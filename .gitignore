@@ -28,5 +28,4 @@ Thumbs.db
 /storage/framework/testing/*
 /storage/framework/views/*
 /bootstrap/cache/*
-/public/assetsadmin/*
 
