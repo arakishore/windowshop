@@ -29,3 +29,4 @@ Thumbs.db
 /storage/framework/views/*
 /bootstrap/cache/*
 
+public/assets/admin/demo/ 
