@@ -11,8 +11,6 @@
 
         <!-- Inner content -->
         <div class="content-inner">
-            @include('partials.flash-message')
-
             <!-- Content area -->
             <div class="content d-flex justify-content-center align-items-center">
                 @yield('content')

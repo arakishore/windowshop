@@ -10,8 +10,7 @@
 
 			<div class="navbar-brand flex-1 flex-lg-0">
 				<a href="#" class="d-inline-flex align-items-center">
-					<img src="{{ asset('assets/admin/images/logo_icon.svg') }}" alt="">
-					<img src="{{ asset('assets/admin/images/logo_text_light.svg') }}" class="d-none d-sm-inline-block h-16px ms-3" alt="">
+					<img src="{{ asset('assets/admin/images/logov2.png') }}" alt="">
 				</a>
 			</div>
 
@@ -209,33 +208,11 @@
 							<img src="{{ asset('assets/admin/images/demo/users/face11.jpg') }}" class="w-32px h-32px rounded-pill" alt="">
 							<span class="status-indicator bg-success"></span>
 						</div>
-						<span class="d-none d-lg-inline-block mx-lg-2">Victoria</span>
+						<span class="d-none d-lg-inline-block mx-lg-2">{{ auth()->user()?->name ?? 'Administrator' }}</span>
 					</a>
 
 					<div class="dropdown-menu dropdown-menu-end">
-						<a href="#" class="dropdown-item">
-							<i class="ph-user-circle me-2"></i>
-							My profile
-						</a>
-						<a href="#" class="dropdown-item">
-							<i class="ph-currency-circle-dollar me-2"></i>
-							My subscription
-						</a>
-						<a href="#" class="dropdown-item">
-							<i class="ph-shopping-cart me-2"></i>
-							My orders
-						</a>
-						<a href="#" class="dropdown-item">
-							<i class="ph-envelope-open me-2"></i>
-							My inbox
-							<span class="badge bg-primary rounded-pill ms-auto">26</span>
-						</a>
-						<div class="dropdown-divider"></div>
-						<a href="#" class="dropdown-item">
-							<i class="ph-gear me-2"></i>
-							Account settings
-						</a>
-						<a href="#" class="dropdown-item">
+						<a href="{{ route('admin.logout') }}" class="dropdown-item">
 							<i class="ph-sign-out me-2"></i>
 							Logout
 						</a>
@@ -245,4 +222,3 @@
 		</div>
 	</div>
 	<!-- /main navbar -->
-

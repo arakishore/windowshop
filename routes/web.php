@@ -12,13 +12,13 @@ Route::get('/', function () {
 Route::prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware('guest')->group(function () {
-        Route::get('/login', [AdminAuthController::class, 'showLogin'])->name('login');
+        Route::get('/login', [AdminAuthController::class, 'showLoginForm'])->name('login');
         Route::post('/login', [AdminAuthController::class, 'authenticate'])->name('authenticate');
     });
 
     Route::middleware('auth')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-        Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
+        Route::get('/logout', [AdminAuthController::class, 'logout'])->name('logout');
     });
 
 });
