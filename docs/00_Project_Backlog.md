@@ -1,4 +1,4 @@
-# V1 Planning Document
+# Project Backlog
 
 ## Project Overview
 
@@ -47,7 +47,7 @@ Main DB = business and transactional data.
 
 Logs DB = audit, activity, debug, and history data.
 
-## Module 1: Authentication & Users DB Structure
+## Current Focus: Authentication and Users
 
 Planned areas to design next:
 
