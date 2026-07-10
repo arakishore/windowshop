@@ -34,11 +34,20 @@
 							<i class="ph-dots-three sidebar-resize-show"></i>
 						</li>
 						<li class="nav-item">
-							<a href="#" class="nav-link active">
+							<a href="{{ route('admin.dashboard') }}" class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
 								<i class="ph-house"></i>
 								<span>
 									Dashboard
 									<span class="d-block fw-normal opacity-50">No pending orders</span>
+								</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.merchants.index') }}" class="nav-link {{ request()->routeIs('admin.merchants.*') ? 'active' : '' }}">
+								<i class="ph-storefront"></i>
+								<span>
+									Merchants
+									<span class="d-block fw-normal opacity-50">Profiles and verification</span>
 								</span>
 							</a>
 						</li>
@@ -55,4 +64,3 @@
 			
 		</div>
 		<!-- /main sidebar -->
-

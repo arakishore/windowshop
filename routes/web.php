@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Admin\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\MerchantController;
 
 Route::get('/', function () {
     return redirect()->route('admin.login');
@@ -19,6 +20,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('auth')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/logout', [AdminAuthController::class, 'logout'])->name('logout');
+    });
+
+    Route::middleware(['auth', 'admin.role'])->group(function () {
+        Route::resource('merchants', MerchantController::class);
     });
 
 });
