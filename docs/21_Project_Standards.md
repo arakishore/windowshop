@@ -242,7 +242,16 @@ Dedicated `system_languages`, `system_currencies`, and `system_timezones` master
 
 Business modules must consume localization defaults through the settings boundary instead of hardcoding numeric database IDs.
 
-## 14. Future Architecture Decisions
+## 14. Merchant Foundation Standards
+
+- Merchant Module Phase 1 is the database foundation only: `merchant_profiles`, `merchant_addresses`, `merchant_documents`, `merchant_bank_accounts`, and `merchant_verifications`.
+- Merchant identity uses `users` plus `auth_roles`; do not create separate admin, merchant, or customer user tables.
+- `merchant_profiles` stores business details only and must keep a unique `user_id` in V1 so one user has exactly one merchant profile.
+- After merchant business data exists, users should be soft deleted or deactivated instead of physically deleted unless an approved data-retention/legal workflow requires hard deletion.
+- Merchant bank `account_number` values must be encrypted in the model or service layer, masked in all output, and excluded from audit-log `old_values` and `new_values`.
+- One default merchant address or bank account is enforced in application logic, not through a simple boolean unique constraint.
+
+## 15. Future Architecture Decisions
 
 - Record significant decisions in `docs/decisions/` before or alongside implementation.
 - Every ADR includes: Problem, Decision, Alternatives Considered, Reason, and Consequences.

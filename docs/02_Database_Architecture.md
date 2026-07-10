@@ -18,6 +18,16 @@ Language, currency, and timezone are stored as values in `system_settings` durin
 
 These master tables are intentionally deferred until WindowShop supports multiple operating countries or regions.
 
+### Phase 4 (V1): Merchant Foundation
+
+- `merchant_profiles`
+- `merchant_addresses`
+- `merchant_documents`
+- `merchant_bank_accounts`
+- `merchant_verifications`
+
+Merchant foundation tables store business profile, address, KYC document, payout bank, and verification-history data only. Merchant identity and access remain based on `users` plus `auth_roles`; no separate merchant user table is created.
+
 ## Authentication & Authorization Database Standards
 
 ### Table Naming
@@ -466,3 +476,166 @@ Cities also reference their country directly for efficient country-scoped lookup
 - The system assigns India, Maharashtra, and Nashik as defaults where location assignment is required.
 - Future searchable dropdowns and APIs will use the same schema without database redesign.
 - Initial seed scope is Asia → Southern Asia → India → Maharashtra → Nashik.
+
+## Merchant Foundation Schema
+
+### Naming Standard
+
+All merchant-owned foundation tables use the `merchant_` prefix. The merchant role is represented through `users` and `auth_roles`; `merchant_profiles` stores only merchant/business details linked to one user.
+
+### `merchant_profiles`
+
+**Purpose:** Stores merchant/business profile information linked to a user.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGINT UNSIGNED | Primary key |
+| `uuid` | CHAR(36) | Unique public identifier exposed in URLs and APIs |
+| `user_id` | BIGINT UNSIGNED | References `users.id`; unique in V1 |
+| `business_name` | VARCHAR(150) | Merchant/business display name |
+| `legal_name` | VARCHAR(150), nullable | Legal business name |
+| `business_type` | VARCHAR(50), nullable | `individual,proprietorship,partnership,llp,pvt_ltd,public_ltd,other` |
+| `gst_number` | VARCHAR(30), nullable | Unique GST number |
+| `pan_number` | VARCHAR(20), nullable | Unique PAN number |
+| `contact_person_name` | VARCHAR(150), nullable | Primary contact person |
+| `contact_email` | VARCHAR(255), nullable | Business contact email |
+| `contact_mobile`, `alternate_mobile` | VARCHAR(20), nullable | Business contact phones |
+| `website_url`, `logo_path` | VARCHAR(255), nullable | Website and logo storage path |
+| `verification_status` | VARCHAR(30) | `pending,submitted,approved,rejected,suspended` |
+| `verified_at` | TIMESTAMP, nullable | Approval/review timestamp |
+| `verified_by` | BIGINT UNSIGNED, nullable | References `users.id` |
+| `rejection_reason` | TEXT, nullable | Merchant-visible rejection reason where applicable |
+| `status` | VARCHAR(30) | `active,inactive,suspended,deleted` |
+| `admin_note` | TEXT, nullable | Internal notes, never visible to merchants or customers |
+| `created_by`, `updated_by`, `deleted_by` | BIGINT UNSIGNED, nullable | Audit user references |
+| `created_at`, `updated_at`, `deleted_at` | TIMESTAMP, nullable | Lifecycle timestamps |
+
+- **Unique constraints:** `uuid`, `user_id`, `gst_number`, `pan_number`.
+- **Indexes:** `business_name`, `verification_status`, `status`; unique constraints also provide indexes.
+- **Foreign keys:** `user_id` -> `users.id` ON DELETE CASCADE; `verified_by`, `created_by`, `updated_by`, `deleted_by` -> `users.id` ON DELETE SET NULL.
+- **Relationships:** One user may have exactly one merchant profile in V1. A merchant profile has many addresses, documents, bank accounts, and verification records.
+- **Soft deletes:** Yes.
+
+### `merchant_addresses`
+
+**Purpose:** Stores merchant business and operational addresses.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGINT UNSIGNED | Primary key |
+| `uuid` | CHAR(36) | Unique public identifier exposed in URLs and APIs |
+| `merchant_id` | BIGINT UNSIGNED | References `merchant_profiles.id` |
+| `address_type` | VARCHAR(30) | `business,billing,pickup,return,warehouse` |
+| `contact_name`, `contact_mobile` | VARCHAR(150/20), nullable | Address-level contact |
+| `address_line_1` | VARCHAR(255) | Required address line |
+| `address_line_2`, `landmark` | VARCHAR(255/150), nullable | Optional address details |
+| `city_id`, `state_id`, `country_id` | MEDIUMINT UNSIGNED, nullable | Location master references |
+| `pincode` | VARCHAR(20), nullable | Postal code |
+| `latitude`, `longitude` | DECIMAL(10,7), nullable | Optional coordinates |
+| `is_default` | BOOLEAN | Default address marker |
+| `status` | VARCHAR(30) | `active,inactive,deleted` |
+| `created_by`, `updated_by`, `deleted_by` | BIGINT UNSIGNED, nullable | Audit user references |
+| `created_at`, `updated_at`, `deleted_at` | TIMESTAMP, nullable | Lifecycle timestamps |
+
+- **Unique constraints:** `uuid`.
+- **Indexes:** (`merchant_id`, `address_type`), `pincode`, (`merchant_id`, `is_default`), `status`; foreign keys provide lookup indexes for `merchant_id`, `city_id`, `state_id`, and `country_id`.
+- **Foreign keys:** `merchant_id` -> `merchant_profiles.id` ON DELETE CASCADE; `city_id` -> `loc_cities.id`, `state_id` -> `loc_states.id`, `country_id` -> `loc_countries.id`, all ON DELETE SET NULL; audit references -> `users.id` ON DELETE SET NULL.
+- **Soft deletes:** Yes.
+- **Notes:** One default address is enforced later in application logic, not by a simple boolean unique constraint.
+
+### `merchant_documents`
+
+**Purpose:** Stores merchant KYC and business-document metadata.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGINT UNSIGNED | Primary key |
+| `uuid` | CHAR(36) | Unique public identifier exposed in URLs and APIs |
+| `merchant_id` | BIGINT UNSIGNED | References `merchant_profiles.id` |
+| `document_type` | VARCHAR(50) | `gst_certificate,pan_card,aadhaar,shop_license,bank_proof,other` |
+| `document_number` | VARCHAR(100), nullable | Business/KYC document number |
+| `file_path`, `original_file_name` | VARCHAR(255), nullable | Stored path and original upload name |
+| `mime_type` | VARCHAR(100), nullable | File MIME type |
+| `file_size` | BIGINT UNSIGNED, nullable | File size in bytes |
+| `verification_status` | VARCHAR(30) | `pending,approved,rejected,expired` |
+| `verified_at` | TIMESTAMP, nullable | Review timestamp |
+| `verified_by` | BIGINT UNSIGNED, nullable | References `users.id` |
+| `rejection_reason` | TEXT, nullable | Rejection reason |
+| `expires_at` | DATE, nullable | Document expiry date |
+| `status` | VARCHAR(30) | `active,inactive,deleted` |
+| `created_by`, `updated_by`, `deleted_by` | BIGINT UNSIGNED, nullable | Audit user references |
+| `created_at`, `updated_at`, `deleted_at` | TIMESTAMP, nullable | Lifecycle timestamps |
+
+- **Unique constraints:** `uuid`.
+- **Indexes:** (`merchant_id`, `document_type`), `document_number`, `verification_status`, `status`, `expires_at`; foreign keys also provide indexes.
+- **Foreign keys:** `merchant_id` -> `merchant_profiles.id` ON DELETE CASCADE; `verified_by` and audit references -> `users.id` ON DELETE SET NULL.
+- **Soft deletes:** Yes.
+- **Notes:** No uniqueness is applied to `merchant_id`, `document_type`, or `document_number` because replacements and historical uploads are allowed.
+
+### `merchant_bank_accounts`
+
+**Purpose:** Stores merchant payout bank details.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGINT UNSIGNED | Primary key |
+| `uuid` | CHAR(36) | Unique public identifier exposed in URLs and APIs |
+| `merchant_id` | BIGINT UNSIGNED | References `merchant_profiles.id` |
+| `account_holder_name` | VARCHAR(150) | Bank account holder |
+| `bank_name`, `branch_name` | VARCHAR(150), nullable | Bank and branch names |
+| `account_number` | VARCHAR(255) | Must be encrypted in the model/service layer |
+| `ifsc_code` | VARCHAR(20), nullable | IFSC code |
+| `account_type` | VARCHAR(30), nullable | `savings,current,other` |
+| `upi_id` | VARCHAR(100), nullable | Optional UPI identifier |
+| `verification_status` | VARCHAR(30) | `pending,verified,rejected` |
+| `is_default` | BOOLEAN | Default payout account marker |
+| `verified_at` | TIMESTAMP, nullable | Review timestamp |
+| `verified_by` | BIGINT UNSIGNED, nullable | References `users.id` |
+| `rejection_reason` | TEXT, nullable | Rejection reason |
+| `status` | VARCHAR(30) | `active,inactive,deleted` |
+| `created_by`, `updated_by`, `deleted_by` | BIGINT UNSIGNED, nullable | Audit user references |
+| `created_at`, `updated_at`, `deleted_at` | TIMESTAMP, nullable | Lifecycle timestamps |
+
+- **Unique constraints:** `uuid`.
+- **Indexes:** `ifsc_code`, `verification_status`, (`merchant_id`, `is_default`), `status`; foreign keys also provide indexes.
+- **Foreign keys:** `merchant_id` -> `merchant_profiles.id` ON DELETE CASCADE; `verified_by` and audit references -> `users.id` ON DELETE SET NULL.
+- **Soft deletes:** Yes.
+- **Security notes:** `account_number` is intentionally `VARCHAR(255)` so encrypted values can be stored later. It must be encrypted through the model or service layer, never exposed in full through APIs or lists, displayed only as a masked value such as `********1234`, and excluded from audit-log `old_values` and `new_values`.
+- **Notes:** One default bank account is enforced later in application logic, not by a simple boolean unique constraint. No index or unique constraint is created on `account_number`.
+
+### `merchant_verifications`
+
+**Purpose:** Tracks merchant verification review history.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGINT UNSIGNED | Primary key |
+| `uuid` | CHAR(36) | Unique public identifier exposed in URLs and APIs |
+| `merchant_id` | BIGINT UNSIGNED | References `merchant_profiles.id` |
+| `verification_type` | VARCHAR(50) | `profile,document,bank,address` |
+| `related_type` | VARCHAR(255), nullable | Related model/table discriminator |
+| `related_id` | BIGINT UNSIGNED, nullable | Related record id |
+| `old_status` | VARCHAR(30), nullable | Previous verification status |
+| `new_status` | VARCHAR(30) | New verification status |
+| `remarks` | TEXT, nullable | Review remarks |
+| `reviewed_by` | BIGINT UNSIGNED, nullable | References `users.id` |
+| `reviewed_at` | TIMESTAMP, nullable | Review timestamp |
+| `created_at`, `updated_at` | TIMESTAMP, nullable | Laravel timestamps |
+
+- **Unique constraints:** `uuid`.
+- **Indexes:** (`merchant_id`, `verification_type`), (`related_type`, `related_id`), `new_status`, `reviewed_at`; foreign keys also provide indexes for `merchant_id` and `reviewed_by`.
+- **Foreign keys:** `merchant_id` -> `merchant_profiles.id` ON DELETE CASCADE; `reviewed_by` -> `users.id` ON DELETE SET NULL.
+- **Soft deletes:** No; verification history is retained while its merchant exists.
+
+### Merchant Relationship Summary
+
+```text
+users
++-- merchant_profiles
+    +-- merchant_addresses
+    +-- merchant_documents
+    +-- merchant_bank_accounts
+    +-- merchant_verifications
+```
+
+After merchant business data exists, user records should be deactivated or soft deleted instead of physically deleted except under an explicitly reviewed data-retention/legal workflow. Physical deletion of a user cascades the merchant profile and related merchant records by design.
