@@ -1,6 +1,7 @@
 {{-- Purpose: Defines shared document metadata and Limitless stylesheet assets for Blade layouts. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="ltr">
+
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -15,4 +16,12 @@
     <!-- /global stylesheets -->
 
     @stack('styles')
+    <style>
+        .sidebar {
+            width: 13.875rem !important;
+        }
+        body {
+            font-size: 12px !important;
+        }
+    </style>
 </head>

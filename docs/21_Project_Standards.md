@@ -55,6 +55,26 @@ Detailed subject documents remain authoritative within their scope. If standards
 - Dependencies are injected through constructors.
 - Avoid static service locators and oversized “god services.”
 
+### Application Layering
+
+WindowShop modules use this request-to-persistence flow:
+
+```text
+Presentation Layer
+↓
+Controller
+↓
+Service
+↓
+Model
+↓
+Database
+```
+
+Controllers stay responsible for HTTP concerns: authorization, validated request input, service calls, redirects, and view responses. Services own database transactions, multi-step workflows, role assignment, lifecycle changes, and verification/history logic. Models own persistence metadata such as relationships, casts, route keys, UUID creation, and soft deletes.
+
+Merchant Admin CRUD V1 follows this structure through `MerchantController`, `MerchantService`, `MerchantVerificationService`, merchant enums, and UUID-enabled models. Future Shop, Product, Order, and Customer modules must follow the same controller-to-service-to-model architecture.
+
 ### Repositories
 
 - Do not add repositories around Eloquent by default.

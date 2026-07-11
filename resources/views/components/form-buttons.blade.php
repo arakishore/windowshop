@@ -4,9 +4,11 @@
     'cancel' => null,
 ])
 
-<div class="d-flex justify-content-end gap-2">
+<div class="card">
+    <div class="card-footer d-flex justify-content-end gap-2">
     @if($cancel)
-        <a href="{{ $cancel }}" class="btn btn-light">Cancel</a>
+        <a href="{{ $cancel }}" class="btn btn-secondary">Cancel</a>
     @endif
     <button type="submit" class="btn btn-primary">{{ $submit }}</button>
+    </div>
 </div>

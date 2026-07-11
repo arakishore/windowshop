@@ -4,7 +4,6 @@
 @section('breadcrumb')
     <x-page-header
         title="Create Merchant"
-        subtitle="Create an owner account and business profile in one transaction."
         :breadcrumbs="['Admin' => route('admin.dashboard'), 'Merchants' => route('admin.merchants.index'), 'Create' => null]"
     />
 @endsection

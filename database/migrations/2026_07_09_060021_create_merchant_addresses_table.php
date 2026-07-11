@@ -12,62 +12,65 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('merchant_addresses', function (Blueprint $table) {
+
             $table->id();
-            $table->uuid('uuid')
-                ->unique()
-                ->comment('Public identifier exposed in URLs and APIs');
+
+            $table->uuid('uuid')->unique();
+
             $table->foreignId('merchant_id');
+
+            // Keep for future scalability, but UI will always use 'business' in V1
             $table->string('address_type', 30)
                 ->default('business')
                 ->comment('business,billing,pickup,return,warehouse');
-            $table->string('contact_name', 150)->nullable();
-            $table->string('contact_mobile', 20)->nullable();
+
             $table->string('address_line_1');
+
             $table->string('address_line_2')->nullable();
+
             $table->string('landmark', 150)->nullable();
-            $table->unsignedMediumInteger('city_id')->nullable();
-            $table->unsignedMediumInteger('state_id')->nullable();
+
             $table->unsignedMediumInteger('country_id')->nullable();
+
+            $table->unsignedMediumInteger('state_id')->nullable();
+
+            $table->unsignedMediumInteger('city_id')->nullable();
+
             $table->string('pincode', 20)->nullable()->index();
-            $table->decimal('latitude', 10, 7)->nullable();
-            $table->decimal('longitude', 10, 7)->nullable();
-            $table->boolean('is_default')->default(false);
+
+            // Audit
             $table->string('status', 30)
                 ->default('active')
                 ->comment('active,inactive,deleted')
                 ->index();
-            $table->foreignId('created_by')
-                ->nullable()
-                ->constrained('users')
-                ->nullOnDelete();
-            $table->foreignId('updated_by')
-                ->nullable()
-                ->constrained('users')
-                ->nullOnDelete();
-            $table->foreignId('deleted_by')
-                ->nullable()
-                ->constrained('users')
-                ->nullOnDelete();
+
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('deleted_by')->nullable()->constrained('users')->nullOnDelete();
+
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['merchant_id', 'address_type']);
-            $table->index(['merchant_id', 'is_default']);
+            $table->unique(['merchant_id', 'address_type']);
+
             $table->foreign('merchant_id')
                 ->references('id')
                 ->on('merchant_profiles')
                 ->cascadeOnDelete();
-            $table->foreign('city_id')
+
+            $table->foreign('country_id')
                 ->references('id')
-                ->on('loc_cities')
+                ->on('loc_countries')
                 ->nullOnDelete();
+
             $table->foreign('state_id')
                 ->references('id')
                 ->on('loc_states')
                 ->nullOnDelete();
-            $table->foreign('country_id')
+
+            $table->foreign('city_id')
                 ->references('id')
-                ->on('loc_countries')
+                ->on('loc_cities')
                 ->nullOnDelete();
         });
     }

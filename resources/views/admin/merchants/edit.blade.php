@@ -4,12 +4,19 @@
 @section('breadcrumb')
     <x-page-header
         title="Edit Merchant"
-        subtitle="{{ $merchant->business_name }}"
         :breadcrumbs="['Admin' => route('admin.dashboard'), 'Merchants' => route('admin.merchants.index'), $merchant->business_name => route('admin.merchants.show', $merchant), 'Edit' => null]"
+        :action-url="route('admin.merchants.index')"
+        action-label="Back to Merchants"
+        action-icon="ph-arrow-left"
     />
 @endsection
 
 @section('content')
+    @php($activeTab = 'profile')
+
+    @include('admin.merchants.partials.management-header')
+    @include('admin.merchants.partials.management-tabs')
+
     <form method="POST" action="{{ route('admin.merchants.update', $merchant) }}">
         @csrf
         @method('PUT')

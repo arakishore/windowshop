@@ -4,6 +4,8 @@
 <!-- /core JS files -->
 
 <!-- Theme JS files -->
+<script src="{{ asset('assets/admin/js/jquery/jquery.min.js') }}"></script>
+<script src="{{ asset('assets/admin/js/vendor/notifications/bootbox.min.js') }}"></script>
 <script src="{{ asset('assets/admin/js/app.js') }}"></script>
 <!-- /theme JS files -->
 

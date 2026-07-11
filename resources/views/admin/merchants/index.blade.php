@@ -4,8 +4,10 @@
 @section('breadcrumb')
     <x-page-header
         title="Merchants"
-        subtitle="Manage merchant business profiles and verification state."
         :breadcrumbs="['Admin' => route('admin.dashboard'), 'Merchants' => null]"
+        :action-url="route('admin.merchants.create')"
+        action-label="Create Merchant"
+        action-icon="ph-plus"
     />
 @endsection
 
@@ -16,15 +18,15 @@
     @endphp
 
     <div class="card">
-        <div class="card-header d-flex flex-wrap gap-2 align-items-center justify-content-between">
+        <div class="card-header d-flex align-items-center justify-content-between">
             <h5 class="mb-0">Merchant List</h5>
-            <a href="{{ route('admin.merchants.create') }}" class="btn btn-primary">
-                <i class="ph-plus me-2"></i>
-                Create Merchant
+            <a href="#merchant-filter-collapse" class="text-body collapsed merchant-filter-toggle" data-bs-toggle="collapse" aria-expanded="false" aria-controls="merchant-filter-collapse">
+                <i class="ph-arrow-circle-down"></i>
             </a>
         </div>
 
-        <div class="card-body border-bottom">
+        <div class="collapse" id="merchant-filter-collapse">
+            <div class="card-body border-bottom">
             <form method="GET" action="{{ route('admin.merchants.index') }}" class="row g-3 align-items-end">
                 <div class="col-lg-5">
                     <label for="q" class="form-label">Search</label>
@@ -56,24 +58,23 @@
                     <a href="{{ route('admin.merchants.index') }}" class="btn btn-light">Reset</a>
                 </div>
             </form>
+            </div>
         </div>
 
         @if($merchants->isEmpty())
             <x-empty-state icon="ph-storefront" title="No merchants found" message="Create a merchant or adjust the current filters." />
         @else
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead>
+            <div class="table-responsive datatable-wrapper">
+                <table class="table table-bordered table-hover align-middle datatable-highlight mb-0">
+                    <thead class="table-light">
                         <tr>
                             <th>Business</th>
                             <th>Owner</th>
-                            <th>Email</th>
                             <th>Mobile</th>
-                            <th>GST</th>
                             <th>Verification</th>
                             <th>Status</th>
                             <th>Created</th>
-                            <th class="text-end">Actions</th>
+                            <th class="text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -86,9 +87,7 @@
                                     @endif
                                 </td>
                                 <td>{{ $merchant->user?->name ?? 'Unavailable' }}</td>
-                                <td>{{ $merchant->user?->email ?? '-' }}</td>
                                 <td>{{ $merchant->user?->mobile ?? '-' }}</td>
-                                <td>{{ $merchant->gst_number ?? '-' }}</td>
                                 <td>
                                     <span class="badge bg-{{ $verificationClasses[$merchant->verification_status] ?? 'secondary' }}">
                                         {{ ucfirst($merchant->verification_status) }}
@@ -100,14 +99,20 @@
                                     </span>
                                 </td>
                                 <td>{{ $merchant->created_at?->format('d M Y') }}</td>
-                                <td class="text-end">
-                                    <div class="d-inline-flex gap-1">
-                                        <a href="{{ route('admin.merchants.show', $merchant) }}" class="btn btn-sm btn-light">View</a>
-                                        <a href="{{ route('admin.merchants.edit', $merchant) }}" class="btn btn-sm btn-primary">Edit</a>
-                                        <form method="POST" action="{{ route('admin.merchants.destroy', $merchant) }}" onsubmit="return confirm('Delete this merchant? This will soft delete the merchant profile and owner account.');">
+                                <td class="text-center">
+                                    <div class="list-icons justify-content-center">
+                                        <a href="{{ route('admin.merchants.show', $merchant) }}" class="list-icons-item text-info" data-bs-popup="tooltip" title="View">
+                                            <i class="ph-eye"></i>
+                                        </a>
+                                        <a href="{{ route('admin.merchants.edit', $merchant) }}" class="list-icons-item text-primary" data-bs-popup="tooltip" title="Edit">
+                                            <i class="ph-pencil-simple"></i>
+                                        </a>
+                                        <form method="POST" action="{{ route('admin.merchants.destroy', $merchant) }}" class="d-inline js-delete-merchant-form">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                            <button type="button" class="list-icons-item text-danger border-0 bg-transparent p-0 js-delete-merchant" data-bs-popup="tooltip" title="Delete">
+                                                <i class="ph-trash"></i>
+                                            </button>
                                         </form>
                                     </div>
                                 </td>
@@ -117,9 +122,75 @@
                 </table>
             </div>
 
-            <div class="card-body">
-                {{ $merchants->links() }}
+            <div class="card-body d-lg-flex align-items-lg-center justify-content-lg-between">
+                <div class="text-muted mb-3 mb-lg-0">
+                    Showing {{ $merchants->firstItem() }} to {{ $merchants->lastItem() }} of {{ $merchants->total() }} entries
+                </div>
+                {{ $merchants->onEachSide(1)->links('pagination::admin-datatable') }}
             </div>
         @endif
     </div>
 @endsection
+
+@push('styles')
+    <style>
+        .datatable-highlight tbody td.active {
+            background-color: rgba(var(--primary-rgb), 0.08);
+        }
+
+        .datatable-highlight tbody tr:hover td {
+            background-color: var(--table-hover-bg);
+        }
+
+        .datatable-highlight.table-bordered > tbody > tr:last-child > * {
+            border-bottom-width: var(--table-border-width);
+            border-bottom-style: solid;
+            
+        }
+
+        .merchant-filter-toggle i {
+            display: inline-block;
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .merchant-filter-toggle:not(.collapsed) i {
+            transform: rotate(180deg);
+        }
+    </style>
+@endpush
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            document.addEventListener('click', function (event) {
+                const button = event.target.closest('.js-delete-merchant');
+
+                if (!button) {
+                    return;
+                }
+
+                const form = button.closest('.js-delete-merchant-form');
+
+                bootbox.confirm({
+                    title: 'Delete Record',
+                    message: 'Are you sure you want to delete this record?',
+                    buttons: {
+                        cancel: {
+                            label: 'Cancel',
+                            className: 'btn-link',
+                        },
+                        confirm: {
+                            label: 'Yes, Delete',
+                            className: 'btn-danger',
+                        },
+                    },
+                    callback: function (confirmed) {
+                        if (confirmed) {
+                            form.submit();
+                        }
+                    },
+                });
+            });
+        });
+    </script>
+@endpush

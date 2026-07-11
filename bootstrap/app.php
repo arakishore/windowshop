@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureAdminRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -12,10 +13,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+
+        // Redirect unauthenticated users to the correct login page
+        $middleware->redirectGuestsTo(function (Request $request): string {
+            return route('admin.login');
+        });
+
         $middleware->alias([
             'admin.role' => EnsureAdminRole::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })
+    ->create();

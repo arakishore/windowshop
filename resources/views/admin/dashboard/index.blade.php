@@ -10,7 +10,6 @@
 
     <x-page-header
         title="WindowShop Dashboard"
-        subtitle="Reusable Limitless components are ready for future admin modules."
         :breadcrumbs="['Home' => url('/'), 'Dashboard' => null]"
     />
 

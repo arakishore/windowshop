@@ -23,13 +23,12 @@ return new class extends Migration
                 ->nullable()
                 ->comment('individual,proprietorship,partnership,llp,pvt_ltd,public_ltd,other');
             $table->string('gst_number', 30)->nullable()->unique();
-            $table->string('pan_number', 20)->nullable()->unique();
+            $table->boolean('has_shop_license')->nullable();
+            $table->boolean('has_fssai')->nullable();
             $table->string('contact_person_name', 150)->nullable();
             $table->string('contact_email')->nullable();
             $table->string('contact_mobile', 20)->nullable();
             $table->string('alternate_mobile', 20)->nullable();
-            $table->string('website_url')->nullable();
-            $table->string('logo_path')->nullable();
             $table->string('verification_status', 30)
                 ->default('pending')
                 ->comment('pending,submitted,approved,rejected,suspended')

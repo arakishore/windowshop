@@ -496,11 +496,11 @@ All merchant-owned foundation tables use the `merchant_` prefix. The merchant ro
 | `legal_name` | VARCHAR(150), nullable | Legal business name |
 | `business_type` | VARCHAR(50), nullable | `individual,proprietorship,partnership,llp,pvt_ltd,public_ltd,other` |
 | `gst_number` | VARCHAR(30), nullable | Unique GST number |
-| `pan_number` | VARCHAR(20), nullable | Unique PAN number |
+| `has_shop_license` | BOOLEAN, nullable | NULL = not answered, 0 = No, 1 = Yes |
+| `has_fssai` | BOOLEAN, nullable | NULL = not answered, 0 = No, 1 = Yes |
 | `contact_person_name` | VARCHAR(150), nullable | Primary contact person |
 | `contact_email` | VARCHAR(255), nullable | Business contact email |
 | `contact_mobile`, `alternate_mobile` | VARCHAR(20), nullable | Business contact phones |
-| `website_url`, `logo_path` | VARCHAR(255), nullable | Website and logo storage path |
 | `verification_status` | VARCHAR(30) | `pending,submitted,approved,rejected,suspended` |
 | `verified_at` | TIMESTAMP, nullable | Approval/review timestamp |
 | `verified_by` | BIGINT UNSIGNED, nullable | References `users.id` |
@@ -510,10 +510,10 @@ All merchant-owned foundation tables use the `merchant_` prefix. The merchant ro
 | `created_by`, `updated_by`, `deleted_by` | BIGINT UNSIGNED, nullable | Audit user references |
 | `created_at`, `updated_at`, `deleted_at` | TIMESTAMP, nullable | Lifecycle timestamps |
 
-- **Unique constraints:** `uuid`, `user_id`, `gst_number`, `pan_number`.
+- **Unique constraints:** `uuid`, `user_id`, `gst_number`.
 - **Indexes:** `business_name`, `verification_status`, `status`; unique constraints also provide indexes.
 - **Foreign keys:** `user_id` -> `users.id` ON DELETE CASCADE; `verified_by`, `created_by`, `updated_by`, `deleted_by` -> `users.id` ON DELETE SET NULL.
-- **Relationships:** One user may have exactly one merchant profile in V1. A merchant profile has many addresses, documents, bank accounts, and verification records.
+- **Relationships:** One user may have exactly one merchant profile in V1. A merchant profile has many addresses.
 - **Soft deletes:** Yes.
 
 ### `merchant_addresses`

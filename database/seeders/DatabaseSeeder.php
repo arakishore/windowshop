@@ -17,7 +17,10 @@ class DatabaseSeeder extends Seeder
         $this->call(AuthRoleSeeder::class);
         $this->call(LocationMasterSeeder::class);
         $this->call(SystemFoundationSeeder::class);
+        $this->call(ShopCategorySeeder::class);
+        $this->call(ShopAudienceSeeder::class);
         $this->call(SuperAdminSeeder::class);
         $this->call(MerchantDemoSeeder::class);
+        $this->call(MerchantAddressSeeder::class);
     }
 }

@@ -23,6 +23,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     Route::middleware(['auth', 'admin.role'])->group(function () {
+        Route::get('/merchants/{merchant}/address', [MerchantController::class, 'address'])->name('merchants.address');
+        Route::post('/merchants/{merchant}/address', [MerchantController::class, 'updateAddress'])->name('merchants.address.update');
+        Route::get('/merchants/address/states', [MerchantController::class, 'addressStates'])->name('merchants.address.states');
+        Route::get('/merchants/address/cities', [MerchantController::class, 'addressCities'])->name('merchants.address.cities');
+        Route::get('/merchants/{merchant}/shops', [MerchantController::class, 'shops'])->name('merchants.shops');
         Route::resource('merchants', MerchantController::class);
     });
 
