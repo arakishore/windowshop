@@ -8,6 +8,7 @@
         :action-url="route('admin.merchants.index')"
         action-label="Back to Merchants"
         action-icon="ph-arrow-left"
+        action-class="btn-light border"
     />
 @endsection
 

@@ -66,6 +66,11 @@ class MerchantProfile extends Model
         return $this->hasMany(MerchantAddress::class, 'merchant_id');
     }
 
+    public function shops(): HasMany
+    {
+        return $this->hasMany(Shop::class, 'merchant_id');
+    }
+
     public function businessAddress(): HasOne
     {
         return $this->hasOne(MerchantAddress::class, 'merchant_id')

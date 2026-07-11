@@ -149,7 +149,7 @@
                         <i class="ph-map-pin me-2"></i>
                         Manage Owner Address
                     </a>
-                    <a href="{{ route('admin.merchants.shops', $merchant) }}" class="btn btn-light">
+                    <a href="{{ route('admin.merchants.shops.index', $merchant) }}" class="btn btn-light">
                         <i class="ph-storefront me-2"></i>
                         Manage Shops
                     </a>

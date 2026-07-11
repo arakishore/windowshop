@@ -30,7 +30,7 @@
             <form method="GET" action="{{ route('admin.merchants.index') }}" class="row g-3 align-items-end">
                 <div class="col-lg-5">
                     <label for="q" class="form-label">Search</label>
-                    <input id="q" name="q" type="search" value="{{ $filters['q'] }}" class="form-control" placeholder="Business, owner, email, mobile, GST, PAN">
+                    <input id="q" name="q" type="search" value="{{ $filters['q'] }}" class="form-control" placeholder="Business, owner, email, mobile, GST, address, landmark, pincode">
                 </div>
                 <div class="col-md-3 col-lg-2">
                     <label for="status" class="form-label">Account status</label>
@@ -71,6 +71,8 @@
                             <th>Business</th>
                             <th>Owner</th>
                             <th>Mobile</th>
+                            <th>Shops</th>
+                            <th>Address</th>
                             <th>Verification</th>
                             <th>Status</th>
                             <th>Created</th>
@@ -88,6 +90,32 @@
                                 </td>
                                 <td>{{ $merchant->user?->name ?? 'Unavailable' }}</td>
                                 <td>{{ $merchant->user?->mobile ?? '-' }}</td>
+                                <td>
+                                    <span class="badge bg-light text-body border">{{ $merchant->shops_count }}</span>
+                                </td>
+                                <td>
+                                    @if($merchant->businessAddress)
+                                        <div>{{ $merchant->businessAddress->address_line_1 }}</div>
+                                        @if($merchant->businessAddress->address_line_2)
+                                            <div class="fs-sm text-muted">{{ $merchant->businessAddress->address_line_2 }}</div>
+                                        @endif
+                                        @if($merchant->businessAddress->landmark || $merchant->businessAddress->pincode)
+                                            <div class="fs-sm text-muted">
+                                                @if($merchant->businessAddress->landmark)
+                                                    Landmark: {{ $merchant->businessAddress->landmark }}
+                                                @endif
+                                                @if($merchant->businessAddress->landmark && $merchant->businessAddress->pincode)
+                                                    <span class="mx-1">|</span>
+                                                @endif
+                                                @if($merchant->businessAddress->pincode)
+                                                    Pincode: {{ $merchant->businessAddress->pincode }}
+                                                @endif
+                                            </div>
+                                        @endif
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </td>
                                 <td>
                                     <span class="badge bg-{{ $verificationClasses[$merchant->verification_status] ?? 'secondary' }}">
                                         {{ ucfirst($merchant->verification_status) }}

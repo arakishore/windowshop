@@ -5,9 +5,10 @@
     <x-page-header
         title="Edit Merchant"
         :breadcrumbs="['Admin' => route('admin.dashboard'), 'Merchants' => route('admin.merchants.index'), $merchant->business_name => route('admin.merchants.show', $merchant), 'Edit' => null]"
-        :action-url="route('admin.merchants.index')"
-        action-label="Back to Merchants"
+        :action-url="route('admin.merchants.show', $merchant)"
+        action-label="Back to Overview"
         action-icon="ph-arrow-left"
+        action-class="btn-light border"
     />
 @endsection
 

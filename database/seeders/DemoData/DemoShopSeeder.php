@@ -67,10 +67,6 @@ class DemoShopSeeder extends Seeder
                         'latitude' => $shop['latitude'],
                         'longitude' => $shop['longitude'],
                         'status' => $shop['status'],
-                        'verification_status' => $shop['verification_status'],
-                        'verified_at' => $shop['verified_at'],
-                        'verified_by' => null,
-                        'rejection_reason' => $shop['rejection_reason'],
                         'admin_note' => $shop['admin_note'],
                         'deleted_at' => null,
                         'updated_at' => $now,
@@ -169,9 +165,6 @@ class DemoShopSeeder extends Seeder
                 'latitude' => '20.0047000',
                 'longitude' => '73.7796000',
                 'status' => 'active',
-                'verification_status' => 'approved',
-                'verified_at' => $this->verifiedAt(),
-                'rejection_reason' => null,
                 'admin_note' => 'Primary demo shop for women apparel workflows.',
             ],
             [
@@ -192,10 +185,7 @@ class DemoShopSeeder extends Seeder
                 'pincode' => '422005',
                 'latitude' => '20.0049000',
                 'longitude' => '73.7798000',
-                'status' => 'active',
-                'verification_status' => 'pending',
-                'verified_at' => null,
-                'rejection_reason' => null,
+                'status' => 'inactive',
                 'admin_note' => 'Used to demonstrate a merchant with multiple shops.',
             ],
             [
@@ -217,9 +207,6 @@ class DemoShopSeeder extends Seeder
                 'latitude' => '19.9975000',
                 'longitude' => '73.7898000',
                 'status' => 'active',
-                'verification_status' => 'approved',
-                'verified_at' => $this->verifiedAt(),
-                'rejection_reason' => null,
                 'admin_note' => 'Beauty category demo shop.',
             ],
             [
@@ -240,10 +227,7 @@ class DemoShopSeeder extends Seeder
                 'pincode' => '422013',
                 'latitude' => '20.0115000',
                 'longitude' => '73.7349000',
-                'status' => 'active',
-                'verification_status' => 'pending',
-                'verified_at' => null,
-                'rejection_reason' => null,
+                'status' => 'inactive',
                 'admin_note' => 'Pending shop demo data.',
             ],
             [
@@ -265,9 +249,6 @@ class DemoShopSeeder extends Seeder
                 'latitude' => '19.9859000',
                 'longitude' => '73.7637000',
                 'status' => 'active',
-                'verification_status' => 'approved',
-                'verified_at' => $this->verifiedAt(),
-                'rejection_reason' => null,
                 'admin_note' => 'Men footwear demo shop.',
             ],
             [
@@ -289,16 +270,8 @@ class DemoShopSeeder extends Seeder
                 'latitude' => '19.9993000',
                 'longitude' => '73.7868000',
                 'status' => 'inactive',
-                'verification_status' => 'rejected',
-                'verified_at' => null,
-                'rejection_reason' => 'Shop profile needs updated storefront details.',
                 'admin_note' => 'Rejected shop demo data for admin review states.',
             ],
         ];
-    }
-
-    private function verifiedAt(): string
-    {
-        return now()->subDay()->format('Y-m-d H:i:s');
     }
 }

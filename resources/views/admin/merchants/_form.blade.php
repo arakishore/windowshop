@@ -164,7 +164,11 @@
     </div>
 </div>
 
-<x-form-buttons :submit="$isEdit ? 'Update Merchant' : 'Create Merchant'" :cancel="route('admin.merchants.index')" />
+<x-form-buttons
+    :submit="$isEdit ? 'Update Merchant' : 'Create Merchant'"
+    :cancel="$isEdit ? route('admin.merchants.show', $merchant) : route('admin.merchants.index')"
+    :cancel-label="$isEdit ? 'Back to Overview' : 'Back to Merchants'"
+/>
 
 @push('scripts')
     <script>

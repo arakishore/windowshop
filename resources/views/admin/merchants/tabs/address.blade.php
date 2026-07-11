@@ -86,7 +86,7 @@
         </div>
 
         <div class="card-footer d-flex justify-content-end gap-2">
-            <a href="{{ route('admin.merchants.show', $merchant) }}" class="btn btn-secondary">Cancel</a>
+            <a href="{{ route('admin.merchants.show', $merchant) }}" class="btn btn-light border">Back to Overview</a>
             <button type="submit" class="btn btn-primary">Save Address</button>
         </div>
     </div>

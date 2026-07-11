@@ -5,6 +5,7 @@
     'actionUrl' => null,
     'actionLabel' => null,
     'actionIcon' => 'ph-plus',
+    'actionClass' => 'btn-primary',
 ])
 
 <!-- Page header -->
@@ -39,7 +40,7 @@
         @if($actionUrl && $actionLabel)
             <div class="collapse d-lg-block ms-lg-auto" id="breadcrumb_elements">
                 <div class="d-lg-flex mb-2 mb-lg-0">
-                    <a href="{{ $actionUrl }}" class="btn btn-primary btn-icon btn-sm pt-1 pb-1">
+                    <a href="{{ $actionUrl }}" class="btn {{ $actionClass }} btn-icon btn-sm pt-1 pb-1">
                         <i class="{{ $actionIcon }} me-2"></i>
                         {{ $actionLabel }}
                     </a>

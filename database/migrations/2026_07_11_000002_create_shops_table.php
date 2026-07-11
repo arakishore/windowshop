@@ -49,16 +49,6 @@ return new class extends Migration
                 ->default('active')
                 ->comment('active,inactive,suspended,deleted')
                 ->index();
-            $table->string('verification_status', 30)
-                ->default('pending')
-                ->comment('pending,approved,rejected,suspended')
-                ->index();
-            $table->timestamp('verified_at')->nullable();
-            $table->foreignId('verified_by')
-                ->nullable()
-                ->constrained('users')
-                ->nullOnDelete();
-            $table->text('rejection_reason')->nullable();
             $table->text('admin_note')
                 ->nullable()
                 ->comment('Internal administrative note. Never customer-facing.');

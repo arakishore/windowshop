@@ -27,20 +27,28 @@ class MerchantService
         $verificationStatus = $filters['verification_status'];
 
         return MerchantProfile::query()
-            ->with('user')
+            ->with(['user', 'businessAddress'])
+            ->withCount('shops')
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($query) use ($search): void {
-                $query
+                    $query
                         ->where('business_name', 'like', "%{$search}%")
                         ->orWhere('legal_name', 'like', "%{$search}%")
                         ->orWhere('gst_number', 'like', "%{$search}%")
                         ->orWhereHas('user', function ($query) use ($search): void {
-                        $query
+                            $query
                                 ->where('name', 'like', "%{$search}%")
                                 ->orWhere('email', 'like', "%{$search}%")
                                 ->orWhere('mobile', 'like', "%{$search}%");
-                    });
-            });
+                        })
+                        ->orWhereHas('businessAddress', function ($query) use ($search): void {
+                            $query
+                                ->where('address_line_1', 'like', "%{$search}%")
+                                ->orWhere('address_line_2', 'like', "%{$search}%")
+                                ->orWhere('landmark', 'like', "%{$search}%")
+                                ->orWhere('pincode', 'like', "%{$search}%");
+                        });
+                });
             })
             ->when($status, fn ($query) => $query->where('status', $status))
             ->when($verificationStatus, fn ($query) => $query->where('verification_status', $verificationStatus))

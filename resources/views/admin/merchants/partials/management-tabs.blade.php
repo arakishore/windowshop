@@ -4,7 +4,7 @@
         'overview' => ['label' => 'Overview', 'route' => route('admin.merchants.show', $merchant)],
         'profile' => ['label' => 'Profile', 'route' => route('admin.merchants.edit', $merchant)],
         'address' => ['label' => 'Owner Address', 'route' => route('admin.merchants.address', $merchant)],
-        'shops' => ['label' => 'Shops', 'route' => route('admin.merchants.shops', $merchant)],
+        'shops' => ['label' => 'Shops', 'route' => route('admin.merchants.shops.index', $merchant)],
     ];
 @endphp
 
