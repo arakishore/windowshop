@@ -11,24 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (Schema::hasTable('shop_audience_map')) {
-            return;
-        }
-
         Schema::create('shop_audience_map', function (Blueprint $table) {
             $table->engine = 'InnoDB';
             $table->charset = 'utf8mb4';
             $table->collation = 'utf8mb4_unicode_ci';
 
-            $table->id();
-            $table->unsignedBigInteger('shop_id');
+            $table->foreignId('shop_id')->constrained('shops')->cascadeOnDelete();
             $table->foreignId('audience_id')->constrained('shop_audiences')->cascadeOnDelete();
             $table->timestamps();
 
-            $table->index('shop_id');
-            $table->index('audience_id');
-            $table->index(['shop_id', 'audience_id']);
             $table->unique(['shop_id', 'audience_id']);
+            $table->index(['audience_id', 'shop_id']);
         });
     }
 

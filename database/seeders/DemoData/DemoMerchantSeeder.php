@@ -1,6 +1,6 @@
 <?php
 
-namespace Database\Seeders;
+namespace Database\Seeders\DemoData;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use RuntimeException;
 
-class MerchantDemoSeeder extends Seeder
+class DemoMerchantSeeder extends Seeder
 {
     /**
      * Seed realistic demo merchant accounts for local Merchant CRUD testing.
@@ -27,6 +27,8 @@ class MerchantDemoSeeder extends Seeder
             if ($roleId === null) {
                 throw new RuntimeException('The active merchant role must exist before seeding demo merchants.');
             }
+
+            $location = $this->defaultLocation();
 
             foreach ($this->merchants() as $merchant) {
                 $userExists = DB::table('users')
@@ -90,12 +92,73 @@ class MerchantDemoSeeder extends Seeder
                         'created_at' => $now,
                     ]),
                 );
+
+                $merchantId = DB::table('merchant_profiles')
+                    ->where('user_id', $userId)
+                    ->value('id');
+
+                DB::table('merchant_addresses')->updateOrInsert(
+                    [
+                        'merchant_id' => $merchantId,
+                        'address_type' => 'business',
+                    ],
+                    fn (bool $exists) => [
+                        'address_line_1' => $merchant['address_line_1'],
+                        'address_line_2' => $merchant['address_line_2'],
+                        'landmark' => $merchant['landmark'],
+                        'country_id' => $location['country_id'],
+                        'state_id' => $location['state_id'],
+                        'city_id' => $location['city_id'],
+                        'pincode' => $merchant['pincode'],
+                        'status' => 'active',
+                        'deleted_at' => null,
+                        'updated_at' => $now,
+                        ...($exists ? [] : [
+                            'uuid' => (string) Str::uuid(),
+                            'created_at' => $now,
+                        ]),
+                    ],
+                );
             }
         });
     }
 
     /**
-     * @return array<int, array<string, string>>
+     * @return array{country_id: int, state_id: int, city_id: int}
+     */
+    private function defaultLocation(): array
+    {
+        $countryId = DB::table('loc_countries')
+            ->where('iso2', 'IN')
+            ->whereNull('deleted_at')
+            ->value('id');
+
+        $stateId = DB::table('loc_states')
+            ->where('country_id', $countryId)
+            ->where('iso2', 'MH')
+            ->whereNull('deleted_at')
+            ->value('id');
+
+        $cityId = DB::table('loc_cities')
+            ->where('country_id', $countryId)
+            ->where('state_id', $stateId)
+            ->where('name', 'Nashik')
+            ->whereNull('deleted_at')
+            ->value('id');
+
+        if ($countryId === null || $stateId === null || $cityId === null) {
+            throw new RuntimeException('India, Maharashtra and Nashik must exist before seeding demo merchants.');
+        }
+
+        return [
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
      */
     private function merchants(): array
     {
@@ -114,6 +177,10 @@ class MerchantDemoSeeder extends Seeder
                 'has_shop_license' => true,
                 'has_fssai' => null,
                 'admin_note' => 'Approved after successful GST and PAN review.',
+                'address_line_1' => 'Shop 12, College Road',
+                'address_line_2' => 'Near Big Bazaar',
+                'landmark' => 'Canada Corner',
+                'pincode' => '422005',
             ],
             [
                 'business_name' => 'Grace & Bloom Fashion',
@@ -129,6 +196,10 @@ class MerchantDemoSeeder extends Seeder
                 'has_shop_license' => true,
                 'has_fssai' => null,
                 'admin_note' => 'Verified successfully after manual profile review.',
+                'address_line_1' => 'Unit 4, Fashion Street',
+                'address_line_2' => 'MG Road',
+                'landmark' => 'Near CBS Signal',
+                'pincode' => '422001',
             ],
             [
                 'business_name' => 'Rangoli Ethnic Wear',
@@ -144,6 +215,10 @@ class MerchantDemoSeeder extends Seeder
                 'has_shop_license' => null,
                 'has_fssai' => null,
                 'admin_note' => 'Waiting for admin review of GST information.',
+                'address_line_1' => 'Plot 18, Gangapur Road',
+                'address_line_2' => null,
+                'landmark' => 'Near Jehan Circle',
+                'pincode' => '422013',
             ],
             [
                 'business_name' => 'Urban Man Clothing',
@@ -159,6 +234,10 @@ class MerchantDemoSeeder extends Seeder
                 'has_shop_license' => true,
                 'has_fssai' => null,
                 'admin_note' => 'Profile details submitted and awaiting admin review.',
+                'address_line_1' => 'Shop 7, City Centre Mall',
+                'address_line_2' => 'Untwadi Road',
+                'landmark' => 'Lavate Nagar',
+                'pincode' => '422009',
             ],
             [
                 'business_name' => 'Classic Menswear Nashik',
@@ -174,6 +253,10 @@ class MerchantDemoSeeder extends Seeder
                 'has_shop_license' => false,
                 'has_fssai' => null,
                 'admin_note' => 'Business profile details need admin review.',
+                'address_line_1' => 'Ground Floor, Main Road',
+                'address_line_2' => 'Shalimar',
+                'landmark' => 'Near Old CBS',
+                'pincode' => '422001',
             ],
         ];
     }

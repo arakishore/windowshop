@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use Database\Seeders\DemoData\DemoSeeder;
+use Database\Seeders\MasterData\SystemFoundationSeeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -14,13 +16,10 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call(AuthRoleSeeder::class);
-        $this->call(LocationMasterSeeder::class);
         $this->call(SystemFoundationSeeder::class);
-        $this->call(ShopCategorySeeder::class);
-        $this->call(ShopAudienceSeeder::class);
         $this->call(SuperAdminSeeder::class);
-        $this->call(MerchantDemoSeeder::class);
-        $this->call(MerchantAddressSeeder::class);
+
+        // Uncomment to seed demo data in development only.
+        $this->call(DemoSeeder::class);
     }
 }

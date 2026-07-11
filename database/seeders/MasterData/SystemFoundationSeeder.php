@@ -1,6 +1,6 @@
 <?php
 
-namespace Database\Seeders;
+namespace Database\Seeders\MasterData;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +13,11 @@ class SystemFoundationSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call(AuthRoleSeeder::class);
+        $this->call(LocationSeeder::class);
+        $this->call(ShopCategorySeeder::class);
+        $this->call(ShopAudienceSeeder::class);
+
         $now = now();
 
         $groups = [
