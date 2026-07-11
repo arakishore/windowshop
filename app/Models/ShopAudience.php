@@ -23,6 +23,11 @@ class ShopAudience extends Model
         'deleted_by',
     ];
 
+    public function getRouteKeyName(): string
+    {
+        return 'uuid';
+    }
+
     public function shops(): BelongsToMany
     {
         return $this->belongsToMany(Shop::class, 'shop_audience_map', 'audience_id', 'shop_id')

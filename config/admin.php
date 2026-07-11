@@ -2,7 +2,7 @@
 
 return [
     'pagination' => [
-        'per_page' => (int) env('ADMIN_PAGINATION_PER_PAGE', 2),
+        'per_page' => (int) env('ADMIN_PAGINATION_PER_PAGE', 50),
     ],
 
     'shop' => [

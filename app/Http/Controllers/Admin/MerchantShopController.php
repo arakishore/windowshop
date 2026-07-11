@@ -268,12 +268,24 @@ class MerchantShopController extends Controller
 
         return [
             'categories' => ShopCategory::query()
-                ->where('status', 'active')
+                ->where(function ($query) use ($shop): void {
+                    $query->where('status', 'active');
+
+                    if ($shop?->shop_category_id) {
+                        $query->orWhere('id', $shop->shop_category_id);
+                    }
+                })
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
             'audiences' => ShopAudience::query()
-                ->where('status', 'active')
+                ->where(function ($query) use ($shop): void {
+                    $query->where('status', 'active');
+
+                    if ($shop?->exists) {
+                        $query->orWhereIn('id', $shop->audiences()->select('shop_audiences.id'));
+                    }
+                })
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),

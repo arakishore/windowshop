@@ -40,7 +40,9 @@
                         <select id="shop_category_id" name="shop_category_id" class="form-select @error('shop_category_id') is-invalid @enderror" required>
                             <option value="">Select category</option>
                             @foreach($categories as $category)
-                                <option value="{{ $category->id }}" @selected((int) old('shop_category_id', $shop?->shop_category_id) === (int) $category->id)>{{ $category->name }}</option>
+                                <option value="{{ $category->id }}" @selected((int) old('shop_category_id', $shop?->shop_category_id) === (int) $category->id)>
+                                    {{ $category->name }}{{ $category->status !== 'active' ? ' (Inactive)' : '' }}
+                                </option>
                             @endforeach
                         </select>
                         @error('shop_category_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
@@ -52,7 +54,9 @@
                             @foreach($audiences as $audience)
                                 <div class="form-check">
                                     <input id="audience_{{ $audience->id }}" name="audience_ids[]" type="checkbox" value="{{ $audience->id }}" class="form-check-input @error('audience_ids') is-invalid @enderror @error('audience_ids.*') is-invalid @enderror" @checked(in_array((int) $audience->id, $selectedAudienceIds, true))>
-                                    <label for="audience_{{ $audience->id }}" class="form-check-label">{{ $audience->name }}</label>
+                                    <label for="audience_{{ $audience->id }}" class="form-check-label">
+                                        {{ $audience->name }}{{ $audience->status !== 'active' ? ' (Inactive)' : '' }}
+                                    </label>
                                 </div>
                             @endforeach
                         </div>

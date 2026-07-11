@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class ShopCategory extends Model
+class Brand extends Model
 {
     use HasUuid, SoftDeletes;
 
@@ -16,7 +16,8 @@ class ShopCategory extends Model
         'name',
         'slug',
         'description',
-        'image_path',
+        'logo_path',
+        'website_url',
         'sort_order',
         'status',
         'created_by',
@@ -24,13 +25,20 @@ class ShopCategory extends Model
         'deleted_by',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'sort_order' => 'integer',
+        ];
+    }
+
     public function getRouteKeyName(): string
     {
         return 'uuid';
     }
 
-    public function shops(): HasMany
+    public function products(): HasMany
     {
-        return $this->hasMany(Shop::class);
+        return $this->hasMany('App\Models\Product');
     }
 }

@@ -4,6 +4,9 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Admin\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\MasterData\BrandController;
+use App\Http\Controllers\Admin\MasterData\ShopAudienceController;
+use App\Http\Controllers\Admin\MasterData\ShopCategoryController;
 use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantShopController;
 
@@ -24,6 +27,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     Route::middleware(['auth', 'admin.role'])->group(function () {
+        Route::resource('master/shop-categories', ShopCategoryController::class)
+            ->except(['show'])
+            ->names('master.shop-categories');
+        Route::resource('master/shop-audiences', ShopAudienceController::class)
+            ->except(['show'])
+            ->names('master.shop-audiences');
+        Route::resource('master/brands', BrandController::class)
+            ->except(['show'])
+            ->names('master.brands');
         Route::get('/merchants/{merchant}/address', [MerchantController::class, 'address'])->name('merchants.address');
         Route::post('/merchants/{merchant}/address', [MerchantController::class, 'updateAddress'])->name('merchants.address.update');
         Route::get('/merchants/address/states', [MerchantController::class, 'addressStates'])->name('merchants.address.states');

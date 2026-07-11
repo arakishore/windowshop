@@ -41,6 +41,17 @@ return [
         ],
     ],
 
+    'brand_logo' => [
+        'max_upload_kb' => 5120,
+        'quality' => 82,
+        'fit' => 'cover',
+        'variants' => [
+            'thumb' => [120, 120],
+            'app' => [256, 256],
+            'web' => [512, 512],
+        ],
+    ],
+
     'product' => [
         'max_upload_kb' => 10240,
         'quality' => 82,

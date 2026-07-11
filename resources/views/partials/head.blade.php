@@ -23,5 +23,9 @@
         body {
             font-size: 12px !important;
         }
+        .navbar-brand img {
+    height: 50px !important;
+    border-radius: 5px !important;
+}
     </style>
 </head>

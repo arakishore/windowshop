@@ -17,6 +17,7 @@ class SystemFoundationSeeder extends Seeder
         $this->call(LocationSeeder::class);
         $this->call(ShopCategorySeeder::class);
         $this->call(ShopAudienceSeeder::class);
+        $this->call(BrandSeeder::class);
 
         $now = now();
 

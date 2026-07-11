@@ -1,4 +1,7 @@
 {{-- Purpose: Provides the shared Limitless sidebar navigation for admin pages. --}}
+@php
+	$isMasterDataActive = request()->routeIs('admin.master.*');
+@endphp
 <!-- Main sidebar -->
 		<div class="sidebar sidebar-dark sidebar-main sidebar-expand-lg">
 
@@ -26,7 +29,7 @@
 
 				<!-- Main navigation -->
 				<div class="sidebar-section">
-					<ul class="nav nav-sidebar" data-nav-type="accordion">
+					<ul class="nav nav-sidebar py-2" data-nav-type="accordion">
 
 						<!-- Main -->
 						<li class="nav-item-header pt-0">
@@ -47,9 +50,32 @@
 								<i class="ph-storefront"></i>
 								<span>
 									Merchants
-									<span class="d-block fw-normal opacity-50">Profiles and verification</span>
 								</span>
 							</a>
+						</li>
+
+						<li class="nav-item nav-item-submenu {{ $isMasterDataActive ? 'nav-item-expanded nav-item-open' : '' }}">
+							<a href="#" class="nav-link {{ $isMasterDataActive ? 'active' : '' }}">
+								<i class="ph-database"></i>
+								<span>Master Data</span>
+							</a>
+							<ul class="nav-group-sub collapse {{ $isMasterDataActive ? 'show' : '' }}">
+								<li class="nav-item">
+									<a href="{{ route('admin.master.shop-categories.index') }}" class="nav-link {{ request()->routeIs('admin.master.shop-categories.*') ? 'active' : '' }}">
+										Shop Categories
+									</a>
+								</li>
+								<li class="nav-item">
+									<a href="{{ route('admin.master.shop-audiences.index') }}" class="nav-link {{ request()->routeIs('admin.master.shop-audiences.*') ? 'active' : '' }}">
+										Shop Audiences
+									</a>
+								</li>
+								<li class="nav-item">
+									<a href="{{ route('admin.master.brands.index') }}" class="nav-link {{ request()->routeIs('admin.master.brands.*') ? 'active' : '' }}">
+										Brands
+									</a>
+								</li>
+							</ul>
 						</li>
 						 
       
