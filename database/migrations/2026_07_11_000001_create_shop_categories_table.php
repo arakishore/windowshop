@@ -18,8 +18,14 @@ return new class extends Migration
 
             $table->id();
             $table->uuid('uuid')->unique();
-            $table->string('name')->unique();
-            $table->string('slug')->unique();
+
+            $table->foreignId('parent_id')
+                ->nullable()
+                ->constrained('shop_categories')
+                ->nullOnDelete();
+
+            $table->string('name');
+            $table->string('slug')->nullable()->unique();
             $table->text('description')->nullable();
             $table->unsignedInteger('sort_order')->default(0)->index();
             $table->string('status', 30)
@@ -31,6 +37,12 @@ return new class extends Migration
             $table->foreignId('deleted_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
+
+            $table->unique(
+                ['parent_id', 'name'],
+                'shop_categories_parent_name_unique',
+            );
+
         });
     }
 

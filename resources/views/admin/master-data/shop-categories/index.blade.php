@@ -14,7 +14,7 @@
 @section('content')
     @php
         $statusClasses = ['active' => 'bg-success', 'inactive' => 'bg-light text-body border'];
-        $hasFilters = $filters['name'] !== '' || $filters['slug'] !== '' || $filters['status'];
+        $hasFilters = $filters['search'] !== '' || $filters['parent_id'] || $filters['status'];
     @endphp
 
     <div class="card">
@@ -29,12 +29,20 @@
             <div class="card-body border-bottom">
                 <form method="GET" action="{{ route('admin.master.shop-categories.index') }}" class="row g-3 align-items-end">
                     <div class="col-md-4">
-                        <label for="name" class="form-label">Name</label>
-                        <input id="name" name="name" type="search" value="{{ $filters['name'] }}" class="form-control" placeholder="Category name">
+                        <label for="search" class="form-label">Search</label>
+                        <input id="search" name="search" type="search" value="{{ $filters['search'] }}" class="form-control" placeholder="Category name, slug, or parent">
                     </div>
                     <div class="col-md-4">
-                        <label for="slug" class="form-label">Slug</label>
-                        <input id="slug" name="slug" type="search" value="{{ $filters['slug'] }}" class="form-control" placeholder="category-slug">
+                        <label for="parent_id" class="form-label">Parent Category</label>
+                        <select id="parent_id" name="parent_id" class="form-select">
+                            <option value="">All</option>
+                            <option value="root" @selected($filters['parent_id'] === 'root')>No Parent / Root Category</option>
+                            @foreach($parentCategories as $parentCategory)
+                                <option value="{{ $parentCategory->id }}" @selected((string) $filters['parent_id'] === (string) $parentCategory->id)>
+                                    {{ $parentCategory->full_path_label ?? $parentCategory->name }}
+                                </option>
+                            @endforeach
+                        </select>
                     </div>
                     <div class="col-md-2">
                         <label for="status" class="form-label">Status</label>
@@ -62,38 +70,35 @@
                 <table class="table table-bordered table-hover align-middle datatable-highlight mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Image</th>
                             <th>Name</th>
-                            <th>Slug</th>
-                            <th>Assigned Shops</th>
+                            <th>Parent Category</th>
+                            <th>Category Path</th>
                             <th>Sort Order</th>
                             <th>Status</th>
-                            <th>Created Date</th>
+                            <th>Created At</th>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($categories as $category)
+                            @php
+                                $path = $categoryPaths[$category->id] ?? $category->name;
+                                $level = max(substr_count($path, ' > '), 0);
+                            @endphp
                             <tr>
-                                <td style="width: 76px;">
-                                    <div class="rounded overflow-hidden bg-light border d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
-                                        @if($category->image_path)
-                                            <img src="{{ asset('storage/'.$category->image_path) }}" alt="{{ $category->name }}" style="width: 100%; height: 100%; object-fit: cover;">
-                                        @else
-                                            <i class="ph-image text-muted"></i>
-                                        @endif
-                                    </div>
-                                </td>
                                 <td>
-                                    <div class="fw-semibold">{{ $category->name }}</div>
+                                    <div class="fw-semibold" style="padding-left: {{ $level * 18 }}px;">
+                                        @if($level > 0)
+                                            <span class="text-muted">{{ str_repeat('-- ', $level) }}</span>
+                                        @endif
+                                        {{ $category->name }}
+                                    </div>
                                     @if($category->description)
                                         <div class="fs-sm text-muted">{{ \Illuminate\Support\Str::limit($category->description, 80) }}</div>
                                     @endif
                                 </td>
-                                <td><code>{{ $category->slug }}</code></td>
-                                <td>
-                                    <span class="badge bg-light text-body border">{{ $category->shops_count }}</span>
-                                </td>
+                                <td>{{ $category->parent?->name ?? '-' }}</td>
+                                <td class="text-muted">{{ $path }}</td>
                                 <td>{{ $category->sort_order }}</td>
                                 <td>
                                     <span class="badge {{ $statusClasses[$category->status] ?? 'bg-secondary' }}">
@@ -103,6 +108,9 @@
                                 <td>{{ $category->created_at?->format('d M Y') }}</td>
                                 <td class="text-center">
                                     <div class="list-icons justify-content-center">
+                                        <a href="{{ route('admin.master.shop-categories.show', $category) }}" class="list-icons-item text-info" data-bs-popup="tooltip" title="View">
+                                            <i class="ph-eye"></i>
+                                        </a>
                                         <a href="{{ route('admin.master.shop-categories.edit', $category) }}" class="list-icons-item text-primary" data-bs-popup="tooltip" title="Edit">
                                             <i class="ph-pencil-simple"></i>
                                         </a>
@@ -121,11 +129,10 @@
                 </table>
             </div>
 
-            <div class="card-body d-lg-flex align-items-lg-center justify-content-lg-between">
-                <div class="text-muted mb-3 mb-lg-0">
-                    Showing {{ $categories->firstItem() }} to {{ $categories->lastItem() }} of {{ $categories->total() }} entries
+            <div class="card-body">
+                <div class="text-muted">
+                    Showing {{ $categories->count() }} entries
                 </div>
-                {{ $categories->onEachSide(1)->links('pagination::admin-datatable') }}
             </div>
         @endif
     </div>

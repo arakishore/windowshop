@@ -1,5 +1,6 @@
 @php
     $isEdit = $category !== null;
+    $selectedParentId = old('parent_id', $category?->parent_id);
     $selectedStatus = old('status', $category?->status ?? 'active');
     $removeImage = old('remove_image') && $category?->image_path;
     $imageMaxMb = (int) ceil(config('images.shop_category.max_upload_kb', 4096) / 1024);
@@ -22,13 +23,27 @@
     </div>
     <div class="card-body">
         <div class="row g-3">
-            <div class="col-md-8">
+            <div class="col-md-5">
                 <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
                 <input id="name" name="name" type="text" value="{{ old('name', $category?->name) }}" class="form-control @error('name') is-invalid @enderror" required>
                 @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 @if($isEdit)
                     <div class="form-text">Slug: {{ $category->slug }}</div>
                 @endif
+            </div>
+
+            <div class="col-md-3">
+                <label for="parent_id" class="form-label">Parent Category</label>
+                <select id="parent_id" name="parent_id" class="form-select @error('parent_id') is-invalid @enderror">
+                    <option value="">No Parent / Root Category</option>
+                    @foreach($parentCategories as $parentCategory)
+                        <option value="{{ $parentCategory->id }}" @selected((int) $selectedParentId === (int) $parentCategory->id)>
+                            {{ $parentCategory->full_path_label ?? $parentCategory->name }}
+                        </option>
+                    @endforeach
+                </select>
+                <div class="form-text">Leave empty to create a top-level category.</div>
+                @error('parent_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
             <div class="col-md-2">

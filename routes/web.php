@@ -31,7 +31,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware(['auth', 'admin.role'])->group(function () {
         Route::resource('master/shop-categories', ShopCategoryController::class)
-            ->except(['show'])
             ->names('master.shop-categories');
         Route::resource('master/shop-audiences', ShopAudienceController::class)
             ->except(['show'])
