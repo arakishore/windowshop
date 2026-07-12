@@ -13,7 +13,7 @@
 
 @section('content')
     @php
-        $statusClasses = ['active' => 'success', 'inactive' => 'secondary'];
+        $statusClasses = ['active' => 'bg-success', 'inactive' => 'bg-light text-body border'];
         $hasFilters = $filters['name'] !== '' || $filters['slug'] !== '' || $filters['status'];
     @endphp
 
@@ -86,7 +86,7 @@
                                 </td>
                                 <td>{{ $audience->sort_order }}</td>
                                 <td>
-                                    <span class="badge bg-{{ $statusClasses[$audience->status] ?? 'secondary' }}">
+                                    <span class="badge {{ $statusClasses[$audience->status] ?? 'bg-secondary' }}">
                                         {{ ucfirst($audience->status) }}
                                     </span>
                                 </td>
@@ -123,15 +123,6 @@
 
 @push('styles')
     <style>
-        .datatable-highlight tbody tr:hover td {
-            background-color: var(--table-hover-bg);
-        }
-
-        .datatable-highlight.table-bordered > tbody > tr:last-child > * {
-            border-bottom-width: var(--table-border-width);
-            border-bottom-style: solid;
-        }
-
         .shop-audience-filter-toggle i {
             display: inline-block;
             transition: transform 0.2s ease-in-out;

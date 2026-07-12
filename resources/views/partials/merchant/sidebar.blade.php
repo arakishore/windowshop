@@ -43,14 +43,14 @@
                     </a>
                 </li>
 
-                <li class="nav-item nav-item-submenu">
-                    <a href="#" class="nav-link">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.shops.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.shops.*') ? 'active' : '' }}">
                         <i class="ph-storefront"></i>
                         <span>Shop Management</span>
                     </a>
-                    <ul class="nav-group-sub collapse">
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.shops.*') ? 'show' : '' }}">
                         <li class="nav-item">
-                            <a href="#" class="nav-link {{ $disabled }}">My Shops</a>
+                            <a href="{{ route('merchant.shops.index') }}" class="nav-link {{ request()->routeIs('merchant.shops.*') ? 'active' : '' }}">My Shops</a>
                         </li>
                     </ul>
                 </li>
@@ -111,7 +111,7 @@
                 <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.password.*') ? 'nav-item-expanded nav-item-open' : '' }}">
                     <a href="#" class="nav-link {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.password.*') ? 'active' : '' }}">
                         <i class="ph-user-gear"></i>
-                        <span>Settings</span>
+                        <span>Account</span>
                     </a>
                     <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.password.*') ? 'show' : '' }}">
                         <li class="nav-item">

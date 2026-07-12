@@ -104,6 +104,198 @@ class MerchantAuthTest extends TestCase
         $this->assertSame('Urban Fits - Pune', session('active_shop_name'));
     }
 
+    public function test_merchant_sees_only_own_shops(): void
+    {
+        $userId = $this->createMerchantUser(email: 'own-shops@example.test');
+        $otherUserId = $this->createMerchantUser(email: 'other-shops@example.test', mobile: '9000000301');
+        $this->createShopForMerchantUser($userId, 'Owner Studio', 'Nashik');
+        $this->createShopForMerchantUser($otherUserId, 'Hidden Studio', 'Pune');
+
+        $response = $this->actingAs(\App\Models\User::findOrFail($userId))->get('/merchant/shops');
+
+        $response->assertOk();
+        $response->assertSee('Owner Studio');
+        $response->assertDontSee('Hidden Studio');
+        $response->assertDontSee('Delete');
+    }
+
+    public function test_merchant_cannot_open_or_update_another_merchants_shop(): void
+    {
+        $userId = $this->createMerchantUser(email: 'shop-owner@example.test');
+        $otherUserId = $this->createMerchantUser(email: 'shop-other@example.test', mobile: '9000000302');
+        $otherShopId = $this->createShopForMerchantUser($otherUserId, 'Other Merchant Shop', 'Pune');
+        $otherShopUuid = $this->shopUuid($otherShopId);
+
+        $this->actingAs(\App\Models\User::findOrFail($userId));
+
+        $this->get("/merchant/shops/{$otherShopUuid}")->assertNotFound();
+        $this->put("/merchant/shops/{$otherShopUuid}", [
+            'name' => 'Should Not Update',
+            'address_line_1' => 'Blocked Road',
+        ])->assertNotFound();
+    }
+
+    public function test_merchant_can_activate_eligible_shop(): void
+    {
+        $userId = $this->createMerchantUser(email: 'activate-shop@example.test');
+        $shopId = $this->createShopForMerchantUser($userId, 'Active Candidate', 'Nashik');
+        $shopUuid = $this->shopUuid($shopId);
+
+        $this->actingAs(\App\Models\User::findOrFail($userId))
+            ->post("/merchant/shops/{$shopUuid}/activate")
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Now managing "Active Candidate - Nashik".');
+
+        $this->assertSame($shopId, session('active_shop_id'));
+        $this->assertSame('Active Candidate - Nashik', session('active_shop_name'));
+    }
+
+    public function test_inactive_shop_cannot_be_activated(): void
+    {
+        $userId = $this->createMerchantUser(email: 'inactive-shop@example.test');
+        $shopId = $this->createShopForMerchantUser($userId, 'Inactive Candidate', 'Nashik', 'inactive');
+        $shopUuid = $this->shopUuid($shopId);
+
+        $this->actingAs(\App\Models\User::findOrFail($userId))
+            ->post("/merchant/shops/{$shopUuid}/activate")
+            ->assertStatus(422);
+
+        $this->assertNull(session('active_shop_id'));
+    }
+
+    public function test_active_shop_name_updates_when_active_shop_name_changes(): void
+    {
+        $userId = $this->createMerchantUser(email: 'rename-shop@example.test');
+        $shopId = $this->createShopForMerchantUser($userId, 'Old Shop Name', 'Nashik');
+        $shopUuid = $this->shopUuid($shopId);
+        $shop = DB::table('shops')->where('id', $shopId)->first();
+
+        $this->actingAs(\App\Models\User::findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId, 'active_shop_name' => 'Old Shop Name - Nashik'])
+            ->put("/merchant/shops/{$shopUuid}", [
+                'name' => 'New Shop Name',
+                'short_description' => 'Updated short text',
+                'email' => ' SHOP@EXAMPLE.TEST ',
+                'mobile' => ' 9000000999 ',
+                'address_line_1' => 'Updated Road',
+                'country_id' => $shop->country_id,
+                'state_id' => $shop->state_id,
+                'city_id' => $shop->city_id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Shop updated successfully.');
+
+        $this->assertDatabaseHas('shops', [
+            'id' => $shopId,
+            'name' => 'New Shop Name',
+            'slug' => 'new-shop-name',
+            'email' => 'shop@example.test',
+            'mobile' => '9000000999',
+            'address_line_1' => 'Updated Road',
+            'updated_by' => $userId,
+        ]);
+        $this->assertSame('New Shop Name - Nashik', session('active_shop_name'));
+    }
+
+    public function test_deactivating_current_shop_selects_another_active_shop(): void
+    {
+        $userId = $this->createMerchantUser(email: 'deactivate-current@example.test');
+        $currentShopId = $this->createShopForMerchantUser($userId, 'Beta Shop', 'Nashik');
+        $nextShopId = $this->createShopForMerchantUser($userId, 'Alpha Shop', 'Pune');
+        $currentShopUuid = $this->shopUuid($currentShopId);
+        $shop = DB::table('shops')->where('id', $currentShopId)->first();
+
+        $this->actingAs(\App\Models\User::findOrFail($userId))
+            ->withSession(['active_shop_id' => $currentShopId, 'active_shop_name' => 'Beta Shop - Nashik'])
+            ->put("/merchant/shops/{$currentShopUuid}", [
+                'name' => 'Beta Shop',
+                'address_line_1' => 'Main Road',
+                'country_id' => $shop->country_id,
+                'state_id' => $shop->state_id,
+                'city_id' => $shop->city_id,
+                'status' => 'inactive',
+            ])
+            ->assertRedirect("/merchant/shops/{$currentShopUuid}/edit")
+            ->assertSessionHas('success', 'Shop updated successfully. Now managing "Alpha Shop - Pune".');
+
+        $this->assertDatabaseHas('shops', [
+            'id' => $currentShopId,
+            'status' => 'inactive',
+        ]);
+        $this->assertSame($nextShopId, session('active_shop_id'));
+        $this->assertSame('Alpha Shop - Pune', session('active_shop_name'));
+    }
+
+    public function test_deactivating_only_current_shop_clears_active_shop_session(): void
+    {
+        $userId = $this->createMerchantUser(email: 'deactivate-only@example.test');
+        $shopId = $this->createShopForMerchantUser($userId, 'Only Shop', 'Nashik');
+        $shopUuid = $this->shopUuid($shopId);
+        $shop = DB::table('shops')->where('id', $shopId)->first();
+
+        $this->actingAs(\App\Models\User::findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId, 'active_shop_name' => 'Only Shop - Nashik'])
+            ->put("/merchant/shops/{$shopUuid}", [
+                'name' => 'Only Shop',
+                'address_line_1' => 'Main Road',
+                'country_id' => $shop->country_id,
+                'state_id' => $shop->state_id,
+                'city_id' => $shop->city_id,
+                'status' => 'inactive',
+            ])
+            ->assertRedirect('/merchant/shops')
+            ->assertSessionHas('warning', 'This shop is now inactive. No other active shop is available.');
+
+        $this->assertDatabaseHas('shops', [
+            'id' => $shopId,
+            'status' => 'inactive',
+        ]);
+        $this->assertNull(session('active_shop_id'));
+        $this->assertNull(session('active_shop_name'));
+    }
+
+    public function test_merchant_cannot_change_protected_shop_status(): void
+    {
+        $userId = $this->createMerchantUser(email: 'protected-status@example.test');
+        $shopId = $this->createShopForMerchantUser($userId, 'Protected Shop', 'Nashik', 'suspended');
+        $shopUuid = $this->shopUuid($shopId);
+        $shop = DB::table('shops')->where('id', $shopId)->first();
+
+        $this->actingAs(\App\Models\User::findOrFail($userId))
+            ->from("/merchant/shops/{$shopUuid}/edit")
+            ->put("/merchant/shops/{$shopUuid}", [
+                'name' => 'Protected Shop',
+                'address_line_1' => 'Main Road',
+                'country_id' => $shop->country_id,
+                'state_id' => $shop->state_id,
+                'city_id' => $shop->city_id,
+                'status' => 'active',
+            ])
+            ->assertRedirect("/merchant/shops/{$shopUuid}/edit")
+            ->assertSessionHasErrors('status');
+
+        $this->assertDatabaseHas('shops', [
+            'id' => $shopId,
+            'status' => 'suspended',
+        ]);
+    }
+
+    public function test_shop_update_validation_errors_display(): void
+    {
+        $userId = $this->createMerchantUser(email: 'shop-validation@example.test');
+        $shopId = $this->createShopForMerchantUser($userId, 'Validation Shop', 'Nashik');
+        $shopUuid = $this->shopUuid($shopId);
+
+        $this->actingAs(\App\Models\User::findOrFail($userId))
+            ->from("/merchant/shops/{$shopUuid}/edit")
+            ->put("/merchant/shops/{$shopUuid}", [
+                'name' => '',
+                'address_line_1' => '',
+            ])
+            ->assertRedirect("/merchant/shops/{$shopUuid}/edit")
+            ->assertSessionHasErrors(['name', 'address_line_1']);
+    }
+
     public function test_authenticated_merchant_can_update_profile(): void
     {
         $userId = $this->createMerchantUser(email: 'profile@example.test', mobile: '9000000001');
@@ -371,6 +563,12 @@ class MerchantAuthTest extends TestCase
 
     private function createRole(string $name, string $slug): int
     {
+        $existingRoleId = DB::table('auth_roles')->where('slug', $slug)->value('id');
+
+        if ($existingRoleId !== null) {
+            return (int) $existingRoleId;
+        }
+
         return (int) DB::table('auth_roles')->insertGetId([
             'uuid' => (string) Str::uuid(),
             'name' => $name,
@@ -381,7 +579,7 @@ class MerchantAuthTest extends TestCase
         ]);
     }
 
-    private function createShopForMerchantUser(int $userId, string $shopName, string $cityName): int
+    private function createShopForMerchantUser(int $userId, string $shopName, string $cityName, string $status = 'active'): int
     {
         $countryId = (int) (DB::table('loc_countries')->where('iso2', 'IN')->value('id')
             ?? DB::table('loc_countries')->insertGetId([
@@ -445,10 +643,15 @@ class MerchantAuthTest extends TestCase
             'country_id' => $countryId,
             'state_id' => $stateId,
             'city_id' => $cityId,
-            'status' => 'active',
+            'status' => $status,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    private function shopUuid(int $shopId): string
+    {
+        return (string) DB::table('shops')->where('id', $shopId)->value('uuid');
     }
 
     private function assertAuthenticatedAsUserId(int $userId): void

@@ -7,6 +7,10 @@ return [
 
     'shop' => [
         'statuses' => [
+            'pending' => [
+                'label' => 'Pending',
+                'badge_class' => 'bg-info',
+            ],
             'active' => [
                 'label' => 'Active',
                 'badge_class' => 'bg-success',
@@ -18,6 +22,10 @@ return [
             'suspended' => [
                 'label' => 'Suspended',
                 'badge_class' => 'bg-warning',
+            ],
+            'rejected' => [
+                'label' => 'Rejected',
+                'badge_class' => 'bg-danger',
             ],
             'deleted' => [
                 'label' => 'Deleted',

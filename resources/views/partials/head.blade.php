@@ -13,6 +13,7 @@
     <link href="{{ asset('assets/admin/fonts/inter/inter.css') }}" rel="stylesheet" type="text/css">
     <link href="{{ asset('assets/admin/icons/phosphor/styles.min.css') }}" rel="stylesheet" type="text/css">
     <link href="{{ asset('assets/admin/css/ltr/all.min.css') }}" id="stylesheet" rel="stylesheet" type="text/css">
+    <link href="{{ asset('assets/admin/css/windowshop-shared.css') }}" rel="stylesheet" type="text/css">
     <!-- /global stylesheets -->
 
     @stack('styles')

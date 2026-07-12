@@ -337,10 +337,10 @@ class MerchantService
     public function accountStatusBadgeClasses(): array
     {
         return [
-            MerchantStatus::ACTIVE->value => 'success',
-            MerchantStatus::INACTIVE->value => 'secondary',
-            MerchantStatus::SUSPENDED->value => 'warning',
-            'deleted' => 'danger',
+            MerchantStatus::ACTIVE->value => 'bg-success',
+            MerchantStatus::INACTIVE->value => 'bg-light text-body border',
+            MerchantStatus::SUSPENDED->value => 'bg-warning',
+            'deleted' => 'bg-danger',
         ];
     }
 
@@ -350,13 +350,13 @@ class MerchantService
     public function verificationStatusBadgeClasses(): array
     {
         return [
-            MerchantVerificationStatus::PENDING->value => 'warning',
-            MerchantVerificationStatus::SUBMITTED->value => 'info',
-            MerchantVerificationStatus::APPROVED->value => 'success',
-            MerchantVerificationStatus::REJECTED->value => 'danger',
-            MerchantVerificationStatus::SUSPENDED->value => 'warning',
-            'verified' => 'success',
-            'unverified' => 'secondary',
+            MerchantVerificationStatus::PENDING->value => 'bg-light text-body border',
+            MerchantVerificationStatus::SUBMITTED->value => 'bg-info',
+            MerchantVerificationStatus::APPROVED->value => 'bg-success',
+            MerchantVerificationStatus::REJECTED->value => 'bg-danger',
+            MerchantVerificationStatus::SUSPENDED->value => 'bg-warning',
+            'verified' => 'bg-success',
+            'unverified' => 'bg-light text-body border',
         ];
     }
 

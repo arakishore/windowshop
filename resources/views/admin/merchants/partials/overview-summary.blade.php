@@ -1,7 +1,7 @@
 {{-- Purpose: Renders the approved Overview content using real merchant data only. --}}
 @php
-    $accountBadge = $accountStatusBadgeClasses[$merchant->status] ?? 'secondary';
-    $verificationBadge = $verificationStatusBadgeClasses[$merchant->verification_status] ?? 'secondary';
+    $accountBadge = $accountStatusBadgeClasses[$merchant->status] ?? 'bg-secondary';
+    $verificationBadge = $verificationStatusBadgeClasses[$merchant->verification_status] ?? 'bg-secondary';
     $flagLabel = function (?bool $value): string {
         if ($value === null) {
             return 'Not answered';
@@ -99,11 +99,11 @@
                     <tbody>
                         <tr>
                             <td class="text-muted">Account Status</td>
-                            <td><span class="badge bg-{{ $accountBadge }}">{{ ucfirst($merchant->status) }}</span></td>
+                            <td><span class="badge {{ $accountBadge }}">{{ ucfirst($merchant->status) }}</span></td>
                         </tr>
                         <tr>
                             <td class="text-muted">Verification Status</td>
-                            <td><span class="badge bg-{{ $verificationBadge }}">{{ \App\Enums\MerchantVerificationStatus::badgeLabelFor($merchant->verification_status) }}</span></td>
+                            <td><span class="badge {{ $verificationBadge }}">{{ \App\Enums\MerchantVerificationStatus::badgeLabelFor($merchant->verification_status) }}</span></td>
                         </tr>
                         <tr>
                             <td class="text-muted">Verified At</td>

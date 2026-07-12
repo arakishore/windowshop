@@ -16,3 +16,12 @@
         </div>
     </div>
 @endif
+
+@if(session('warning'))
+    <div class="px-3 pt-3">
+        <div class="alert alert-warning alert-dismissible fade show mb-0">
+            {{ session('warning') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    </div>
+@endif

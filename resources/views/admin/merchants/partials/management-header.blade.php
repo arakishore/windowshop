@@ -1,7 +1,7 @@
 {{-- Purpose: Shows the approved merchant overview header using real merchant data only. --}}
 @php
-    $accountBadge = $accountStatusBadgeClasses[$merchant->status] ?? 'secondary';
-    $verificationBadge = $verificationStatusBadgeClasses[$merchant->verification_status] ?? 'secondary';
+    $accountBadge = $accountStatusBadgeClasses[$merchant->status] ?? 'bg-secondary';
+    $verificationBadge = $verificationStatusBadgeClasses[$merchant->verification_status] ?? 'bg-secondary';
 @endphp
 
 <div class="card">
@@ -20,8 +20,8 @@
                     <div class="min-w-0">
                         <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                             <h3 class="mb-0">{{ $merchant->business_name }}</h3>
-                            <span class="badge bg-{{ $accountBadge }}">{{ ucfirst($merchant->status) }}</span>
-                            <span class="badge bg-{{ $verificationBadge }}">Verification: {{ \App\Enums\MerchantVerificationStatus::badgeLabelFor($merchant->verification_status) }}</span>
+                            <span class="badge {{ $accountBadge }}">{{ ucfirst($merchant->status) }}</span>
+                            <span class="badge {{ $verificationBadge }}">Verification: {{ \App\Enums\MerchantVerificationStatus::badgeLabelFor($merchant->verification_status) }}</span>
                         </div>
 
                         <div class="row g-2 text-muted small">

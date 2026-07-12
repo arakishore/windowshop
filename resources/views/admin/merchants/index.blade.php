@@ -13,8 +13,8 @@
 
 @section('content')
     @php
-        $statusClasses = ['active' => 'success', 'inactive' => 'secondary', 'suspended' => 'warning'];
-        $verificationClasses = ['pending' => 'secondary', 'submitted' => 'info', 'approved' => 'success', 'rejected' => 'danger', 'suspended' => 'warning'];
+        $statusClasses = ['active' => 'bg-success', 'inactive' => 'bg-light text-body border', 'suspended' => 'bg-warning'];
+        $verificationClasses = ['pending' => 'bg-light text-body border', 'submitted' => 'bg-info', 'approved' => 'bg-success', 'rejected' => 'bg-danger', 'suspended' => 'bg-warning'];
     @endphp
 
     <div class="card">
@@ -117,12 +117,12 @@
                                     @endif
                                 </td>
                                 <td>
-                                    <span class="badge bg-{{ $verificationClasses[$merchant->verification_status] ?? 'secondary' }}">
+                                    <span class="badge {{ $verificationClasses[$merchant->verification_status] ?? 'bg-secondary' }}">
                                         {{ \App\Enums\MerchantVerificationStatus::badgeLabelFor($merchant->verification_status) }}
                                     </span>
                                 </td>
                                 <td>
-                                    <span class="badge bg-{{ $statusClasses[$merchant->status] ?? 'secondary' }}">
+                                    <span class="badge {{ $statusClasses[$merchant->status] ?? 'bg-secondary' }}">
                                         {{ ucfirst($merchant->status) }}
                                     </span>
                                 </td>
@@ -162,20 +162,6 @@
 
 @push('styles')
     <style>
-        .datatable-highlight tbody td.active {
-            background-color: rgba(var(--primary-rgb), 0.08);
-        }
-
-        .datatable-highlight tbody tr:hover td {
-            background-color: var(--table-hover-bg);
-        }
-
-        .datatable-highlight.table-bordered > tbody > tr:last-child > * {
-            border-bottom-width: var(--table-border-width);
-            border-bottom-style: solid;
-            
-        }
-
         .merchant-filter-toggle i {
             display: inline-block;
             transition: transform 0.2s ease-in-out;

@@ -1,0 +1,13 @@
+/* Shared WindowShop refinements for Admin and Merchant Limitless tables. */
+.datatable-highlight tbody td.active {
+    background-color: rgba(var(--primary-rgb), 0.08);
+}
+
+.datatable-highlight tbody tr:hover td {
+    background-color: var(--table-hover-bg);
+}
+
+.datatable-highlight.table-bordered > tbody > tr:last-child > * {
+    border-bottom-width: var(--table-border-width);
+    border-bottom-style: solid;
+}
