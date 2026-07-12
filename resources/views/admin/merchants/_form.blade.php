@@ -98,6 +98,11 @@
                             'has_shop_license' => 'Do you have Shop Establishment Licence?',
                             'has_fssai' => 'Do you have FSSAI Licence?',
                         ];
+
+                        $profileFlagEmptyLabels = [
+                            'has_shop_license' => 'Not answered',
+                            'has_fssai' => 'Not Applicable',
+                        ];
                     @endphp
 
                     @foreach($profileFlags as $field => $label)
@@ -108,7 +113,7 @@
                                     $selectedFlag = old($field, $merchant?->{$field});
                                     $selectedFlagString = $selectedFlag === null || $selectedFlag === '' ? '' : (string) (int) (bool) $selectedFlag;
                                 @endphp
-                                <option value="" @selected($selectedFlag === null || $selectedFlag === '')>Not answered</option>
+                                <option value="" @selected($selectedFlag === null || $selectedFlag === '')>{{ $profileFlagEmptyLabels[$field] ?? 'Not answered' }}</option>
                                 <option value="1" @selected($selectedFlagString === '1')>Yes</option>
                                 <option value="0" @selected($selectedFlagString === '0')>No</option>
                             </select>

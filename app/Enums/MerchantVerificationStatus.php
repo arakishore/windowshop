@@ -21,6 +21,26 @@ enum MerchantVerificationStatus: string
         };
     }
 
+    public function badgeLabel(): string
+    {
+        return match ($this) {
+            self::PENDING => '🟡 Pending',
+            self::SUBMITTED => '🟡 Submitted',
+            self::APPROVED => '🟢 Approved',
+            self::REJECTED => '🔴 Rejected',
+            self::SUSPENDED => '🔴 Suspended',
+        };
+    }
+
+    public static function badgeLabelFor(?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return '🟡 Pending';
+        }
+
+        return self::tryFrom($value)?->badgeLabel() ?? ucwords(str_replace('_', ' ', $value));
+    }
+
     /**
      * @return array<int, string>
      */

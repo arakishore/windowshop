@@ -118,7 +118,7 @@
                                 </td>
                                 <td>
                                     <span class="badge bg-{{ $verificationClasses[$merchant->verification_status] ?? 'secondary' }}">
-                                        {{ ucfirst($merchant->verification_status) }}
+                                        {{ \App\Enums\MerchantVerificationStatus::badgeLabelFor($merchant->verification_status) }}
                                     </span>
                                 </td>
                                 <td>

@@ -21,7 +21,7 @@
                         <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                             <h3 class="mb-0">{{ $merchant->business_name }}</h3>
                             <span class="badge bg-{{ $accountBadge }}">{{ ucfirst($merchant->status) }}</span>
-                            <span class="badge bg-{{ $verificationBadge }}">Verification: {{ ucfirst($merchant->verification_status) }}</span>
+                            <span class="badge bg-{{ $verificationBadge }}">Verification: {{ \App\Enums\MerchantVerificationStatus::badgeLabelFor($merchant->verification_status) }}</span>
                         </div>
 
                         <div class="row g-2 text-muted small">

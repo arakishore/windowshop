@@ -103,7 +103,7 @@
                         </tr>
                         <tr>
                             <td class="text-muted">Verification Status</td>
-                            <td><span class="badge bg-{{ $verificationBadge }}">{{ ucfirst($merchant->verification_status) }}</span></td>
+                            <td><span class="badge bg-{{ $verificationBadge }}">{{ \App\Enums\MerchantVerificationStatus::badgeLabelFor($merchant->verification_status) }}</span></td>
                         </tr>
                         <tr>
                             <td class="text-muted">Verified At</td>
