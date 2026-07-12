@@ -16,6 +16,6 @@
     <form method="POST" action="{{ route('admin.master.product-attributes.values.update', [$group, $value]) }}">
         @csrf
         @method('PUT')
-        @include('admin.master-data.product-attribute-values._form')
+        @include('admin.master-data.product-attribute-group-values._form')
     </form>
 @endsection

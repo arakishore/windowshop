@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class ShopCategory extends Model
+class ProductCategory extends Model
 {
     use HasUuid, SoftDeletes;
 
@@ -31,11 +31,6 @@ class ShopCategory extends Model
         return 'uuid';
     }
 
-    public function shops(): HasMany
-    {
-        return $this->hasMany(Shop::class);
-    }
-
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_id');
@@ -53,6 +48,16 @@ class ShopCategory extends Model
         return $this->children()->with('childrenRecursive');
     }
 
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class, 'product_category_id');
+    }
+
+    public function descriptionTemplates(): HasMany
+    {
+        return $this->hasMany(ProductDescriptionTemplate::class);
+    }
+
     public function getFullPathAttribute(): string
     {
         $names = [];
@@ -67,5 +72,4 @@ class ShopCategory extends Model
 
         return implode(' > ', $names);
     }
-
 }

@@ -7,7 +7,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-class StoreProductAttributeValueRequest extends FormRequest
+class StoreProductAttributeGroupValueRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -28,7 +28,7 @@ class StoreProductAttributeValueRequest extends FormRequest
                 'required',
                 'string',
                 'max:100',
-                Rule::unique('product_attribute_values', 'code')
+                Rule::unique('product_attribute_group_values', 'code')
                     ->where(fn ($query) => $query->where('product_attribute_group_id', $groupId)),
             ],
             'description' => ['nullable', 'string'],

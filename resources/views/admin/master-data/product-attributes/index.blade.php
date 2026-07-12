@@ -25,6 +25,7 @@
                     <tr>
                         <th>Name</th>
                         <th>Code</th>
+                        <th>Selection</th>
                         <th>Number of Values</th>
                         <th>Status</th>
                         <th>Sort Order</th>
@@ -41,6 +42,7 @@
                                 @endif
                             </td>
                             <td><code>{{ $group->code }}</code></td>
+                            <td>{{ ucfirst($group->selection_type) }}</td>
                             <td><span class="badge bg-light text-body border">{{ $group->values_count }}</span></td>
                             <td>
                                 <span class="badge {{ $statusClasses[$group->status] ?? 'bg-secondary' }}">
@@ -101,7 +103,7 @@
                 jQuery('#product-attributes-table').DataTable({
                     responsive: true,
                     pageLength: 500,
-                    order: [[4, 'asc'], [0, 'asc']],
+                    order: [[5, 'asc'], [0, 'asc']],
                     columnDefs: [
                         { orderable: false, targets: -1 },
                         { responsivePriority: 1, targets: 0 },

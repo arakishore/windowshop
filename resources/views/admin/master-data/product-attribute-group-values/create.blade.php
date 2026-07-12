@@ -11,6 +11,6 @@
 @section('content')
     <form method="POST" action="{{ route('admin.master.product-attributes.values.store', $group) }}">
         @csrf
-        @include('admin.master-data.product-attribute-values._form')
+        @include('admin.master-data.product-attribute-group-values._form')
     </form>
 @endsection

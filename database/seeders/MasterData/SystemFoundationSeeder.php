@@ -18,6 +18,7 @@ class SystemFoundationSeeder extends Seeder
         $this->call(ShopCategorySeeder::class);
         $this->call(ShopAudienceSeeder::class);
         $this->call(BrandSeeder::class);
+        $this->call(ProductCategorySeeder::class);
         $this->call(ProductAttributeSeeder::class);
         $this->call(ProductDescriptionTemplateSeeder::class);
 

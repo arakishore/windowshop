@@ -1,6 +1,7 @@
 @php
     $isEdit = $group !== null;
     $selectedStatus = old('status', $group?->status ?? 'active');
+    $selectedSelectionType = old('selection_type', $group?->selection_type ?? 'single');
 @endphp
 
 @if ($errors->any())
@@ -27,6 +28,15 @@
             <input id="code" name="code" type="text" value="{{ old('code', $group?->code) }}" class="form-control @error('code') is-invalid @enderror" required>
             @error('code')<div class="invalid-feedback">{{ $message }}</div>@enderror
             <div class="form-text">Use a stable slug, such as size or color.</div>
+        </div>
+
+        <div class="col-md-2">
+            <label for="selection_type" class="form-label">Selection <span class="text-danger">*</span></label>
+            <select id="selection_type" name="selection_type" class="form-select @error('selection_type') is-invalid @enderror" required>
+                <option value="single" @selected($selectedSelectionType === 'single')>Single</option>
+                <option value="multiple" @selected($selectedSelectionType === 'multiple')>Multiple</option>
+            </select>
+            @error('selection_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
 
         <div class="col-md-2">

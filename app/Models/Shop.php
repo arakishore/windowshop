@@ -6,6 +6,7 @@ use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Shop extends Model
@@ -54,6 +55,19 @@ class Shop extends Model
         return 'uuid';
     }
 
+    protected static function booted(): void
+    {
+        static::updated(function (Shop $shop): void {
+            if (! $shop->wasChanged('shop_category_id')) {
+                return;
+            }
+
+            Product::query()
+                ->where('shop_id', $shop->getKey())
+                ->update(['shop_category_id' => $shop->shop_category_id]);
+        });
+    }
+
     public function merchant(): BelongsTo
     {
         return $this->belongsTo(MerchantProfile::class, 'merchant_id');
@@ -68,6 +82,11 @@ class Shop extends Model
     {
         return $this->belongsToMany(ShopAudience::class, 'shop_audience_map', 'shop_id', 'audience_id')
             ->withTimestamps();
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
     }
 
     public function createdBy(): BelongsTo

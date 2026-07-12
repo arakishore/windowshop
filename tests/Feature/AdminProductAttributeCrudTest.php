@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ProductAttributeGroup;
-use App\Models\ProductAttributeValue;
+use App\Models\ProductAttributeGroupValue;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -63,6 +63,7 @@ class AdminProductAttributeCrudTest extends TestCase
                 'name' => 'Care Instruction',
                 'code' => 'Care Instruction',
                 'description' => 'Product care labels',
+                'selection_type' => 'single',
                 'status' => 'active',
                 'sort_order' => 30,
             ])
@@ -76,6 +77,7 @@ class AdminProductAttributeCrudTest extends TestCase
                 'name' => 'Care',
                 'code' => 'care',
                 'description' => 'Updated care labels',
+                'selection_type' => 'multiple',
                 'status' => 'inactive',
                 'sort_order' => 31,
             ])
@@ -86,6 +88,7 @@ class AdminProductAttributeCrudTest extends TestCase
             'id' => $group->getKey(),
             'name' => 'Care',
             'code' => 'care',
+            'selection_type' => 'multiple',
             'status' => 'inactive',
             'sort_order' => 31,
         ]);
@@ -100,7 +103,7 @@ class AdminProductAttributeCrudTest extends TestCase
         ]);
     }
 
-    public function test_admin_can_manage_product_attribute_values(): void
+    public function test_admin_can_manage_product_attribute_group_values(): void
     {
         $admin = $this->createAdminUser();
         $group = $this->createGroup([
@@ -119,7 +122,7 @@ class AdminProductAttributeCrudTest extends TestCase
             ->get(route('admin.master.product-attributes.values.index', $group))
             ->assertOk()
             ->assertSee('Short')
-            ->assertSee('product-attribute-values-table')
+            ->assertSee('product-attribute-group-values-table')
             ->assertSee('DataTable');
 
         $this->actingAs($admin)
@@ -131,9 +134,9 @@ class AdminProductAttributeCrudTest extends TestCase
                 'sort_order' => 2,
             ])
             ->assertRedirect(route('admin.master.product-attributes.values.index', $group))
-            ->assertSessionHas('success', 'Product attribute value created successfully.');
+            ->assertSessionHas('success', 'Product attribute group value created successfully.');
 
-        $value = ProductAttributeValue::query()
+        $value = ProductAttributeGroupValue::query()
             ->where('product_attribute_group_id', $group->getKey())
             ->where('code', 'long')
             ->firstOrFail();
@@ -147,9 +150,9 @@ class AdminProductAttributeCrudTest extends TestCase
                 'sort_order' => 3,
             ])
             ->assertRedirect(route('admin.master.product-attributes.values.edit', [$group, $value]))
-            ->assertSessionHas('success', 'Product attribute value updated successfully.');
+            ->assertSessionHas('success', 'Product attribute group value updated successfully.');
 
-        $this->assertDatabaseHas('product_attribute_values', [
+        $this->assertDatabaseHas('product_attribute_group_values', [
             'id' => $value->getKey(),
             'name' => 'Extra Long',
             'code' => 'extra-long',
@@ -160,14 +163,14 @@ class AdminProductAttributeCrudTest extends TestCase
         $this->actingAs($admin)
             ->delete(route('admin.master.product-attributes.values.destroy', [$group, $value->fresh()]))
             ->assertRedirect(route('admin.master.product-attributes.values.index', $group))
-            ->assertSessionHas('success', 'Product attribute value deleted successfully.');
+            ->assertSessionHas('success', 'Product attribute group value deleted successfully.');
 
-        $this->assertDatabaseMissing('product_attribute_values', [
+        $this->assertDatabaseMissing('product_attribute_group_values', [
             'id' => $value->getKey(),
         ]);
     }
 
-    public function test_attribute_value_codes_are_unique_within_group(): void
+    public function test_attribute_group_value_codes_are_unique_within_group(): void
     {
         $admin = $this->createAdminUser();
         $group = $this->createGroup([
@@ -240,9 +243,9 @@ class AdminProductAttributeCrudTest extends TestCase
     /**
      * @param array<string, mixed> $attributes
      */
-    private function createValue(array $attributes = []): ProductAttributeValue
+    private function createValue(array $attributes = []): ProductAttributeGroupValue
     {
-        return ProductAttributeValue::query()->create([
+        return ProductAttributeGroupValue::query()->create([
             'product_attribute_group_id' => $attributes['product_attribute_group_id'],
             'name' => $attributes['name'] ?? 'Test Value',
             'code' => $attributes['code'] ?? 'test-value',

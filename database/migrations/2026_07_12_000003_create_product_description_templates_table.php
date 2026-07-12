@@ -18,8 +18,8 @@ return new class extends Migration
 
             $table->id();
             $table->uuid('uuid')->unique();
-            $table->foreignId('shop_category_id')
-                ->constrained('shop_categories')
+            $table->foreignId('product_category_id')
+                ->constrained('product_categories')
                 ->cascadeOnDelete();
             $table->string('name', 150);
             $table->text('short_description_template');
@@ -33,7 +33,7 @@ return new class extends Migration
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
-            $table->index(['shop_category_id', 'status'], 'description_templates_category_status_index');
+            $table->index(['product_category_id', 'status'], 'description_templates_category_status_index');
             $table->index(['status', 'sort_order'], 'description_templates_status_sort_index');
         });
     }

@@ -6,7 +6,8 @@ use App\Http\Controllers\Admin\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupController;
-use App\Http\Controllers\Admin\MasterData\ProductAttributeValueController;
+use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupValueController;
+use App\Http\Controllers\Admin\MasterData\ProductCategoryController;
 use App\Http\Controllers\Admin\MasterData\ProductDescriptionTemplateController;
 use App\Http\Controllers\Admin\MasterData\ShopAudienceController;
 use App\Http\Controllers\Admin\MasterData\ShopCategoryController;
@@ -38,13 +39,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('master/brands', BrandController::class)
             ->except(['show'])
             ->names('master.brands');
+        Route::resource('master/product-categories', ProductCategoryController::class)
+            ->parameters(['product-categories' => 'productCategory'])
+            ->names('master.product-categories');
         Route::resource('master/product-attributes', ProductAttributeGroupController::class)
             ->except(['show'])
             ->parameters(['product-attributes' => 'productAttribute'])
             ->names('master.product-attributes');
-        Route::resource('master/product-attributes/{productAttribute}/values', ProductAttributeValueController::class)
+        Route::resource('master/product-attributes/{productAttribute}/values', ProductAttributeGroupValueController::class)
             ->except(['show'])
-            ->parameters(['values' => 'productAttributeValue'])
+            ->parameters(['values' => 'productAttributeGroupValue'])
             ->names('master.product-attributes.values');
         Route::get('master/description-templates/{description_template}/preview', [ProductDescriptionTemplateController::class, 'preview'])
             ->name('master.description-templates.preview');

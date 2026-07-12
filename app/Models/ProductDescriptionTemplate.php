@@ -12,7 +12,7 @@ class ProductDescriptionTemplate extends Model
 
     protected $fillable = [
         'uuid',
-        'shop_category_id',
+        'product_category_id',
         'name',
         'short_description_template',
         'description_template',
@@ -29,7 +29,7 @@ class ProductDescriptionTemplate extends Model
 
     public function category(): BelongsTo
     {
-        return $this->belongsTo(ShopCategory::class, 'shop_category_id')->withTrashed();
+        return $this->belongsTo(ProductCategory::class, 'product_category_id')->withTrashed();
     }
 
     public function createdBy(): BelongsTo

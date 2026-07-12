@@ -3,7 +3,7 @@
 namespace App\Services\Product;
 
 use App\Models\ProductDescriptionTemplate;
-use App\Models\ShopCategory;
+use App\Models\ProductCategory;
 
 class ProductDescriptionTemplateService
 {
@@ -24,9 +24,9 @@ class ProductDescriptionTemplateService
      * @param array<string, mixed> $values
      * @return array{found: bool, message: ?string, short_description: ?string, description: ?string}
      */
-    public function generateForCategory(ShopCategory|int|null $category, array $values): array
+    public function generateForCategory(ProductCategory|int|null $category, array $values): array
     {
-        $categoryId = $category instanceof ShopCategory ? $category->getKey() : $category;
+        $categoryId = $category instanceof ProductCategory ? $category->getKey() : $category;
 
         if ($categoryId === null) {
             return $this->missingTemplateResult('Select a category before generating a description.');
@@ -60,7 +60,7 @@ class ProductDescriptionTemplateService
     public function activeTemplateForCategory(int $categoryId): ?ProductDescriptionTemplate
     {
         return ProductDescriptionTemplate::query()
-            ->where('shop_category_id', $categoryId)
+            ->where('product_category_id', $categoryId)
             ->where('status', 'active')
             ->orderBy('sort_order')
             ->orderByDesc('updated_at')
@@ -70,7 +70,7 @@ class ProductDescriptionTemplateService
     /**
      * @return array<string, string>
      */
-    public function sampleValues(?ShopCategory $category = null): array
+    public function sampleValues(?ProductCategory $category = null): array
     {
         return [
             'product_name' => 'Cotton Kurti - Red',

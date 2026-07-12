@@ -3,15 +3,15 @@
 namespace App\Http\Controllers\Admin\MasterData;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Admin\MasterData\StoreProductAttributeValueRequest;
-use App\Http\Requests\Admin\MasterData\UpdateProductAttributeValueRequest;
+use App\Http\Requests\Admin\MasterData\StoreProductAttributeGroupValueRequest;
+use App\Http\Requests\Admin\MasterData\UpdateProductAttributeGroupValueRequest;
 use App\Models\ProductAttributeGroup;
-use App\Models\ProductAttributeValue;
+use App\Models\ProductAttributeGroupValue;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
-class ProductAttributeValueController extends Controller
+class ProductAttributeGroupValueController extends Controller
 {
     public function index(ProductAttributeGroup $productAttribute): View
     {
@@ -20,7 +20,7 @@ class ProductAttributeValueController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('admin.master-data.product-attribute-values.index', [
+        return view('admin.master-data.product-attribute-group-values.index', [
             'group' => $productAttribute,
             'values' => $values,
         ]);
@@ -28,13 +28,13 @@ class ProductAttributeValueController extends Controller
 
     public function create(ProductAttributeGroup $productAttribute): View
     {
-        return view('admin.master-data.product-attribute-values.create', [
+        return view('admin.master-data.product-attribute-group-values.create', [
             'group' => $productAttribute,
             'value' => null,
         ]);
     }
 
-    public function store(StoreProductAttributeValueRequest $request, ProductAttributeGroup $productAttribute): RedirectResponse
+    public function store(StoreProductAttributeGroupValueRequest $request, ProductAttributeGroup $productAttribute): RedirectResponse
     {
         $data = $request->validated();
         $actorId = Auth::id();
@@ -51,29 +51,29 @@ class ProductAttributeValueController extends Controller
 
         return redirect()
             ->route('admin.master.product-attributes.values.index', $productAttribute)
-            ->with('success', 'Product attribute value created successfully.');
+            ->with('success', 'Product attribute group value created successfully.');
     }
 
-    public function edit(ProductAttributeGroup $productAttribute, ProductAttributeValue $productAttributeValue): View
+    public function edit(ProductAttributeGroup $productAttribute, ProductAttributeGroupValue $productAttributeGroupValue): View
     {
-        $this->authorizeValue($productAttribute, $productAttributeValue);
+        $this->authorizeValue($productAttribute, $productAttributeGroupValue);
 
-        return view('admin.master-data.product-attribute-values.edit', [
+        return view('admin.master-data.product-attribute-group-values.edit', [
             'group' => $productAttribute,
-            'value' => $productAttributeValue,
+            'value' => $productAttributeGroupValue,
         ]);
     }
 
     public function update(
-        UpdateProductAttributeValueRequest $request,
+        UpdateProductAttributeGroupValueRequest $request,
         ProductAttributeGroup $productAttribute,
-        ProductAttributeValue $productAttributeValue,
+        ProductAttributeGroupValue $productAttributeGroupValue,
     ): RedirectResponse {
-        $this->authorizeValue($productAttribute, $productAttributeValue);
+        $this->authorizeValue($productAttribute, $productAttributeGroupValue);
 
         $data = $request->validated();
 
-        $productAttributeValue->forceFill([
+        $productAttributeGroupValue->forceFill([
             'name' => $data['name'],
             'code' => $data['code'],
             'description' => $this->nullable($data['description'] ?? null),
@@ -83,22 +83,22 @@ class ProductAttributeValueController extends Controller
         ])->save();
 
         return redirect()
-            ->route('admin.master.product-attributes.values.edit', [$productAttribute, $productAttributeValue])
-            ->with('success', 'Product attribute value updated successfully.');
+            ->route('admin.master.product-attributes.values.edit', [$productAttribute, $productAttributeGroupValue])
+            ->with('success', 'Product attribute group value updated successfully.');
     }
 
-    public function destroy(ProductAttributeGroup $productAttribute, ProductAttributeValue $productAttributeValue): RedirectResponse
+    public function destroy(ProductAttributeGroup $productAttribute, ProductAttributeGroupValue $productAttributeGroupValue): RedirectResponse
     {
-        $this->authorizeValue($productAttribute, $productAttributeValue);
+        $this->authorizeValue($productAttribute, $productAttributeGroupValue);
 
-        $productAttributeValue->delete();
+        $productAttributeGroupValue->delete();
 
         return redirect()
             ->route('admin.master.product-attributes.values.index', $productAttribute)
-            ->with('success', 'Product attribute value deleted successfully.');
+            ->with('success', 'Product attribute group value deleted successfully.');
     }
 
-    private function authorizeValue(ProductAttributeGroup $group, ProductAttributeValue $value): void
+    private function authorizeValue(ProductAttributeGroup $group, ProductAttributeGroupValue $value): void
     {
         abort_unless((int) $value->product_attribute_group_id === (int) $group->getKey(), 404);
     }

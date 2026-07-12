@@ -1,4 +1,4 @@
-{{-- Purpose: Lists product attribute values for one attribute group using client-side DataTables. --}}
+{{-- Purpose: Lists product attribute group values for one attribute group using client-side DataTables. --}}
 @extends('layouts.admin')
 
 @section('breadcrumb')
@@ -25,10 +25,10 @@
     </div>
 
     @if($values->isEmpty())
-        <x-empty-state icon="ph-list-bullets" title="No attribute values found" message="Create reusable values for this product attribute." />
+        <x-empty-state icon="ph-list-bullets" title="No attribute group values found" message="Create reusable values for this product attribute." />
     @else
         <div class="table-responsive datatable-wrapper border rounded bg-white">
-            <table id="product-attribute-values-table" class="table datatable-basic table-bordered table-striped table-hover mb-0">
+            <table id="product-attribute-group-values-table" class="table datatable-basic table-bordered table-striped table-hover mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>Name</th>
@@ -59,10 +59,10 @@
                                     <a href="{{ route('admin.master.product-attributes.values.edit', [$group, $value]) }}" class="list-icons-item text-primary" data-bs-popup="tooltip" title="Edit">
                                         <i class="ph-pencil-simple"></i>
                                     </a>
-                                    <form method="POST" action="{{ route('admin.master.product-attributes.values.destroy', [$group, $value]) }}" class="d-inline js-delete-product-attribute-value-form">
+                                    <form method="POST" action="{{ route('admin.master.product-attributes.values.destroy', [$group, $value]) }}" class="d-inline js-delete-product-attribute-group-value-form">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="button" class="list-icons-item text-danger border-0 bg-transparent p-0 js-delete-product-attribute-value" data-bs-popup="tooltip" title="Delete">
+                                        <button type="button" class="list-icons-item text-danger border-0 bg-transparent p-0 js-delete-product-attribute-group-value" data-bs-popup="tooltip" title="Delete">
                                             <i class="ph-trash"></i>
                                         </button>
                                     </form>
@@ -101,7 +101,7 @@
                     },
                 });
 
-                jQuery('#product-attribute-values-table').DataTable({
+                jQuery('#product-attribute-group-values-table').DataTable({
                     responsive: true,
                     pageLength: 25,
                     order: [[3, 'asc'], [0, 'asc']],
@@ -114,17 +114,17 @@
             }
 
             document.addEventListener('click', function (event) {
-                const button = event.target.closest('.js-delete-product-attribute-value');
+                const button = event.target.closest('.js-delete-product-attribute-group-value');
 
                 if (!button) {
                     return;
                 }
 
-                const form = button.closest('.js-delete-product-attribute-value-form');
+                const form = button.closest('.js-delete-product-attribute-group-value-form');
 
                 bootbox.confirm({
-                    title: 'Delete Attribute Value',
-                    message: 'Are you sure you want to delete this product attribute value?',
+                    title: 'Delete Attribute Group Value',
+                    message: 'Are you sure you want to delete this product attribute group value?',
                     buttons: {
                         cancel: {
                             label: 'Cancel',

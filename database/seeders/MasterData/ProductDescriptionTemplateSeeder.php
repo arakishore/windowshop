@@ -13,7 +13,7 @@ class ProductDescriptionTemplateSeeder extends Seeder
      */
     public function run(): void
     {
-        $categoryId = DB::table('shop_categories')
+        $categoryId = DB::table('product_categories')
             ->whereNull('parent_id')
             ->where('name', 'Apparel')
             ->where('status', 'active')
@@ -26,13 +26,13 @@ class ProductDescriptionTemplateSeeder extends Seeder
 
         $now = now();
         $exists = DB::table('product_description_templates')
-            ->where('shop_category_id', $categoryId)
+            ->where('product_category_id', $categoryId)
             ->where('name', 'Default Apparel Description')
             ->exists();
 
         DB::table('product_description_templates')->updateOrInsert(
             [
-                'shop_category_id' => $categoryId,
+                'product_category_id' => $categoryId,
                 'name' => 'Default Apparel Description',
             ],
             [

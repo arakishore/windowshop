@@ -170,6 +170,7 @@ class ProductAttributeSeeder extends Seeder
                 'name' => 'Occasion',
                 'code' => 'occasion',
                 'description' => 'Suitable product occasions',
+                'selection_type' => 'multiple',
                 'values' => [
                     'Casual',
                     'Formal',
@@ -191,6 +192,7 @@ class ProductAttributeSeeder extends Seeder
                 fn (bool $exists) => [
                     'name' => $group['name'],
                     'description' => $group['description'],
+                    'selection_type' => $group['selection_type'] ?? 'single',
                     'status' => 'active',
                     'sort_order' => $groupIndex + 1,
                     'updated_at' => $now,
@@ -206,7 +208,7 @@ class ProductAttributeSeeder extends Seeder
                 ->value('id');
 
             foreach ($group['values'] as $valueIndex => $name) {
-                DB::table('product_attribute_values')->updateOrInsert(
+                DB::table('product_attribute_group_values')->updateOrInsert(
                     [
                         'product_attribute_group_id' => $groupId,
                         'code' => Str::slug($name),

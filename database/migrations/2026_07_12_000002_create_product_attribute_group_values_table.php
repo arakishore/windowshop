@@ -11,19 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('product_attribute_groups', function (Blueprint $table) {
+        Schema::create('product_attribute_group_values', function (Blueprint $table) {
             $table->engine = 'InnoDB';
             $table->charset = 'utf8mb4';
             $table->collation = 'utf8mb4_unicode_ci';
 
             $table->id();
             $table->uuid('uuid')->unique();
+            $table->foreignId('product_attribute_group_id');
             $table->string('name');
-            $table->string('code')->unique();
+            $table->string('code');
             $table->text('description')->nullable();
-            $table->string('selection_type', 30)
-                ->default('single')
-                ->comment('single,multiple');
             $table->string('status', 30)
                 ->default('active')
                 ->comment('active,inactive')
@@ -32,6 +30,14 @@ return new class extends Migration
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
+
+            $table->foreign('product_attribute_group_id', 'pagv_group_fk')
+                ->references('id')
+                ->on('product_attribute_groups')
+                ->cascadeOnDelete();
+
+            $table->unique(['product_attribute_group_id', 'code'], 'attribute_group_values_group_code_unique');
+            $table->index(['product_attribute_group_id', 'status'], 'attribute_group_values_group_status_index');
         });
     }
 
@@ -40,6 +46,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('product_attribute_groups');
+        Schema::dropIfExists('product_attribute_group_values');
     }
 };

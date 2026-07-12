@@ -16,6 +16,7 @@ class ProductAttributeGroup extends Model
         'name',
         'code',
         'description',
+        'selection_type',
         'status',
         'sort_order',
         'created_by',
@@ -29,9 +30,19 @@ class ProductAttributeGroup extends Model
 
     public function values(): HasMany
     {
-        return $this->hasMany(ProductAttributeValue::class)
+        return $this->hasMany(ProductAttributeGroupValue::class)
             ->orderBy('sort_order')
             ->orderBy('name');
+    }
+
+    public function productAttributes(): HasMany
+    {
+        return $this->hasMany(ProductAttribute::class, 'product_attribute_group_id');
+    }
+
+    public function variantAttributes(): HasMany
+    {
+        return $this->hasMany(ProductVariantAttribute::class, 'product_attribute_group_id');
     }
 
     public function createdBy(): BelongsTo

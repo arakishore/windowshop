@@ -5,8 +5,9 @@ namespace App\Models;
 use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class ProductAttributeValue extends Model
+class ProductAttributeGroupValue extends Model
 {
     use HasUuid;
 
@@ -30,6 +31,16 @@ class ProductAttributeValue extends Model
     public function group(): BelongsTo
     {
         return $this->belongsTo(ProductAttributeGroup::class, 'product_attribute_group_id');
+    }
+
+    public function productAttributes(): HasMany
+    {
+        return $this->hasMany(ProductAttribute::class, 'product_attribute_group_value_id');
+    }
+
+    public function variantAttributes(): HasMany
+    {
+        return $this->hasMany(ProductVariantAttribute::class, 'product_attribute_group_value_id');
     }
 
     public function createdBy(): BelongsTo

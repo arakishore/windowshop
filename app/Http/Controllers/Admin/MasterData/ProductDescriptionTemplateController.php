@@ -7,7 +7,7 @@ use App\Http\Requests\Admin\MasterData\PreviewProductDescriptionTemplateRequest;
 use App\Http\Requests\Admin\MasterData\StoreProductDescriptionTemplateRequest;
 use App\Http\Requests\Admin\MasterData\UpdateProductDescriptionTemplateRequest;
 use App\Models\ProductDescriptionTemplate;
-use App\Models\ShopCategory;
+use App\Models\ProductCategory;
 use App\Services\Product\ProductDescriptionTemplateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -48,7 +48,7 @@ class ProductDescriptionTemplateController extends Controller
         $actorId = Auth::id();
 
         ProductDescriptionTemplate::create([
-            'shop_category_id' => $data['shop_category_id'],
+            'product_category_id' => $data['product_category_id'],
             'name' => $data['name'],
             'short_description_template' => $data['short_description_template'],
             'description_template' => $data['description_template'],
@@ -79,7 +79,7 @@ class ProductDescriptionTemplateController extends Controller
         $data = $request->validated();
 
         $descriptionTemplate->forceFill([
-            'shop_category_id' => $data['shop_category_id'],
+            'product_category_id' => $data['product_category_id'],
             'name' => $data['name'],
             'short_description_template' => $data['short_description_template'],
             'description_template' => $data['description_template'],
@@ -137,7 +137,7 @@ class ProductDescriptionTemplateController extends Controller
 
     private function categories(): \Illuminate\Support\Collection
     {
-        return ShopCategory::query()
+        return ProductCategory::query()
             ->whereIn('status', ['active', 'inactive'])
             ->orderBy('sort_order')
             ->orderBy('name')

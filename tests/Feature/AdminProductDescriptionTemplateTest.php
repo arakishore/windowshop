@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ProductDescriptionTemplate;
-use App\Models\ShopCategory;
+use App\Models\ProductCategory;
 use App\Models\User;
 use App\Services\Product\ProductDescriptionTemplateService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -48,7 +48,7 @@ class AdminProductDescriptionTemplateTest extends TestCase
 
         $this->actingAs($admin)
             ->put(route('admin.master.description-templates.update', $template), [
-                'shop_category_id' => $category->getKey(),
+                'product_category_id' => $category->getKey(),
                 'name' => 'Updated Apparel Default',
                 'short_description_template' => 'Buy {product_name}',
                 'description_template' => 'Buy {product_name} from {shop_name}.',
@@ -87,7 +87,7 @@ class AdminProductDescriptionTemplateTest extends TestCase
         $this->actingAs($admin)
             ->from(route('admin.master.description-templates.create'))
             ->post(route('admin.master.description-templates.store'), [
-                'shop_category_id' => $category->getKey(),
+                'product_category_id' => $category->getKey(),
                 'name' => 'Second Active',
                 'short_description_template' => '{product_name}',
                 'description_template' => '{product_name}',
@@ -183,9 +183,9 @@ class AdminProductDescriptionTemplateTest extends TestCase
         return $user;
     }
 
-    private function createCategory(string $name, string $slug): ShopCategory
+    private function createCategory(string $name, string $slug): ProductCategory
     {
-        return ShopCategory::query()->create([
+        return ProductCategory::query()->create([
             'name' => $name,
             'slug' => $slug,
             'status' => 'active',
@@ -196,10 +196,10 @@ class AdminProductDescriptionTemplateTest extends TestCase
     /**
      * @param array<string, mixed> $attributes
      */
-    private function createTemplate(ShopCategory $category, array $attributes = []): ProductDescriptionTemplate
+    private function createTemplate(ProductCategory $category, array $attributes = []): ProductDescriptionTemplate
     {
         return ProductDescriptionTemplate::query()->create([
-            'shop_category_id' => $category->getKey(),
+            'product_category_id' => $category->getKey(),
             'name' => $attributes['name'] ?? 'Default Template',
             'short_description_template' => $attributes['short_description_template'] ?? '{product_name} {category}',
             'description_template' => $attributes['description_template'] ?? '{product_name} from {shop_name}.',

@@ -1,6 +1,6 @@
 @php
     $isEdit = $template !== null;
-    $selectedCategoryId = old('shop_category_id', $template?->shop_category_id);
+    $selectedCategoryId = old('product_category_id', $template?->product_category_id);
     $selectedStatus = old('status', $template?->status ?? 'active');
 @endphp
 
@@ -18,8 +18,8 @@
 <div class="border rounded bg-white p-3">
     <div class="row g-3">
         <div class="col-md-5">
-            <label for="shop_category_id" class="form-label">Category <span class="text-danger">*</span></label>
-            <select id="shop_category_id" name="shop_category_id" class="form-select @error('shop_category_id') is-invalid @enderror" required>
+            <label for="product_category_id" class="form-label">Category <span class="text-danger">*</span></label>
+            <select id="product_category_id" name="product_category_id" class="form-select @error('product_category_id') is-invalid @enderror" required>
                 <option value="">Select category</option>
                 @foreach($categories as $category)
                     <option value="{{ $category->id }}" @selected((int) $selectedCategoryId === (int) $category->id)>
@@ -27,7 +27,7 @@
                     </option>
                 @endforeach
             </select>
-            @error('shop_category_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            @error('product_category_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
 
         <div class="col-md-3">

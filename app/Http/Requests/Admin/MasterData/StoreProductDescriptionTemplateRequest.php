@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Admin\MasterData;
 
 use App\Models\ProductDescriptionTemplate;
-use App\Models\ShopCategory;
+use App\Models\ProductCategory;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -21,10 +21,10 @@ class StoreProductDescriptionTemplateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'shop_category_id' => [
+            'product_category_id' => [
                 'required',
                 'integer',
-                Rule::exists('shop_categories', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+                Rule::exists('product_categories', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
             'name' => ['required', 'string', 'max:150'],
             'short_description_template' => ['required', 'string'],
@@ -41,7 +41,7 @@ class StoreProductDescriptionTemplateRequest extends FormRequest
                 return;
             }
 
-            $categoryId = $this->integer('shop_category_id') ?: null;
+            $categoryId = $this->integer('product_category_id') ?: null;
 
             if ($categoryId === null) {
                 return;
@@ -51,13 +51,13 @@ class StoreProductDescriptionTemplateRequest extends FormRequest
             $templateId = $template instanceof ProductDescriptionTemplate ? $template->getKey() : null;
 
             $activeExists = ProductDescriptionTemplate::query()
-                ->where('shop_category_id', $categoryId)
+                ->where('product_category_id', $categoryId)
                 ->where('status', 'active')
                 ->when($templateId !== null, fn ($query) => $query->whereKeyNot($templateId))
                 ->exists();
 
             if ($activeExists) {
-                $categoryName = ShopCategory::query()->whereKey($categoryId)->value('name') ?? 'this category';
+                $categoryName = ProductCategory::query()->whereKey($categoryId)->value('name') ?? 'this category';
                 $validator->errors()->add('status', "Only one active description template is allowed for {$categoryName}.");
             }
         });
