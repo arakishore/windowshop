@@ -36,6 +36,8 @@ WindowShop interfaces should feel consistent across admin, merchant, customer, s
 - Tables must have clear headings, meaningful empty states, and predictable actions.
 - Align numbers consistently and format dates, money, and status through shared helpers.
 - Provide search/filter feedback and a clear-filter action.
+- Large operational modules use Laravel pagination with server-side search and filtering, not client-side DataTables.
+- Small master-data modules use client-side DataTables with all records loaded, client-side search, and sorting.
 - Paginate every potentially unbounded list.
 - Preserve filters and page state when returning from a detail screen where practical.
 - On small screens, use responsive columns, cards, or controlled horizontal scrolling.
@@ -69,4 +71,3 @@ WindowShop interfaces should feel consistent across admin, merchant, customer, s
 - Provide alternative text for informative images.
 - Test loading, empty, error, disabled, and permission-denied states.
 - Review new UI against existing components before merging.
-

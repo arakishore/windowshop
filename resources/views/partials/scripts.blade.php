@@ -6,6 +6,7 @@
 <!-- Theme JS files -->
 <script src="{{ asset('assets/admin/js/jquery/jquery.min.js') }}"></script>
 <script src="{{ asset('assets/admin/js/vendor/notifications/bootbox.min.js') }}"></script>
+@stack('vendor_scripts')
 <script src="{{ asset('assets/admin/js/app.js') }}"></script>
 <!-- /theme JS files -->
 

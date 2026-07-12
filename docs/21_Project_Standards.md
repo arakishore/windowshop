@@ -158,7 +158,43 @@ Suggested error shape:
 }
 ```
 
-## 6. Validation Standards
+## 6. List Pagination Standards
+
+WindowShop uses two list strategies based on expected record volume.
+
+### Large Modules
+
+Use Laravel pagination with server-side search/filtering. Do not use client-side DataTables for these modules.
+
+Large modules include:
+
+- Merchants
+- Products
+- Orders
+- Customers
+- Inventory
+- Transactions
+- Reports
+
+### Master Data
+
+Use client-side DataTables for small master-data lists. Load all records, use DataTables search and sorting, and do not add Laravel pagination unless the dataset outgrows the expected range.
+
+Master-data modules include:
+
+- Shop Categories
+- Shop Audiences
+- Brands
+- Product Attributes
+- Product Attribute Values
+- Units
+- Countries
+- States
+- Cities, when the dataset is not huge
+
+Expected master-data counts are usually small: shop categories around 20-100 records, shop audiences around 10-50, brands around 100-500, product attribute groups around 5-20, and product attribute values around 10-200. Client-side DataTables keeps these screens simple and responsive.
+
+## 7. Validation Standards
 
 - Treat every external value as untrusted.
 - Validate through Form Requests or dedicated validators.
@@ -169,7 +205,7 @@ Suggested error shape:
 - Validate again at the database layer through constraints where possible.
 - Return safe, actionable validation messages without revealing protected records.
 
-## 7. Logging Standards
+## 8. Logging Standards
 
 - Follow [13_Logging_Audit_System.md](13_Logging_Audit_System.md).
 - Use structured logs with event names and correlation/request IDs.
@@ -179,7 +215,7 @@ Suggested error shape:
 - Redact sensitive provider requests and responses.
 - Append-only audit history is separate from transient diagnostic logging.
 
-## 8. File Upload Standards
+## 9. File Upload Standards
 
 - Validate file size, extension, MIME type, and actual content where feasible.
 - Use server-generated filenames and never trust the original filename.
@@ -190,7 +226,7 @@ Suggested error shape:
 - Process images and large files asynchronously when appropriate.
 - Remove temporary and abandoned files through scheduled cleanup.
 
-## 9. Security Standards
+## 10. Security Standards
 
 - Follow [12_Security_Guidelines.md](12_Security_Guidelines.md).
 - Deny access by default and apply least privilege.
@@ -202,7 +238,7 @@ Suggested error shape:
 - Apply rate limits and stronger verification to sensitive operations.
 - Review dependencies and security advisories before releases.
 
-## 10. Git Standards
+## 11. Git Standards
 
 - Keep commits focused, reviewable, and written in imperative language.
 - Use branches named by intent, such as `feature/merchant-approval`, `fix/session-timeout`, or `docs/database-standards`.
@@ -220,7 +256,7 @@ type(scope): concise imperative summary
 
 Common types include `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, and `perf`.
 
-## 11. Coding Standards
+## 12. Coding Standards
 
 - Use PHP 8.2+ language features where they improve clarity.
 - Follow PSR-12 and Laravel conventions.
@@ -233,7 +269,7 @@ Common types include `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, and `pe
 - Remove dead code instead of commenting it out.
 - Add tests proportional to behavior and risk.
 
-## 12. Folder Structure
+## 13. Folder Structure
 
 - Follow [10_File_Folder_Structure.md](10_File_Folder_Structure.md).
 - Place code by responsibility, not by convenience.
@@ -242,7 +278,7 @@ Common types include `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, and `pe
 - Shared abstractions require more than one proven consumer.
 - Avoid catch-all utility folders and circular dependencies between modules.
 
-## 13. Localization Strategy
+## 14. Localization Strategy
 
 WindowShop Version 1 targets one operating region:
 
@@ -262,7 +298,7 @@ Dedicated `system_languages`, `system_currencies`, and `system_timezones` master
 
 Business modules must consume localization defaults through the settings boundary instead of hardcoding numeric database IDs.
 
-## 14. Merchant Foundation Standards
+## 15. Merchant Foundation Standards
 
 - Merchant Module Phase 1 is the database foundation only: `merchant_profiles`, `merchant_addresses`, `merchant_documents`, `merchant_bank_accounts`, and `merchant_verifications`.
 - Merchant identity uses `users` plus `auth_roles`; do not create separate admin, merchant, or customer user tables.
@@ -271,7 +307,7 @@ Business modules must consume localization defaults through the settings boundar
 - Merchant bank `account_number` values must be encrypted in the model or service layer, masked in all output, and excluded from audit-log `old_values` and `new_values`.
 - One default merchant address or bank account is enforced in application logic, not through a simple boolean unique constraint.
 
-## 15. Future Architecture Decisions
+## 16. Future Architecture Decisions
 
 - Record significant decisions in `docs/decisions/` before or alongside implementation.
 - Every ADR includes: Problem, Decision, Alternatives Considered, Reason, and Consequences.

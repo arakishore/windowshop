@@ -75,6 +75,16 @@
 										Brands
 									</a>
 								</li>
+								<li class="nav-item">
+									<a href="{{ route('admin.master.product-attributes.index') }}" class="nav-link {{ request()->routeIs('admin.master.product-attributes.*') ? 'active' : '' }}">
+										Product Attributes
+									</a>
+								</li>
+								<li class="nav-item">
+									<a href="{{ route('admin.master.description-templates.index') }}" class="nav-link {{ request()->routeIs('admin.master.description-templates.*') ? 'active' : '' }}">
+										Description Templates
+									</a>
+								</li>
 							</ul>
 						</li>
 						 

@@ -33,4 +33,9 @@ class ShopCategory extends Model
     {
         return $this->hasMany(Shop::class);
     }
+
+    public function productDescriptionTemplates(): HasMany
+    {
+        return $this->hasMany(ProductDescriptionTemplate::class);
+    }
 }

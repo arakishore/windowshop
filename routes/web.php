@@ -5,6 +5,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
+use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupController;
+use App\Http\Controllers\Admin\MasterData\ProductAttributeValueController;
+use App\Http\Controllers\Admin\MasterData\ProductDescriptionTemplateController;
 use App\Http\Controllers\Admin\MasterData\ShopAudienceController;
 use App\Http\Controllers\Admin\MasterData\ShopCategoryController;
 use App\Http\Controllers\Admin\MerchantController;
@@ -36,6 +39,21 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('master/brands', BrandController::class)
             ->except(['show'])
             ->names('master.brands');
+        Route::resource('master/product-attributes', ProductAttributeGroupController::class)
+            ->except(['show'])
+            ->parameters(['product-attributes' => 'productAttribute'])
+            ->names('master.product-attributes');
+        Route::resource('master/product-attributes/{productAttribute}/values', ProductAttributeValueController::class)
+            ->except(['show'])
+            ->parameters(['values' => 'productAttributeValue'])
+            ->names('master.product-attributes.values');
+        Route::get('master/description-templates/{description_template}/preview', [ProductDescriptionTemplateController::class, 'preview'])
+            ->name('master.description-templates.preview');
+        Route::post('master/description-templates/{description_template}/preview', [ProductDescriptionTemplateController::class, 'generatePreview'])
+            ->name('master.description-templates.preview.generate');
+        Route::resource('master/description-templates', ProductDescriptionTemplateController::class)
+            ->except(['show'])
+            ->names('master.description-templates');
         Route::get('/merchants/{merchant}/address', [MerchantController::class, 'address'])->name('merchants.address');
         Route::post('/merchants/{merchant}/address', [MerchantController::class, 'updateAddress'])->name('merchants.address.update');
         Route::get('/merchants/address/states', [MerchantController::class, 'addressStates'])->name('merchants.address.states');
