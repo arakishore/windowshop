@@ -36,30 +36,43 @@ class ShopCategorySeeder extends Seeder
             $apparel = $this->createCategory('Apparel', null, 1);
 
             $men = $this->createCategory('Men', $apparel, 1);
-            $menTopWear = $this->createCategory('Top Wear', $men, 1);
-            $this->createChildren($menTopWear, ['T-Shirts', 'Shirts', 'Polo T-Shirts', 'Sweatshirts', 'Jackets']);
-
-            $menBottomWear = $this->createCategory('Bottom Wear', $men, 2);
-            $this->createChildren($menBottomWear, ['Jeans', 'Trousers', 'Shorts', 'Track Pants']);
-
-            $menEthnicWear = $this->createCategory('Ethnic Wear', $men, 3);
-            $this->createChildren($menEthnicWear, ['Kurtas', 'Kurta Sets', 'Sherwanis']);
-            $this->createCategory('Innerwear', $men, 4);
-            $this->createCategory('Sleepwear', $men, 5);
-            $this->createCategory('Winter Wear', $men, 6);
+            $this->createChildren($men, [
+                'T-Shirts',
+                'Shirts',
+                'Polo T-Shirts',
+                'Sweatshirts',
+                'Jackets',
+                'Jeans',
+                'Trousers',
+                'Shorts',
+                'Track Pants',
+                'Kurtas',
+                'Kurta Sets',
+                'Sherwanis',
+                'Innerwear',
+                'Sleepwear',
+                'Winter Wear',
+            ]);
 
             $women = $this->createCategory('Women', $apparel, 2);
-            $womenWesternWear = $this->createCategory('Western Wear', $women, 1);
-            $this->createChildren($womenWesternWear, ['Tops', 'T-Shirts', 'Dresses', 'Jumpsuits']);
-
-            $womenBottomWear = $this->createCategory('Bottom Wear', $women, 2);
-            $this->createChildren($womenBottomWear, ['Jeans', 'Trousers', 'Skirts', 'Leggings']);
-
-            $womenEthnicWear = $this->createCategory('Ethnic Wear', $women, 3);
-            $this->createChildren($womenEthnicWear, ['Kurtis', 'Kurta Sets', 'Sarees', 'Salwar Suits', 'Lehengas']);
-            $this->createCategory('Innerwear', $women, 4);
-            $this->createCategory('Sleepwear', $women, 5);
-            $this->createCategory('Winter Wear', $women, 6);
+            $this->createChildren($women, [
+                'Tops',
+                'T-Shirts',
+                'Dresses',
+                'Jumpsuits',
+                'Jeans',
+                'Trousers',
+                'Skirts',
+                'Leggings',
+                'Kurtis',
+                'Kurta Sets',
+                'Sarees',
+                'Salwar Suits',
+                'Lehengas',
+                'Innerwear',
+                'Sleepwear',
+                'Winter Wear',
+            ]);
 
             $this->createCategory('Boys', $apparel, 3);
             $this->createCategory('Girls', $apparel, 4);

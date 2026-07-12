@@ -14,7 +14,10 @@ class ProductDescriptionTemplateSeeder extends Seeder
     public function run(): void
     {
         $categoryId = DB::table('shop_categories')
-            ->where('slug', 'apparel')
+            ->whereNull('parent_id')
+            ->where('name', 'Apparel')
+            ->where('status', 'active')
+            ->whereNull('deleted_at')
             ->value('id');
 
         if ($categoryId === null) {

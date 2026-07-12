@@ -83,13 +83,13 @@
                         @foreach($categories as $category)
                             @php
                                 $path = $categoryPaths[$category->id] ?? $category->name;
-                                $level = max(substr_count($path, ' > '), 0);
+                                $depth = (int) ($category->depth ?? 0);
                             @endphp
                             <tr>
                                 <td>
-                                    <div class="fw-semibold" style="padding-left: {{ $level * 18 }}px;">
-                                        @if($level > 0)
-                                            <span class="text-muted">{{ str_repeat('-- ', $level) }}</span>
+                                    <div class="fw-semibold" style="padding-left: {{ $depth * 20 }}px;">
+                                        @if($depth > 0)
+                                            <span class="text-muted">{{ str_repeat('-- ', $depth) }}</span>
                                         @endif
                                         {{ $category->name }}
                                     </div>

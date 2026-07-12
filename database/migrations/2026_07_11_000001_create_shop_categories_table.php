@@ -27,6 +27,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug')->nullable()->unique();
             $table->text('description')->nullable();
+            $table->string('image_path')->nullable();
             $table->unsignedInteger('sort_order')->default(0)->index();
             $table->string('status', 30)
                 ->default('active')
@@ -42,7 +43,6 @@ return new class extends Migration
                 ['parent_id', 'name'],
                 'shop_categories_parent_name_unique',
             );
-
         });
     }
 

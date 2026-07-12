@@ -132,6 +132,28 @@ class AdminShopCategoryHierarchyTest extends TestCase
             ->assertSee('Women');
     }
 
+    public function test_unfiltered_category_list_is_flattened_as_tree(): void
+    {
+        $admin = $this->createAdminUser();
+        $fashion = $this->createCategory('Fashion', 'fashion');
+        $electronics = $this->createCategory('Electronics', 'electronics');
+        $women = $this->createCategory('Women', 'women', $fashion);
+        $this->createCategory('Dresses', 'dresses', $women);
+        $this->createCategory('Mobiles', 'mobiles', $electronics);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.master.shop-categories.index'));
+
+        $response->assertOk();
+        $response->assertSeeInOrder([
+            'Electronics',
+            'Mobiles',
+            'Fashion',
+            'Women',
+            'Dresses',
+        ]);
+    }
+
     private function createAdminUser(): User
     {
         $user = User::query()->create([

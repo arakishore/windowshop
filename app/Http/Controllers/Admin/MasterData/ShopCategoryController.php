@@ -50,11 +50,13 @@ class ShopCategoryController extends Controller
             ->when($filters['parent_id'] === 'root', fn ($query) => $query->whereNull('parent_id'))
             ->when(is_numeric($filters['parent_id']), fn ($query) => $query->where('parent_id', (int) $filters['parent_id']))
             ->when(in_array($filters['status'], ['active', 'inactive'], true), fn ($query) => $query->where('status', $filters['status']))
-            ->orderByRaw('CASE WHEN parent_id IS NULL THEN id ELSE parent_id END')
-            ->orderByRaw('parent_id IS NOT NULL')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
+
+        if ($filters['search'] === '' && empty($filters['parent_id']) && empty($filters['status'])) {
+            $categories = $this->flattenCategoryTree($categories);
+        }
 
         $categoryPaths = $this->categoryPaths();
 
@@ -240,6 +242,30 @@ class ShopCategoryController extends Controller
     private function categoryPaths(): array
     {
         return $this->buildCategoryPaths(ShopCategory::query()->select(['id', 'parent_id', 'name'])->get());
+    }
+
+    private function flattenCategoryTree(Collection $categories, ?int $parentId = null, int $depth = 0): Collection
+    {
+        $result = collect();
+
+        $children = $categories
+            ->filter(fn (ShopCategory $category) => $category->parent_id === $parentId)
+            ->sortBy([
+                ['sort_order', 'asc'],
+                ['name', 'asc'],
+            ]);
+
+        foreach ($children as $category) {
+            $category->setAttribute('depth', $depth);
+
+            $result->push($category);
+
+            $result = $result->concat(
+                $this->flattenCategoryTree($categories, $category->getKey(), $depth + 1),
+            );
+        }
+
+        return $result;
     }
 
     private function buildCategoryPaths(Collection $categories): array

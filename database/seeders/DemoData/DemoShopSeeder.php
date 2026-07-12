@@ -29,11 +29,7 @@ class DemoShopSeeder extends Seeder
                     throw new RuntimeException("Demo merchant profile not found for {$shop['merchant_email']}.");
                 }
 
-                $categoryId = DB::table('shop_categories')
-                    ->where('slug', $shop['category_slug'])
-                    ->where('status', 'active')
-                    ->whereNull('deleted_at')
-                    ->value('id');
+                $categoryId = $this->categoryId($shop['category_slug']);
 
                 if ($categoryId === null) {
                     throw new RuntimeException("Active shop category not found for {$shop['category_slug']}.");
@@ -138,6 +134,27 @@ class DemoShopSeeder extends Seeder
             'state_id' => $stateId,
             'city_id' => $cityId,
         ];
+    }
+
+    private function categoryId(string $categoryCode): ?int
+    {
+        $categoryNames = [
+            'apparel' => 'Apparel',
+            'jewellery-accessories' => 'Jewellery & Accessories',
+            'beauty-cosmetics' => 'Beauty & Cosmetics',
+            'footwear' => 'Footwear',
+        ];
+
+        $name = $categoryNames[$categoryCode] ?? Str::headline(str_replace('-', ' ', $categoryCode));
+
+        $id = DB::table('shop_categories')
+            ->whereNull('parent_id')
+            ->where('name', $name)
+            ->where('status', 'active')
+            ->whereNull('deleted_at')
+            ->value('id');
+
+        return $id === null ? null : (int) $id;
     }
 
     /**
