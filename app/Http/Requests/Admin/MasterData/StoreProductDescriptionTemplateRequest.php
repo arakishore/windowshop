@@ -29,6 +29,8 @@ class StoreProductDescriptionTemplateRequest extends FormRequest
             'name' => ['required', 'string', 'max:150'],
             'short_description_template' => ['required', 'string'],
             'description_template' => ['required', 'string'],
+            'meta_title_template' => ['nullable', 'string', 'max:255'],
+            'meta_description_template' => ['nullable', 'string'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ];

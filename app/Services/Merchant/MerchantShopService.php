@@ -24,7 +24,7 @@ class MerchantShopService
     public function shopsForMerchant(MerchantProfile $merchant): LengthAwarePaginator
     {
         return $merchant->shops()
-            ->with(['category', 'audiences', 'city'])
+            ->with(['rootProductCategory', 'audiences', 'city'])
             ->orderByDesc('created_at')
             ->paginate((int) config('admin.pagination.per_page', 15));
     }

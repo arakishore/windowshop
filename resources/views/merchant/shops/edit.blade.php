@@ -240,8 +240,8 @@
                         <dl class="row mb-0">
                             <dt class="col-sm-4">Merchant</dt>
                             <dd class="col-sm-8 fw-semibold">{{ $shop->merchant?->business_name ?? '-' }}</dd>
-                            <dt class="col-sm-4">Category</dt>
-                            <dd class="col-sm-8 fw-semibold">{{ $shop->category?->name ?? '-' }}</dd>
+                            <dt class="col-sm-4">Shop Type</dt>
+                            <dd class="col-sm-8 fw-semibold">{{ $shop->rootProductCategory?->name ?? '-' }}</dd>
                             <dt class="col-sm-4">Audience</dt>
                             <dd class="col-sm-8">
                                 @forelse($shop->audiences as $audience)

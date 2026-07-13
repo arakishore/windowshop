@@ -23,7 +23,7 @@
                 <option value="">Select category</option>
                 @foreach($categories as $category)
                     <option value="{{ $category->id }}" @selected((int) $selectedCategoryId === (int) $category->id)>
-                        {{ $category->name }}{{ $category->status !== 'active' ? ' (Inactive)' : '' }}
+                        {{ $category->full_path_label ?? $category->name }}{{ $category->status !== 'active' ? ' (Inactive)' : '' }}
                     </option>
                 @endforeach
             </select>
@@ -61,6 +61,18 @@
             <label for="description_template" class="form-label">Description Template <span class="text-danger">*</span></label>
             <textarea id="description_template" name="description_template" rows="12" class="form-control @error('description_template') is-invalid @enderror" required>{{ old('description_template', $template?->description_template) }}</textarea>
             @error('description_template')<div class="invalid-feedback">{{ $message }}</div>@enderror
+        </div>
+
+        <div class="col-12">
+            <label for="meta_title_template" class="form-label">Meta Title Template</label>
+            <input id="meta_title_template" name="meta_title_template" type="text" maxlength="255" value="{{ old('meta_title_template', $template?->meta_title_template) }}" class="form-control @error('meta_title_template') is-invalid @enderror">
+            @error('meta_title_template')<div class="invalid-feedback">{{ $message }}</div>@enderror
+        </div>
+
+        <div class="col-12">
+            <label for="meta_description_template" class="form-label">Meta Description Template</label>
+            <textarea id="meta_description_template" name="meta_description_template" rows="3" class="form-control @error('meta_description_template') is-invalid @enderror">{{ old('meta_description_template', $template?->meta_description_template) }}</textarea>
+            @error('meta_description_template')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
 
         <div class="col-12">

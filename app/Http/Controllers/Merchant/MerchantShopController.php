@@ -37,7 +37,7 @@ class MerchantShopController extends Controller
 
         return view('merchant.shops.show', [
             ...$this->viewData($request),
-            'shop' => $shop->load(['merchant', 'category', 'audiences', 'country', 'state', 'city']),
+            'shop' => $shop->load(['merchant', 'rootProductCategory', 'audiences', 'country', 'state', 'city']),
         ]);
     }
 
@@ -48,7 +48,7 @@ class MerchantShopController extends Controller
         return view('merchant.shops.edit', [
             ...$this->viewData($request),
             ...$this->shopService->formData($shop),
-            'shop' => $shop->load(['merchant', 'category', 'audiences', 'country', 'state', 'city']),
+            'shop' => $shop->load(['merchant', 'rootProductCategory', 'audiences', 'country', 'state', 'city']),
         ]);
     }
 

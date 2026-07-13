@@ -36,16 +36,16 @@
                     </div>
 
                     <div class="col-12">
-                        <label for="shop_category_id" class="form-label">Shop Category <span class="text-danger">*</span></label>
-                        <select id="shop_category_id" name="shop_category_id" class="form-select @error('shop_category_id') is-invalid @enderror" required>
-                            <option value="">Select category</option>
+                        <label for="root_product_category_id" class="form-label">Shop Type <span class="text-danger">*</span></label>
+                        <select id="root_product_category_id" name="root_product_category_id" class="form-select @error('root_product_category_id') is-invalid @enderror" required>
+                            <option value="">Select shop type</option>
                             @foreach($categories as $category)
-                                <option value="{{ $category->id }}" @selected((int) old('shop_category_id', $shop?->shop_category_id) === (int) $category->id)>
+                                <option value="{{ $category->id }}" @selected((int) old('root_product_category_id', $shop?->root_product_category_id) === (int) $category->id)>
                                     {{ $category->name }}{{ $category->status !== 'active' ? ' (Inactive)' : '' }}
                                 </option>
                             @endforeach
                         </select>
-                        @error('shop_category_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        @error('root_product_category_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
                     <div class="col-12">

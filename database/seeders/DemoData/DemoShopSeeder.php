@@ -32,7 +32,7 @@ class DemoShopSeeder extends Seeder
                 $categoryId = $this->categoryId($shop['category_slug']);
 
                 if ($categoryId === null) {
-                    throw new RuntimeException("Active shop category not found for {$shop['category_slug']}.");
+                    throw new RuntimeException("Active root product category not found for {$shop['category_slug']}.");
                 }
 
                 $exists = DB::table('shops')
@@ -43,7 +43,7 @@ class DemoShopSeeder extends Seeder
                     ['slug' => $shop['slug']],
                     array_merge([
                         'merchant_id' => $merchantId,
-                        'shop_category_id' => $categoryId,
+                        'root_product_category_id' => $categoryId,
                         'name' => $shop['name'],
                         'short_description' => $shop['short_description'],
                         'description' => $shop['description'],
@@ -147,7 +147,7 @@ class DemoShopSeeder extends Seeder
 
         $name = $categoryNames[$categoryCode] ?? Str::headline(str_replace('-', ' ', $categoryCode));
 
-        $id = DB::table('shop_categories')
+        $id = DB::table('product_categories')
             ->whereNull('parent_id')
             ->where('name', $name)
             ->where('status', 'active')

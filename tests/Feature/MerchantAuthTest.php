@@ -619,9 +619,10 @@ class MerchantAuthTest extends TestCase
                 'updated_at' => now(),
             ]));
 
-        $categoryId = (int) (DB::table('shop_categories')->where('slug', 'apparel')->value('id')
-            ?? DB::table('shop_categories')->insertGetId([
+        $categoryId = (int) (DB::table('product_categories')->where('slug', 'apparel')->value('id')
+            ?? DB::table('product_categories')->insertGetId([
                 'uuid' => (string) Str::uuid(),
+                'parent_id' => null,
                 'name' => 'Apparel',
                 'slug' => 'apparel',
                 'status' => 'active',
@@ -636,7 +637,7 @@ class MerchantAuthTest extends TestCase
         return (int) DB::table('shops')->insertGetId([
             'uuid' => (string) Str::uuid(),
             'merchant_id' => $merchantId,
-            'shop_category_id' => $categoryId,
+            'root_product_category_id' => $categoryId,
             'name' => $shopName,
             'slug' => Str::slug($shopName),
             'address_line_1' => 'Main Road',

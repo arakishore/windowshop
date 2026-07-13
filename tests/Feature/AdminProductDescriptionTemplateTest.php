@@ -3,7 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\ProductDescriptionTemplate;
+use App\Models\Brand;
+use App\Models\MerchantProfile;
+use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\ProductVariant;
+use App\Models\Shop;
 use App\Models\User;
 use App\Services\Product\ProductDescriptionTemplateService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -154,6 +159,250 @@ class AdminProductDescriptionTemplateTest extends TestCase
             ->assertSee('Linen Shirt made from Linen at Urban Shop.');
     }
 
+    public function test_product_creation_generates_description_from_exact_category_template(): void
+    {
+        $admin = $this->createAdminUser();
+        $rootCategory = $this->createCategory('Apparel', 'apparel');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $rootCategory);
+        $shop = $this->createShop($admin, $rootCategory);
+        $brand = $this->createBrand('Acme');
+
+        $this->createTemplate($category, [
+            'short_description_template' => '{product_name} by {brand} at {shop_name}.',
+            'description_template' => "{product_name}\n- Category: {category_path}\n- Material: {material}",
+            'meta_title_template' => '{product_name} | {brand}',
+            'meta_description_template' => 'Buy {product_name} from {shop_name}.',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.products.store'), [
+                'shop_id' => $shop->getKey(),
+                'product_category_id' => $category->getKey(),
+                'brand_id' => $brand->getKey(),
+                'product_name' => 'Premium Cotton Tee',
+                'product_type' => 'simple',
+                'status' => 'active',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $product = Product::query()->where('product_name', 'Premium Cotton Tee')->firstOrFail();
+
+        $this->assertSame('draft', $product->status);
+        $this->assertSame($rootCategory->getKey(), $product->root_product_category_id);
+        $this->assertSame('Premium Cotton Tee by Acme at Demo Shop.', $product->short_description);
+        $this->assertStringContainsString('Premium Cotton Tee', (string) $product->description);
+        $this->assertStringNotContainsString('{material}', (string) $product->description);
+        $this->assertSame('Premium Cotton Tee | Acme', $product->meta_title);
+        $this->assertSame('Buy Premium Cotton Tee from Demo Shop.', $product->meta_description);
+    }
+
+    public function test_product_create_dropdown_disables_root_categories(): void
+    {
+        $admin = $this->createAdminUser();
+        $rootCategory = $this->createCategory('Apparel', 'apparel');
+        $this->createCategory('T-Shirts', 't-shirts', $rootCategory);
+
+        $this->actingAs($admin)
+            ->get(route('admin.products.create'))
+            ->assertOk()
+            ->assertSee('value="'.$rootCategory->getKey().'"', false)
+            ->assertSee('disabled', false)
+            ->assertSee('Apparel > T-Shirts');
+    }
+
+    public function test_product_creation_rejects_root_product_category(): void
+    {
+        $admin = $this->createAdminUser();
+        $rootCategory = $this->createCategory('Apparel', 'apparel');
+        $shop = $this->createShop($admin, $rootCategory);
+
+        $this->actingAs($admin)
+            ->from(route('admin.products.create'))
+            ->post(route('admin.products.store'), [
+                'shop_id' => $shop->getKey(),
+                'product_category_id' => $rootCategory->getKey(),
+                'brand_id' => null,
+                'product_name' => 'Root Category Product',
+                'product_type' => 'simple',
+                'status' => 'draft',
+            ])
+            ->assertRedirect(route('admin.products.create'))
+            ->assertSessionHasErrors('product_category_id');
+    }
+
+    public function test_product_creation_rejects_category_outside_selected_shop_type(): void
+    {
+        $admin = $this->createAdminUser();
+        $apparel = $this->createCategory('Apparel', 'apparel');
+        $footwear = $this->createCategory('Footwear', 'footwear');
+        $sneakers = $this->createCategory('Sneakers', 'sneakers', $footwear);
+        $shop = $this->createShop($admin, $apparel);
+
+        $this->actingAs($admin)
+            ->from(route('admin.products.create'))
+            ->post(route('admin.products.store'), [
+                'shop_id' => $shop->getKey(),
+                'product_category_id' => $sneakers->getKey(),
+                'brand_id' => null,
+                'product_name' => 'Wrong Root Product',
+                'product_type' => 'simple',
+                'status' => 'draft',
+            ])
+            ->assertRedirect(route('admin.products.create'))
+            ->assertSessionHasErrors('product_category_id');
+    }
+
+    public function test_parent_category_template_fallback_is_used_when_exact_template_is_missing(): void
+    {
+        $parent = $this->createCategory('Men', 'men');
+        $child = $this->createCategory('Shirts', 'shirts', $parent);
+        $product = $this->createProduct($child);
+
+        $this->createTemplate($parent, [
+            'short_description_template' => '{product_name} parent fallback for {product_category}.',
+            'description_template' => 'Path: {category_path}.',
+            'status' => 'active',
+        ]);
+
+        app(ProductDescriptionTemplateService::class)->applyToProduct($product);
+
+        $product->refresh();
+
+        $this->assertSame('Oxford Shirt parent fallback for Shirts.', $product->short_description);
+        $this->assertSame('Path: Men > Shirts.', $product->description);
+    }
+
+    public function test_missing_template_does_not_block_product_creation(): void
+    {
+        $admin = $this->createAdminUser();
+        $rootCategory = $this->createCategory('Footwear', 'footwear');
+        $category = $this->createCategory('Sneakers', 'sneakers', $rootCategory);
+        $shop = $this->createShop($admin, $rootCategory);
+        $brand = $this->createBrand('Acme');
+
+        $this->actingAs($admin)
+            ->post(route('admin.products.store'), [
+                'shop_id' => $shop->getKey(),
+                'product_category_id' => $category->getKey(),
+                'brand_id' => $brand->getKey(),
+                'product_name' => 'Canvas Sneaker',
+                'product_type' => 'simple',
+                'status' => 'draft',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('info');
+
+        $this->assertDatabaseHas('products', [
+            'product_name' => 'Canvas Sneaker',
+            'short_description' => null,
+            'description' => null,
+            'meta_title' => null,
+            'meta_description' => null,
+        ]);
+    }
+
+    public function test_unresolved_placeholders_are_removed_from_generated_output(): void
+    {
+        $category = $this->createCategory('Kurtis', 'kurtis');
+        $product = $this->createProduct($category, ['product_name' => 'Daily Kurti']);
+
+        $this->createTemplate($category, [
+            'short_description_template' => '{product_name} in {material}.',
+            'description_template' => "Details\n- Material: {material}\n- Fit: {fit}\nSold by {shop_name}.",
+            'status' => 'active',
+        ]);
+
+        app(ProductDescriptionTemplateService::class)->applyToProduct($product);
+
+        $product->refresh();
+
+        $this->assertStringNotContainsString('{material}', (string) $product->short_description);
+        $this->assertStringNotContainsString('{fit}', (string) $product->description);
+        $this->assertStringNotContainsString('Material:', (string) $product->description);
+        $this->assertStringContainsString('Sold by Demo Shop.', (string) $product->description);
+    }
+
+    public function test_existing_descriptions_are_not_overwritten_without_overwrite(): void
+    {
+        $category = $this->createCategory('Jeans', 'jeans');
+        $product = $this->createProduct($category, [
+            'short_description' => 'Manual short',
+            'description' => 'Manual description',
+            'meta_title' => 'Manual title',
+            'meta_description' => 'Manual meta',
+        ]);
+
+        $this->createTemplate($category, [
+            'short_description_template' => 'Generated short',
+            'description_template' => 'Generated description',
+            'meta_title_template' => 'Generated title',
+            'meta_description_template' => 'Generated meta',
+        ]);
+
+        app(ProductDescriptionTemplateService::class)->applyToProduct($product);
+
+        $product->refresh();
+
+        $this->assertSame('Manual short', $product->short_description);
+        $this->assertSame('Manual description', $product->description);
+        $this->assertSame('Manual title', $product->meta_title);
+        $this->assertSame('Manual meta', $product->meta_description);
+    }
+
+    public function test_regeneration_updates_descriptions_after_variant_changes(): void
+    {
+        $admin = $this->createAdminUser();
+        $category = $this->createCategory('Jeans', 'jeans');
+        $product = $this->createProduct($category, ['short_description' => 'Old price']);
+
+        $this->createTemplate($category, [
+            'short_description_template' => '{product_name} now at {selling_price}.',
+            'description_template' => 'MRP {mrp}; selling price {selling_price}.',
+        ]);
+
+        ProductVariant::query()->create([
+            'product_id' => $product->getKey(),
+            'shop_id' => $product->shop_id,
+            'sku' => 'JEANS-001',
+            'name' => 'Default',
+            'mrp' => 1999,
+            'selling_price' => 1499,
+            'stock_quantity' => 10,
+            'is_default' => true,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.products.description-seo.generate', $product))
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'description']));
+
+        $product->refresh();
+
+        $this->assertSame('Oxford Shirt now at 1499.00.', $product->short_description);
+        $this->assertSame('MRP 1999.00; selling price 1499.00.', $product->description);
+    }
+
+    public function test_inactive_templates_are_ignored(): void
+    {
+        $category = $this->createCategory('Shirts', 'shirts');
+        $product = $this->createProduct($category);
+
+        $this->createTemplate($category, [
+            'short_description_template' => 'Inactive generated',
+            'description_template' => 'Inactive generated',
+            'status' => 'inactive',
+        ]);
+
+        app(ProductDescriptionTemplateService::class)->applyToProduct($product);
+
+        $product->refresh();
+
+        $this->assertNull($product->short_description);
+        $this->assertNull($product->description);
+    }
+
     private function createAdminUser(): User
     {
         $user = User::query()->create([
@@ -183,9 +432,10 @@ class AdminProductDescriptionTemplateTest extends TestCase
         return $user;
     }
 
-    private function createCategory(string $name, string $slug): ProductCategory
+    private function createCategory(string $name, string $slug, ?ProductCategory $parent = null): ProductCategory
     {
         return ProductCategory::query()->create([
+            'parent_id' => $parent?->getKey(),
             'name' => $name,
             'slug' => $slug,
             'status' => 'active',
@@ -203,8 +453,81 @@ class AdminProductDescriptionTemplateTest extends TestCase
             'name' => $attributes['name'] ?? 'Default Template',
             'short_description_template' => $attributes['short_description_template'] ?? '{product_name} {category}',
             'description_template' => $attributes['description_template'] ?? '{product_name} from {shop_name}.',
+            'meta_title_template' => $attributes['meta_title_template'] ?? null,
+            'meta_description_template' => $attributes['meta_description_template'] ?? null,
             'status' => $attributes['status'] ?? 'active',
             'sort_order' => $attributes['sort_order'] ?? 1,
+        ]);
+    }
+
+    private function createBrand(string $name = 'Acme'): Brand
+    {
+        return Brand::query()->create([
+            'name' => $name,
+            'slug' => Str::slug($name).'-'.Str::random(6),
+            'status' => 'active',
+            'sort_order' => 1,
+        ]);
+    }
+
+    private function createShop(User $user, ?ProductCategory $rootCategory = null): Shop
+    {
+        $merchant = MerchantProfile::query()->create([
+            'user_id' => $user->getKey(),
+            'business_name' => 'Demo Merchant',
+            'verification_status' => 'approved',
+            'status' => 'active',
+        ]);
+
+        $shopTypeCategoryId = $rootCategory?->rootCategoryId() ?? DB::table('product_categories')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'parent_id' => null,
+            'name' => 'Apparel',
+            'slug' => 'apparel-'.Str::random(6),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return Shop::query()->create([
+            'merchant_id' => $merchant->getKey(),
+            'root_product_category_id' => $shopTypeCategoryId,
+            'name' => 'Demo Shop',
+            'slug' => 'demo-shop-'.Str::random(6),
+            'address_line_1' => 'Nashik',
+            'status' => 'active',
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    private function createProduct(ProductCategory $category, array $attributes = []): Product
+    {
+        $user = User::query()->create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Merchant User',
+            'email' => 'merchant-'.Str::uuid().'@example.test',
+            'password' => Hash::make('password'),
+            'status' => 'active',
+        ]);
+        $shop = $this->createShop($user, $category);
+        $brand = $this->createBrand();
+
+        return Product::query()->create([
+            'merchant_id' => $shop->merchant_id,
+            'shop_id' => $shop->getKey(),
+            'root_product_category_id' => $shop->root_product_category_id,
+            'product_category_id' => $category->getKey(),
+            'brand_id' => $brand->getKey(),
+            'product_name' => $attributes['product_name'] ?? 'Oxford Shirt',
+            'slug' => 'product-'.Str::random(8),
+            'product_type' => 'simple',
+            'short_description' => $attributes['short_description'] ?? null,
+            'description' => $attributes['description'] ?? null,
+            'meta_title' => $attributes['meta_title'] ?? null,
+            'meta_description' => $attributes['meta_description'] ?? null,
+            'status' => 'draft',
         ]);
     }
 }

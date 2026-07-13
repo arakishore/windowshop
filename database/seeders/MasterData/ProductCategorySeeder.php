@@ -59,6 +59,41 @@ class ProductCategorySeeder extends Seeder
             $this->createCategory('Girls', $apparel, 4);
             $this->createCategory('Baby Clothing', $apparel, 5);
             $this->createCategory('Unisex', $apparel, 6);
+
+            $footwear = $this->createCategory('Footwear', null, 2);
+            $this->createChildren($footwear, [
+                'Men',
+                'Women',
+                'Kids',
+            ]);
+
+            $electronics = $this->createCategory('Mobile & Electronics', null, 3);
+            $this->createChildren($electronics, [
+                'Mobile Phones',
+                'Laptops',
+                'Accessories',
+            ]);
+
+            $beauty = $this->createCategory('Beauty & Cosmetics', null, 4);
+            $this->createChildren($beauty, [
+                'Makeup',
+                'Skin Care',
+                'Hair Care',
+            ]);
+
+            $jewellery = $this->createCategory('Jewellery & Accessories', null, 5);
+            $this->createChildren($jewellery, [
+                'Fashion Jewellery',
+                'Bags',
+                'Accessories',
+            ]);
+
+            $this->createCategory('Grocery & Daily Needs', null, 6);
+            $this->createCategory('Cafe & Restaurant', null, 7);
+            $this->createCategory('Home & Furniture', null, 8);
+            $this->createCategory('Sports & Fitness', null, 9);
+            $this->createCategory('Books & Stationery', null, 10);
+            $this->createCategory('Other', null, 11);
         });
     }
 

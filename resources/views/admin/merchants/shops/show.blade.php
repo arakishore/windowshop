@@ -27,7 +27,7 @@
                     <h5 class="mb-0">{{ $shop->name }}</h5>
                     <span class="badge {{ $statusConfig['badge_class'] }}">{{ $statusConfig['label'] }}</span>
                 </div>
-                <div class="text-muted small">{{ $shop->category?->name ?? '-' }} · {{ $shop->slug }}</div>
+                <div class="text-muted small">{{ $shop->rootProductCategory?->name ?? '-' }} · {{ $shop->slug }}</div>
             </div>
             <a href="{{ route('admin.merchants.shops.edit', [$merchant, $shop]) }}" class="btn btn-primary">
                 <i class="ph-pencil-simple me-2"></i>
@@ -47,8 +47,8 @@
                         <dt class="col-sm-4">Shop Name</dt>
                         <dd class="col-sm-8">{{ $shop->name }}</dd>
 
-                        <dt class="col-sm-4">Category</dt>
-                        <dd class="col-sm-8">{{ $shop->category?->name ?? '-' }}</dd>
+                        <dt class="col-sm-4">Shop Type</dt>
+                        <dd class="col-sm-8">{{ $shop->rootProductCategory?->name ?? '-' }}</dd>
 
                         <dt class="col-sm-4">Audiences</dt>
                         <dd class="col-sm-8">

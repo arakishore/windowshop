@@ -53,6 +53,14 @@
 								</span>
 							</a>
 						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.products.index') }}" class="nav-link {{ request()->routeIs('admin.products.*') ? 'active' : '' }}">
+								<i class="ph-package"></i>
+								<span>
+									Products
+								</span>
+							</a>
+						</li>
 
 						<li class="nav-item nav-item-submenu {{ $isMasterDataActive ? 'nav-item-expanded nav-item-open' : '' }}">
 							<a href="#" class="nav-link {{ $isMasterDataActive ? 'active' : '' }}">
@@ -60,11 +68,6 @@
 								<span>Master Data</span>
 							</a>
 							<ul class="nav-group-sub collapse {{ $isMasterDataActive ? 'show' : '' }}">
-								<li class="nav-item">
-									<a href="{{ route('admin.master.shop-categories.index') }}" class="nav-link {{ request()->routeIs('admin.master.shop-categories.*') ? 'active' : '' }}">
-										Shop Categories
-									</a>
-								</li>
 								<li class="nav-item">
 									<a href="{{ route('admin.master.shop-audiences.index') }}" class="nav-link {{ request()->routeIs('admin.master.shop-audiences.*') ? 'active' : '' }}">
 										Shop Audiences

@@ -10,9 +10,9 @@ use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupValueController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryController;
 use App\Http\Controllers\Admin\MasterData\ProductDescriptionTemplateController;
 use App\Http\Controllers\Admin\MasterData\ShopAudienceController;
-use App\Http\Controllers\Admin\MasterData\ShopCategoryController;
 use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantShopController;
+use App\Http\Controllers\Admin\ProductController;
 
 Route::get('/', function () {
     return redirect()->route('admin.login');
@@ -31,8 +31,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     Route::middleware(['auth', 'admin.role'])->group(function () {
-        Route::resource('master/shop-categories', ShopCategoryController::class)
-            ->names('master.shop-categories');
         Route::resource('master/shop-audiences', ShopAudienceController::class)
             ->except(['show'])
             ->names('master.shop-audiences');
@@ -64,6 +62,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('/merchants/{merchant}/shops', MerchantShopController::class)
             ->names('merchants.shops');
         Route::resource('merchants', MerchantController::class);
+        Route::put('products/{product}/description-seo', [ProductController::class, 'updateDescriptionSeo'])
+            ->name('products.description-seo.update');
+        Route::post('products/{product}/description-seo/generate', [ProductController::class, 'generateDescriptionSeo'])
+            ->name('products.description-seo.generate');
+        Route::resource('products', ProductController::class)
+            ->except(['show']);
     });
 
 });

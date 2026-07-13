@@ -24,10 +24,13 @@ class StoreShopRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:150'],
-            'shop_category_id' => [
+            'root_product_category_id' => [
                 'required',
                 'integer',
-                Rule::exists('shop_categories', 'id')->where(fn ($query) => $query->where('status', 'active')->whereNull('deleted_at')),
+                Rule::exists('product_categories', 'id')->where(fn ($query) => $query
+                    ->whereNull('parent_id')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
             ],
             'audience_ids' => ['nullable', 'array'],
             'audience_ids.*' => [

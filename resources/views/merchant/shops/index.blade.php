@@ -29,7 +29,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Shop</th>
-                            <th>Category</th>
+                            <th>Shop Type</th>
                             <th>City</th>
                             <th>Status</th>
                             <th class="text-center">Actions</th>
@@ -45,7 +45,7 @@
                                     <div class="fw-semibold">{{ $shop->name }}</div>
                                     <div class="fs-sm text-muted">{{ $shop->slug }}</div>
                                 </td>
-                                <td>{{ $shop->category?->name ?? '-' }}</td>
+                                <td>{{ $shop->rootProductCategory?->name ?? '-' }}</td>
                                 <td>{{ $shop->city?->name ?? '-' }}</td>
                                 <td><span class="badge {{ $statusConfig['badge_class'] }}">{{ $statusConfig['label'] }}</span></td>
                                 <td class="text-center">

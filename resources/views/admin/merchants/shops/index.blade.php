@@ -48,7 +48,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Shop Name</th>
-                            <th>Category</th>
+                            <th>Shop Type</th>
                             <th>Audiences</th>
                             <th>City</th>
                             <th>Mobile</th>
@@ -64,7 +64,7 @@
                                     <div class="fw-semibold">{{ $shop->name }}</div>
                                     <div class="fs-sm text-muted">{{ $shop->slug }}</div>
                                 </td>
-                                <td>{{ $shop->category?->name ?? '-' }}</td>
+                                <td>{{ $shop->rootProductCategory?->name ?? '-' }}</td>
                                 <td>
                                     @forelse($shop->audiences as $audience)
                                         <span class="badge bg-light text-body border me-1">{{ $audience->name }}</span>

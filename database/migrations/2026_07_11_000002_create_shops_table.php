@@ -23,8 +23,8 @@ return new class extends Migration
             $table->foreignId('merchant_id')
                 ->constrained('merchant_profiles')
                 ->cascadeOnDelete();
-            $table->foreignId('shop_category_id')
-                ->constrained('shop_categories')
+            $table->foreignId('root_product_category_id')
+                ->constrained('product_categories')
                 ->restrictOnDelete();
             $table->string('name', 150)->index();
             $table->string('slug', 180)->unique();
@@ -59,7 +59,7 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->index(['merchant_id', 'status']);
-            $table->index(['shop_category_id', 'status']);
+            $table->index(['root_product_category_id', 'status']);
             $table->index(['city_id', 'status']);
             $table->index(['merchant_id', 'created_at']);
 

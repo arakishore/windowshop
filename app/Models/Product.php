@@ -17,6 +17,7 @@ class Product extends Model
         'uuid',
         'merchant_id',
         'shop_id',
+        'root_product_category_id',
         'product_category_id',
         'brand_id',
         'product_name',
@@ -50,19 +51,6 @@ class Product extends Model
         return (Str::slug($this->product_name) ?: 'product').'-'.$this->getKey();
     }
 
-    protected static function booted(): void
-    {
-        static::saving(function (Product $product): void {
-            if ($product->shop_id === null) {
-                return;
-            }
-
-            $product->shop_category_id = Shop::query()
-                ->whereKey($product->shop_id)
-                ->value('shop_category_id');
-        });
-    }
-
     public function merchant(): BelongsTo
     {
         return $this->belongsTo(MerchantProfile::class, 'merchant_id');
@@ -78,9 +66,9 @@ class Product extends Model
         return $this->belongsTo(ProductCategory::class, 'product_category_id');
     }
 
-    public function shopCategory(): BelongsTo
+    public function rootProductCategory(): BelongsTo
     {
-        return $this->belongsTo(ShopCategory::class, 'shop_category_id');
+        return $this->belongsTo(ProductCategory::class, 'root_product_category_id');
     }
 
     public function brand(): BelongsTo

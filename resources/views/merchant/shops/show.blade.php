@@ -17,7 +17,7 @@
                     <h5 class="mb-0">{{ $shop->name }}</h5>
                     <span class="badge {{ $statusConfig['badge_class'] }}">{{ $statusConfig['label'] }}</span>
                 </div>
-                <div class="text-muted small">{{ $shop->category?->name ?? '-' }} · {{ $shop->slug }}</div>
+                <div class="text-muted small">{{ $shop->rootProductCategory?->name ?? '-' }} · {{ $shop->slug }}</div>
             </div>
             <div class="d-flex gap-2">
                 <a href="{{ route('merchant.shops.index') }}" class="btn btn-light border">
@@ -40,8 +40,8 @@
                     <dl class="row mb-0">
                         <dt class="col-sm-4">Shop Name</dt>
                         <dd class="col-sm-8">{{ $shop->name }}</dd>
-                        <dt class="col-sm-4">Category</dt>
-                        <dd class="col-sm-8">{{ $shop->category?->name ?? '-' }}</dd>
+                        <dt class="col-sm-4">Shop Type</dt>
+                        <dd class="col-sm-8">{{ $shop->rootProductCategory?->name ?? '-' }}</dd>
                         <dt class="col-sm-4">Audience</dt>
                         <dd class="col-sm-8">
                             @forelse($shop->audiences as $audience)

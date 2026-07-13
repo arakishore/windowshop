@@ -13,33 +13,99 @@ class ProductDescriptionTemplateSeeder extends Seeder
      */
     public function run(): void
     {
-        $categoryId = DB::table('product_categories')
-            ->whereNull('parent_id')
-            ->where('name', 'Apparel')
-            ->where('status', 'active')
-            ->whereNull('deleted_at')
-            ->value('id');
+        $templates = [
+            [
+                'path' => ['Apparel', 'Men', 'T-Shirts'],
+                'name' => 'Men T-Shirts Default Description',
+                'short' => '{product_name} by {brand} is a comfortable {fit} {product_category} from {shop_name}, made for everyday casual wear.',
+                'description' => "Refresh your wardrobe with {product_name}, a versatile {product_category} designed for comfort and easy styling.\n\nKey Features:\n- Brand: {brand}\n- Category: {category_path}\n- Material: {material}\n- Pattern: {pattern}\n- Fit: {fit}\n- Sleeve: {sleeve}\n- Neck: {neck}\n- Available colors: {colors}\n- Available sizes: {sizes}\n\nIdeal For:\n- {occasion}\n- Daily wear\n- Weekend outings\n\nPrice:\n- MRP: {mrp}\n- Selling Price: {selling_price}",
+                'meta_title' => '{product_name} - Men T-Shirt by {brand}',
+                'meta_description' => 'Shop {product_name}, a comfortable men t-shirt from {brand}, available at {shop_name}.',
+            ],
+            [
+                'path' => ['Apparel', 'Men', 'Shirts'],
+                'name' => 'Men Shirts Default Description',
+                'short' => '{product_name} by {brand} is a polished {fit} {product_category} for smart casual and everyday wear.',
+                'description' => "{product_name} brings together clean tailoring, reliable comfort, and versatile styling for modern menswear.\n\nKey Features:\n- Brand: {brand}\n- Category: {category_path}\n- Material: {material}\n- Pattern: {pattern}\n- Fit: {fit}\n- Sleeve: {sleeve}\n- Available colors: {colors}\n- Available sizes: {sizes}\n\nStyle Notes:\n- Suitable for {occasion}\n- Pairs well with jeans, chinos, or trousers\n\nPrice:\n- MRP: {mrp}\n- Selling Price: {selling_price}",
+                'meta_title' => '{product_name} - Men Shirt by {brand}',
+                'meta_description' => 'Buy {product_name}, a versatile men shirt from {brand}, at {shop_name}.',
+            ],
+            [
+                'path' => ['Apparel', 'Women', 'Jeans'],
+                'name' => 'Women Jeans Default Description',
+                'short' => '{product_name} by {brand} is a stylish {fit} {product_category} designed for confident everyday dressing.',
+                'description' => "{product_name} offers a flattering silhouette, dependable comfort, and styling flexibility for daily wear.\n\nKey Features:\n- Brand: {brand}\n- Category: {category_path}\n- Material: {material}\n- Fit: {fit}\n- Pattern: {pattern}\n- Available colors: {colors}\n- Available sizes: {sizes}\n\nBest Paired With:\n- Tops, shirts, kurtis, or casual tees\n- Sneakers, flats, or heels\n\nPrice:\n- MRP: {mrp}\n- Selling Price: {selling_price}",
+                'meta_title' => '{product_name} - Women Jeans by {brand}',
+                'meta_description' => 'Discover {product_name}, women jeans from {brand}, available at {shop_name}.',
+            ],
+            [
+                'path' => ['Apparel', 'Women', 'Kurtis'],
+                'name' => 'Women Kurtis Default Description',
+                'short' => '{product_name} by {brand} is an elegant {product_category} made for {occasion} and everyday comfort.',
+                'description' => "{product_name} blends traditional charm with practical comfort, making it a dependable choice for everyday and occasion wear.\n\nKey Features:\n- Brand: {brand}\n- Category: {category_path}\n- Material: {material}\n- Pattern: {pattern}\n- Fit: {fit}\n- Sleeve: {sleeve}\n- Neck: {neck}\n- Available colors: {colors}\n- Available sizes: {sizes}\n\nStyle Notes:\n- Suitable for {occasion}\n- Pair with leggings, palazzos, jeans, or ethnic bottoms\n\nPrice:\n- MRP: {mrp}\n- Selling Price: {selling_price}",
+                'meta_title' => '{product_name} - Women Kurti by {brand}',
+                'meta_description' => 'Shop {product_name}, an elegant women kurti from {brand}, at {shop_name}.',
+            ],
+        ];
 
-        if ($categoryId === null) {
-            return;
+        foreach ($templates as $index => $template) {
+            $categoryId = $this->categoryIdByPath($template['path']);
+
+            if ($categoryId === null) {
+                continue;
+            }
+
+            $this->upsertTemplate($categoryId, $template, $index + 1);
+        }
+    }
+
+    /**
+     * @param array<int, string> $path
+     */
+    private function categoryIdByPath(array $path): ?int
+    {
+        $parentId = null;
+
+        foreach ($path as $name) {
+            $category = DB::table('product_categories')
+                ->where('name', $name)
+                ->where('parent_id', $parentId)
+                ->whereNull('deleted_at')
+                ->first(['id']);
+
+            if (! $category) {
+                return null;
+            }
+
+            $parentId = (int) $category->id;
         }
 
+        return $parentId;
+    }
+
+    /**
+     * @param array<string, mixed> $template
+     */
+    private function upsertTemplate(int $categoryId, array $template, int $sortOrder): void
+    {
         $now = now();
         $exists = DB::table('product_description_templates')
             ->where('product_category_id', $categoryId)
-            ->where('name', 'Default Apparel Description')
+            ->where('name', $template['name'])
             ->exists();
 
         DB::table('product_description_templates')->updateOrInsert(
             [
                 'product_category_id' => $categoryId,
-                'name' => 'Default Apparel Description',
+                'name' => $template['name'],
             ],
             [
-                'short_description_template' => 'Discover this stylish {color} {category}, crafted from premium {material} for everyday comfort and elegance. Available in sizes {sizes}.',
-                'description_template' => "Introducing the {product_name}, a perfect combination of style, comfort, and quality. Made from premium {material}, this {color} {category} is designed for customers who appreciate elegant fashion without compromising on comfort.\n\nThe lightweight fabric, comfortable fit, and versatile design make it suitable for everyday wear, office wear, family gatherings, festive occasions, and casual outings.\n\nKey Features:\n- Premium {material} fabric\n- Stylish {color} finish\n- Soft and comfortable\n- Durable stitching\n- Easy to maintain\n- Available in sizes: {sizes}\n\nWhy You'll Love It:\n- Comfortable all-day wear\n- Elegant and modern design\n- Suitable for multiple occasions\n- Excellent value for money\n\nPackage Includes:\n1 x {product_name}\n\nDisclaimer:\nActual product color may vary slightly due to photographic lighting or your device display settings.",
+                'short_description_template' => $template['short'],
+                'description_template' => $template['description'],
+                'meta_title_template' => $template['meta_title'],
+                'meta_description_template' => $template['meta_description'],
                 'status' => 'active',
-                'sort_order' => 1,
+                'sort_order' => $sortOrder,
                 'updated_at' => $now,
                 ...($exists ? [] : [
                     'uuid' => (string) Str::uuid(),

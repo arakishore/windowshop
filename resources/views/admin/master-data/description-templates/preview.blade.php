@@ -68,6 +68,16 @@
                         <label class="form-label">Description</label>
                         <textarea class="form-control" rows="16" readonly>{{ $preview['description'] }}</textarea>
                     </div>
+
+                    <div class="mt-3">
+                        <label class="form-label">Meta Title</label>
+                        <input type="text" class="form-control" value="{{ $preview['meta_title'] }}" readonly>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label">Meta Description</label>
+                        <textarea class="form-control" rows="3" readonly>{{ $preview['meta_description'] }}</textarea>
+                    </div>
                 @endif
             </div>
         </div>

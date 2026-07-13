@@ -24,8 +24,8 @@ return new class extends Migration
             $table->foreignId('shop_id')
                 ->constrained('shops')
                 ->restrictOnDelete();
-            $table->foreignId('shop_category_id')
-                ->constrained('shop_categories')
+            $table->foreignId('root_product_category_id')
+                ->constrained('product_categories')
                 ->restrictOnDelete();
             $table->foreignId('product_category_id')
                 ->constrained('product_categories')
@@ -56,7 +56,7 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->index(['merchant_id', 'shop_id', 'status'], 'products_merchant_shop_status_idx');
-            $table->index(['shop_id', 'shop_category_id'], 'products_shop_shop_category_idx');
+            $table->index(['shop_id', 'root_product_category_id'], 'products_shop_root_category_idx');
             $table->index(['shop_id', 'product_category_id'], 'products_shop_product_category_idx');
             $table->index(['shop_id', 'brand_id'], 'products_shop_brand_idx');
             $table->index(['shop_id', 'slug'], 'products_shop_slug_idx');

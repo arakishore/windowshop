@@ -18,7 +18,7 @@ class DemoProductSeeder extends Seeder
 
         DB::transaction(function () use ($now): void {
             $shops = DB::table('shops')
-                ->select('id', 'merchant_id', 'shop_category_id', 'name', 'slug')
+                ->select('id', 'merchant_id', 'name', 'slug', 'root_product_category_id')
                 ->whereNull('deleted_at')
                 ->orderBy('id')
                 ->get();
@@ -33,7 +33,8 @@ class DemoProductSeeder extends Seeder
             foreach ($shops as $shop) {
                 foreach ($this->productsForShop((string) $shop->name) as $index => $product) {
                     $productNumber = $index + 1;
-                    $productCategoryId = $this->categoryIdForProduct($productCategories, $product['category']);
+                    $rootCategoryId = (int) $shop->root_product_category_id;
+                    $productCategoryId = $this->categoryIdForProduct($productCategories, $product['category'], $rootCategoryId);
                     $brandId = $this->brandIdForProduct($brands, $product['brand']);
 
                     $existingProductId = DB::table('products')
@@ -46,7 +47,7 @@ class DemoProductSeeder extends Seeder
                             'uuid' => (string) Str::uuid(),
                             'merchant_id' => $shop->merchant_id,
                             'shop_id' => $shop->id,
-                            'shop_category_id' => $shop->shop_category_id,
+                            'root_product_category_id' => $rootCategoryId,
                             'product_category_id' => $productCategoryId,
                             'brand_id' => $brandId,
                             'product_name' => $product['name'],
@@ -68,7 +69,7 @@ class DemoProductSeeder extends Seeder
                             ->where('id', $productId)
                             ->update([
                                 'merchant_id' => $shop->merchant_id,
-                                'shop_category_id' => $shop->shop_category_id,
+                                'root_product_category_id' => $rootCategoryId,
                                 'product_category_id' => $productCategoryId,
                                 'brand_id' => $brandId,
                                 'product_type' => 'simple',
@@ -167,22 +168,41 @@ class DemoProductSeeder extends Seeder
     }
 
     /**
-     * @return array<string, int>
+     * @return array{by_root: array<int, array<string, int>>, fallback_by_root: array<int, int>, fallback: int}
      */
     private function productCategories(): array
     {
-        $categories = DB::table('product_categories')
+        $rows = DB::table('product_categories')
             ->where('status', 'active')
             ->whereNull('deleted_at')
-            ->pluck('id', 'name')
-            ->mapWithKeys(fn ($id, $name): array => [Str::lower((string) $name) => (int) $id])
-            ->all();
+            ->orderBy('parent_id')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'parent_id', 'name']);
 
-        if ($categories === []) {
+        if ($rows->isEmpty()) {
             throw new RuntimeException('Active product categories must exist before seeding demo products.');
         }
 
-        return $categories;
+        $byId = $rows->keyBy('id');
+        $byRoot = [];
+        $fallbackByRoot = [];
+
+        foreach ($rows as $row) {
+            if ($row->parent_id === null) {
+                continue;
+            }
+
+            $rootId = $this->rootCategoryId((int) $row->id, $byId);
+            $byRoot[$rootId][Str::lower((string) $row->name)] = (int) $row->id;
+            $fallbackByRoot[$rootId] ??= (int) $row->id;
+        }
+
+        return [
+            'by_root' => $byRoot,
+            'fallback_by_root' => $fallbackByRoot,
+            'fallback' => (int) $rows->first()->id,
+        ];
     }
 
     /**
@@ -199,14 +219,29 @@ class DemoProductSeeder extends Seeder
     }
 
     /**
-     * @param array<string, int> $categories
+     * @param array{by_root: array<int, array<string, int>>, fallback_by_root: array<int, int>, fallback: int} $categories
      */
-    private function categoryIdForProduct(array $categories, string $name): int
+    private function categoryIdForProduct(array $categories, string $name, int $rootCategoryId): int
     {
-        return $categories[Str::lower($name)]
-            ?? $categories['unisex']
-            ?? $categories['apparel']
-            ?? array_values($categories)[0];
+        $rootCategories = $categories['by_root'][$rootCategoryId] ?? [];
+
+        return $rootCategories[Str::lower($name)]
+            ?? $rootCategories['unisex']
+            ?? $categories['fallback_by_root'][$rootCategoryId]
+            ?? $categories['fallback'];
+    }
+
+    private function rootCategoryId(int $categoryId, mixed $byId): int
+    {
+        $visited = [];
+        $current = $byId->get($categoryId);
+
+        while ($current && $current->parent_id !== null && ! in_array((int) $current->id, $visited, true)) {
+            $visited[] = (int) $current->id;
+            $current = $byId->get((int) $current->parent_id);
+        }
+
+        return (int) ($current->id ?? $categoryId);
     }
 
     /**

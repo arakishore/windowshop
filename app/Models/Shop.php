@@ -15,7 +15,7 @@ class Shop extends Model
 
     protected $fillable = [
         'merchant_id',
-        'shop_category_id',
+        'root_product_category_id',
         'name',
         'slug',
         'short_description',
@@ -55,27 +55,14 @@ class Shop extends Model
         return 'uuid';
     }
 
-    protected static function booted(): void
-    {
-        static::updated(function (Shop $shop): void {
-            if (! $shop->wasChanged('shop_category_id')) {
-                return;
-            }
-
-            Product::query()
-                ->where('shop_id', $shop->getKey())
-                ->update(['shop_category_id' => $shop->shop_category_id]);
-        });
-    }
-
     public function merchant(): BelongsTo
     {
         return $this->belongsTo(MerchantProfile::class, 'merchant_id');
     }
 
-    public function category(): BelongsTo
+    public function rootProductCategory(): BelongsTo
     {
-        return $this->belongsTo(ShopCategory::class, 'shop_category_id');
+        return $this->belongsTo(ProductCategory::class, 'root_product_category_id');
     }
 
     public function audiences(): BelongsToMany

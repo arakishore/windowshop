@@ -16,10 +16,12 @@ class UpdateShopRequest extends StoreShopRequest
     public function rules(): array
     {
         $rules = parent::rules();
-        $rules['shop_category_id'] = [
+        $rules['root_product_category_id'] = [
             'required',
             'integer',
-            Rule::exists('shop_categories', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            Rule::exists('product_categories', 'id')->where(fn ($query) => $query
+                ->whereNull('parent_id')
+                ->whereNull('deleted_at')),
         ];
         $rules['audience_ids.*'] = [
             'integer',
@@ -36,21 +38,22 @@ class UpdateShopRequest extends StoreShopRequest
 
         $validator->after(function (Validator $validator): void {
             $shop = $this->route('shop');
-            $currentCategoryId = $shop instanceof Shop ? (int) $shop->shop_category_id : null;
-            $selectedCategoryId = $this->integer('shop_category_id') ?: null;
+            $currentCategoryId = $shop instanceof Shop ? (int) $shop->root_product_category_id : null;
+            $selectedCategoryId = $this->integer('root_product_category_id') ?: null;
 
             if ($selectedCategoryId === null || $selectedCategoryId === $currentCategoryId) {
                 return;
             }
 
-            $isActive = DB::table('shop_categories')
+            $isActive = DB::table('product_categories')
                 ->where('id', $selectedCategoryId)
+                ->whereNull('parent_id')
                 ->where('status', 'active')
                 ->whereNull('deleted_at')
                 ->exists();
 
             if (! $isActive) {
-                $validator->errors()->add('shop_category_id', 'The selected shop category must be active.');
+                $validator->errors()->add('root_product_category_id', 'The selected shop type must be an active root category.');
             }
 
             $currentAudienceIds = $shop instanceof Shop

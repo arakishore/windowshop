@@ -15,7 +15,6 @@ class SystemFoundationSeeder extends Seeder
     {
         $this->call(AuthRoleSeeder::class);
         $this->call(LocationSeeder::class);
-        $this->call(ShopCategorySeeder::class);
         $this->call(ShopAudienceSeeder::class);
         $this->call(BrandSeeder::class);
         $this->call(ProductCategorySeeder::class);

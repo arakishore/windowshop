@@ -24,6 +24,8 @@ return new class extends Migration
             $table->string('name', 150);
             $table->text('short_description_template');
             $table->longText('description_template');
+            $table->string('meta_title_template')->nullable();
+            $table->text('meta_description_template')->nullable();
             $table->string('status', 30)
                 ->default('active')
                 ->comment('active,inactive,deleted')

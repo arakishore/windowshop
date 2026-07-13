@@ -178,6 +178,12 @@ class ProductCategoryController extends Controller
                 ->with('error', 'This category cannot be deleted because it is assigned to one or more products. Set it to Inactive instead.');
         }
 
+        if ($productCategory->shops()->withTrashed()->exists()) {
+            return redirect()
+                ->route('admin.master.product-categories.index')
+                ->with('error', 'This category cannot be deleted because it is assigned to one or more shops as a shop type. Set it to Inactive instead.');
+        }
+
         if ($productCategory->descriptionTemplates()->exists()) {
             return redirect()
                 ->route('admin.master.product-categories.index')

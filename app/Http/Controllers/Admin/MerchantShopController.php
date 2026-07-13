@@ -6,9 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreShopRequest;
 use App\Http\Requests\Admin\UpdateShopRequest;
 use App\Models\MerchantProfile;
+use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\Shop;
 use App\Models\ShopAudience;
-use App\Models\ShopCategory;
 use App\Services\Image\ImageVariantService;
 use App\Services\Merchant\MerchantService;
 use Illuminate\Http\RedirectResponse;
@@ -33,7 +34,7 @@ class MerchantShopController extends Controller
     {
         $shops = Shop::query()
             ->where('merchant_id', $merchant->getKey())
-            ->with(['category', 'audiences', 'city'])
+            ->with(['rootProductCategory', 'audiences', 'city'])
             ->orderByDesc('created_at')
             ->paginate((int) config('admin.pagination.per_page', 15));
 
@@ -69,7 +70,7 @@ class MerchantShopController extends Controller
 
         return view('admin.merchants.shops.show', [
             ...$this->workspaceData($merchant),
-            'shop' => $shop->load(['category', 'audiences', 'country', 'state', 'city']),
+            'shop' => $shop->load(['rootProductCategory', 'audiences', 'country', 'state', 'city']),
         ]);
     }
 
@@ -125,13 +126,19 @@ class MerchantShopController extends Controller
     {
         return DB::transaction(function () use ($shop, $merchant, $data, $request, $actorId): Shop {
             $isNew = ! $shop->exists;
+            $currentRootCategoryId = $shop->exists ? (int) $shop->root_product_category_id : null;
+            $newRootCategoryId = (int) $data['root_product_category_id'];
+
+            if (! $isNew && $currentRootCategoryId !== $newRootCategoryId) {
+                $this->assertShopTypeCanChange($shop, $newRootCategoryId);
+            }
 
             $logoPath = $shop->logo_path;
             $bannerPath = $shop->banner_path;
 
             $shop->forceFill([
                 'merchant_id' => $merchant->getKey(),
-                'shop_category_id' => $data['shop_category_id'],
+                'root_product_category_id' => $newRootCategoryId,
                 'name' => $data['name'],
                 'slug' => $this->uniqueSlug($data['name'], $shop),
                 'short_description' => $this->nullable($data['short_description'] ?? null),
@@ -161,6 +168,12 @@ class MerchantShopController extends Controller
             }
 
             $shop->save();
+
+            if (! $isNew && $currentRootCategoryId !== $newRootCategoryId) {
+                Product::query()
+                    ->where('shop_id', $shop->getKey())
+                    ->update(['root_product_category_id' => $newRootCategoryId]);
+            }
 
             if ($request->boolean('remove_logo')) {
                 $this->deleteImageDirectory($logoPath);
@@ -267,12 +280,13 @@ class MerchantShopController extends Controller
         $stateId = (int) old('state_id', $shop?->state_id ?? $defaultLocation['state_id']);
 
         return [
-            'categories' => ShopCategory::query()
+            'categories' => ProductCategory::query()
                 ->where(function ($query) use ($shop): void {
-                    $query->where('status', 'active');
+                    $query->whereNull('parent_id')
+                        ->where('status', 'active');
 
-                    if ($shop?->shop_category_id) {
-                        $query->orWhere('id', $shop->shop_category_id);
+                    if ($shop?->root_product_category_id) {
+                        $query->orWhere('id', $shop->root_product_category_id);
                     }
                 })
                 ->orderBy('sort_order')
@@ -305,5 +319,33 @@ class MerchantShopController extends Controller
         $value = trim((string) $value);
 
         return $value === '' ? null : $value;
+    }
+
+    private function assertShopTypeCanChange(Shop $shop, int $newRootCategoryId): void
+    {
+        $categoryIds = Product::query()
+            ->where('shop_id', $shop->getKey())
+            ->pluck('product_category_id')
+            ->unique()
+            ->values();
+
+        if ($categoryIds->isEmpty()) {
+            return;
+        }
+
+        $categories = ProductCategory::query()
+            ->with('parent.parent')
+            ->whereIn('id', $categoryIds)
+            ->get();
+
+        $hasInvalidProductCategory = $categories->contains(
+            fn (ProductCategory $category): bool => $category->rootCategoryId() !== $newRootCategoryId
+        );
+
+        if ($hasInvalidProductCategory) {
+            throw ValidationException::withMessages([
+                'root_product_category_id' => 'This shop type cannot be changed because one or more existing products belong to categories outside the selected shop type.',
+            ]);
+        }
     }
 }

@@ -16,6 +16,8 @@ class ProductDescriptionTemplate extends Model
         'name',
         'short_description_template',
         'description_template',
+        'meta_title_template',
+        'meta_description_template',
         'status',
         'sort_order',
         'created_by',

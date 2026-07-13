@@ -10,6 +10,12 @@
 
 Language, currency, and timezone are stored as values in `system_settings` during Version 1.
 
+### Shop and Product Category Usage
+
+`product_categories` is the single category master. Root categories, where `parent_id` is `NULL`, represent shop or business types such as `Apparel`, `Footwear`, or `Mobile & Electronics`. Child and leaf categories represent product classification and are used when assigning a category to an individual product.
+
+Shops store their shop type in `shops.root_product_category_id`, which must reference an active root product category. Products store both `products.root_product_category_id`, copied from the selected shop, and `products.product_category_id`, the exact selectable product category under that root. The product root category is not independently editable.
+
 ### Future Expansion
 
 - `system_languages`
