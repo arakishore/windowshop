@@ -40,6 +40,11 @@ class ProductAttributeGroup extends Model
         return $this->hasMany(ProductAttribute::class, 'product_attribute_group_id');
     }
 
+    public function categoryMappings(): HasMany
+    {
+        return $this->hasMany(ProductCategoryAttributeGroup::class, 'product_attribute_group_id');
+    }
+
     public function variantAttributes(): HasMany
     {
         return $this->hasMany(ProductVariantAttribute::class, 'product_attribute_group_id');

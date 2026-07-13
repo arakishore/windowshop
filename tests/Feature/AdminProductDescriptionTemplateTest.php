@@ -196,6 +196,20 @@ class AdminProductDescriptionTemplateTest extends TestCase
         $this->assertStringNotContainsString('{material}', (string) $product->description);
         $this->assertSame('Premium Cotton Tee | Acme', $product->meta_title);
         $this->assertSame('Buy Premium Cotton Tee from Demo Shop.', $product->meta_description);
+
+        $this->actingAs($admin)
+            ->get(route('admin.products.edit', $product))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'Basic Information',
+                'Attributes',
+                'Variants',
+                'Images',
+                'Pricing',
+                'Inventory',
+                'Description',
+                'SEO',
+            ]);
     }
 
     public function test_product_create_dropdown_disables_root_categories(): void

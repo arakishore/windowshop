@@ -3,6 +3,7 @@
 namespace App\Services\Merchant;
 
 use App\Models\MerchantProfile;
+use App\Models\ProductCategory;
 use App\Models\Shop;
 use App\Services\Image\ImageVariantService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -41,18 +42,73 @@ class MerchantShopService
     /**
      * @return array<string, mixed>
      */
-    public function formData(Shop $shop): array
+    public function formData(?Shop $shop = null): array
     {
         $defaultLocation = $this->merchantService->defaultBusinessLocation();
-        $countryId = (int) old('country_id', $shop->country_id ?? $defaultLocation['country_id']);
-        $stateId = (int) old('state_id', $shop->state_id ?? $defaultLocation['state_id']);
+        $countryId = (int) old('country_id', $shop?->country_id ?? $defaultLocation['country_id']);
+        $stateId = (int) old('state_id', $shop?->state_id ?? $defaultLocation['state_id']);
 
         return [
+            'shopTypes' => ProductCategory::query()
+                ->whereNull('parent_id')
+                ->where('status', 'active')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
             'countries' => $this->merchantService->activeCountries(),
             'states' => $countryId ? $this->merchantService->activeStates($countryId) : collect(),
             'cities' => $countryId && $stateId ? $this->merchantService->citiesForState($countryId, $stateId) : collect(),
             'defaultLocation' => $defaultLocation,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public function createShop(MerchantProfile $merchant, array $data, Request $request, ?int $actorId): Shop
+    {
+        return DB::transaction(function () use ($merchant, $data, $request, $actorId): Shop {
+            $shop = Shop::query()->create([
+                'merchant_id' => $merchant->getKey(),
+                'root_product_category_id' => $data['root_product_category_id'],
+                'name' => $data['name'],
+                'slug' => $this->uniqueSlug($data['name']),
+                'short_description' => $this->nullable($data['short_description'] ?? null),
+                'description' => $this->nullable($data['description'] ?? null),
+                'email' => $this->nullableLower($data['email'] ?? null),
+                'mobile' => $this->nullable($data['mobile'] ?? null),
+                'whatsapp_number' => $this->nullable($data['whatsapp_number'] ?? null),
+                'website_url' => $this->nullable($data['website_url'] ?? null),
+                'address_line_1' => $data['address_line_1'],
+                'address_line_2' => $this->nullable($data['address_line_2'] ?? null),
+                'landmark' => $this->nullable($data['landmark'] ?? null),
+                'country_id' => $data['country_id'] ?? null,
+                'state_id' => $data['state_id'] ?? null,
+                'city_id' => $data['city_id'] ?? null,
+                'pincode' => $this->nullable($data['pincode'] ?? null),
+                'latitude' => $this->nullable($data['latitude'] ?? null),
+                'longitude' => $this->nullable($data['longitude'] ?? null),
+                'status' => $data['status'],
+                'created_by' => $actorId,
+                'updated_by' => $actorId,
+            ]);
+
+            $paths = [];
+
+            if ($request->hasFile('logo')) {
+                $paths['logo_path'] = $this->storeImage($request, 'logo', 'shop_logo', "shops/{$shop->getKey()}/logo");
+            }
+
+            if ($request->hasFile('banner')) {
+                $paths['banner_path'] = $this->storeImage($request, 'banner', 'shop_banner', "shops/{$shop->getKey()}/banner");
+            }
+
+            if ($paths !== []) {
+                $shop->forceFill($paths)->save();
+            }
+
+            return $shop;
+        });
     }
 
     /**
@@ -118,7 +174,7 @@ class MerchantShopService
         });
     }
 
-    private function uniqueSlug(string $name, Shop $shop): string
+    private function uniqueSlug(string $name, ?Shop $shop = null): string
     {
         $base = Str::slug($name) ?: Str::uuid()->toString();
         $slug = $base;
@@ -126,7 +182,7 @@ class MerchantShopService
 
         while (Shop::query()
             ->where('slug', $slug)
-            ->whereKeyNot($shop->getKey())
+            ->when($shop?->exists, fn ($query) => $query->whereKeyNot($shop->getKey()))
             ->exists()) {
             $slug = "{$base}-{$suffix}";
             $suffix++;

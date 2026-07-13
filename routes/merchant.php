@@ -24,6 +24,8 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::put('/change-password', [MerchantPasswordController::class, 'update'])->name('password.update');
         Route::post('/active-shop', [MerchantShopContextController::class, 'update'])->name('active-shop.update');
         Route::get('/shops', [MerchantShopController::class, 'index'])->name('shops.index');
+        Route::get('/shops/create', [MerchantShopController::class, 'create'])->name('shops.create');
+        Route::post('/shops', [MerchantShopController::class, 'store'])->name('shops.store');
         Route::get('/shops/{shop}', [MerchantShopController::class, 'show'])->name('shops.show');
         Route::get('/shops/{shop}/edit', [MerchantShopController::class, 'edit'])->name('shops.edit');
         Route::put('/shops/{shop}', [MerchantShopController::class, 'update'])->name('shops.update');

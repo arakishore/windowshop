@@ -18,10 +18,12 @@
         $tabs = [
             'basic' => ['label' => 'Basic Information', 'icon' => 'ph-info'],
             'attributes' => ['label' => 'Attributes', 'icon' => 'ph-sliders-horizontal'],
-            'variants' => ['label' => 'Variants & Pricing', 'icon' => 'ph-tag'],
+            'variants' => ['label' => 'Variants', 'icon' => 'ph-tag'],
             'images' => ['label' => 'Images', 'icon' => 'ph-images'],
-            'description' => ['label' => 'Description & SEO', 'icon' => 'ph-text-aa'],
-            'preview' => ['label' => 'Preview', 'icon' => 'ph-eye'],
+            'pricing' => ['label' => 'Pricing', 'icon' => 'ph-currency-inr'],
+            'inventory' => ['label' => 'Inventory', 'icon' => 'ph-warehouse'],
+            'description' => ['label' => 'Description', 'icon' => 'ph-text-aa'],
+            'seo' => ['label' => 'SEO', 'icon' => 'ph-magnifying-glass'],
         ];
     @endphp
 
@@ -56,7 +58,7 @@
                 <form method="POST" action="{{ route('admin.products.update', $product) }}">
                     @csrf
                     @method('PUT')
-                    @include('admin.products.partials.quick-form', ['submitLabel' => 'Update Basic Information', 'includeShortDescription' => true])
+                    @include('admin.products.partials.quick-form', ['submitLabel' => 'Update Basic Information', 'includeShortDescription' => false])
                 </form>
             </div>
 
@@ -72,8 +74,8 @@
             <div class="tab-pane fade {{ $activeTab === 'variants' ? 'show active' : '' }}" id="product-tab-variants">
                 @include('admin.products.partials.tab-placeholder', [
                     'icon' => 'ph-tag',
-                    'title' => 'Variants & Pricing',
-                    'message' => 'Variant SKUs, prices, stock, and default variant controls will be managed here.',
+                    'title' => 'Variants',
+                    'message' => 'Variant SKUs, option combinations, and default variant controls will be managed here.',
                     'meta' => $product->variants->count().' variants',
                 ])
             </div>
@@ -84,6 +86,24 @@
                     'title' => 'Images',
                     'message' => 'Product and variant images will be uploaded and ordered here.',
                     'meta' => $product->images->count().' images',
+                ])
+            </div>
+
+            <div class="tab-pane fade {{ $activeTab === 'pricing' ? 'show active' : '' }}" id="product-tab-pricing">
+                @include('admin.products.partials.tab-placeholder', [
+                    'icon' => 'ph-currency-inr',
+                    'title' => 'Pricing',
+                    'message' => 'MRP, selling price, cost price, discounts, and price history controls will be managed here.',
+                    'meta' => $product->variants->count().' variants',
+                ])
+            </div>
+
+            <div class="tab-pane fade {{ $activeTab === 'inventory' ? 'show active' : '' }}" id="product-tab-inventory">
+                @include('admin.products.partials.tab-placeholder', [
+                    'icon' => 'ph-warehouse',
+                    'title' => 'Inventory',
+                    'message' => 'Stock quantity, low stock thresholds, and inventory movement controls will be managed here.',
+                    'meta' => $product->variants->sum('stock_quantity').' units in variants',
                 ])
             </div>
 
@@ -112,7 +132,10 @@
                     <form method="POST" action="{{ route('admin.products.description-seo.update', $product) }}">
                         @csrf
                         @method('PUT')
+                        <input type="hidden" name="current_tab" value="description">
                         <input type="hidden" name="template_id" value="{{ $selectedDescriptionTemplate?->id }}">
+                        <input type="hidden" name="meta_title" value="{{ old('meta_title', $product->meta_title) }}">
+                        <textarea name="meta_description" class="d-none" aria-hidden="true">{{ old('meta_description', $product->meta_description) }}</textarea>
 
                         <div class="row g-3">
                             <div class="col-12">
@@ -127,6 +150,28 @@
                                 @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
 
+                            <div class="col-12 text-end">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="ph-floppy-disk me-2"></i>
+                                    Save Description
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="tab-pane fade {{ $activeTab === 'seo' ? 'show active' : '' }}" id="product-tab-seo">
+                <div class="card-body">
+                    <form method="POST" action="{{ route('admin.products.description-seo.update', $product) }}">
+                        @csrf
+                        @method('PUT')
+                        <input type="hidden" name="current_tab" value="seo">
+                        <input type="hidden" name="template_id" value="{{ $selectedDescriptionTemplate?->id }}">
+                        <textarea name="short_description" class="d-none" aria-hidden="true">{{ old('short_description', $product->short_description) }}</textarea>
+                        <textarea name="description" class="d-none" aria-hidden="true">{{ old('description', $product->description) }}</textarea>
+
+                        <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="meta_title" class="form-label">Meta Title</label>
                                 <input id="meta_title" name="meta_title" type="text" maxlength="255" value="{{ old('meta_title', $product->meta_title) }}" class="form-control @error('meta_title') is-invalid @enderror">
@@ -142,32 +187,11 @@
                             <div class="col-12 text-end">
                                 <button type="submit" class="btn btn-primary">
                                     <i class="ph-floppy-disk me-2"></i>
-                                    Save Description & SEO
+                                    Save SEO
                                 </button>
                             </div>
                         </div>
                     </form>
-                </div>
-            </div>
-
-            <div class="tab-pane fade {{ $activeTab === 'preview' ? 'show active' : '' }}" id="product-tab-preview">
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-8">
-                            <h5 class="mb-2">{{ $product->product_name }}</h5>
-                            <div class="text-muted mb-3">{{ $product->short_description ?: 'No short description added.' }}</div>
-                            <dl class="row mb-0">
-                                <dt class="col-sm-3">Shop</dt>
-                                <dd class="col-sm-9">{{ $product->shop?->name ?? '-' }}</dd>
-                                <dt class="col-sm-3">Category</dt>
-                                <dd class="col-sm-9">{{ $product->category?->name ?? '-' }}</dd>
-                                <dt class="col-sm-3">Brand</dt>
-                                <dd class="col-sm-9">{{ $product->brand?->name ?? '-' }}</dd>
-                                <dt class="col-sm-3">Type</dt>
-                                <dd class="col-sm-9">{{ $productTypes[$product->product_type] ?? ucfirst($product->product_type) }}</dd>
-                            </dl>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>

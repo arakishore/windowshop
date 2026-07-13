@@ -13,6 +13,32 @@ This is the canonical register for approved WindowShop business behavior. Each r
 - Rejection and suspension require a safe internal reason.
 - Merchant staff access depends on both staff and merchant status.
 
+## Shop And Category Rules
+
+**Current policy: Approved**
+
+- `product_categories` is the single category master.
+- Root product categories (`parent_id IS NULL`) are Shop Types.
+- Child or leaf product categories (`parent_id IS NOT NULL`) classify products.
+- Admin and merchant shop forms show Shop Type from active root product categories.
+- Products must be assigned to an active leaf product category under the selected shop's Shop Type.
+- `products.root_product_category_id` is copied from the selected shop and is not independently editable.
+- Merchant users may add shops from the merchant area and choose `active` or `inactive`.
+- Merchant users may edit their own shop details and switch eligible shops active/inactive.
+- Merchant users cannot delete shops. Shop delete actions remain admin-only.
+- Admin shop type changes are blocked if existing products would no longer belong under the new Shop Type.
+
+## Product Attribute Variant Rules
+
+**Current policy: Approved**
+
+- `product_attribute_groups.selection_type` controls how many values can be selected for that group.
+- Variant generation is controlled by `product_category_attribute_groups.is_variant`.
+- Do not add `is_variant` to `product_attribute_groups`; the same attribute group can behave differently by category.
+- Only category attribute mappings where `is_variant = true` may be used to generate product variants.
+- Apparel defaults: Color and Size are variant attributes; Material, Sleeve, Neck, Pattern, Fabric, Fit, and Occasion are descriptive attributes.
+- Descriptive attributes must not multiply generated variants.
+
 ## Customer Registration
 
 **Initial policy: Proposed**
@@ -96,4 +122,3 @@ Audit requirement:
 Tests:
 Related ADR:
 ```
-

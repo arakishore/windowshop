@@ -20,6 +20,7 @@ class ProductAttributeSeeder extends Seeder
                 'name' => 'Size',
                 'code' => 'size',
                 'description' => 'Apparel product sizes',
+                'selection_type' => 'multiple',
                 'values' => [
                     'XS',
                     'S',
@@ -38,6 +39,7 @@ class ProductAttributeSeeder extends Seeder
                 'name' => 'Color',
                 'code' => 'color',
                 'description' => 'Product colors',
+                'selection_type' => 'multiple',
                 'values' => [
                     'Black',
                     'White',
@@ -226,6 +228,57 @@ class ProductAttributeSeeder extends Seeder
                     ],
                 );
             }
+        }
+
+        $this->seedCategoryMappings($now);
+    }
+
+    private function seedCategoryMappings(mixed $now): void
+    {
+        $apparelId = DB::table('product_categories')
+            ->whereNull('parent_id')
+            ->where('name', 'Apparel')
+            ->whereNull('deleted_at')
+            ->value('id');
+
+        if ($apparelId === null) {
+            return;
+        }
+
+        $mappings = [
+            ['code' => 'color', 'is_required' => true, 'is_variant' => true, 'sort_order' => 1],
+            ['code' => 'size', 'is_required' => true, 'is_variant' => true, 'sort_order' => 2],
+            ['code' => 'material', 'is_required' => false, 'is_variant' => false, 'sort_order' => 3],
+            ['code' => 'sleeve', 'is_required' => false, 'is_variant' => false, 'sort_order' => 4],
+            ['code' => 'neck', 'is_required' => false, 'is_variant' => false, 'sort_order' => 5],
+            ['code' => 'pattern', 'is_required' => false, 'is_variant' => false, 'sort_order' => 6],
+            ['code' => 'fabric', 'is_required' => false, 'is_variant' => false, 'sort_order' => 7],
+            ['code' => 'fit', 'is_required' => false, 'is_variant' => false, 'sort_order' => 8],
+            ['code' => 'occasion', 'is_required' => false, 'is_variant' => false, 'sort_order' => 9],
+        ];
+
+        foreach ($mappings as $mapping) {
+            $groupId = DB::table('product_attribute_groups')
+                ->where('code', $mapping['code'])
+                ->value('id');
+
+            if ($groupId === null) {
+                continue;
+            }
+
+            DB::table('product_category_attribute_groups')->updateOrInsert(
+                [
+                    'product_category_id' => $apparelId,
+                    'product_attribute_group_id' => $groupId,
+                ],
+                fn (bool $exists) => [
+                    'is_required' => $mapping['is_required'],
+                    'is_variant' => $mapping['is_variant'],
+                    'sort_order' => $mapping['sort_order'],
+                    'updated_at' => $now,
+                    ...($exists ? [] : ['created_at' => $now]),
+                ],
+            );
         }
     }
 }

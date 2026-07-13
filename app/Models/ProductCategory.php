@@ -68,6 +68,11 @@ class ProductCategory extends Model
         return $this->hasMany(ProductDescriptionTemplate::class);
     }
 
+    public function attributeGroupMappings(): HasMany
+    {
+        return $this->hasMany(ProductCategoryAttributeGroup::class, 'product_category_id');
+    }
+
     public function getFullPathAttribute(): string
     {
         $names = [];

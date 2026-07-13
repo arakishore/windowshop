@@ -143,6 +143,7 @@ class ProductController extends Controller
     public function updateDescriptionSeo(UpdateProductDescriptionSeoRequest $request, Product $product): RedirectResponse
     {
         $data = $request->validated();
+        $tab = $request->input('current_tab') === 'seo' ? 'seo' : 'description';
 
         $product->forceFill([
             'short_description' => $this->nullable($data['short_description'] ?? null),
@@ -153,8 +154,8 @@ class ProductController extends Controller
         ])->save();
 
         return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => 'description'])
-            ->with('success', 'Product description and SEO updated successfully.');
+            ->route('admin.products.edit', ['product' => $product, 'tab' => $tab])
+            ->with('success', $tab === 'seo' ? 'Product SEO updated successfully.' : 'Product description updated successfully.');
     }
 
     public function generateDescriptionSeo(Product $product): RedirectResponse

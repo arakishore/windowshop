@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Merchant\StoreMerchantShopRequest;
 use App\Http\Requests\Merchant\UpdateMerchantShopRequest;
 use App\Models\Shop;
 use App\Services\Merchant\MerchantShopContextService;
@@ -39,6 +40,32 @@ class MerchantShopController extends Controller
             ...$this->viewData($request),
             'shop' => $shop->load(['merchant', 'rootProductCategory', 'audiences', 'country', 'state', 'city']),
         ]);
+    }
+
+    public function create(Request $request): View
+    {
+        $merchant = $this->shopContextService->activeMerchantForUser($request->user());
+
+        abort_unless($merchant !== null, 403);
+
+        return view('merchant.shops.create', [
+            ...$this->viewData($request),
+            ...$this->shopService->formData(),
+            'shop' => null,
+        ]);
+    }
+
+    public function store(StoreMerchantShopRequest $request): RedirectResponse
+    {
+        $merchant = $this->shopContextService->activeMerchantForUser($request->user());
+
+        abort_unless($merchant !== null, 403);
+
+        $shop = $this->shopService->createShop($merchant, $request->validated(), $request, $request->user()?->getKey());
+
+        return redirect()
+            ->route('merchant.shops.show', $shop)
+            ->with('success', 'Shop created successfully.');
     }
 
     public function edit(Request $request, Shop $shop): View

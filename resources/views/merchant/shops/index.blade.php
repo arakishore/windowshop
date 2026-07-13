@@ -7,21 +7,27 @@
 
 @section('content')
     <div class="card">
-        <div class="card-header d-flex align-items-center gap-2">
-            <h5 class="mb-0">My Shops</h5>
-            <i
-                class="ph-info text-muted"
-                data-bs-placement="right"
-                data-bs-popup="tooltip"
-                title="Manage your shop information. Use the shop selector in the header to switch the shop you're currently managing."
-            ></i>
+        <div class="card-header d-flex align-items-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <h5 class="mb-0">My Shops</h5>
+                <i
+                    class="ph-info text-muted"
+                    data-bs-placement="right"
+                    data-bs-popup="tooltip"
+                    title="Manage your shop information. Use the shop selector in the header to switch the shop you're currently managing."
+                ></i>
+            </div>
+            <a href="{{ route('merchant.shops.create') }}" class="btn btn-primary">
+                <i class="ph-plus me-2"></i>
+                Add Shop
+            </a>
         </div>
 
         @if($shops->isEmpty())
             <x-empty-state
                 icon="ph-storefront"
                 title="No shops are available yet."
-                message="Your approved shops will appear here after setup by the admin team."
+                message="Add your first shop and submit it for admin review."
             />
         @else
             <div class="table-responsive">

@@ -15,6 +15,39 @@ This document is the human-readable register for constants and workflow values s
 | `suspended` | Access blocked by an authorized action |
 | `deleted` | Business-level deleted state where explicitly used |
 
+### Shop Status
+
+| Value | Meaning |
+|---|---|
+| `pending` | Awaiting administrative review or setup |
+| `active` | Visible/usable shop |
+| `inactive` | Merchant/admin-disabled shop |
+| `suspended` | Shop blocked by an authorized administrative action |
+| `rejected` | Shop rejected by an authorized administrative action |
+| `deleted` | Business-level deleted state; delete action is admin-only |
+
+Merchants may choose only `active` or `inactive` when adding or editing shops. Other shop statuses are controlled by admin workflows.
+
+### Category Usage
+
+| Concept | Database representation | User-facing label |
+|---|---|---|
+| Shop/business type | Root `product_categories` row where `parent_id IS NULL` | Shop Type |
+| Product classification | Child/leaf `product_categories` row where `parent_id IS NOT NULL` | Product Category |
+| Shop category column | `shops.root_product_category_id` | Shop Type |
+| Product root copy | `products.root_product_category_id` | Not directly editable |
+| Product exact category | `products.product_category_id` | Product Category |
+
+### Product Attribute Mapping Flags
+
+| Field | Meaning |
+|---|---|
+| `product_attribute_groups.selection_type` | Whether a group allows one or multiple selected values |
+| `product_category_attribute_groups.is_required` | Whether the category requires this attribute group |
+| `product_category_attribute_groups.is_variant` | Whether this category uses the attribute group to generate variants |
+
+For Apparel, Color and Size are variant attributes. Material, Sleeve, Neck, Pattern, Fabric, Fit, and Occasion are descriptive attributes.
+
 ### Authentication Guards
 
 | Value | Meaning | State |
@@ -90,4 +123,3 @@ Introduced:
 Deprecated:
 Related business rule or ADR:
 ```
-

@@ -16,6 +16,22 @@ Language, currency, and timezone are stored as values in `system_settings` durin
 
 Shops store their shop type in `shops.root_product_category_id`, which must reference an active root product category. Products store both `products.root_product_category_id`, copied from the selected shop, and `products.product_category_id`, the exact selectable product category under that root. The product root category is not independently editable.
 
+There is no separate `shop_categories` table and no shop-category-to-product-category mapping table. The only category CRUD is Product Categories. In V1, the product category hierarchy is limited to three levels. Product assignment uses active leaf categories under the selected shop type; root categories are visible for context but are not selectable as exact product categories.
+
+Merchant-created shops also use `shops.root_product_category_id` as Shop Type. Merchants may choose `active` or `inactive` when adding or editing their own shops. Shop deletion remains an admin-only operation.
+
+### Product Attribute Category Mapping
+
+`product_category_attribute_groups` maps attribute groups to product categories. The mapping stores category-specific behavior:
+
+- `product_category_id`
+- `product_attribute_group_id`
+- `is_required`
+- `is_variant`
+- `sort_order`
+
+`product_attribute_groups.selection_type` remains generic and describes whether a group accepts one or multiple values. `product_category_attribute_groups.is_variant` decides whether selected values from that group generate variants for a specific category. For example, Color and Size generate variants for Apparel, while Material and Sleeve remain descriptive attributes.
+
 ### Future Expansion
 
 - `system_languages`

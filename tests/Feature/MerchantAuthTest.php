@@ -119,6 +119,80 @@ class MerchantAuthTest extends TestCase
         $response->assertDontSee('Delete');
     }
 
+    public function test_merchant_can_open_add_shop_form(): void
+    {
+        $userId = $this->createMerchantUser(email: 'add-shop-form@example.test');
+        $this->rootProductCategoryId('Apparel');
+
+        $this->actingAs(\App\Models\User::findOrFail($userId))
+            ->get('/merchant/shops/create')
+            ->assertOk()
+            ->assertSee('Add Shop')
+            ->assertSee('Shop Type')
+            ->assertSee('Status')
+            ->assertSee('Apparel');
+    }
+
+    public function test_merchant_can_submit_shop_for_review(): void
+    {
+        $userId = $this->createMerchantUser(email: 'submit-shop@example.test');
+        $categoryId = $this->rootProductCategoryId('Apparel');
+        $countryId = (int) DB::table('loc_countries')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'India',
+            'iso2' => 'IN',
+            'iso3' => 'IND',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $stateId = (int) DB::table('loc_states')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Maharashtra',
+            'country_id' => $countryId,
+            'country_code' => 'IN',
+            'iso2' => 'MH',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $cityId = (int) DB::table('loc_cities')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Nashik',
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs(\App\Models\User::findOrFail($userId))
+            ->post('/merchant/shops', [
+                'root_product_category_id' => $categoryId,
+                'name' => 'Merchant Added Shop',
+                'short_description' => 'New branch',
+                'email' => ' NEW-SHOP@EXAMPLE.TEST ',
+                'mobile' => ' 9000000444 ',
+                'address_line_1' => 'College Road',
+                'country_id' => $countryId,
+                'state_id' => $stateId,
+                'city_id' => $cityId,
+                'status' => 'inactive',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Shop created successfully.');
+
+        $merchantId = (int) DB::table('merchant_profiles')->where('user_id', $userId)->value('id');
+
+        $this->assertDatabaseHas('shops', [
+            'merchant_id' => $merchantId,
+            'root_product_category_id' => $categoryId,
+            'name' => 'Merchant Added Shop',
+            'slug' => 'merchant-added-shop',
+            'email' => 'new-shop@example.test',
+            'mobile' => '9000000444',
+            'status' => 'inactive',
+            'created_by' => $userId,
+        ]);
+    }
+
     public function test_merchant_cannot_open_or_update_another_merchants_shop(): void
     {
         $userId = $this->createMerchantUser(email: 'shop-owner@example.test');
@@ -619,16 +693,7 @@ class MerchantAuthTest extends TestCase
                 'updated_at' => now(),
             ]));
 
-        $categoryId = (int) (DB::table('product_categories')->where('slug', 'apparel')->value('id')
-            ?? DB::table('product_categories')->insertGetId([
-                'uuid' => (string) Str::uuid(),
-                'parent_id' => null,
-                'name' => 'Apparel',
-                'slug' => 'apparel',
-                'status' => 'active',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]));
+        $categoryId = $this->rootProductCategoryId('Apparel');
 
         $merchantId = (int) DB::table('merchant_profiles')
             ->where('user_id', $userId)
@@ -653,6 +718,25 @@ class MerchantAuthTest extends TestCase
     private function shopUuid(int $shopId): string
     {
         return (string) DB::table('shops')->where('id', $shopId)->value('uuid');
+    }
+
+    private function rootProductCategoryId(string $name): int
+    {
+        $slug = Str::slug($name);
+
+        return (int) (DB::table('product_categories')
+            ->whereNull('parent_id')
+            ->where('slug', $slug)
+            ->value('id')
+            ?? DB::table('product_categories')->insertGetId([
+                'uuid' => (string) Str::uuid(),
+                'parent_id' => null,
+                'name' => $name,
+                'slug' => $slug,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
     }
 
     private function assertAuthenticatedAsUserId(int $userId): void
