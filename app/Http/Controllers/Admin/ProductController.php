@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreProductQuickCreateRequest;
+use App\Http\Requests\Admin\UpdateProductAttributesRequest;
 use App\Http\Requests\Admin\UpdateProductBasicRequest;
 use App\Http\Requests\Admin\UpdateProductDescriptionSeoRequest;
 use App\Models\Brand;
@@ -11,6 +12,8 @@ use App\Models\Product;
 use App\Models\ProductDescriptionTemplate;
 use App\Models\ProductCategory;
 use App\Models\Shop;
+use App\Services\Product\ProductAttributeConfigurationService;
+use App\Services\Product\ProductAttributeService;
 use App\Services\Product\ProductDescriptionTemplateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +27,8 @@ class ProductController extends Controller
 {
     public function __construct(
         private readonly ProductDescriptionTemplateService $descriptionTemplateService,
+        private readonly ProductAttributeConfigurationService $attributeConfigurationService,
+        private readonly ProductAttributeService $attributeService,
     ) {
     }
 
@@ -110,8 +115,12 @@ class ProductController extends Controller
     public function edit(Product $product): View
     {
         return view('admin.products.edit', [
-            'product' => $product->load(['shop.merchant', 'category', 'brand', 'attributes', 'variants', 'images']),
+            'product' => $product->load(['shop.merchant', 'category.parent', 'brand', 'attributes', 'variants', 'images']),
             'selectedDescriptionTemplate' => $this->descriptionTemplateService->findTemplateForProduct($product),
+            'attributeMappings' => $product->category
+                ? $this->attributeConfigurationService->forCategory($product->category)
+                : collect(),
+            'selectedAttributeValues' => $this->attributeService->selectedValues($product),
             ...$this->sharedData($product),
         ]);
     }
@@ -138,6 +147,15 @@ class ProductController extends Controller
         return redirect()
             ->route('admin.products.edit', $product)
             ->with('success', 'Product basic information updated successfully.');
+    }
+
+    public function updateAttributes(UpdateProductAttributesRequest $request, Product $product): RedirectResponse
+    {
+        $this->attributeService->sync($product, $request->selectedAttributes());
+
+        return redirect()
+            ->route('admin.products.edit', ['product' => $product, 'tab' => 'attributes'])
+            ->with('success', 'Product attributes updated successfully.');
     }
 
     public function updateDescriptionSeo(UpdateProductDescriptionSeoRequest $request, Product $product): RedirectResponse

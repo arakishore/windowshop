@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ProductCategoryAttributeGroup extends Model
 {
     protected $fillable = [
-        'product_category_id',
+        'root_product_category_id',
         'product_attribute_group_id',
         'is_required',
         'is_variant',
@@ -23,9 +23,9 @@ class ProductCategoryAttributeGroup extends Model
         ];
     }
 
-    public function category(): BelongsTo
+    public function rootCategory(): BelongsTo
     {
-        return $this->belongsTo(ProductCategory::class, 'product_category_id');
+        return $this->belongsTo(ProductCategory::class, 'root_product_category_id');
     }
 
     public function group(): BelongsTo

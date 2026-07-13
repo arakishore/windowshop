@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('product_category_attribute_groups', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('product_category_id');
+            $table->foreignId('root_product_category_id');
             $table->foreignId('product_attribute_group_id');
             $table->boolean('is_required')
                 ->default(false)
@@ -25,15 +25,15 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(
-                ['product_category_id', 'product_attribute_group_id'],
+                ['root_product_category_id', 'product_attribute_group_id'],
                 'product_category_attribute_group_unique',
             );
             $table->index(
-                ['product_category_id', 'is_variant', 'sort_order'],
+                ['root_product_category_id', 'is_variant', 'sort_order'],
                 'product_category_attribute_variant_idx',
             );
 
-            $table->foreign('product_category_id', 'pcag_category_fk')
+            $table->foreign('root_product_category_id', 'pcag_root_category_fk')
                 ->references('id')
                 ->on('product_categories')
                 ->cascadeOnDelete();

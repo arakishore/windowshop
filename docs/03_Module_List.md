@@ -41,3 +41,5 @@ Merchants can add shops from the merchant area. During creation they choose a Sh
 ## Product Rules
 
 Admin product creation uses a quick-create flow followed by a tabbed edit screen: Basic Information, Attributes, Variants, Images, Pricing, Inventory, Description, and SEO. Product Category selection is filtered by the selected shop's Shop Type. Root categories are shown for context but are disabled; only active leaf categories under the shop type are selectable.
+
+The Attributes tab loads category-mapped attribute groups from `product_category_attribute_groups`, displays active values from `product_attribute_group_values`, and saves selections to `product_attributes`. It does not generate variants.

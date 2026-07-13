@@ -63,12 +63,7 @@
             </div>
 
             <div class="tab-pane fade {{ $activeTab === 'attributes' ? 'show active' : '' }}" id="product-tab-attributes">
-                @include('admin.products.partials.tab-placeholder', [
-                    'icon' => 'ph-sliders-horizontal',
-                    'title' => 'Attributes',
-                    'message' => 'Attribute assignment will be managed here for this product.',
-                    'meta' => $product->attributes->count().' assigned attributes',
-                ])
+                @include('admin.products.partials.attributes-form')
             </div>
 
             <div class="tab-pane fade {{ $activeTab === 'variants' ? 'show active' : '' }}" id="product-tab-variants">

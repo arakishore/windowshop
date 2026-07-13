@@ -82,27 +82,6 @@ class ProductAttributeSeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'Fabric',
-                'code' => 'fabric',
-                'description' => 'Apparel fabric types',
-                'values' => [
-                    'Cotton',
-                    'Silk',
-                    'Georgette',
-                    'Chiffon',
-                    'Crepe',
-                    'Rayon',
-                    'Linen',
-                    'Denim',
-                    'Velvet',
-                    'Satin',
-                    'Net',
-                    'Organza',
-                    'Jacquard',
-                    'Khadi',
-                ],
-            ],
-            [
                 'name' => 'Fit',
                 'code' => 'fit',
                 'description' => 'Apparel fit types',
@@ -252,9 +231,8 @@ class ProductAttributeSeeder extends Seeder
             ['code' => 'sleeve', 'is_required' => false, 'is_variant' => false, 'sort_order' => 4],
             ['code' => 'neck', 'is_required' => false, 'is_variant' => false, 'sort_order' => 5],
             ['code' => 'pattern', 'is_required' => false, 'is_variant' => false, 'sort_order' => 6],
-            ['code' => 'fabric', 'is_required' => false, 'is_variant' => false, 'sort_order' => 7],
-            ['code' => 'fit', 'is_required' => false, 'is_variant' => false, 'sort_order' => 8],
-            ['code' => 'occasion', 'is_required' => false, 'is_variant' => false, 'sort_order' => 9],
+            ['code' => 'fit', 'is_required' => false, 'is_variant' => false, 'sort_order' => 7],
+            ['code' => 'occasion', 'is_required' => false, 'is_variant' => false, 'sort_order' => 8],
         ];
 
         foreach ($mappings as $mapping) {
@@ -268,7 +246,7 @@ class ProductAttributeSeeder extends Seeder
 
             DB::table('product_category_attribute_groups')->updateOrInsert(
                 [
-                    'product_category_id' => $apparelId,
+                    'root_product_category_id' => $apparelId,
                     'product_attribute_group_id' => $groupId,
                 ],
                 fn (bool $exists) => [

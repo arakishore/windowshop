@@ -46,7 +46,7 @@ Merchants may choose only `active` or `inactive` when adding or editing shops. O
 | `product_category_attribute_groups.is_required` | Whether the category requires this attribute group |
 | `product_category_attribute_groups.is_variant` | Whether this category uses the attribute group to generate variants |
 
-For Apparel, Color and Size are variant attributes. Material, Sleeve, Neck, Pattern, Fabric, Fit, and Occasion are descriptive attributes.
+For Apparel, Color and Size are variant attributes. Material, Sleeve, Neck, Pattern, Fit, and Occasion are descriptive attributes.
 
 ### Authentication Guards
 

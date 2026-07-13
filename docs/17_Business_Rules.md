@@ -36,7 +36,7 @@ This is the canonical register for approved WindowShop business behavior. Each r
 - Variant generation is controlled by `product_category_attribute_groups.is_variant`.
 - Do not add `is_variant` to `product_attribute_groups`; the same attribute group can behave differently by category.
 - Only category attribute mappings where `is_variant = true` may be used to generate product variants.
-- Apparel defaults: Color and Size are variant attributes; Material, Sleeve, Neck, Pattern, Fabric, Fit, and Occasion are descriptive attributes.
+- Apparel defaults: Color and Size are variant attributes; Material, Sleeve, Neck, Pattern, Fit, and Occasion are descriptive attributes.
 - Descriptive attributes must not multiply generated variants.
 
 ## Customer Registration

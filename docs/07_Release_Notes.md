@@ -27,6 +27,7 @@
 - Added `is_variant` on the category mapping so variant generation can use only configured variant attributes.
 - Kept `product_attribute_groups.selection_type` generic and independent from variant generation.
 - Seeded Apparel so Color and Size are variant attributes while descriptive attributes remain non-variant.
+- Implemented the admin Product Attributes tab for loading, displaying, saving, and editing category-based product attributes without generating variants.
 
 ### Merchant Shops
 

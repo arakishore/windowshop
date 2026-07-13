@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupValueController;
+use App\Http\Controllers\Admin\MasterData\ProductCategoryAttributeGroupController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryController;
 use App\Http\Controllers\Admin\MasterData\ProductDescriptionTemplateController;
 use App\Http\Controllers\Admin\MasterData\ShopAudienceController;
@@ -37,6 +38,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('master/brands', BrandController::class)
             ->except(['show'])
             ->names('master.brands');
+        Route::get('master/product-categories/{productCategory}/attribute-groups', [ProductCategoryAttributeGroupController::class, 'edit'])
+            ->name('master.product-categories.attribute-groups.edit');
+        Route::put('master/product-categories/{productCategory}/attribute-groups', [ProductCategoryAttributeGroupController::class, 'update'])
+            ->name('master.product-categories.attribute-groups.update');
         Route::resource('master/product-categories', ProductCategoryController::class)
             ->parameters(['product-categories' => 'productCategory'])
             ->names('master.product-categories');
@@ -62,6 +67,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('/merchants/{merchant}/shops', MerchantShopController::class)
             ->names('merchants.shops');
         Route::resource('merchants', MerchantController::class);
+        Route::put('products/{product}/attributes', [ProductController::class, 'updateAttributes'])
+            ->name('products.attributes.update');
         Route::put('products/{product}/description-seo', [ProductController::class, 'updateDescriptionSeo'])
             ->name('products.description-seo.update');
         Route::post('products/{product}/description-seo/generate', [ProductController::class, 'generateDescriptionSeo'])

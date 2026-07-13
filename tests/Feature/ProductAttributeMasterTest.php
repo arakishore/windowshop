@@ -66,7 +66,6 @@ class ProductAttributeMasterTest extends TestCase
             'size',
             'color',
             'material',
-            'fabric',
             'fit',
             'sleeve',
             'neck',

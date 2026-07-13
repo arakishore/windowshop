@@ -20,6 +20,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) co
 - Product Description Template integration for product creation and Description actions.
 - Merchant-side Add Shop module with Shop Type and active/inactive status selection.
 - Category-level product attribute mappings with an `is_variant` flag.
+- Admin Product Attributes tab for category-based attribute selection.
 
 ### Changed
 

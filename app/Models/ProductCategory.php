@@ -70,7 +70,7 @@ class ProductCategory extends Model
 
     public function attributeGroupMappings(): HasMany
     {
-        return $this->hasMany(ProductCategoryAttributeGroup::class, 'product_category_id');
+        return $this->hasMany(ProductCategoryAttributeGroup::class, 'root_product_category_id');
     }
 
     public function getFullPathAttribute(): string

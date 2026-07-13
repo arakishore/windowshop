@@ -18,8 +18,12 @@
     @endphp
 
     <div class="card">
-        <div class="card-header">
+        <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Category Information</h5>
+            <a href="{{ route('admin.master.product-categories.attribute-groups.edit', $category) }}" class="btn btn-sm btn-primary">
+                <i class="ph-sliders-horizontal me-2"></i>
+                Attribute Mapping
+            </a>
         </div>
         <div class="table-responsive">
             <table class="table table-bordered mb-0">

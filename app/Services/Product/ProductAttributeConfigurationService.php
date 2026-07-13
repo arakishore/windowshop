@@ -18,17 +18,11 @@ class ProductAttributeConfigurationService
      */
     public function forCategory(ProductCategory $category): Collection
     {
-        $categoryIds = $this->ancestorIds($category);
-
-        $mappings = ProductCategoryAttributeGroup::query()
-            ->with('group.values')
-            ->whereIn('product_category_id', $categoryIds)
+        return ProductCategoryAttributeGroup::query()
+            ->with(['group.values' => fn ($query) => $query->where('status', 'active')])
+            ->where('root_product_category_id', $category->rootCategoryId())
+            ->orderBy('sort_order')
             ->get()
-            ->sortBy(fn (ProductCategoryAttributeGroup $mapping): int => array_search((int) $mapping->product_category_id, $categoryIds, true) ?: 0);
-
-        return $mappings
-            ->keyBy('product_attribute_group_id')
-            ->sortBy('sort_order')
             ->values();
     }
 
@@ -44,21 +38,4 @@ class ProductAttributeConfigurationService
             ->values();
     }
 
-    /**
-     * @return array<int, int>
-     */
-    private function ancestorIds(ProductCategory $category): array
-    {
-        $ids = [];
-        $visited = [];
-        $current = $category;
-
-        while ($current && ! in_array($current->getKey(), $visited, true)) {
-            $visited[] = $current->getKey();
-            array_unshift($ids, (int) $current->getKey());
-            $current = $current->parent;
-        }
-
-        return $ids;
-    }
 }
