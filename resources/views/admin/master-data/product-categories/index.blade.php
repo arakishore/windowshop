@@ -114,6 +114,11 @@
                                         <a href="{{ route('admin.master.product-categories.edit', $category) }}" class="list-icons-item text-primary" data-bs-popup="tooltip" title="Edit">
                                             <i class="ph-pencil-simple"></i>
                                         </a>
+                                        @if($category->parent_id === null)
+                                            <a href="{{ route('admin.master.product-categories.attribute-groups.edit', $category) }}" class="list-icons-item product-category-mapping-action" data-bs-popup="tooltip" title="Manage Attribute Mapping">
+                                                <i class="ph-sliders-horizontal"></i>
+                                            </a>
+                                        @endif
                                         <form method="POST" action="{{ route('admin.master.product-categories.destroy', $category) }}" class="d-inline js-delete-product-category-form">
                                             @csrf
                                             @method('DELETE')
@@ -147,6 +152,23 @@
 
         .product-category-filter-toggle:not(.collapsed) i {
             transform: rotate(180deg);
+        }
+
+        .product-category-mapping-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.75rem;
+            height: 1.75rem;
+            border-radius: 50%;
+            background-color: #eef2ff;
+            color: #4f46e5;
+        }
+
+        .product-category-mapping-action:hover,
+        .product-category-mapping-action:focus {
+            background-color: #4f46e5;
+            color: #fff;
         }
     </style>
 @endpush

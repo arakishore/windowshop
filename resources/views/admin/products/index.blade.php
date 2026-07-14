@@ -73,7 +73,6 @@
                             <th>Shop</th>
                             <th>Product Category</th>
                             <th>Brand</th>
-                            <th>Type</th>
                             <th>Status</th>
                             <th>Created Date</th>
                             <th class="text-center">Actions</th>
@@ -94,7 +93,6 @@
                                 </td>
                                 <td>{{ $product->category?->name ?? '-' }}</td>
                                 <td>{{ $product->brand?->name ?? '-' }}</td>
-                                <td>{{ $productTypes[$product->product_type] ?? ucfirst($product->product_type) }}</td>
                                 <td>
                                     <span class="badge {{ $statuses[$product->status]['badge_class'] ?? 'bg-secondary' }}">
                                         {{ $statuses[$product->status]['label'] ?? ucfirst($product->status) }}

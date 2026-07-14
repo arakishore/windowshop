@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\BulkUpdateProductVariantsRequest;
 use App\Http\Requests\Admin\StoreProductQuickCreateRequest;
 use App\Http\Requests\Admin\UpdateProductAttributesRequest;
 use App\Http\Requests\Admin\UpdateProductBasicRequest;
 use App\Http\Requests\Admin\UpdateProductDescriptionSeoRequest;
+use App\Http\Requests\Admin\UpdateProductVariantsRequest;
 use App\Models\Brand;
 use App\Models\Product;
 use App\Models\ProductDescriptionTemplate;
@@ -15,6 +17,8 @@ use App\Models\Shop;
 use App\Services\Product\ProductAttributeConfigurationService;
 use App\Services\Product\ProductAttributeService;
 use App\Services\Product\ProductDescriptionTemplateService;
+use App\Services\Product\ProductVariantGenerationService;
+use App\Services\Product\ProductVariantManagementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -29,6 +33,8 @@ class ProductController extends Controller
         private readonly ProductDescriptionTemplateService $descriptionTemplateService,
         private readonly ProductAttributeConfigurationService $attributeConfigurationService,
         private readonly ProductAttributeService $attributeService,
+        private readonly ProductVariantGenerationService $variantGenerationService,
+        private readonly ProductVariantManagementService $variantManagementService,
     ) {
     }
 
@@ -88,7 +94,6 @@ class ProductController extends Controller
                 'brand_id' => $data['brand_id'] ?? null,
                 'product_name' => $data['product_name'],
                 'slug' => 'pending-'.Str::uuid()->toString(),
-                'product_type' => $data['product_type'],
                 'status' => 'draft',
                 'created_by' => $actorId,
                 'updated_by' => $actorId,
@@ -97,6 +102,8 @@ class ProductController extends Controller
             $product->updateQuietly([
                 'slug' => $product->slugFromName(),
             ]);
+
+            $this->variantManagementService->ensureBaseVariant($product, Auth::user());
 
             return $product;
         });
@@ -114,13 +121,32 @@ class ProductController extends Controller
 
     public function edit(Product $product): View
     {
+        $this->variantManagementService->ensureBaseVariant($product, Auth::user());
+        $variantFilters = [
+            'search' => request()->query('variant_search', ''),
+            'status' => request()->query('variant_status', ''),
+            'attributes' => request()->query('variant_attributes', []),
+        ];
+
         return view('admin.products.edit', [
-            'product' => $product->load(['shop.merchant', 'category.parent', 'brand', 'attributes', 'variants', 'images']),
+            'product' => $product->load([
+                'shop.merchant',
+                'category.parent',
+                'brand',
+                'attributes',
+                'variants.attributes.group',
+                'variants.attributes.value',
+                'images',
+            ]),
             'selectedDescriptionTemplate' => $this->descriptionTemplateService->findTemplateForProduct($product),
             'attributeMappings' => $product->category
                 ? $this->attributeConfigurationService->forCategory($product->category)
                 : collect(),
             'selectedAttributeValues' => $this->attributeService->selectedValues($product),
+            'variantPreview' => $this->variantGenerationService->preview($product),
+            'variantRows' => $this->variantManagementService->variantsForDisplay($product, $variantFilters),
+            'variantFilters' => $variantFilters,
+            'variantFilterOptions' => $this->variantManagementService->filterOptions($product),
             ...$this->sharedData($product),
         ]);
     }
@@ -130,6 +156,10 @@ class ProductController extends Controller
         $data = $request->validated();
         $shop = Shop::query()->findOrFail((int) $data['shop_id']);
 
+        if ($data['status'] === 'active') {
+            $this->variantManagementService->assertProductCanBePublished($product);
+        }
+
         $product->forceFill([
             'merchant_id' => $shop->merchant_id,
             'shop_id' => $shop->getKey(),
@@ -138,7 +168,6 @@ class ProductController extends Controller
             'brand_id' => $data['brand_id'] ?? null,
             'product_name' => $data['product_name'],
             'slug' => $this->slugForProduct($product, $data['product_name']),
-            'product_type' => $data['product_type'],
             'short_description' => $this->nullable($data['short_description'] ?? null),
             'status' => $data['status'],
             'updated_by' => Auth::id(),
@@ -156,6 +185,39 @@ class ProductController extends Controller
         return redirect()
             ->route('admin.products.edit', ['product' => $product, 'tab' => 'attributes'])
             ->with('success', 'Product attributes updated successfully.');
+    }
+
+    public function generateVariants(Product $product): RedirectResponse
+    {
+        $result = $this->variantGenerationService->generate($product, Auth::user());
+
+        return redirect()
+            ->route('admin.products.edit', ['product' => $product, 'tab' => 'variants'])
+            ->with('success', "{$result['created_count']} product variants generated successfully.");
+    }
+
+    public function updateVariants(UpdateProductVariantsRequest $request, Product $product): RedirectResponse
+    {
+        $updated = $this->variantManagementService->updateVariants($product, $request->variants(), Auth::user());
+
+        return redirect()
+            ->route('admin.products.edit', ['product' => $product, 'tab' => 'variants'])
+            ->with('success', "{$updated} variant rows updated successfully.");
+    }
+
+    public function bulkUpdateVariants(BulkUpdateProductVariantsRequest $request, Product $product): RedirectResponse
+    {
+        $updated = $this->variantManagementService->bulkUpdate(
+            $product,
+            $request->variantIds(),
+            $request->changes(),
+            Auth::user(),
+            $request->appliesToAll(),
+        );
+
+        return redirect()
+            ->route('admin.products.edit', ['product' => $product, 'tab' => 'variants'])
+            ->with('success', "{$updated} variant rows updated successfully.");
     }
 
     public function updateDescriptionSeo(UpdateProductDescriptionSeoRequest $request, Product $product): RedirectResponse
@@ -218,10 +280,6 @@ class ProductController extends Controller
             'shops' => $this->shops($product),
             'productCategories' => $this->productCategories($product),
             'brands' => $this->brands($product),
-            'productTypes' => [
-                'simple' => 'Simple',
-                'variant' => 'Variant',
-            ],
             'statuses' => $this->statuses(),
         ];
     }

@@ -44,7 +44,6 @@ class UpdateProductBasicRequest extends FormRequest
                 })->whereNull('deleted_at')),
             ],
             'product_name' => ['required', 'string', 'max:255'],
-            'product_type' => ['required', Rule::in(['simple', 'variant'])],
             'short_description' => ['nullable', 'string', 'max:255'],
             'status' => ['required', Rule::in(['draft', 'active', 'inactive', 'archived'])],
         ];

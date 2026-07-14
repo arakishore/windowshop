@@ -181,7 +181,6 @@ class AdminProductDescriptionTemplateTest extends TestCase
                 'product_category_id' => $category->getKey(),
                 'brand_id' => $brand->getKey(),
                 'product_name' => 'Premium Cotton Tee',
-                'product_type' => 'simple',
                 'status' => 'active',
             ])
             ->assertRedirect()
@@ -196,6 +195,16 @@ class AdminProductDescriptionTemplateTest extends TestCase
         $this->assertStringNotContainsString('{material}', (string) $product->description);
         $this->assertSame('Premium Cotton Tee | Acme', $product->meta_title);
         $this->assertSame('Buy Premium Cotton Tee from Demo Shop.', $product->meta_description);
+        $this->assertDatabaseHas('product_variants', [
+            'product_id' => $product->getKey(),
+            'shop_id' => $shop->getKey(),
+            'name' => 'Premium Cotton Tee',
+            'mrp' => 0,
+            'selling_price' => 0,
+            'stock_quantity' => 0,
+            'is_default' => true,
+            'status' => 'active',
+        ]);
 
         $this->actingAs($admin)
             ->get(route('admin.products.edit', $product))
@@ -203,13 +212,11 @@ class AdminProductDescriptionTemplateTest extends TestCase
             ->assertSeeInOrder([
                 'Basic Information',
                 'Attributes',
-                'Variants',
+                'Variants &amp; Inventory',
                 'Images',
-                'Pricing',
-                'Inventory',
                 'Description',
                 'SEO',
-            ]);
+            ], false);
     }
 
     public function test_product_create_dropdown_disables_root_categories(): void
@@ -223,7 +230,57 @@ class AdminProductDescriptionTemplateTest extends TestCase
             ->assertOk()
             ->assertSee('value="'.$rootCategory->getKey().'"', false)
             ->assertSee('disabled', false)
+            ->assertDontSee('Product Type')
             ->assertSee('Apparel > T-Shirts');
+    }
+
+    public function test_product_basic_information_updates_without_product_type(): void
+    {
+        $admin = $this->createAdminUser();
+        $rootCategory = $this->createCategory('Apparel', 'apparel');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $rootCategory);
+        $shop = $this->createShop($admin, $rootCategory);
+        $brand = $this->createBrand('Updated Brand');
+        $product = $this->createProduct($category, [
+            'product_name' => 'Original Product',
+        ]);
+
+        $product->forceFill([
+            'merchant_id' => $shop->merchant_id,
+            'shop_id' => $shop->getKey(),
+            'root_product_category_id' => $rootCategory->getKey(),
+            'product_category_id' => $category->getKey(),
+            'brand_id' => null,
+        ])->save();
+        ProductVariant::query()->create([
+            'product_id' => $product->getKey(),
+            'shop_id' => $shop->getKey(),
+            'sku' => 'UPDATED-BASE',
+            'name' => $product->product_name,
+            'mrp' => 999,
+            'selling_price' => 799,
+            'stock_quantity' => 0,
+            'is_default' => true,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.products.update', $product), [
+                'shop_id' => $shop->getKey(),
+                'product_category_id' => $category->getKey(),
+                'brand_id' => $brand->getKey(),
+                'product_name' => 'Updated Product',
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.products.edit', $product))
+            ->assertSessionHas('success', 'Product basic information updated successfully.');
+
+        $this->assertDatabaseHas('products', [
+            'id' => $product->getKey(),
+            'product_name' => 'Updated Product',
+            'brand_id' => $brand->getKey(),
+            'status' => 'active',
+        ]);
     }
 
     public function test_product_creation_rejects_root_product_category(): void
@@ -239,7 +296,6 @@ class AdminProductDescriptionTemplateTest extends TestCase
                 'product_category_id' => $rootCategory->getKey(),
                 'brand_id' => null,
                 'product_name' => 'Root Category Product',
-                'product_type' => 'simple',
                 'status' => 'draft',
             ])
             ->assertRedirect(route('admin.products.create'))
@@ -261,7 +317,6 @@ class AdminProductDescriptionTemplateTest extends TestCase
                 'product_category_id' => $sneakers->getKey(),
                 'brand_id' => null,
                 'product_name' => 'Wrong Root Product',
-                'product_type' => 'simple',
                 'status' => 'draft',
             ])
             ->assertRedirect(route('admin.products.create'))
@@ -302,7 +357,6 @@ class AdminProductDescriptionTemplateTest extends TestCase
                 'product_category_id' => $category->getKey(),
                 'brand_id' => $brand->getKey(),
                 'product_name' => 'Canvas Sneaker',
-                'product_type' => 'simple',
                 'status' => 'draft',
             ])
             ->assertRedirect()
@@ -536,7 +590,6 @@ class AdminProductDescriptionTemplateTest extends TestCase
             'brand_id' => $brand->getKey(),
             'product_name' => $attributes['product_name'] ?? 'Oxford Shirt',
             'slug' => 'product-'.Str::random(8),
-            'product_type' => 'simple',
             'short_description' => $attributes['short_description'] ?? null,
             'description' => $attributes['description'] ?? null,
             'meta_title' => $attributes['meta_title'] ?? null,

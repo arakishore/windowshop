@@ -22,7 +22,6 @@ class Product extends Model
         'brand_id',
         'product_name',
         'slug',
-        'product_type',
         'short_description',
         'description',
         'meta_title',

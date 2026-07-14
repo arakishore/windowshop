@@ -18,10 +18,8 @@
         $tabs = [
             'basic' => ['label' => 'Basic Information', 'icon' => 'ph-info'],
             'attributes' => ['label' => 'Attributes', 'icon' => 'ph-sliders-horizontal'],
-            'variants' => ['label' => 'Variants', 'icon' => 'ph-tag'],
-            'images' => ['label' => 'Images', 'icon' => 'ph-images'],
-            'pricing' => ['label' => 'Pricing', 'icon' => 'ph-currency-inr'],
-            'inventory' => ['label' => 'Inventory', 'icon' => 'ph-warehouse'],
+            'variants' => ['label' => 'Variants & Inventory', 'icon' => 'ph-tag'],
+            'images' => ['label' => 'Images', 'icon' => 'ph-image'],
             'description' => ['label' => 'Description', 'icon' => 'ph-text-aa'],
             'seo' => ['label' => 'SEO', 'icon' => 'ph-magnifying-glass'],
         ];
@@ -67,12 +65,7 @@
             </div>
 
             <div class="tab-pane fade {{ $activeTab === 'variants' ? 'show active' : '' }}" id="product-tab-variants">
-                @include('admin.products.partials.tab-placeholder', [
-                    'icon' => 'ph-tag',
-                    'title' => 'Variants',
-                    'message' => 'Variant SKUs, option combinations, and default variant controls will be managed here.',
-                    'meta' => $product->variants->count().' variants',
-                ])
+                @include('admin.products.partials.variants-grid')
             </div>
 
             <div class="tab-pane fade {{ $activeTab === 'images' ? 'show active' : '' }}" id="product-tab-images">
@@ -81,24 +74,6 @@
                     'title' => 'Images',
                     'message' => 'Product and variant images will be uploaded and ordered here.',
                     'meta' => $product->images->count().' images',
-                ])
-            </div>
-
-            <div class="tab-pane fade {{ $activeTab === 'pricing' ? 'show active' : '' }}" id="product-tab-pricing">
-                @include('admin.products.partials.tab-placeholder', [
-                    'icon' => 'ph-currency-inr',
-                    'title' => 'Pricing',
-                    'message' => 'MRP, selling price, cost price, discounts, and price history controls will be managed here.',
-                    'meta' => $product->variants->count().' variants',
-                ])
-            </div>
-
-            <div class="tab-pane fade {{ $activeTab === 'inventory' ? 'show active' : '' }}" id="product-tab-inventory">
-                @include('admin.products.partials.tab-placeholder', [
-                    'icon' => 'ph-warehouse',
-                    'title' => 'Inventory',
-                    'message' => 'Stock quantity, low stock thresholds, and inventory movement controls will be managed here.',
-                    'meta' => $product->variants->sum('stock_quantity').' units in variants',
                 ])
             </div>
 

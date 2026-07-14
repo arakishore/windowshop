@@ -36,10 +36,6 @@ return new class extends Migration
                 ->nullOnDelete();
             $table->string('product_name');
             $table->string('slug')->nullable()->unique();
-            $table->string('product_type', 30)
-                ->default('simple')
-                ->comment('simple,variant')
-                ->index();
             $table->text('short_description')->nullable();
             $table->longText('description')->nullable();
             $table->string('meta_title')->nullable();

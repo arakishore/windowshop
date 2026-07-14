@@ -69,6 +69,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('merchants', MerchantController::class);
         Route::put('products/{product}/attributes', [ProductController::class, 'updateAttributes'])
             ->name('products.attributes.update');
+        Route::post('products/{product}/variants/generate', [ProductController::class, 'generateVariants'])
+            ->name('products.variants.generate');
+        Route::put('products/{product}/variants', [ProductController::class, 'updateVariants'])
+            ->name('products.variants.update');
+        Route::put('products/{product}/variants/bulk', [ProductController::class, 'bulkUpdateVariants'])
+            ->name('products.variants.bulk-update');
         Route::put('products/{product}/description-seo', [ProductController::class, 'updateDescriptionSeo'])
             ->name('products.description-seo.update');
         Route::post('products/{product}/description-seo/generate', [ProductController::class, 'generateDescriptionSeo'])

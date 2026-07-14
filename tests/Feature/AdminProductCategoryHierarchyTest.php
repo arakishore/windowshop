@@ -147,6 +147,10 @@ class AdminProductCategoryHierarchyTest extends TestCase
         $response->assertOk();
         $response->assertSee('Showing 5 entries');
         $response->assertDontSee('Showing 1 to', false);
+        $response->assertSee(route('admin.master.product-categories.attribute-groups.edit', $fashion), false);
+        $response->assertDontSee(route('admin.master.product-categories.attribute-groups.edit', $women), false);
+        $response->assertSee('Manage Attribute Mapping');
+        $response->assertSee('ph-sliders-horizontal');
         $response->assertSeeInOrder([
             'Electronics',
             'Mobiles',

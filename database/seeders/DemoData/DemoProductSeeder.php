@@ -31,9 +31,10 @@ class DemoProductSeeder extends Seeder
             $brands = $this->brands();
 
             foreach ($shops as $shop) {
-                foreach ($this->productsForShop((string) $shop->name) as $index => $product) {
-                    $productNumber = $index + 1;
-                    $rootCategoryId = (int) $shop->root_product_category_id;
+                $rootCategoryId = (int) $shop->root_product_category_id;
+                $rootCategoryName = $productCategories['root_names'][$rootCategoryId] ?? '';
+
+                foreach ($this->productsForShop((string) $shop->name, $rootCategoryName) as $product) {
                     $productCategoryId = $this->categoryIdForProduct($productCategories, $product['category'], $rootCategoryId);
                     $brandId = $this->brandIdForProduct($brands, $product['brand']);
 
@@ -52,7 +53,6 @@ class DemoProductSeeder extends Seeder
                             'brand_id' => $brandId,
                             'product_name' => $product['name'],
                             'slug' => 'pending-'.Str::uuid(),
-                            'product_type' => 'simple',
                             'short_description' => $product['short_description'],
                             'description' => $product['description'],
                             'meta_title' => $product['name'],
@@ -72,7 +72,6 @@ class DemoProductSeeder extends Seeder
                                 'root_product_category_id' => $rootCategoryId,
                                 'product_category_id' => $productCategoryId,
                                 'brand_id' => $brandId,
-                                'product_type' => 'simple',
                                 'short_description' => $product['short_description'],
                                 'description' => $product['description'],
                                 'meta_title' => $product['name'],
@@ -90,18 +89,6 @@ class DemoProductSeeder extends Seeder
                             'slug' => $this->productSlug($product['name'], $productId),
                             'updated_at' => $now,
                         ]);
-
-                    $this->upsertDefaultVariant(
-                        productId: $productId,
-                        shopId: (int) $shop->id,
-                        shopSlug: (string) $shop->slug,
-                        productNumber: $productNumber,
-                        productName: $product['name'],
-                        mrp: $product['mrp'],
-                        sellingPrice: $product['selling_price'],
-                        stockQuantity: $product['stock_quantity'],
-                        now: $now,
-                    );
                 }
             }
         });
@@ -110,34 +97,46 @@ class DemoProductSeeder extends Seeder
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function productsForShop(string $shopName): array
+    private function productsForShop(string $shopName, string $rootCategoryName): array
+    {
+        return match ($rootCategoryName) {
+            'Beauty & Cosmetics' => $this->beautyProductsForShop($shopName),
+            'Jewellery & Accessories' => $this->bagProductsForShop($shopName),
+            default => $this->apparelProductsForShop($shopName),
+        };
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function apparelProductsForShop(string $shopName): array
     {
         $templates = [
-            ['name' => 'Premium Cotton T-Shirt', 'category' => 'T-Shirts', 'brand' => 'Max Fashion', 'mrp' => 799, 'selling_price' => 599],
-            ['name' => 'Classic Casual Shirt', 'category' => 'Shirts', 'brand' => 'Peter England', 'mrp' => 1299, 'selling_price' => 999],
-            ['name' => 'Solid Polo T-Shirt', 'category' => 'Polo T-Shirts', 'brand' => 'Indian Terrain', 'mrp' => 999, 'selling_price' => 749],
-            ['name' => 'Soft Fleece Sweatshirt', 'category' => 'Sweatshirts', 'brand' => 'Monte Carlo', 'mrp' => 1599, 'selling_price' => 1199],
-            ['name' => 'Lightweight Casual Jacket', 'category' => 'Jackets', 'brand' => 'Being Human', 'mrp' => 2499, 'selling_price' => 1899],
-            ['name' => 'Slim Fit Denim Jeans', 'category' => 'Jeans', 'brand' => 'Spykar', 'mrp' => 1999, 'selling_price' => 1499],
-            ['name' => 'Formal Flat Front Trousers', 'category' => 'Trousers', 'brand' => 'Park Avenue', 'mrp' => 1799, 'selling_price' => 1399],
-            ['name' => 'Everyday Cotton Shorts', 'category' => 'Shorts', 'brand' => 'Zudio', 'mrp' => 699, 'selling_price' => 499],
-            ['name' => 'Comfort Track Pants', 'category' => 'Track Pants', 'brand' => 'Trends', 'mrp' => 899, 'selling_price' => 699],
-            ['name' => 'Festive Cotton Kurta', 'category' => 'Kurtas', 'brand' => 'Fabindia', 'mrp' => 1499, 'selling_price' => 1099],
-            ['name' => 'Elegant Kurta Set', 'category' => 'Kurta Sets', 'brand' => 'Biba', 'mrp' => 2499, 'selling_price' => 1999],
-            ['name' => 'Wedding Sherwani Set', 'category' => 'Sherwanis', 'brand' => 'Manyavar', 'mrp' => 6999, 'selling_price' => 5999],
-            ['name' => 'Cotton Innerwear Pack', 'category' => 'Innerwear', 'brand' => 'Lux Cozi', 'mrp' => 599, 'selling_price' => 449],
-            ['name' => 'Printed Sleepwear Set', 'category' => 'Sleepwear', 'brand' => 'Westside', 'mrp' => 1199, 'selling_price' => 899],
-            ['name' => 'Warm Winter Wear Set', 'category' => 'Winter Wear', 'brand' => 'Monte Carlo', 'mrp' => 2299, 'selling_price' => 1799],
-            ['name' => 'Relaxed Fit Top', 'category' => 'Tops', 'brand' => 'Global Desi', 'mrp' => 999, 'selling_price' => 749],
-            ['name' => 'Daily Wear Kurti', 'category' => 'Kurtis', 'brand' => 'Aurelia', 'mrp' => 1299, 'selling_price' => 999],
-            ['name' => 'Silk Blend Saree', 'category' => 'Sarees', 'brand' => 'Nalli Silks', 'mrp' => 3499, 'selling_price' => 2999],
-            ['name' => 'Designer Lehenga', 'category' => 'Lehengas', 'brand' => 'Meena Bazaar', 'mrp' => 5999, 'selling_price' => 4999],
-            ['name' => 'A-Line Casual Dress', 'category' => 'Dresses', 'brand' => 'W for Woman', 'mrp' => 1899, 'selling_price' => 1499],
-            ['name' => 'Stretch Cotton Leggings', 'category' => 'Leggings', 'brand' => 'Rangriti', 'mrp' => 699, 'selling_price' => 499],
-            ['name' => 'Pleated Midi Skirt', 'category' => 'Skirts', 'brand' => 'Pantaloons', 'mrp' => 1199, 'selling_price' => 899],
-            ['name' => 'Boys Graphic T-Shirt', 'category' => 'Boys', 'brand' => 'Gini & Jony', 'mrp' => 699, 'selling_price' => 499],
-            ['name' => 'Girls Party Dress', 'category' => 'Girls', 'brand' => 'Gini & Jony', 'mrp' => 1299, 'selling_price' => 999],
-            ['name' => 'Baby Clothing Gift Set', 'category' => 'Baby Clothing', 'brand' => 'Max Fashion', 'mrp' => 999, 'selling_price' => 799],
+            ['name' => 'Premium Cotton T-Shirt', 'category' => 'T-Shirts', 'brand' => 'Max Fashion'],
+            ['name' => 'Classic Casual Shirt', 'category' => 'Shirts', 'brand' => 'Peter England'],
+            ['name' => 'Solid Polo T-Shirt', 'category' => 'Polo T-Shirts', 'brand' => 'Indian Terrain'],
+            ['name' => 'Soft Fleece Sweatshirt', 'category' => 'Sweatshirts', 'brand' => 'Monte Carlo'],
+            ['name' => 'Lightweight Casual Jacket', 'category' => 'Jackets', 'brand' => 'Being Human'],
+            ['name' => 'Slim Fit Denim Jeans', 'category' => 'Jeans', 'brand' => 'Spykar'],
+            ['name' => 'Formal Flat Front Trousers', 'category' => 'Trousers', 'brand' => 'Park Avenue'],
+            ['name' => 'Everyday Cotton Shorts', 'category' => 'Shorts', 'brand' => 'Zudio'],
+            ['name' => 'Comfort Track Pants', 'category' => 'Track Pants', 'brand' => 'Trends'],
+            ['name' => 'Festive Cotton Kurta', 'category' => 'Kurtas', 'brand' => 'Fabindia'],
+            ['name' => 'Elegant Kurta Set', 'category' => 'Kurta Sets', 'brand' => 'Biba'],
+            ['name' => 'Wedding Sherwani Set', 'category' => 'Sherwanis', 'brand' => 'Manyavar'],
+            ['name' => 'Cotton Innerwear Pack', 'category' => 'Innerwear', 'brand' => 'Lux Cozi'],
+            ['name' => 'Printed Sleepwear Set', 'category' => 'Sleepwear', 'brand' => 'Westside'],
+            ['name' => 'Warm Winter Wear Set', 'category' => 'Winter Wear', 'brand' => 'Monte Carlo'],
+            ['name' => 'Relaxed Fit Top', 'category' => 'Tops', 'brand' => 'Global Desi'],
+            ['name' => 'Daily Wear Kurti', 'category' => 'Kurtis', 'brand' => 'Aurelia'],
+            ['name' => 'Silk Blend Saree', 'category' => 'Sarees', 'brand' => 'Nalli Silks'],
+            ['name' => 'Designer Lehenga', 'category' => 'Lehengas', 'brand' => 'Meena Bazaar'],
+            ['name' => 'A-Line Casual Dress', 'category' => 'Dresses', 'brand' => 'W for Woman'],
+            ['name' => 'Stretch Cotton Leggings', 'category' => 'Leggings', 'brand' => 'Rangriti'],
+            ['name' => 'Pleated Midi Skirt', 'category' => 'Skirts', 'brand' => 'Pantaloons'],
+            ['name' => 'Boys Graphic T-Shirt', 'category' => 'Boys', 'brand' => 'Gini & Jony'],
+            ['name' => 'Girls Party Dress', 'category' => 'Girls', 'brand' => 'Gini & Jony'],
+            ['name' => 'Baby Clothing Gift Set', 'category' => 'Baby Clothing', 'brand' => 'Max Fashion'],
         ];
 
         $colors = ['Black', 'White', 'Navy', 'Maroon', 'Olive', 'Beige', 'Grey', 'Pink', 'Blue', 'Green'];
@@ -157,9 +156,6 @@ class DemoProductSeeder extends Seeder
                 'brand' => $template['brand'],
                 'short_description' => "{$fit} {$template['name']} from {$shopName}.",
                 'description' => "{$name} is demo catalogue data for {$shopName}. It is suitable for product listing, filtering, variant, and checkout workflow testing.",
-                'mrp' => $template['mrp'] + ($series * 25),
-                'selling_price' => $template['selling_price'] + ($series * 20),
-                'stock_quantity' => 20 + (($index * 7) % 80),
                 'status' => $index % 10 === 0 ? 'draft' : 'active',
             ];
         }
@@ -168,7 +164,85 @@ class DemoProductSeeder extends Seeder
     }
 
     /**
-     * @return array{by_root: array<int, array<string, int>>, fallback_by_root: array<int, int>, fallback: int}
+     * @return array<int, array<string, mixed>>
+     */
+    private function beautyProductsForShop(string $shopName): array
+    {
+        $templates = [
+            ['name' => 'Matte Liquid Lipstick', 'category' => 'Makeup', 'brand' => 'Lakme'],
+            ['name' => 'Long Wear Foundation', 'category' => 'Makeup', 'brand' => 'Maybelline'],
+            ['name' => 'Waterproof Kajal', 'category' => 'Makeup', 'brand' => 'Lakme'],
+            ['name' => 'Compact Powder', 'category' => 'Makeup', 'brand' => 'Colorbar'],
+            ['name' => 'Blush Palette', 'category' => 'Makeup', 'brand' => 'Nykaa Cosmetics'],
+            ['name' => 'Eyeshadow Palette', 'category' => 'Makeup', 'brand' => 'Colorbar'],
+            ['name' => 'Nail Enamel Set', 'category' => 'Makeup', 'brand' => 'Nykaa Cosmetics'],
+            ['name' => 'Makeup Primer', 'category' => 'Makeup', 'brand' => 'Maybelline'],
+            ['name' => 'Brow Definer Pencil', 'category' => 'Makeup', 'brand' => 'Lakme'],
+            ['name' => 'Makeup Brush Kit', 'category' => 'Makeup', 'brand' => 'Colorbar'],
+        ];
+
+        $shades = ['Rose', 'Nude', 'Berry', 'Coral', 'Ivory', 'Sand', 'Caramel', 'Plum', 'Peach', 'Ruby'];
+        $finishes = ['Matte', 'Dewy', 'Satin', 'Natural', 'Glossy'];
+
+        return $this->buildDemoProducts($templates, $shades, $finishes, $shopName, 30);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function bagProductsForShop(string $shopName): array
+    {
+        $templates = [
+            ['name' => 'Structured Tote Bag', 'category' => 'Bags', 'brand' => 'Caprese'],
+            ['name' => 'Quilted Sling Bag', 'category' => 'Bags', 'brand' => 'Lavie'],
+            ['name' => 'Office Shoulder Bag', 'category' => 'Bags', 'brand' => 'Lino Perros'],
+            ['name' => 'Mini Crossbody Bag', 'category' => 'Bags', 'brand' => 'Caprese'],
+            ['name' => 'Everyday Backpack', 'category' => 'Bags', 'brand' => 'Lavie'],
+            ['name' => 'Party Clutch', 'category' => 'Bags', 'brand' => 'Lino Perros'],
+            ['name' => 'Travel Duffel Bag', 'category' => 'Bags', 'brand' => 'Mochi'],
+            ['name' => 'Laptop Messenger Bag', 'category' => 'Bags', 'brand' => 'Caprese'],
+            ['name' => 'Drawstring Bucket Bag', 'category' => 'Bags', 'brand' => 'Lavie'],
+            ['name' => 'Wallet and Pouch Set', 'category' => 'Bags', 'brand' => 'Lino Perros'],
+        ];
+
+        $colors = ['Black', 'Tan', 'Navy', 'Maroon', 'Beige', 'Olive', 'Grey', 'Pink', 'Brown', 'Cream'];
+        $styles = ['Classic', 'Premium', 'Textured', 'Compact', 'Statement'];
+
+        return $this->buildDemoProducts($templates, $colors, $styles, $shopName, 30);
+    }
+
+    /**
+     * @param array<int, array{name: string, category: string, brand: string}> $templates
+     * @param array<int, string> $prefixes
+     * @param array<int, string> $modifiers
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildDemoProducts(array $templates, array $prefixes, array $modifiers, string $shopName, int $count): array
+    {
+        $products = [];
+
+        for ($index = 0; $index < $count; $index++) {
+            $template = $templates[$index % count($templates)];
+            $prefix = $prefixes[$index % count($prefixes)];
+            $modifier = $modifiers[$index % count($modifiers)];
+            $series = intdiv($index, count($templates)) + 1;
+            $name = "{$prefix} {$modifier} {$template['name']} {$series}";
+
+            $products[] = [
+                'name' => $name,
+                'category' => $template['category'],
+                'brand' => $template['brand'],
+                'short_description' => "{$modifier} {$template['name']} from {$shopName}.",
+                'description' => "{$name} is demo catalogue data for {$shopName}. It is suitable for product listing, filtering, variant, and checkout workflow testing.",
+                'status' => $index % 10 === 0 ? 'draft' : 'active',
+            ];
+        }
+
+        return $products;
+    }
+
+    /**
+     * @return array{by_root: array<int, array<string, int>>, fallback_by_root: array<int, int>, root_names: array<int, string>, fallback: int}
      */
     private function productCategories(): array
     {
@@ -187,9 +261,11 @@ class DemoProductSeeder extends Seeder
         $byId = $rows->keyBy('id');
         $byRoot = [];
         $fallbackByRoot = [];
+        $rootNames = [];
 
         foreach ($rows as $row) {
             if ($row->parent_id === null) {
+                $rootNames[(int) $row->id] = (string) $row->name;
                 continue;
             }
 
@@ -201,6 +277,7 @@ class DemoProductSeeder extends Seeder
         return [
             'by_root' => $byRoot,
             'fallback_by_root' => $fallbackByRoot,
+            'root_names' => $rootNames,
             'fallback' => (int) $rows->first()->id,
         ];
     }
@@ -219,7 +296,7 @@ class DemoProductSeeder extends Seeder
     }
 
     /**
-     * @param array{by_root: array<int, array<string, int>>, fallback_by_root: array<int, int>, fallback: int} $categories
+     * @param array{by_root: array<int, array<string, int>>, fallback_by_root: array<int, int>, root_names: array<int, string>, fallback: int} $categories
      */
     private function categoryIdForProduct(array $categories, string $name, int $rootCategoryId): int
     {
@@ -259,52 +336,4 @@ class DemoProductSeeder extends Seeder
         return (Str::slug($name) ?: 'product').'-'.$productId;
     }
 
-    private function upsertDefaultVariant(
-        int $productId,
-        int $shopId,
-        string $shopSlug,
-        int $productNumber,
-        string $productName,
-        int $mrp,
-        int $sellingPrice,
-        int $stockQuantity,
-        mixed $now,
-    ): void {
-        $sku = 'DEMO-'.Str::upper(Str::limit(Str::slug($shopSlug, ''), 12, '')).'-'.str_pad((string) $productNumber, 3, '0', STR_PAD_LEFT);
-        $existingVariantId = DB::table('product_variants')
-            ->where('shop_id', $shopId)
-            ->where('sku', $sku)
-            ->value('id');
-
-        $data = [
-            'product_id' => $productId,
-            'shop_id' => $shopId,
-            'sku' => $sku,
-            'barcode' => null,
-            'name' => $productName,
-            'mrp' => $mrp,
-            'selling_price' => $sellingPrice,
-            'cost_price' => max(1, $sellingPrice - 150),
-            'stock_quantity' => $stockQuantity,
-            'low_stock_threshold' => 5,
-            'is_default' => true,
-            'sort_order' => 1,
-            'status' => 'active',
-            'deleted_at' => null,
-            'updated_at' => $now,
-        ];
-
-        if ($existingVariantId === null) {
-            DB::table('product_variants')->insert(array_merge($data, [
-                'uuid' => (string) Str::uuid(),
-                'created_at' => $now,
-            ]));
-
-            return;
-        }
-
-        DB::table('product_variants')
-            ->where('id', $existingVariantId)
-            ->update($data);
-    }
 }

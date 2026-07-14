@@ -2,7 +2,6 @@
     $selectedShopId = old('shop_id', $product?->shop_id);
     $selectedCategoryId = old('product_category_id', $product?->product_category_id);
     $selectedBrandId = old('brand_id', $product?->brand_id);
-    $selectedType = old('product_type', $product?->product_type ?? 'simple');
     $selectedStatus = old('status', $product?->status ?? 'draft');
     $statusOptions = $product ? $statuses : ['draft' => $statuses['draft']];
     $includeShortDescription = $includeShortDescription ?? false;
@@ -67,16 +66,6 @@
             @if($product)
                 <div class="form-text">Slug: {{ $product->slug }}</div>
             @endif
-        </div>
-
-        <div class="col-md-6">
-            <label for="product_type" class="form-label">Product Type <span class="text-danger">*</span></label>
-            <select id="product_type" name="product_type" class="form-select @error('product_type') is-invalid @enderror" required>
-                @foreach($productTypes as $value => $label)
-                    <option value="{{ $value }}" @selected($selectedType === $value)>{{ $label }}</option>
-                @endforeach
-            </select>
-            @error('product_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
 
         <div class="col-md-6">

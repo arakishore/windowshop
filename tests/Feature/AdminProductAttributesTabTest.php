@@ -269,7 +269,6 @@ class AdminProductAttributesTabTest extends TestCase
             'product_category_id' => $category->getKey(),
             'product_name' => 'Cotton T-Shirt',
             'slug' => 'cotton-t-shirt-'.Str::random(6),
-            'product_type' => 'simple',
             'status' => 'draft',
         ]);
     }

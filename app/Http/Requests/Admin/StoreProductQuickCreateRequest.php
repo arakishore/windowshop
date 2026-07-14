@@ -41,7 +41,6 @@ class StoreProductQuickCreateRequest extends FormRequest
                 Rule::exists('brands', 'id')->where(fn ($query) => $query->where('status', 'active')->whereNull('deleted_at')),
             ],
             'product_name' => ['required', 'string', 'max:255'],
-            'product_type' => ['required', Rule::in(['simple', 'variant'])],
             'status' => ['required', Rule::in(['draft', 'active', 'inactive', 'archived'])],
         ];
     }
