@@ -18,6 +18,7 @@ class UpdateProductVariantsRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'default_variant_id' => ['nullable', 'integer', Rule::exists('product_variants', 'id')],
             'variants' => ['required', 'array'],
             'variants.*.sku' => ['nullable', 'string', 'max:255'],
             'variants.*.barcode' => ['nullable', 'string', 'max:100'],
@@ -36,5 +37,12 @@ class UpdateProductVariantsRequest extends FormRequest
     public function variants(): array
     {
         return $this->validated('variants', []);
+    }
+
+    public function defaultVariantId(): ?int
+    {
+        $value = $this->input('default_variant_id');
+
+        return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
     }
 }

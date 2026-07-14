@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\BulkDeleteProductImagesRequest;
 use App\Http\Requests\Admin\BulkUpdateProductVariantsRequest;
 use App\Http\Requests\Admin\StoreProductImagesRequest;
 use App\Http\Requests\Admin\StoreProductQuickCreateRequest;
@@ -207,7 +208,12 @@ class ProductController extends Controller
 
     public function updateVariants(UpdateProductVariantsRequest $request, Product $product): RedirectResponse
     {
-        $updated = $this->variantManagementService->updateVariants($product, $request->variants(), Auth::user());
+        $updated = $this->variantManagementService->updateVariants(
+            $product,
+            $request->variants(),
+            Auth::user(),
+            $request->defaultVariantId(),
+        );
 
         return redirect()
             ->route('admin.products.edit', ['product' => $product, 'tab' => 'variants'])
@@ -249,12 +255,16 @@ class ProductController extends Controller
 
     public function storeImages(StoreProductImagesRequest $request, Product $product): RedirectResponse
     {
-        $this->productImageService->upload(
-            $product,
-            $request->file('images', []),
-            $request->attributeValueId(),
-            Auth::id(),
-        );
+        if ($request->hasGroupedImages()) {
+            $this->productImageService->uploadGroups($product, $request->imageGroups(), Auth::id());
+        } else {
+            $this->productImageService->upload(
+                $product,
+                $request->file('images', []),
+                $request->attributeValueId(),
+                Auth::id(),
+            );
+        }
 
         return redirect()
             ->route('admin.products.edit', ['product' => $product, 'tab' => 'images'])
@@ -282,6 +292,15 @@ class ProductController extends Controller
         return redirect()
             ->route('admin.products.edit', ['product' => $product, 'tab' => 'images'])
             ->with('success', 'Product image deleted successfully.');
+    }
+
+    public function bulkDestroyImages(BulkDeleteProductImagesRequest $request, Product $product): RedirectResponse
+    {
+        $deleted = $this->productImageService->deleteMany($product, $request->imageIds(), Auth::id());
+
+        return redirect()
+            ->route('admin.products.edit', ['product' => $product, 'tab' => 'images'])
+            ->with('success', "{$deleted} product images deleted successfully.");
     }
 
     public function generateDescriptionSeo(Product $product): RedirectResponse

@@ -61,37 +61,61 @@ class ProductImageService
             return;
         }
 
-        $this->assertCanAddActiveImages($product, count($files));
-        $this->assertValidAttributeValue($product, $attributeValueId);
+        $this->uploadGroups($product, [$attributeValueId ?? 'entire' => $files], $actorId);
+    }
 
-        DB::transaction(function () use ($product, $files, $attributeValueId, $actorId): void {
+    /**
+     * @param array<int|string, array<int, UploadedFile>> $groups
+     */
+    public function uploadGroups(Product $product, array $groups, int $actorId): void
+    {
+        $normalizedGroups = $this->normalizeUploadGroups($product, $groups);
+        $fileCount = collect($normalizedGroups)->sum(fn (array $group): int => count($group['files']));
+
+        if ($fileCount === 0) {
+            return;
+        }
+
+        $this->assertCanAddActiveImages($product, $fileCount);
+
+        DB::transaction(function () use ($product, $normalizedGroups, $actorId): void {
             $nextSortOrder = ((int) $product->images()->max('sort_order')) + 1;
 
-            foreach ($files as $file) {
-                $imageUuid = (string) Str::uuid();
-                $directory = "products/{$product->uuid}/images/{$imageUuid}";
-                $paths = $this->imageVariantService->store($file, 'product', $directory);
+            foreach ($normalizedGroups as $group) {
+                foreach ($group['files'] as $file) {
+                    $imageUuid = (string) Str::uuid();
+                    $image = ProductImage::query()->create([
+                        'uuid' => $imageUuid,
+                        'product_id' => $product->getKey(),
+                        'image_path' => '',
+                        'thumbnail_path' => null,
+                        'title' => null,
+                        'alt_text' => null,
+                        'sort_order' => $nextSortOrder++,
+                        'is_primary' => false,
+                        'status' => 'active',
+                        'created_by' => $actorId,
+                        'updated_by' => $actorId,
+                    ]);
 
-                $image = ProductImage::query()->create([
-                    'uuid' => $imageUuid,
-                    'product_id' => $product->getKey(),
-                    'image_path' => $paths['web'] ?? array_values($paths)[0],
-                    'thumbnail_path' => $paths['thumb'] ?? array_values($paths)[0],
-                    'title' => null,
-                    'alt_text' => null,
-                    'sort_order' => $nextSortOrder++,
-                    'is_primary' => false,
-                    'status' => 'active',
-                    'created_by' => $actorId,
-                    'updated_by' => $actorId,
-                ]);
+                    $paths = $this->imageVariantService->store(
+                        $file,
+                        'product',
+                        $this->imageDirectory($product, $image),
+                        $this->imageFilenamePrefix($product, $image),
+                    );
+                    $image->forceFill([
+                        'image_path' => $paths['web'] ?? array_values($paths)[0],
+                        'thumbnail_path' => $paths['thumb'] ?? array_values($paths)[0],
+                    ])->save();
 
-                if ($attributeValueId !== null) {
-                    $image->attributeValues()->sync([$attributeValueId]);
-                }
+                    if ($group['attribute_value_id'] !== null) {
+                        $image->attributeValues()->sync([$group['attribute_value_id']]);
+                    }
 
-                if ($product->primary_image_id === null) {
-                    $this->setPrimaryImage($product, $image, $actorId);
+                    if ($product->primary_image_id === null) {
+                        $this->setPrimaryImage($product, $image, $actorId);
+                    }
                 }
             }
         });
@@ -158,15 +182,34 @@ class ProductImageService
         }
 
         DB::transaction(function () use ($product, $image, $actorId): void {
-            $image->forceFill([
-                'deleted_by' => $actorId,
-                'updated_by' => $actorId,
-            ])->save();
-
-            $image->delete();
-            Storage::disk('public')->deleteDirectory(dirname($image->image_path));
+            $this->forceDeleteImage($image, $actorId);
 
             $this->refreshPrimaryImage($product, $actorId);
+        });
+    }
+
+    /**
+     * @param array<int, int> $imageIds
+     */
+    public function deleteMany(Product $product, array $imageIds, int $actorId): int
+    {
+        if ($imageIds === []) {
+            return 0;
+        }
+
+        return DB::transaction(function () use ($product, $imageIds, $actorId): int {
+            $images = ProductImage::query()
+                ->where('product_id', $product->getKey())
+                ->whereIn('id', $imageIds)
+                ->get();
+
+            foreach ($images as $image) {
+                $this->forceDeleteImage($image, $actorId);
+            }
+
+            $this->refreshPrimaryImage($product, $actorId);
+
+            return $images->count();
         });
     }
 
@@ -295,6 +338,51 @@ class ProductImageService
             ->first();
     }
 
+    private function forceDeleteImage(ProductImage $image, int $actorId): void
+    {
+        $paths = collect([$image->image_path, $image->thumbnail_path, ...$this->variantPathsForImage($image)])
+            ->filter()
+            ->unique()
+            ->values();
+
+        $image->forceFill([
+            'deleted_by' => $actorId,
+            'updated_by' => $actorId,
+        ])->save();
+
+        $image->forceDelete();
+
+        Storage::disk('public')->delete($paths->all());
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function variantPathsForImage(ProductImage $image): array
+    {
+        if (! $image->image_path) {
+            return [];
+        }
+
+        $directory = dirname($image->image_path);
+        $prefix = "p{$image->product_id}-img{$image->getKey()}-";
+
+        return collect(Storage::disk('public')->files($directory))
+            ->filter(fn (string $path): bool => str_starts_with(basename($path), $prefix))
+            ->values()
+            ->all();
+    }
+
+    private function imageDirectory(Product $product, ProductImage $image): string
+    {
+        return "products/{$product->getKey()}-{$product->uuid}/images";
+    }
+
+    private function imageFilenamePrefix(Product $product, ProductImage $image): string
+    {
+        return "p{$product->getKey()}-img{$image->getKey()}";
+    }
+
     private function assertCanAddActiveImages(Product $product, int $count): void
     {
         $activeCount = ProductImage::query()
@@ -321,6 +409,34 @@ class ProductImageService
                 'images' => 'A product can have a maximum of 8 active images.',
             ]);
         }
+    }
+
+    /**
+     * @param array<int|string, array<int, UploadedFile>> $groups
+     * @return array<int, array{attribute_value_id: int|null, files: array<int, UploadedFile>}>
+     */
+    private function normalizeUploadGroups(Product $product, array $groups): array
+    {
+        $normalized = [];
+
+        foreach ($groups as $attributeValueId => $files) {
+            if (! is_array($files) || $files === []) {
+                continue;
+            }
+
+            $resolvedAttributeValueId = is_numeric($attributeValueId) && (int) $attributeValueId > 0
+                ? (int) $attributeValueId
+                : null;
+
+            $this->assertValidAttributeValue($product, $resolvedAttributeValueId);
+
+            $normalized[] = [
+                'attribute_value_id' => $resolvedAttributeValueId,
+                'files' => array_values($files),
+            ];
+        }
+
+        return $normalized;
     }
 
     private function assertValidAttributeValue(Product $product, ?int $attributeValueId): void

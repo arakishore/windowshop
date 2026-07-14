@@ -32,7 +32,10 @@ return new class extends Migration
             $table->decimal('cost_price', 12, 2)->nullable();
             $table->unsignedInteger('stock_quantity')->default(0);
             $table->unsignedInteger('low_stock_threshold')->default(0);
-            $table->boolean('is_default')->default(false)->index();
+            $table->boolean('is_default')
+                ->default(false)
+                ->comment('Default variant selected when the product page first loads')
+                ->index();
             $table->unsignedInteger('sort_order')->default(0)->index();
             $table->string('status', 30)
                 ->default('active')

@@ -20,25 +20,24 @@ class ProductVariantManagementService
     {
         return DB::transaction(function () use ($product, $actor): ProductVariant {
             $defaultVariant = $product->variants()
+                ->where('status', 'active')
                 ->where('is_default', true)
                 ->first();
 
             if ($defaultVariant instanceof ProductVariant) {
+                $this->clearOtherDefaults($product, $defaultVariant, $actor);
+
                 return $defaultVariant;
             }
 
             $firstVariant = $product->variants()
+                ->where('status', 'active')
                 ->orderBy('sort_order')
                 ->orderBy('id')
                 ->first();
 
             if ($firstVariant instanceof ProductVariant) {
-                $firstVariant->forceFill([
-                    'is_default' => true,
-                    'updated_by' => $actor?->getKey(),
-                ])->save();
-
-                return $firstVariant->refresh();
+                return $this->setDefaultVariant($product, $firstVariant->getKey(), $actor);
             }
 
             return ProductVariant::query()->create([
@@ -65,9 +64,9 @@ class ProductVariantManagementService
     /**
      * @param array<int|string, array<string, mixed>> $variants
      */
-    public function updateVariants(Product $product, array $variants, User $actor): int
+    public function updateVariants(Product $product, array $variants, User $actor, ?int $defaultVariantId = null): int
     {
-        return DB::transaction(function () use ($product, $variants, $actor): int {
+        return DB::transaction(function () use ($product, $variants, $actor, $defaultVariantId): int {
             $ids = collect(array_keys($variants))
                 ->map(fn ($id): int => (int) $id)
                 ->filter()
@@ -93,7 +92,76 @@ class ProductVariantManagementService
                 }
             }
 
+            if ($defaultVariantId !== null) {
+                $this->setDefaultVariant($product, $defaultVariantId, $actor);
+            } else {
+                $this->ensureDefaultVariant($product, $actor);
+            }
+
             return $updated;
+        });
+    }
+
+    public function ensureDefaultVariant(Product $product, ?User $actor = null): ?ProductVariant
+    {
+        return DB::transaction(function () use ($product, $actor): ?ProductVariant {
+            $defaultVariant = $product->variants()
+                ->where('status', 'active')
+                ->where('is_default', true)
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->first();
+
+            if ($defaultVariant instanceof ProductVariant) {
+                $this->clearOtherDefaults($product, $defaultVariant, $actor);
+
+                return $defaultVariant->refresh();
+            }
+
+            $firstActive = $product->variants()
+                ->where('status', 'active')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->first();
+
+            if ($firstActive instanceof ProductVariant) {
+                return $this->setDefaultVariant($product, $firstActive->getKey(), $actor);
+            }
+
+            $product->variants()
+                ->where('is_default', true)
+                ->update([
+                    'is_default' => false,
+                    'updated_by' => $actor?->getKey(),
+                    'updated_at' => now(),
+                ]);
+
+            return null;
+        });
+    }
+
+    public function setDefaultVariant(Product $product, int $variantId, ?User $actor = null): ProductVariant
+    {
+        return DB::transaction(function () use ($product, $variantId, $actor): ProductVariant {
+            $variant = $product->variants()
+                ->whereKey($variantId)
+                ->where('status', 'active')
+                ->first();
+
+            if (! $variant instanceof ProductVariant) {
+                throw ValidationException::withMessages([
+                    'default_variant_id' => 'The selected default variant must belong to this product and be active.',
+                ]);
+            }
+
+            $this->clearOtherDefaults($product, $variant, $actor);
+
+            $variant->forceFill([
+                'is_default' => true,
+                'updated_by' => $actor?->getKey(),
+            ])->save();
+
+            return $variant->refresh();
         });
     }
 
@@ -251,6 +319,18 @@ class ProductVariantManagementService
         return $product->variants()
             ->whereIn('id', $ids)
             ->get();
+    }
+
+    private function clearOtherDefaults(Product $product, ProductVariant $defaultVariant, ?User $actor = null): void
+    {
+        $product->variants()
+            ->whereKeyNot($defaultVariant->getKey())
+            ->where('is_default', true)
+            ->update([
+                'is_default' => false,
+                'updated_by' => $actor?->getKey(),
+                'updated_at' => now(),
+            ]);
     }
 
     /**

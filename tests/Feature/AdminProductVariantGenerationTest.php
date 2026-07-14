@@ -333,6 +333,111 @@ class AdminProductVariantGenerationTest extends TestCase
         ]);
     }
 
+    public function test_no_attribute_product_single_variant_is_default(): void
+    {
+        [$admin, $product] = $this->productWithVariantSetup();
+        $variant = $product->variants()->firstOrFail();
+
+        $this->assertTrue($variant->is_default);
+        $this->assertSame('active', $variant->status);
+        $this->assertTrue($admin->exists);
+    }
+
+    public function test_selecting_another_default_clears_previous_default(): void
+    {
+        [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->selectValues($product, [
+            [$color, ['Red', 'Blue']],
+            [$size, ['M']],
+        ]);
+        $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
+
+        $red = $product->variants()->where('name', 'Red / M')->firstOrFail();
+        $blue = $product->variants()->where('name', 'Blue / M')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->put(route('admin.products.variants.update', $product), [
+                'default_variant_id' => $blue->getKey(),
+                'variants' => [
+                    $red->getKey() => $this->variantPayload($red),
+                    $blue->getKey() => $this->variantPayload($blue),
+                ],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']));
+
+        $this->assertFalse($red->fresh()->is_default);
+        $this->assertTrue($blue->fresh()->is_default);
+        $this->assertSame(1, $product->variants()->where('is_default', true)->count());
+    }
+
+    public function test_inactive_variant_cannot_become_default(): void
+    {
+        [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->selectValues($product, [
+            [$color, ['Red', 'Blue']],
+            [$size, ['M']],
+        ]);
+        $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
+
+        $red = $product->variants()->where('name', 'Red / M')->firstOrFail();
+        $blue = $product->variants()->where('name', 'Blue / M')->firstOrFail();
+        $blue->forceFill(['status' => 'inactive'])->save();
+
+        $this->actingAs($admin)
+            ->from(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->put(route('admin.products.variants.update', $product), [
+                'default_variant_id' => $blue->getKey(),
+                'variants' => [
+                    $red->getKey() => $this->variantPayload($red),
+                    $blue->getKey() => $this->variantPayload($blue->fresh()),
+                ],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertSessionHasErrors('default_variant_id');
+
+        $this->assertFalse($blue->fresh()->is_default);
+    }
+
+    public function test_regenerating_variants_preserves_valid_default_and_repairs_inactive_default(): void
+    {
+        [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->selectValues($product, [
+            [$color, ['Red', 'Blue']],
+            [$size, ['M']],
+        ]);
+        $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
+
+        $blue = $product->variants()->where('name', 'Blue / M')->firstOrFail();
+        app(\App\Services\Product\ProductVariantManagementService::class)->setDefaultVariant($product, $blue->getKey(), $admin);
+        app(ProductVariantGenerationService::class)->generate($product->fresh(), $admin);
+        $this->assertTrue($blue->fresh()->is_default);
+
+        $blue->forceFill(['status' => 'inactive'])->save();
+        app(ProductVariantGenerationService::class)->generate($product->fresh(), $admin);
+
+        $this->assertFalse($blue->fresh()->is_default);
+        $this->assertSame('Red / M', $product->fresh()->variants()->where('is_default', true)->firstOrFail()->name);
+    }
+
+    public function test_variants_tab_selects_current_default_radio(): void
+    {
+        [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->selectValues($product, [
+            [$color, ['Red', 'Blue']],
+            [$size, ['M']],
+        ]);
+        $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
+        $blue = $product->variants()->where('name', 'Blue / M')->firstOrFail();
+        app(\App\Services\Product\ProductVariantManagementService::class)->setDefaultVariant($product, $blue->getKey(), $admin);
+
+        $this->actingAs($admin)
+            ->get(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertOk()
+            ->assertSee('name="default_variant_id"', false)
+            ->assertSee('value="'.$blue->getKey().'"', false)
+            ->assertSee('checked', false);
+    }
+
     public function test_combination_limit_is_enforced(): void
     {
         config(['products.max_variant_combinations' => 3]);
@@ -650,6 +755,20 @@ class AdminProductVariantGenerationTest extends TestCase
             'sort_order' => 1,
             'status' => 'active',
         ]);
+    }
+
+    private function variantPayload(ProductVariant $variant): array
+    {
+        return [
+            'sku' => $variant->sku,
+            'barcode' => $variant->barcode,
+            'mrp' => $variant->mrp,
+            'selling_price' => $variant->selling_price,
+            'cost_price' => $variant->cost_price,
+            'stock_quantity' => $variant->stock_quantity,
+            'low_stock_threshold' => $variant->low_stock_threshold,
+            'status' => $variant->status,
+        ];
     }
 
     /**

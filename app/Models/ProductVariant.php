@@ -65,6 +65,11 @@ class ProductVariant extends Model
         return $this->hasMany(ProductVariantAttribute::class);
     }
 
+    public function scopeDefault($query)
+    {
+        return $query->where('is_default', true);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by')->withTrashed();

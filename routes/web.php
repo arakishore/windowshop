@@ -73,6 +73,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->name('products.images.store');
         Route::put('products/{product}/images', [ProductController::class, 'updateImages'])
             ->name('products.images.update');
+        Route::delete('products/{product}/images', [ProductController::class, 'bulkDestroyImages'])
+            ->name('products.images.bulk-destroy');
         Route::delete('products/{product}/images/{productImage}', [ProductController::class, 'destroyImage'])
             ->name('products.images.destroy');
         Route::post('products/{product}/variants/generate', [ProductController::class, 'generateVariants'])

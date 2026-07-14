@@ -16,6 +16,9 @@
     @error('variant_ids')
         <div class="alert alert-danger">{{ $message }}</div>
     @enderror
+    @error('default_variant_id')
+        <div class="alert alert-danger">{{ $message }}</div>
+    @enderror
 
     <div class="alert alert-light border d-flex flex-wrap gap-2 align-items-center mb-3">
         <span>Basic Information <span class="text-success fw-semibold">✓</span></span>
@@ -222,9 +225,15 @@
                                 <input name="variants[{{ $variant->id }}][low_stock_threshold]" type="number" min="0" step="1" value="{{ old("variants.{$variant->id}.low_stock_threshold", $variant->low_stock_threshold) }}" class="form-control form-control-sm text-end">
                             </td>
                             <td>
-                                <span class="badge {{ $variant->is_default ? 'bg-success' : 'bg-light text-body border' }}">
-                                    {{ $variant->is_default ? 'Yes' : 'No' }}
-                                </span>
+                                <input
+                                    type="radio"
+                                    name="default_variant_id"
+                                    value="{{ $variant->getKey() }}"
+                                    class="form-check-input"
+                                    aria-label="Set {{ $variant->name ?: $product->product_name }} as default variant"
+                                    @checked((int) old('default_variant_id', $product->variants->firstWhere('is_default', true)?->getKey()) === (int) $variant->getKey())
+                                    @disabled($variant->status !== 'active')
+                                >
                             </td>
                             <td>
                                 <select name="variants[{{ $variant->id }}][status]" class="form-select form-select-sm">

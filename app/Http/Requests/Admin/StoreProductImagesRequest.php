@@ -17,15 +17,19 @@ class StoreProductImagesRequest extends FormRequest
      */
     public function rules(): array
     {
+        $imageRules = [
+            'image',
+            'mimes:jpg,jpeg,png,webp',
+            'max:'.(int) config('images.product.max_upload_kb', 3072),
+        ];
+
         return [
-            'images' => ['required', 'array', 'min:1', 'max:8'],
-            'images.*' => [
-                'required',
-                'image',
-                'mimes:jpg,jpeg,png,webp',
-                'max:'.(int) config('images.product.max_upload_kb', 3072),
-            ],
+            'images' => ['nullable', 'array', 'max:8', 'required_without:image_groups'],
+            'images.*' => ['required', ...$imageRules],
             'attribute_value_id' => ['nullable', 'integer', Rule::exists('product_attribute_group_values', 'id')],
+            'image_groups' => ['nullable', 'array', 'required_without:images'],
+            'image_groups.*' => ['nullable', 'array'],
+            'image_groups.*.*' => ['required', ...$imageRules],
         ];
     }
 
@@ -34,5 +38,22 @@ class StoreProductImagesRequest extends FormRequest
         $value = $this->input('attribute_value_id');
 
         return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
+    }
+
+    /**
+     * @return array<int|string, array<int, \Illuminate\Http\UploadedFile>>
+     */
+    public function imageGroups(): array
+    {
+        $groups = $this->file('image_groups', []);
+
+        return collect(is_array($groups) ? $groups : [])
+            ->filter(fn (mixed $files): bool => is_array($files) && $files !== [])
+            ->all();
+    }
+
+    public function hasGroupedImages(): bool
+    {
+        return $this->imageGroups() !== [];
     }
 }

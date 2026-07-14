@@ -135,6 +135,8 @@ class ProductVariantGenerationService
                 $created++;
             }
 
+            $this->variantManagementService->ensureDefaultVariant($product, $actor);
+
             return [
                 'created_count' => $created,
                 'skipped_existing_count' => (int) $preview['existing_count'],

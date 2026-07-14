@@ -12,7 +12,7 @@ class ImageVariantService
     /**
      * @return array<string, string>
      */
-    public function store(UploadedFile $file, string $profile, string $directory): array
+    public function store(UploadedFile $file, string $profile, string $directory, ?string $filenamePrefix = null): array
     {
         $config = config("images.{$profile}");
 
@@ -28,7 +28,8 @@ class ImageVariantService
         Storage::disk('public')->makeDirectory($directory);
 
         foreach ($config['variants'] as $name => [$width, $height]) {
-            $path = "{$directory}/{$name}.webp";
+            $filename = $filenamePrefix ? "{$filenamePrefix}-{$name}.webp" : "{$name}.webp";
+            $path = "{$directory}/{$filename}";
             $absolutePath = Storage::disk('public')->path($path);
 
             (clone $source)
