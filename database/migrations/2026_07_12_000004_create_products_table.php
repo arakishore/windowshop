@@ -34,6 +34,8 @@ return new class extends Migration
                 ->nullable()
                 ->constrained('brands')
                 ->nullOnDelete();
+            $table->foreignId('primary_image_id')
+                ->nullable();
             $table->string('product_name');
             $table->string('slug')->nullable()->unique();
             $table->text('short_description')->nullable();

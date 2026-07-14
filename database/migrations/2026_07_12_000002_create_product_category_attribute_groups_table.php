@@ -21,6 +21,9 @@ return new class extends Migration
             $table->boolean('is_variant')
                 ->default(false)
                 ->comment('Whether this attribute generates product variants');
+            $table->boolean('is_image_attribute')
+                ->default(false)
+                ->comment('Attribute used for product image grouping (e.g. Color, Shade, Finish).');
             $table->unsignedInteger('sort_order')->default(0)->index();
             $table->timestamps();
 

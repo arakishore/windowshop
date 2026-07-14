@@ -25,7 +25,15 @@ class UpdateProductBasicRequest extends FormRequest
             'shop_id' => [
                 'required',
                 'integer',
-                Rule::exists('shops', 'id')->where(fn ($query) => $query->whereIn('status', ['pending', 'active'])->whereNull('deleted_at')),
+                Rule::exists('shops', 'id')->where(fn ($query) => $query
+                    ->whereNull('deleted_at')
+                    ->where(function ($query): void {
+                        $query->whereIn('status', ['pending', 'active']);
+
+                        if ($this->route('product')?->shop_id) {
+                            $query->orWhere('id', $this->route('product')->shop_id);
+                        }
+                    })),
             ],
             'product_category_id' => [
                 'required',

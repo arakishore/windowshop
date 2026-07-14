@@ -41,7 +41,11 @@ class ProductCategoryAttributeGroupController extends Controller
     ): RedirectResponse {
         $rootCategory = $this->rootCategory($productCategory);
 
-        $this->mappingService->sync($rootCategory, $request->validated('mappings', []));
+        $this->mappingService->sync(
+            $rootCategory,
+            $request->validated('mappings', []),
+            $request->imageAttributeGroupId(),
+        );
 
         return redirect()
             ->route('admin.master.product-categories.attribute-groups.edit', $rootCategory)

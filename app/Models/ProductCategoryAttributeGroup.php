@@ -12,6 +12,7 @@ class ProductCategoryAttributeGroup extends Model
         'product_attribute_group_id',
         'is_required',
         'is_variant',
+        'is_image_attribute',
         'sort_order',
     ];
 
@@ -20,6 +21,7 @@ class ProductCategoryAttributeGroup extends Model
         return [
             'is_required' => 'boolean',
             'is_variant' => 'boolean',
+            'is_image_attribute' => 'boolean',
         ];
     }
 

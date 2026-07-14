@@ -117,6 +117,7 @@ class ProductAttributeMasterTest extends TestCase
         $this->seed(ProductAttributeSeeder::class);
 
         $this->assertTrue(Schema::hasColumn('product_category_attribute_groups', 'is_variant'));
+        $this->assertTrue(Schema::hasColumn('product_category_attribute_groups', 'is_image_attribute'));
         $this->assertFalse(Schema::hasColumn('product_attribute_groups', 'is_variant'));
 
         $mappings = app(ProductAttributeConfigurationService::class)
@@ -126,6 +127,7 @@ class ProductAttributeMasterTest extends TestCase
                     'selection_type' => $mapping->group->selection_type,
                     'is_required' => $mapping->is_required,
                     'is_variant' => $mapping->is_variant,
+                    'is_image_attribute' => $mapping->is_image_attribute,
                 ],
             ]);
 
@@ -133,16 +135,19 @@ class ProductAttributeMasterTest extends TestCase
             'selection_type' => 'multiple',
             'is_required' => true,
             'is_variant' => true,
+            'is_image_attribute' => true,
         ], $mappings->get('color'));
         $this->assertSame([
             'selection_type' => 'multiple',
             'is_required' => true,
             'is_variant' => true,
+            'is_image_attribute' => false,
         ], $mappings->get('size'));
         $this->assertSame([
             'selection_type' => 'single',
             'is_required' => false,
             'is_variant' => false,
+            'is_image_attribute' => false,
         ], $mappings->get('material'));
         $this->assertFalse($mappings->get('sleeve')['is_variant']);
         $this->assertFalse($mappings->get('neck')['is_variant']);

@@ -69,12 +69,7 @@
             </div>
 
             <div class="tab-pane fade {{ $activeTab === 'images' ? 'show active' : '' }}" id="product-tab-images">
-                @include('admin.products.partials.tab-placeholder', [
-                    'icon' => 'ph-images',
-                    'title' => 'Images',
-                    'message' => 'Product and variant images will be uploaded and ordered here.',
-                    'meta' => $product->images->count().' images',
-                ])
+                @include('admin.products.partials.images-form')
             </div>
 
             <div class="tab-pane fade {{ $activeTab === 'description' ? 'show active' : '' }}" id="product-tab-description">

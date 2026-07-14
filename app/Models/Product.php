@@ -20,6 +20,7 @@ class Product extends Model
         'root_product_category_id',
         'product_category_id',
         'brand_id',
+        'primary_image_id',
         'product_name',
         'slug',
         'short_description',
@@ -75,6 +76,11 @@ class Product extends Model
         return $this->belongsTo(Brand::class);
     }
 
+    public function primaryImage(): BelongsTo
+    {
+        return $this->belongsTo(ProductImage::class, 'primary_image_id');
+    }
+
     public function variants(): HasMany
     {
         return $this->hasMany(ProductVariant::class)
@@ -91,7 +97,6 @@ class Product extends Model
     public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class)
-            ->orderByDesc('is_primary')
             ->orderBy('sort_order')
             ->orderBy('id');
     }

@@ -38,11 +38,30 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">Attribute Groups for Root Category: {{ $category->name }}</h5>
+                <div class="text-muted fs-sm mt-1">Select one image attribute for future product image grouping, such as Color, Shade, or Finish.</div>
             </div>
 
             @if($attributeGroups->isEmpty())
                 <x-empty-state icon="ph-list-bullets" title="No active product attributes found" message="Create product attributes before mapping them to categories." />
             @else
+                @php
+                    $selectedImageAttributeGroupId = old(
+                        'image_attribute_group_id',
+                        optional($existingMappings->firstWhere('is_image_attribute', true))->product_attribute_group_id,
+                    );
+                @endphp
+                <div class="card-body border-bottom">
+                    <label class="form-check mb-0">
+                        <input
+                            type="radio"
+                            name="image_attribute_group_id"
+                            value=""
+                            class="form-check-input js-image-attribute-radio"
+                            @checked(blank($selectedImageAttributeGroupId))
+                        >
+                        <span class="form-check-label">No image attribute</span>
+                    </label>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle mb-0">
                         <thead class="table-light">
@@ -51,6 +70,7 @@
                                 <th class="text-center" style="width: 150px;">Mapped</th>
                                 <th class="text-center" style="width: 160px;">Required</th>
                                 <th class="text-center" style="width: 210px;">Generates Variants</th>
+                                <th class="text-center" style="width: 170px;">Image Attribute</th>
                                 <th style="width: 140px;">Sort Order</th>
                             </tr>
                         </thead>
@@ -63,6 +83,7 @@
                                     $isRequired = old("mappings.{$rowKey}.is_required", $mapping?->is_required ? '1' : '0');
                                     $isVariant = old("mappings.{$rowKey}.is_variant", $mapping?->is_variant ? '1' : '0');
                                     $sortOrder = old("mappings.{$rowKey}.sort_order", $mapping?->sort_order ?? $group->sort_order);
+                                    $isImageAttribute = (string) $selectedImageAttributeGroupId === (string) $group->getKey();
                                 @endphp
                                 <tr>
                                     <td>
@@ -75,10 +96,11 @@
                                         <div class="form-check form-switch d-inline-flex mb-0">
                                             <input
                                                 id="mapping_enabled_{{ $rowKey }}"
-                                                class="form-check-input"
+                                                class="form-check-input js-mapping-enabled"
                                                 type="checkbox"
                                                 name="mappings[{{ $rowKey }}][enabled]"
                                                 value="1"
+                                                data-group-id="{{ $rowKey }}"
                                                 @checked((bool) $enabled)
                                             >
                                         </div>
@@ -102,16 +124,31 @@
                                             <div class="form-check form-switch mb-0">
                                                 <input
                                                     id="mapping_variant_{{ $rowKey }}"
-                                                    class="form-check-input"
+                                                    class="form-check-input js-mapping-variant"
                                                     type="checkbox"
                                                     name="mappings[{{ $rowKey }}][is_variant]"
                                                     value="1"
+                                                    data-group-id="{{ $rowKey }}"
                                                     @checked((bool) $isVariant)
                                                 >
                                                 <label class="form-check-label" for="mapping_variant_{{ $rowKey }}">Generates Variants</label>
                                             </div>
                                         </div>
                                         <div class="form-text text-center">Use this attribute when creating product variant combinations.</div>
+                                    </td>
+                                    <td class="text-center">
+                                        <input
+                                            id="mapping_image_attribute_{{ $rowKey }}"
+                                            class="form-check-input js-image-attribute-radio"
+                                            type="radio"
+                                            name="image_attribute_group_id"
+                                            value="{{ $group->getKey() }}"
+                                            data-group-id="{{ $rowKey }}"
+                                            @checked($isImageAttribute)
+                                        >
+                                        <label class="visually-hidden" for="mapping_image_attribute_{{ $rowKey }}">
+                                            Use {{ $group->name }} for image grouping
+                                        </label>
                                     </td>
                                     <td>
                                         <input
@@ -140,3 +177,42 @@
         </div>
     </form>
 @endsection
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const noneRadio = document.querySelector('input[name="image_attribute_group_id"][value=""]');
+
+            document.querySelectorAll('.js-image-attribute-radio[data-group-id]').forEach(function (radio) {
+                radio.addEventListener('change', function () {
+                    if (!radio.checked) {
+                        return;
+                    }
+
+                    const groupId = radio.dataset.groupId;
+                    const enabled = document.querySelector('.js-mapping-enabled[data-group-id="' + groupId + '"]');
+                    const variant = document.querySelector('.js-mapping-variant[data-group-id="' + groupId + '"]');
+
+                    if (enabled) {
+                        enabled.checked = true;
+                    }
+
+                    if (variant) {
+                        variant.checked = true;
+                    }
+                });
+            });
+
+            document.querySelectorAll('.js-mapping-enabled, .js-mapping-variant').forEach(function (checkbox) {
+                checkbox.addEventListener('change', function () {
+                    const groupId = checkbox.dataset.groupId;
+                    const radio = document.querySelector('.js-image-attribute-radio[data-group-id="' + groupId + '"]');
+
+                    if (radio && radio.checked && !checkbox.checked && noneRadio) {
+                        noneRadio.checked = true;
+                    }
+                });
+            });
+        });
+    </script>
+@endpush

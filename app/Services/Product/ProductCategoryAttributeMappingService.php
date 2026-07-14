@@ -11,11 +11,11 @@ class ProductCategoryAttributeMappingService
     /**
      * @param array<int|string, array<string, mixed>> $mappings
      */
-    public function sync(ProductCategory $category, array $mappings): void
+    public function sync(ProductCategory $category, array $mappings, ?int $imageAttributeGroupId = null): void
     {
         $rootCategoryId = $category->rootCategoryId();
 
-        DB::transaction(function () use ($rootCategoryId, $mappings): void {
+        DB::transaction(function () use ($rootCategoryId, $mappings, $imageAttributeGroupId): void {
             $enabledGroupIds = [];
 
             foreach ($mappings as $mapping) {
@@ -35,6 +35,7 @@ class ProductCategoryAttributeMappingService
                     [
                         'is_required' => (bool) ($mapping['is_required'] ?? false),
                         'is_variant' => (bool) ($mapping['is_variant'] ?? false),
+                        'is_image_attribute' => $groupId === $imageAttributeGroupId,
                         'sort_order' => (int) ($mapping['sort_order'] ?? 0),
                     ],
                 );

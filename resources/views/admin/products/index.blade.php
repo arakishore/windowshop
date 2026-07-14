@@ -37,7 +37,11 @@
                             <option value="">All</option>
                             @foreach($shops as $shop)
                                 <option value="{{ $shop->id }}" @selected((string) $filters['shop_id'] === (string) $shop->id)>
-                                    {{ $shop->name }} @if($shop->merchant) - {{ $shop->merchant->business_name }} @endif
+                                    {{ $shop->name }}
+                                    @if($shop->merchant)
+                                        - {{ $shop->merchant->business_name }}
+                                    @endif
+                                    ({{ ucfirst($shop->status) }})
                                 </option>
                             @endforeach
                         </select>
@@ -82,13 +86,27 @@
                         @foreach($products as $product)
                             <tr>
                                 <td>
-                                    <div class="fw-semibold">{{ $product->product_name }}</div>
-                                    <code>{{ $product->slug }}</code>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="rounded overflow-hidden bg-light border d-flex align-items-center justify-content-center flex-shrink-0" style="width: 48px; height: 48px;">
+                                            @if($product->primaryImage)
+                                                <img src="{{ asset('storage/'.($product->primaryImage->thumbnail_path ?: $product->primaryImage->image_path)) }}" alt="{{ $product->primaryImage->alt_text ?: $product->product_name }}" style="width: 100%; height: 100%; object-fit: cover;">
+                                            @else
+                                                <i class="ph-image text-muted"></i>
+                                            @endif
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold">{{ $product->product_name }}</div>
+                                            <code>{{ $product->slug }}</code>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td>
                                     <div>{{ $product->shop?->name ?? '-' }}</div>
                                     @if($product->shop?->merchant)
                                         <div class="fs-sm text-muted">{{ $product->shop->merchant->business_name }}</div>
+                                    @endif
+                                    @if($product->shop && $product->shop->status !== 'active')
+                                        <div class="fs-sm text-muted">({{ ucfirst($product->shop->status) }})</div>
                                     @endif
                                 </td>
                                 <td>{{ $product->category?->name ?? '-' }}</td>

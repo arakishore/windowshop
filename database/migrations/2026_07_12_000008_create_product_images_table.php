@@ -21,10 +21,6 @@ return new class extends Migration
             $table->foreignId('product_id')
                 ->constrained('products')
                 ->cascadeOnDelete();
-            $table->foreignId('product_variant_id')
-                ->nullable()
-                ->constrained('product_variants')
-                ->cascadeOnDelete();
             $table->string('image_path', 500);
             $table->string('thumbnail_path', 500)->nullable();
             $table->string('title')->nullable();
@@ -40,8 +36,13 @@ return new class extends Migration
             $table->foreignId('deleted_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
+        });
 
-            $table->index(['product_id', 'product_variant_id'], 'product_images_product_variant_idx');
+        Schema::table('products', function (Blueprint $table): void {
+            $table->foreign('primary_image_id', 'products_primary_image_id_foreign')
+                ->references('id')
+                ->on('product_images')
+                ->nullOnDelete();
         });
     }
 
@@ -50,6 +51,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('products', function (Blueprint $table): void {
+            $table->dropForeign('products_primary_image_id_foreign');
+        });
+
         Schema::dropIfExists('product_images');
     }
 };

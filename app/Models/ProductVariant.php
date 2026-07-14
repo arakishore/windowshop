@@ -65,14 +65,6 @@ class ProductVariant extends Model
         return $this->hasMany(ProductVariantAttribute::class);
     }
 
-    public function images(): HasMany
-    {
-        return $this->hasMany(ProductImage::class)
-            ->orderByDesc('is_primary')
-            ->orderBy('sort_order')
-            ->orderBy('id');
-    }
-
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by')->withTrashed();

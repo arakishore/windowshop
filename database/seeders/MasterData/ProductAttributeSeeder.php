@@ -233,14 +233,14 @@ class ProductAttributeSeeder extends Seeder
         }
 
         $mappings = [
-            ['code' => 'color', 'is_required' => true, 'is_variant' => true, 'sort_order' => 1],
-            ['code' => 'size', 'is_required' => true, 'is_variant' => true, 'sort_order' => 2],
-            ['code' => 'material', 'is_required' => false, 'is_variant' => false, 'sort_order' => 3],
-            ['code' => 'sleeve', 'is_required' => false, 'is_variant' => false, 'sort_order' => 4],
-            ['code' => 'neck', 'is_required' => false, 'is_variant' => false, 'sort_order' => 5],
-            ['code' => 'pattern', 'is_required' => false, 'is_variant' => false, 'sort_order' => 6],
-            ['code' => 'fit', 'is_required' => false, 'is_variant' => false, 'sort_order' => 7],
-            ['code' => 'occasion', 'is_required' => false, 'is_variant' => false, 'sort_order' => 8],
+            ['code' => 'color', 'is_required' => true, 'is_variant' => true, 'is_image_attribute' => true, 'sort_order' => 1],
+            ['code' => 'size', 'is_required' => true, 'is_variant' => true, 'is_image_attribute' => false, 'sort_order' => 2],
+            ['code' => 'material', 'is_required' => false, 'is_variant' => false, 'is_image_attribute' => false, 'sort_order' => 3],
+            ['code' => 'sleeve', 'is_required' => false, 'is_variant' => false, 'is_image_attribute' => false, 'sort_order' => 4],
+            ['code' => 'neck', 'is_required' => false, 'is_variant' => false, 'is_image_attribute' => false, 'sort_order' => 5],
+            ['code' => 'pattern', 'is_required' => false, 'is_variant' => false, 'is_image_attribute' => false, 'sort_order' => 6],
+            ['code' => 'fit', 'is_required' => false, 'is_variant' => false, 'is_image_attribute' => false, 'sort_order' => 7],
+            ['code' => 'occasion', 'is_required' => false, 'is_variant' => false, 'is_image_attribute' => false, 'sort_order' => 8],
         ];
 
         foreach ($mappings as $mapping) {
@@ -260,6 +260,7 @@ class ProductAttributeSeeder extends Seeder
                 fn (bool $exists) => [
                     'is_required' => $mapping['is_required'],
                     'is_variant' => $mapping['is_variant'],
+                    'is_image_attribute' => $mapping['is_image_attribute'],
                     'sort_order' => $mapping['sort_order'],
                     'updated_at' => $now,
                     ...($exists ? [] : ['created_at' => $now]),

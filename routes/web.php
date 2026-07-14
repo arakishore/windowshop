@@ -69,6 +69,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('merchants', MerchantController::class);
         Route::put('products/{product}/attributes', [ProductController::class, 'updateAttributes'])
             ->name('products.attributes.update');
+        Route::post('products/{product}/images', [ProductController::class, 'storeImages'])
+            ->name('products.images.store');
+        Route::put('products/{product}/images', [ProductController::class, 'updateImages'])
+            ->name('products.images.update');
+        Route::delete('products/{product}/images/{productImage}', [ProductController::class, 'destroyImage'])
+            ->name('products.images.destroy');
         Route::post('products/{product}/variants/generate', [ProductController::class, 'generateVariants'])
             ->name('products.variants.generate');
         Route::put('products/{product}/variants', [ProductController::class, 'updateVariants'])

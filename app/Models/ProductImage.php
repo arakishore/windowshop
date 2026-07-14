@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductImage extends Model
@@ -14,7 +15,6 @@ class ProductImage extends Model
     protected $fillable = [
         'uuid',
         'product_id',
-        'product_variant_id',
         'image_path',
         'thumbnail_path',
         'title',
@@ -45,9 +45,14 @@ class ProductImage extends Model
         return $this->belongsTo(Product::class);
     }
 
-    public function variant(): BelongsTo
+    public function attributeValues(): BelongsToMany
     {
-        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+        return $this->belongsToMany(
+            ProductAttributeGroupValue::class,
+            'product_image_attribute_values',
+            'product_image_id',
+            'product_attribute_group_value_id',
+        )->withTimestamps();
     }
 
     public function createdBy(): BelongsTo

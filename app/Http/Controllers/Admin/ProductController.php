@@ -4,19 +4,23 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\BulkUpdateProductVariantsRequest;
+use App\Http\Requests\Admin\StoreProductImagesRequest;
 use App\Http\Requests\Admin\StoreProductQuickCreateRequest;
 use App\Http\Requests\Admin\UpdateProductAttributesRequest;
 use App\Http\Requests\Admin\UpdateProductBasicRequest;
 use App\Http\Requests\Admin\UpdateProductDescriptionSeoRequest;
+use App\Http\Requests\Admin\UpdateProductImagesRequest;
 use App\Http\Requests\Admin\UpdateProductVariantsRequest;
 use App\Models\Brand;
 use App\Models\Product;
 use App\Models\ProductDescriptionTemplate;
 use App\Models\ProductCategory;
+use App\Models\ProductImage;
 use App\Models\Shop;
 use App\Services\Product\ProductAttributeConfigurationService;
 use App\Services\Product\ProductAttributeService;
 use App\Services\Product\ProductDescriptionTemplateService;
+use App\Services\Product\ProductImageService;
 use App\Services\Product\ProductVariantGenerationService;
 use App\Services\Product\ProductVariantManagementService;
 use Illuminate\Http\RedirectResponse;
@@ -35,6 +39,7 @@ class ProductController extends Controller
         private readonly ProductAttributeService $attributeService,
         private readonly ProductVariantGenerationService $variantGenerationService,
         private readonly ProductVariantManagementService $variantManagementService,
+        private readonly ProductImageService $productImageService,
     ) {
     }
 
@@ -47,7 +52,7 @@ class ProductController extends Controller
         ];
 
         $products = Product::query()
-            ->with(['shop.merchant', 'category', 'brand'])
+            ->with(['shop.merchant', 'category', 'brand', 'primaryImage'])
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
                 $search = $filters['search'];
 
@@ -67,6 +72,8 @@ class ProductController extends Controller
             'products' => $products,
             'filters' => $filters,
             ...$this->sharedData(),
+            'shops' => $this->productFilterShops(),
+            'statuses' => $this->statuses(),
         ]);
     }
 
@@ -135,7 +142,8 @@ class ProductController extends Controller
                 'attributes',
                 'variants.attributes.group',
                 'variants.attributes.value',
-                'images',
+                'images.attributeValues',
+                'primaryImage',
             ]),
             'selectedDescriptionTemplate' => $this->descriptionTemplateService->findTemplateForProduct($product),
             'attributeMappings' => $product->category
@@ -146,6 +154,8 @@ class ProductController extends Controller
             'variantRows' => $this->variantManagementService->variantsForDisplay($product, $variantFilters),
             'variantFilters' => $variantFilters,
             'variantFilterOptions' => $this->variantManagementService->filterOptions($product),
+            'imageAttributeMapping' => $this->productImageService->imageAttributeMapping($product),
+            'imageAttributeValues' => $this->productImageService->selectableImageAttributeValues($product),
             ...$this->sharedData($product),
         ]);
     }
@@ -237,6 +247,43 @@ class ProductController extends Controller
             ->with('success', $tab === 'seo' ? 'Product SEO updated successfully.' : 'Product description updated successfully.');
     }
 
+    public function storeImages(StoreProductImagesRequest $request, Product $product): RedirectResponse
+    {
+        $this->productImageService->upload(
+            $product,
+            $request->file('images', []),
+            $request->attributeValueId(),
+            Auth::id(),
+        );
+
+        return redirect()
+            ->route('admin.products.edit', ['product' => $product, 'tab' => 'images'])
+            ->with('success', 'Product images uploaded successfully.');
+    }
+
+    public function updateImages(UpdateProductImagesRequest $request, Product $product): RedirectResponse
+    {
+        $this->productImageService->update(
+            $product,
+            $request->imageRows(),
+            $request->primaryImageId(),
+            Auth::id(),
+        );
+
+        return redirect()
+            ->route('admin.products.edit', ['product' => $product, 'tab' => 'images'])
+            ->with('success', 'Product images updated successfully.');
+    }
+
+    public function destroyImage(Product $product, ProductImage $productImage): RedirectResponse
+    {
+        $this->productImageService->delete($product, $productImage, Auth::id());
+
+        return redirect()
+            ->route('admin.products.edit', ['product' => $product, 'tab' => 'images'])
+            ->with('success', 'Product image deleted successfully.');
+    }
+
     public function generateDescriptionSeo(Product $product): RedirectResponse
     {
         $generated = $this->descriptionTemplateService->generateForProduct($product);
@@ -293,6 +340,18 @@ class ProductController extends Controller
                 if ($product?->shop_id) {
                     $query->orWhere('id', $product->shop_id);
                 }
+            })
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function productFilterShops(): Collection
+    {
+        return Shop::query()
+            ->with('merchant')
+            ->where(function ($query): void {
+                $query->whereIn('status', ['pending', 'active'])
+                    ->orWhereHas('products');
             })
             ->orderBy('name')
             ->get();

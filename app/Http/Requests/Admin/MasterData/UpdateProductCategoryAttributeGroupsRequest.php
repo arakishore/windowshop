@@ -19,6 +19,7 @@ class UpdateProductCategoryAttributeGroupsRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'image_attribute_group_id' => ['nullable', 'integer', Rule::exists('product_attribute_groups', 'id')],
             'mappings' => ['nullable', 'array'],
             'mappings.*.product_attribute_group_id' => [
                 'required',
@@ -47,7 +48,38 @@ class UpdateProductCategoryAttributeGroupsRequest extends FormRequest
                         'Each attribute group can only be mapped once for this category.',
                     );
                 }
+
+                $imageAttributeGroupId = $this->imageAttributeGroupId();
+
+                if ($imageAttributeGroupId === null) {
+                    return;
+                }
+
+                $imageMapping = collect($this->input('mappings', []))
+                    ->first(fn (array $mapping): bool => (int) ($mapping['product_attribute_group_id'] ?? 0) === $imageAttributeGroupId);
+
+                if (! $imageMapping || ! (bool) ($imageMapping['enabled'] ?? false)) {
+                    $validator->errors()->add(
+                        'image_attribute_group_id',
+                        'The image attribute must be mapped to this category.',
+                    );
+                    return;
+                }
+
+                if (! (bool) ($imageMapping['is_variant'] ?? false)) {
+                    $validator->errors()->add(
+                        'image_attribute_group_id',
+                        'The image attribute must also generate variants.',
+                    );
+                }
             },
         ];
+    }
+
+    public function imageAttributeGroupId(): ?int
+    {
+        $value = $this->input('image_attribute_group_id');
+
+        return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
     }
 }

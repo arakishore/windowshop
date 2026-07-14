@@ -37,6 +37,7 @@ class AdminProductCategoryAttributeMappingTest extends TestCase
 
         $this->actingAs($admin)
             ->put(route('admin.master.product-categories.attribute-groups.update', $category), [
+                'image_attribute_group_id' => $finish->id,
                 'mappings' => [
                     $finish->id => [
                         'product_attribute_group_id' => $finish->id,
@@ -55,8 +56,98 @@ class AdminProductCategoryAttributeMappingTest extends TestCase
             'product_attribute_group_id' => $finish->getKey(),
             'is_required' => true,
             'is_variant' => true,
+            'is_image_attribute' => true,
             'sort_order' => 10,
         ]);
+    }
+
+    public function test_image_attribute_selection_moves_to_new_variant_mapping(): void
+    {
+        $admin = $this->createAdminUser();
+        $category = $this->createCategory('Apparel');
+        $color = $this->createAttributeGroup('Color', 'multiple');
+        $shade = $this->createAttributeGroup('Shade', 'multiple');
+
+        ProductCategoryAttributeGroup::query()->create([
+            'root_product_category_id' => $category->getKey(),
+            'product_attribute_group_id' => $color->getKey(),
+            'is_required' => true,
+            'is_variant' => true,
+            'is_image_attribute' => true,
+            'sort_order' => 10,
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.master.product-categories.attribute-groups.update', $category), [
+                'image_attribute_group_id' => $shade->id,
+                'mappings' => [
+                    $color->id => [
+                        'product_attribute_group_id' => $color->id,
+                        'enabled' => '1',
+                        'is_required' => '1',
+                        'is_variant' => '1',
+                        'sort_order' => '10',
+                    ],
+                    $shade->id => [
+                        'product_attribute_group_id' => $shade->id,
+                        'enabled' => '1',
+                        'is_required' => '0',
+                        'is_variant' => '1',
+                        'sort_order' => '20',
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('admin.master.product-categories.attribute-groups.edit', $category));
+
+        $this->assertFalse((bool) ProductCategoryAttributeGroup::query()
+            ->where('root_product_category_id', $category->getKey())
+            ->where('product_attribute_group_id', $color->getKey())
+            ->value('is_image_attribute'));
+        $this->assertTrue(ProductCategoryAttributeGroup::query()
+            ->where('root_product_category_id', $category->getKey())
+            ->where('product_attribute_group_id', $shade->getKey())
+            ->value('is_image_attribute'));
+    }
+
+    public function test_image_attribute_must_be_mapped_and_variant_enabled(): void
+    {
+        $admin = $this->createAdminUser();
+        $category = $this->createCategory('Beauty & Cosmetics');
+        $shade = $this->createAttributeGroup('Shade', 'multiple');
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.attribute-groups.edit', $category))
+            ->put(route('admin.master.product-categories.attribute-groups.update', $category), [
+                'image_attribute_group_id' => $shade->id,
+                'mappings' => [
+                    $shade->id => [
+                        'product_attribute_group_id' => $shade->id,
+                        'enabled' => '0',
+                        'is_required' => '0',
+                        'is_variant' => '1',
+                        'sort_order' => '10',
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('admin.master.product-categories.attribute-groups.edit', $category))
+            ->assertSessionHasErrors('image_attribute_group_id');
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.attribute-groups.edit', $category))
+            ->put(route('admin.master.product-categories.attribute-groups.update', $category), [
+                'image_attribute_group_id' => $shade->id,
+                'mappings' => [
+                    $shade->id => [
+                        'product_attribute_group_id' => $shade->id,
+                        'enabled' => '1',
+                        'is_required' => '0',
+                        'is_variant' => '0',
+                        'sort_order' => '10',
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('admin.master.product-categories.attribute-groups.edit', $category))
+            ->assertSessionHasErrors('image_attribute_group_id');
     }
 
     public function test_admin_can_update_variant_mapping_from_true_to_false(): void

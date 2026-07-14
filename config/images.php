@@ -53,7 +53,7 @@ return [
     ],
 
     'product' => [
-        'max_upload_kb' => 10240,
+        'max_upload_kb' => 3072,
         'quality' => 82,
         'fit' => 'cover',
         'variants' => [

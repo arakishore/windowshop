@@ -176,6 +176,67 @@ class AdminBrandRootCategoryMappingTest extends TestCase
             ->assertSee('data-current-selected="1"', false);
     }
 
+    public function test_existing_product_can_be_updated_when_current_shop_is_inactive(): void
+    {
+        $admin = $this->createAdminUser();
+        $apparel = $this->createCategory('Apparel');
+        $shirts = $this->createCategory('Shirts', $apparel);
+        $inactiveShop = $this->createShop($admin, $apparel, 'inactive');
+
+        $product = Product::query()->create([
+            'merchant_id' => $inactiveShop->merchant_id,
+            'shop_id' => $inactiveShop->getKey(),
+            'root_product_category_id' => $apparel->getKey(),
+            'product_category_id' => $shirts->getKey(),
+            'product_name' => 'Inactive Shop Product',
+            'slug' => 'inactive-shop-product-'.Str::random(6),
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.products.index'))
+            ->assertOk()
+            ->assertSee('Inactive Shop Product')
+            ->assertSee('Demo Shop')
+            ->assertSeeText('(Inactive)');
+
+        $this->actingAs($admin)
+            ->get(route('admin.products.index', ['shop_id' => $inactiveShop->getKey()]))
+            ->assertOk()
+            ->assertSee('Inactive Shop Product')
+            ->assertSeeText('(Inactive)');
+
+        $this->actingAs($admin)
+            ->from(route('admin.products.edit', $product))
+            ->get(route('admin.products.edit', $product))
+            ->assertOk()
+            ->assertSee('Inactive Shop Product')
+            ->assertSee('Demo Shop')
+            ->assertSee('type="hidden" id="shop_id"', false)
+            ->assertDontSee('<select id="shop_id"', false)
+            ->assertDontSee('Status:')
+            ->assertSeeText('(Inactive)');
+
+        $this->actingAs($admin)
+            ->from(route('admin.products.edit', $product))
+            ->put(route('admin.products.update', $product), [
+                'shop_id' => $inactiveShop->getKey(),
+                'product_category_id' => $shirts->getKey(),
+                'brand_id' => null,
+                'product_name' => 'Inactive Shop Product Updated',
+                'short_description' => null,
+                'status' => 'draft',
+            ])
+            ->assertRedirect(route('admin.products.edit', $product))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('products', [
+            'id' => $product->getKey(),
+            'shop_id' => $inactiveShop->getKey(),
+            'product_name' => 'Inactive Shop Product Updated',
+        ]);
+    }
+
     private function createAdminUser(): User
     {
         $user = User::query()->create([
@@ -233,7 +294,7 @@ class AdminBrandRootCategoryMappingTest extends TestCase
         return $brand;
     }
 
-    private function createShop(User $user, ProductCategory $rootCategory): Shop
+    private function createShop(User $user, ProductCategory $rootCategory, string $status = 'active'): Shop
     {
         $merchant = MerchantProfile::query()->firstOrCreate([
             'user_id' => $user->getKey(),
@@ -249,7 +310,7 @@ class AdminBrandRootCategoryMappingTest extends TestCase
             'name' => 'Demo Shop '.Str::random(4),
             'slug' => 'demo-shop-'.Str::random(6),
             'address_line_1' => 'Nashik',
-            'status' => 'active',
+            'status' => $status,
         ]);
     }
 }

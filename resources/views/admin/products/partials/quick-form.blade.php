@@ -5,6 +5,7 @@
     $selectedStatus = old('status', $product?->status ?? 'draft');
     $statusOptions = $product ? $statuses : ['draft' => $statuses['draft']];
     $includeShortDescription = $includeShortDescription ?? false;
+    $selectedShop = $selectedShopId ? $shops->firstWhere('id', (int) $selectedShopId) : null;
 @endphp
 
 @if ($errors->any())
@@ -22,14 +23,29 @@
     <div class="row g-3">
         <div class="col-md-6">
             <label for="shop_id" class="form-label">Shop <span class="text-danger">*</span></label>
-            <select id="shop_id" name="shop_id" class="form-select @error('shop_id') is-invalid @enderror" required>
-                <option value="">Select Shop</option>
-                @foreach($shops as $shop)
-                    <option value="{{ $shop->id }}" data-root-category-id="{{ $shop->root_product_category_id }}" @selected((string) $selectedShopId === (string) $shop->id)>
-                        {{ $shop->name }} @if($shop->merchant) - {{ $shop->merchant->business_name }} @endif
-                    </option>
-                @endforeach
-            </select>
+            @if($product && $selectedShop)
+                <input type="hidden" id="shop_id" name="shop_id" value="{{ $selectedShop->getKey() }}" data-root-category-id="{{ $selectedShop->root_product_category_id }}">
+                <div class="form-control bg-light">
+                    {{ $selectedShop->name }}
+                    @if($selectedShop->merchant)
+                        - {{ $selectedShop->merchant->business_name }}
+                    @endif
+                    <span>(<strong>{{ ucfirst($selectedShop->status) }}</strong>)</span>
+                </div>
+            @else
+                <select id="shop_id" name="shop_id" class="form-select @error('shop_id') is-invalid @enderror" required>
+                    <option value="">Select Shop</option>
+                    @foreach($shops as $shop)
+                        <option value="{{ $shop->id }}" data-root-category-id="{{ $shop->root_product_category_id }}" @selected((string) $selectedShopId === (string) $shop->id)>
+                            {{ $shop->name }}
+                            @if($shop->merchant)
+                                - {{ $shop->merchant->business_name }}
+                            @endif
+                            ({{ ucfirst($shop->status) }})
+                        </option>
+                    @endforeach
+                </select>
+            @endif
             @error('shop_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
 
@@ -100,7 +116,7 @@
             }
 
             const syncCategoryOptions = function () {
-                const selectedShop = shopSelect.options[shopSelect.selectedIndex];
+                const selectedShop = shopSelect.tagName === 'SELECT' ? shopSelect.options[shopSelect.selectedIndex] : shopSelect;
                 const rootCategoryId = selectedShop ? selectedShop.dataset.rootCategoryId : '';
                 let selectedCategoryVisible = false;
                 let selectedBrandVisible = false;
@@ -152,7 +168,10 @@
                 }
             };
 
-            shopSelect.addEventListener('change', syncCategoryOptions);
+            if (shopSelect.tagName === 'SELECT') {
+                shopSelect.addEventListener('change', syncCategoryOptions);
+            }
+
             syncCategoryOptions();
         });
     </script>
