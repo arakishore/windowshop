@@ -121,7 +121,6 @@ class ProductController extends Controller
 
     public function edit(Product $product): View
     {
-        $this->variantManagementService->ensureBaseVariant($product, Auth::user());
         $variantFilters = [
             'search' => request()->query('variant_search', ''),
             'status' => request()->query('variant_status', ''),
@@ -328,9 +327,23 @@ class ProductController extends Controller
 
     private function brands(?Product $product = null): Collection
     {
+        $shopRootCategoryIds = $this->shops($product)
+            ->pluck('root_product_category_id')
+            ->filter()
+            ->unique()
+            ->values();
+
         return Brand::query()
+            ->with('rootProductCategories:id,name')
             ->where(function ($query) use ($product): void {
                 $query->where('status', 'active');
+
+                if ($product?->brand_id) {
+                    $query->orWhere('id', $product->brand_id);
+                }
+            })
+            ->where(function ($query) use ($product, $shopRootCategoryIds): void {
+                $query->whereHas('rootProductCategories', fn ($query) => $query->whereIn('product_categories.id', $shopRootCategoryIds));
 
                 if ($product?->brand_id) {
                     $query->orWhere('id', $product->brand_id);

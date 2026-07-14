@@ -55,6 +55,14 @@ class ProductAttributeMasterTest extends TestCase
             '5xl',
             '6xl',
             'free-size',
+            'shoe-size-5',
+            'shoe-size-6',
+            'shoe-size-7',
+            'shoe-size-8',
+            'shoe-size-9',
+            'shoe-size-10',
+            'shoe-size-11',
+            'shoe-size-12',
         ], $group->values->pluck('code')->all());
     }
 

@@ -2,6 +2,8 @@
 
 namespace Database\Seeders\MasterData;
 
+use App\Models\Brand;
+use App\Models\ProductCategory;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -98,5 +100,53 @@ class BrandSeeder extends Seeder
                 ],
             );
         }
+
+        $this->seedBrandCategoryMappings();
+    }
+
+    private function seedBrandCategoryMappings(): void
+    {
+        $rootCategories = ProductCategory::query()
+            ->whereNull('parent_id')
+            ->where('status', 'active')
+            ->whereNull('deleted_at')
+            ->pluck('id', 'name');
+
+        if ($rootCategories->isEmpty()) {
+            return;
+        }
+
+        $beautyBrands = ['Colorbar', 'Lakme', 'Maybelline', 'Nykaa Cosmetics'];
+        $bagBrands = ['Caprese', 'Lavie', 'Lino Perros', 'Mochi'];
+        $footwearBrands = ['Bata', 'Relaxo', 'Mochi'];
+        $homeBrands = ['Bombay Dyeing'];
+        $genericBrands = ['Other'];
+
+        Brand::query()
+            ->whereNull('deleted_at')
+            ->get()
+            ->each(function (Brand $brand) use ($rootCategories, $beautyBrands, $bagBrands, $footwearBrands, $homeBrands, $genericBrands): void {
+                $categoryNames = ['Apparel'];
+
+                if (in_array($brand->name, $beautyBrands, true)) {
+                    $categoryNames = ['Beauty & Cosmetics'];
+                } elseif (in_array($brand->name, $bagBrands, true)) {
+                    $categoryNames = ['Jewellery & Accessories'];
+                } elseif (in_array($brand->name, $footwearBrands, true)) {
+                    $categoryNames = ['Footwear'];
+                } elseif (in_array($brand->name, $homeBrands, true)) {
+                    $categoryNames = ['Home & Furniture'];
+                } elseif (in_array($brand->name, $genericBrands, true)) {
+                    $categoryNames = $rootCategories->keys()->all();
+                }
+
+                $ids = collect($categoryNames)
+                    ->map(fn (string $name) => $rootCategories[$name] ?? null)
+                    ->filter()
+                    ->values()
+                    ->all();
+
+                $brand->rootProductCategories()->sync($ids);
+            });
     }
 }

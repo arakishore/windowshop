@@ -27,15 +27,33 @@ class DemoProductSeederTest extends TestCase
         }
     }
 
-    public function test_demo_product_seeder_creates_products_without_seeded_variants(): void
+    public function test_demo_product_seeder_creates_one_base_variant_per_seeded_product(): void
     {
         $this->seed(SystemFoundationSeeder::class);
         $this->seed(DemoMerchantSeeder::class);
         $this->seed(DemoShopSeeder::class);
         $this->seed(DemoProductSeeder::class);
 
-        $this->assertGreaterThan(0, DB::table('products')->count());
-        $this->assertSame(0, DB::table('product_variants')->count());
+        $productCount = DB::table('products')->count();
+
+        $this->assertGreaterThan(0, $productCount);
+        $this->assertSame($productCount, DB::table('product_variants')->count());
+        $this->assertSame($productCount, DB::table('product_variants')->where('is_default', true)->count());
+        $this->assertSame(0, DB::table('products')
+            ->leftJoin('product_variants', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('product_variants.id')
+            ->count());
+        $this->assertSame(0, DB::table('product_variants')
+            ->where(function ($query): void {
+                $query->where('mrp', '<=', 0)
+                    ->orWhere('selling_price', '<=', 0);
+            })
+            ->count());
+
+        $initialVariantCount = DB::table('product_variants')->count();
+        $this->seed(DemoProductSeeder::class);
+
+        $this->assertSame($initialVariantCount, DB::table('product_variants')->count());
     }
 
     public function test_demo_product_seeder_uses_category_specific_products_for_beauty_and_bags(): void

@@ -3,6 +3,10 @@
     $selectedStatus = old('status', $brand?->status ?? 'active');
     $removeLogo = old('remove_logo') && $brand?->logo_path;
     $logoMaxMb = (int) ceil(config('images.brand_logo.max_upload_kb', 5120) / 1024);
+    $selectedRootCategoryIds = collect(old(
+        'root_product_category_ids',
+        $brand?->rootProductCategories?->pluck('id')->all() ?? []
+    ))->map(fn ($id) => (string) $id)->all();
 @endphp
 
 @if ($errors->any())
@@ -56,6 +60,39 @@
                 <label for="description" class="form-label">Description</label>
                 <textarea id="description" name="description" rows="4" class="form-control @error('description') is-invalid @enderror">{{ old('description', $brand?->description) }}</textarea>
                 @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+
+            <div class="col-12">
+                <label class="form-label d-block">Applicable Shop Types</label>
+                <div class="border rounded p-3 @error('root_product_category_ids') border-danger @enderror">
+                    @if(($rootProductCategories ?? collect())->isEmpty())
+                        <div class="text-muted">No root product categories are available.</div>
+                    @else
+                        <div class="row g-2">
+                            @foreach($rootProductCategories as $rootCategory)
+                                @php
+                                    $inputId = 'root_product_category_'.$rootCategory->id;
+                                @endphp
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="form-check">
+                                        <input
+                                            id="{{ $inputId }}"
+                                            name="root_product_category_ids[]"
+                                            type="checkbox"
+                                            value="{{ $rootCategory->id }}"
+                                            class="form-check-input"
+                                            @checked(in_array((string) $rootCategory->id, $selectedRootCategoryIds, true))
+                                        >
+                                        <label for="{{ $inputId }}" class="form-check-label">{{ $rootCategory->name }}</label>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+                <div class="form-text">Select the root shop types where this brand should be available.</div>
+                @error('root_product_category_ids')<div class="text-danger small">{{ $message }}</div>@enderror
+                @error('root_product_category_ids.*')<div class="text-danger small">{{ $message }}</div>@enderror
             </div>
 
             <div class="col-12">

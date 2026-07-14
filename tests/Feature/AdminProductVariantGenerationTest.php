@@ -69,6 +69,22 @@ class AdminProductVariantGenerationTest extends TestCase
             ->assertSee($product->variants()->where('is_default', true)->firstOrFail()->name);
     }
 
+    public function test_edit_screen_does_not_repair_missing_base_variant(): void
+    {
+        $admin = $this->createAdminUser();
+        $root = $this->createCategory('Apparel');
+        $leaf = $this->createCategory('T-Shirts', $root);
+        $product = $this->createProduct($admin, $root, $leaf);
+
+        $this->assertSame(0, $product->variants()->count());
+
+        $this->actingAs($admin)
+            ->get(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertOk();
+
+        $this->assertSame(0, $product->fresh()->variants()->count());
+    }
+
     public function test_variants_tab_with_selected_attributes_shows_generate_guidance(): void
     {
         [$admin, $product, $color, $size] = $this->productWithVariantSetup();

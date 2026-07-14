@@ -112,6 +112,7 @@ class ProductVariantGenerationService
 
             foreach ($missingCombinations as $combination) {
                 $variant = ProductVariant::query()->create([
+                    'uuid' => (string) Str::uuid(),
                     'product_id' => $product->getKey(),
                     'shop_id' => $product->shop_id,
                     'sku' => $this->uniqueSku($product, $combination),

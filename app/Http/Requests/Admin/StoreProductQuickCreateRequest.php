@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Brand;
 use App\Models\ProductCategory;
 use App\Models\Shop;
 use Illuminate\Foundation\Http\FormRequest;
@@ -66,6 +67,15 @@ class StoreProductQuickCreateRequest extends FormRequest
 
             if (! $category->isLeaf()) {
                 $validator->errors()->add('product_category_id', 'Please select a leaf product category.');
+            }
+
+            $brandId = $this->integer('brand_id');
+
+            if ($brandId > 0 && ! Brand::query()
+                ->whereKey($brandId)
+                ->whereHas('rootProductCategories', fn ($query) => $query->whereKey($shop->root_product_category_id))
+                ->exists()) {
+                $validator->errors()->add('brand_id', 'The selected brand is not applicable to the selected shop type.');
             }
         });
     }

@@ -14,7 +14,7 @@
 @section('content')
     @php
         $statusClasses = ['active' => 'bg-success', 'inactive' => 'bg-light text-body border'];
-        $hasFilters = $filters['name'] !== '' || $filters['slug'] !== '' || $filters['status'];
+        $hasFilters = $filters['name'] !== '' || $selectedRootCategoryId || $filters['status'];
     @endphp
 
     <div class="card">
@@ -32,9 +32,16 @@
                         <label for="name" class="form-label">Name</label>
                         <input id="name" name="name" type="search" value="{{ $filters['name'] }}" class="form-control" placeholder="Brand name">
                     </div>
-                    <div class="col-md-4">
-                        <label for="slug" class="form-label">Slug</label>
-                        <input id="slug" name="slug" type="search" value="{{ $filters['slug'] }}" class="form-control" placeholder="brand-slug">
+                    <div class="col-md-3">
+                        <label for="root_product_category_id" class="form-label">Applicable Shop Type</label>
+                        <select id="root_product_category_id" name="root_product_category_id" class="form-select">
+                            <option value="">All</option>
+                            @foreach($rootProductCategories as $rootProductCategory)
+                                <option value="{{ $rootProductCategory->getKey() }}" @selected($selectedRootCategoryId === $rootProductCategory->getKey())>
+                                    {{ $rootProductCategory->name }}
+                                </option>
+                            @endforeach
+                        </select>
                     </div>
                     <div class="col-md-2">
                         <label for="status" class="form-label">Status</label>
@@ -44,7 +51,7 @@
                             <option value="inactive" @selected($filters['status'] === 'inactive')>Inactive</option>
                         </select>
                     </div>
-                    <div class="col-md-2 d-flex gap-2">
+                    <div class="col-md-3 d-flex gap-2">
                         <button type="submit" class="btn btn-primary flex-fill">
                             <i class="ph-magnifying-glass me-2"></i>
                             Filter
@@ -65,6 +72,7 @@
                             <th>Logo</th>
                             <th>Brand Name</th>
                             <th>Slug</th>
+                            <th>Applicable Shop Types</th>
                             <th>Sort Order</th>
                             <th>Status</th>
                             <th>Created Date</th>
@@ -93,6 +101,15 @@
                                     @endif
                                 </td>
                                 <td><code>{{ $brand->slug }}</code></td>
+                                <td>
+                                    @forelse($brand->rootProductCategories as $rootProductCategory)
+                                        <span class="badge bg-light text-body border me-1 mb-1">
+                                            {{ $rootProductCategory->name }}
+                                        </span>
+                                    @empty
+                                        <span class="text-muted">-</span>
+                                    @endforelse
+                                </td>
                                 <td>{{ $brand->sort_order }}</td>
                                 <td>
                                     <span class="badge {{ $statusClasses[$brand->status] ?? 'bg-secondary' }}">

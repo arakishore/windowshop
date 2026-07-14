@@ -530,12 +530,23 @@ class AdminProductDescriptionTemplateTest extends TestCase
 
     private function createBrand(string $name = 'Acme'): Brand
     {
-        return Brand::query()->create([
+        $brand = Brand::query()->create([
             'name' => $name,
             'slug' => Str::slug($name).'-'.Str::random(6),
             'status' => 'active',
             'sort_order' => 1,
         ]);
+
+        $rootCategoryIds = ProductCategory::query()
+            ->whereNull('parent_id')
+            ->pluck('id')
+            ->all();
+
+        if ($rootCategoryIds !== []) {
+            $brand->rootProductCategories()->sync($rootCategoryIds);
+        }
+
+        return $brand;
     }
 
     private function createShop(User $user, ?ProductCategory $rootCategory = null): Shop

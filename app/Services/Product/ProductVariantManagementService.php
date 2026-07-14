@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ProductVariantManagementService
@@ -41,6 +42,7 @@ class ProductVariantManagementService
             }
 
             return ProductVariant::query()->create([
+                'uuid' => (string) Str::uuid(),
                 'product_id' => $product->getKey(),
                 'shop_id' => $product->shop_id,
                 'sku' => null,

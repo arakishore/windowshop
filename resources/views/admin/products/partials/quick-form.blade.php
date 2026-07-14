@@ -51,7 +51,7 @@
             <select id="brand_id" name="brand_id" class="form-select @error('brand_id') is-invalid @enderror">
                 <option value="">No Brand</option>
                 @foreach($brands as $brand)
-                    <option value="{{ $brand->id }}" @selected((string) $selectedBrandId === (string) $brand->id)>
+                    <option value="{{ $brand->id }}" data-root-category-ids="{{ $brand->rootProductCategories->pluck('id')->implode(',') }}" data-current-selected="{{ (string) $selectedBrandId === (string) $brand->id ? '1' : '0' }}" @selected((string) $selectedBrandId === (string) $brand->id)>
                         {{ $brand->name }}
                     </option>
                 @endforeach
@@ -93,6 +93,7 @@
         document.addEventListener('DOMContentLoaded', function () {
             const shopSelect = document.getElementById('shop_id');
             const categorySelect = document.getElementById('product_category_id');
+            const brandSelect = document.getElementById('brand_id');
 
             if (!shopSelect || !categorySelect) {
                 return;
@@ -102,6 +103,7 @@
                 const selectedShop = shopSelect.options[shopSelect.selectedIndex];
                 const rootCategoryId = selectedShop ? selectedShop.dataset.rootCategoryId : '';
                 let selectedCategoryVisible = false;
+                let selectedBrandVisible = false;
 
                 Array.from(categorySelect.options).forEach(function (option) {
                     if (!option.value) {
@@ -121,6 +123,32 @@
 
                 if (!selectedCategoryVisible) {
                     categorySelect.value = '';
+                }
+
+                if (!brandSelect) {
+                    return;
+                }
+
+                Array.from(brandSelect.options).forEach(function (option) {
+                    if (!option.value) {
+                        option.hidden = false;
+                        option.disabled = false;
+                        return;
+                    }
+
+                    const rootIds = (option.dataset.rootCategoryIds || '').split(',').filter(Boolean);
+                    const isCurrentSelected = option.dataset.currentSelected === '1';
+                    const belongsToShopType = rootCategoryId && rootIds.includes(rootCategoryId);
+                    option.hidden = !belongsToShopType && !isCurrentSelected;
+                    option.disabled = !belongsToShopType && !isCurrentSelected;
+
+                    if (option.selected && (belongsToShopType || isCurrentSelected)) {
+                        selectedBrandVisible = true;
+                    }
+                });
+
+                if (!selectedBrandVisible) {
+                    brandSelect.value = '';
                 }
             };
 

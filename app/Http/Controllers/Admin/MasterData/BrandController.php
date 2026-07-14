@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\MasterData\StoreBrandRequest;
 use App\Http\Requests\Admin\MasterData\UpdateBrandRequest;
 use App\Models\Brand;
+use App\Models\ProductCategory;
 use App\Services\Image\ImageVariantService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,13 +30,24 @@ class BrandController extends Controller
     {
         $filters = [
             'name' => trim((string) $request->query('name', '')),
-            'slug' => trim((string) $request->query('slug', '')),
+            'root_product_category_id' => $request->query('root_product_category_id'),
             'status' => $request->query('status'),
         ];
 
+        $rootProductCategories = $this->rootProductCategories();
+        $requestedRootCategoryId = (int) $filters['root_product_category_id'];
+        $selectedRootCategoryId = $requestedRootCategoryId
+            && $rootProductCategories->pluck('id')->contains($requestedRootCategoryId)
+                ? $requestedRootCategoryId
+                : null;
+
         $brands = Brand::query()
+            ->with(['rootProductCategories' => fn ($query) => $query->orderBy('sort_order')->orderBy('name')])
             ->when($filters['name'] !== '', fn ($query) => $query->where('name', 'like', "%{$filters['name']}%"))
-            ->when($filters['slug'] !== '', fn ($query) => $query->where('slug', 'like', "%{$filters['slug']}%"))
+            ->when($selectedRootCategoryId, fn ($query) => $query->whereHas(
+                'rootProductCategories',
+                fn ($query) => $query->whereKey($selectedRootCategoryId),
+            ))
             ->when(in_array($filters['status'], ['active', 'inactive'], true), fn ($query) => $query->where('status', $filters['status']))
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -45,6 +57,8 @@ class BrandController extends Controller
         return view('admin.master-data.brands.index', [
             'brands' => $brands,
             'filters' => $filters,
+            'rootProductCategories' => $rootProductCategories,
+            'selectedRootCategoryId' => $selectedRootCategoryId,
         ]);
     }
 
@@ -52,6 +66,7 @@ class BrandController extends Controller
     {
         return view('admin.master-data.brands.create', [
             'brand' => null,
+            'rootProductCategories' => $this->rootProductCategories(),
         ]);
     }
 
@@ -78,6 +93,8 @@ class BrandController extends Controller
             ])->save();
         }
 
+        $brand->rootProductCategories()->sync($request->rootProductCategoryIds());
+
         return redirect()
             ->route('admin.master.brands.index')
             ->with('success', 'Brand created successfully.');
@@ -86,7 +103,8 @@ class BrandController extends Controller
     public function edit(Brand $brand): View
     {
         return view('admin.master-data.brands.edit', [
-            'brand' => $brand,
+            'brand' => $brand->load('rootProductCategories'),
+            'rootProductCategories' => $this->rootProductCategories($brand),
         ]);
     }
 
@@ -121,6 +139,8 @@ class BrandController extends Controller
             'status' => $data['status'],
             'updated_by' => Auth::id(),
         ])->save();
+
+        $brand->rootProductCategories()->sync($request->rootProductCategoryIds());
 
         return redirect()
             ->route('admin.master.brands.edit', $brand)
@@ -157,6 +177,23 @@ class BrandController extends Controller
         return DB::table('products')
             ->where('brand_id', $brand->getKey())
             ->exists();
+    }
+
+    private function rootProductCategories(?Brand $brand = null)
+    {
+        return ProductCategory::query()
+            ->where(function ($query) use ($brand): void {
+                $query->where('status', 'active');
+
+                if ($brand?->exists) {
+                    $query->orWhereHas('brands', fn ($query) => $query->whereKey($brand->getKey()));
+                }
+            })
+            ->whereNull('parent_id')
+            ->whereNull('deleted_at')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
     }
 
     private function replaceLogo(Request $request, Brand $brand, ?string $oldPath): string

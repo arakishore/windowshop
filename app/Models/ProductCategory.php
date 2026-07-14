@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -71,6 +72,16 @@ class ProductCategory extends Model
     public function attributeGroupMappings(): HasMany
     {
         return $this->hasMany(ProductCategoryAttributeGroup::class, 'root_product_category_id');
+    }
+
+    public function brands(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Brand::class,
+            'brand_root_product_categories',
+            'root_product_category_id',
+            'brand_id',
+        )->withTimestamps();
     }
 
     public function getFullPathAttribute(): string

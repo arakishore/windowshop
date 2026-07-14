@@ -2,6 +2,9 @@
 
 namespace Database\Seeders\DemoData;
 
+use App\Models\Product;
+use App\Models\User;
+use App\Services\Product\ProductVariantManagementService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -29,6 +32,8 @@ class DemoProductSeeder extends Seeder
 
             $productCategories = $this->productCategories();
             $brands = $this->brands();
+            $actor = $this->actor();
+            $actorId = $actor?->getKey();
 
             foreach ($shops as $shop) {
                 $rootCategoryId = (int) $shop->root_product_category_id;
@@ -59,6 +64,8 @@ class DemoProductSeeder extends Seeder
                             'meta_description' => $product['short_description'],
                             'status' => $product['status'],
                             'published_at' => $product['status'] === 'active' ? $now : null,
+                            'created_by' => $actorId,
+                            'updated_by' => $actorId,
                             'created_at' => $now,
                             'updated_at' => $now,
                         ]);
@@ -79,6 +86,7 @@ class DemoProductSeeder extends Seeder
                                 'status' => $product['status'],
                                 'published_at' => $product['status'] === 'active' ? $now : null,
                                 'deleted_at' => null,
+                                'updated_by' => $actorId,
                                 'updated_at' => $now,
                             ]);
                     }
@@ -89,6 +97,8 @@ class DemoProductSeeder extends Seeder
                             'slug' => $this->productSlug($product['name'], $productId),
                             'updated_at' => $now,
                         ]);
+
+                    $this->upsertBaseVariant((int) $productId, $actor, $now);
                 }
             }
         });
@@ -334,6 +344,36 @@ class DemoProductSeeder extends Seeder
     private function productSlug(string $name, int $productId): string
     {
         return (Str::slug($name) ?: 'product').'-'.$productId;
+    }
+
+    private function upsertBaseVariant(int $productId, ?User $actor, mixed $now): void
+    {
+        $product = Product::query()->findOrFail($productId);
+        $variant = app(ProductVariantManagementService::class)->ensureBaseVariant($product, $actor);
+        $mrp = 899 + (($productId % 25) * 100);
+        $sellingPrice = max(1, $mrp - 150);
+
+        $variant->forceFill([
+            'name' => $product->product_name,
+            'sku' => 'DEMO-'.$productId,
+            'barcode' => null,
+            'mrp' => $mrp,
+            'selling_price' => $sellingPrice,
+            'cost_price' => max(0, $sellingPrice - 250),
+            'stock_quantity' => 5 + ($productId % 30),
+            'low_stock_threshold' => 2,
+            'status' => 'active',
+            'updated_by' => $actor?->getKey(),
+            'updated_at' => $now,
+        ])->save();
+    }
+
+    private function actor(): ?User
+    {
+        return User::query()
+            ->where('email', 'admin@windowshop.test')
+            ->first()
+            ?? User::query()->where('status', 'active')->orderBy('id')->first();
     }
 
 }
