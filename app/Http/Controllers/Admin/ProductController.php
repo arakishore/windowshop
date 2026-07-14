@@ -157,6 +157,7 @@ class ProductController extends Controller
             'variantFilterOptions' => $this->variantManagementService->filterOptions($product),
             'imageAttributeMapping' => $this->productImageService->imageAttributeMapping($product),
             'imageAttributeValues' => $this->productImageService->selectableImageAttributeValues($product),
+            'imageLimits' => $this->productImageService->imageLimits($product),
             ...$this->sharedData($product),
         ]);
     }

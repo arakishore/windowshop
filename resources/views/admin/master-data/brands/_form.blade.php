@@ -108,6 +108,9 @@
                                 <i class="ph-upload me-1"></i>
                                 {{ $brand?->logo_path ? 'Change Logo' : 'Choose Logo' }}
                             </label>
+                            <button type="button" id="clear_logo" class="btn btn-link btn-sm text-muted">
+                                Clear
+                            </button>
                             <input id="logo" name="logo" type="file" accept=".jpg,.jpeg,.png,.webp" class="d-none @error('logo') is-invalid @enderror">
                             <p class="text-muted mb-1 mt-2">JPG, JPEG, PNG or WEBP. Max {{ $logoMaxMb }}MB.</p>
                             @if($brand?->logo_path)<div class="text-muted small text-break">Current: {{ $brand->logo_path }}</div>@endif
@@ -140,6 +143,8 @@
             const preview = document.getElementById('brand_logo_preview');
             const placeholder = document.getElementById('brand_logo_placeholder');
             const remove = document.getElementById('remove_logo');
+            const clear = document.getElementById('clear_logo');
+            let objectUrl = null;
 
             if (!input || !preview) {
                 return;
@@ -156,7 +161,12 @@
                     remove.checked = false;
                 }
 
-                preview.src = URL.createObjectURL(file);
+                if (objectUrl) {
+                    URL.revokeObjectURL(objectUrl);
+                }
+
+                objectUrl = URL.createObjectURL(file);
+                preview.src = objectUrl;
                 preview.classList.remove('d-none');
 
                 if (placeholder) {
@@ -189,6 +199,43 @@
 
                     if (placeholder) {
                         placeholder.textContent = 'Will remove';
+                        placeholder.classList.remove('d-none');
+                    }
+                });
+            }
+
+            if (clear) {
+                clear.addEventListener('click', function () {
+                    if (objectUrl) {
+                        URL.revokeObjectURL(objectUrl);
+                        objectUrl = null;
+                    }
+
+                    input.value = '';
+
+                    if (remove) {
+                        remove.checked = false;
+                    }
+
+                    const currentSrc = preview.dataset.currentSrc;
+
+                    if (currentSrc) {
+                        preview.src = currentSrc;
+                        preview.classList.remove('d-none');
+
+                        if (placeholder) {
+                            placeholder.textContent = 'Logo';
+                            placeholder.classList.add('d-none');
+                        }
+
+                        return;
+                    }
+
+                    preview.removeAttribute('src');
+                    preview.classList.add('d-none');
+
+                    if (placeholder) {
+                        placeholder.textContent = 'Logo';
                         placeholder.classList.remove('d-none');
                     }
                 });

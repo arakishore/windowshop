@@ -230,6 +230,75 @@ class AdminProductImagesTest extends TestCase
         $this->assertTrue($color->exists);
     }
 
+    public function test_product_without_primary_variant_uses_configured_image_limit(): void
+    {
+        Storage::fake('public');
+        config(['products.images.no_variant_max' => 1]);
+        [$admin, $product] = $this->productFixture();
+
+        $this->actingAs($admin)
+            ->from(route('admin.products.edit', ['product' => $product, 'tab' => 'images']))
+            ->post(route('admin.products.images.store', $product), [
+                'image_groups' => [
+                    'entire' => [
+                        UploadedFile::fake()->image('front.jpg', 900, 900),
+                        UploadedFile::fake()->image('back.jpg', 900, 900),
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'images']))
+            ->assertSessionHasErrors('images');
+
+        $this->assertSame(0, $product->images()->count());
+    }
+
+    public function test_primary_variant_image_limits_are_configurable_per_bucket(): void
+    {
+        Storage::fake('public');
+        config([
+            'products.images.per_variant_value' => 2,
+            'products.images.entire_product' => 1,
+        ]);
+        [$admin, $product, $color, $red] = $this->productFixtureWithImageAttribute();
+
+        $this->actingAs($admin)
+            ->post(route('admin.products.images.store', $product), [
+                'image_groups' => [
+                    'entire' => [UploadedFile::fake()->image('general.jpg', 900, 900)],
+                    $red->getKey() => [
+                        UploadedFile::fake()->image('red-front.jpg', 900, 900),
+                        UploadedFile::fake()->image('red-back.jpg', 900, 900),
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'images']));
+
+        $this->assertSame(3, $product->images()->count());
+
+        $this->actingAs($admin)
+            ->from(route('admin.products.edit', ['product' => $product, 'tab' => 'images']))
+            ->post(route('admin.products.images.store', $product), [
+                'image_groups' => [
+                    'entire' => [UploadedFile::fake()->image('general-extra.jpg', 900, 900)],
+                ],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'images']))
+            ->assertSessionHasErrors('images');
+
+        $this->actingAs($admin)
+            ->from(route('admin.products.edit', ['product' => $product, 'tab' => 'images']))
+            ->post(route('admin.products.images.store', $product), [
+                'image_groups' => [
+                    $red->getKey() => [UploadedFile::fake()->image('red-extra.jpg', 900, 900)],
+                ],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'images']))
+            ->assertSessionHasErrors('images');
+
+        $this->assertSame(3, $product->images()->count());
+        $this->assertTrue($color->exists);
+    }
+
     public function test_gallery_prefers_variant_image_attribute_then_general_then_primary(): void
     {
         [$admin, $product, $color, $red, $blue] = $this->productFixtureWithImageAttribute();

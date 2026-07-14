@@ -24,7 +24,7 @@ class StoreProductImagesRequest extends FormRequest
         ];
 
         return [
-            'images' => ['nullable', 'array', 'max:8', 'required_without:image_groups'],
+            'images' => ['nullable', 'array', 'required_without:image_groups'],
             'images.*' => ['required', ...$imageRules],
             'attribute_value_id' => ['nullable', 'integer', Rule::exists('product_attribute_group_values', 'id')],
             'image_groups' => ['nullable', 'array', 'required_without:images'],

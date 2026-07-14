@@ -76,7 +76,7 @@ class ProductImageService
             return;
         }
 
-        $this->assertCanAddActiveImages($product, $fileCount);
+        $this->assertCanAddUploadGroups($product, $normalizedGroups);
 
         DB::transaction(function () use ($product, $normalizedGroups, $actorId): void {
             $nextSortOrder = ((int) $product->images()->max('sort_order')) + 1;
@@ -148,7 +148,7 @@ class ProductImageService
                 ])->save();
             }
 
-            $this->assertCanHaveActiveImages($product);
+            $this->assertCurrentImageLimits($product);
 
             if ($primaryImageId !== null) {
                 $primary = ProductImage::query()
@@ -383,32 +383,132 @@ class ProductImageService
         return "p{$product->getKey()}-img{$image->getKey()}";
     }
 
-    private function assertCanAddActiveImages(Product $product, int $count): void
+    private function assertCurrentImageLimits(Product $product): void
     {
-        $activeCount = ProductImage::query()
+        $limits = $this->imageLimits($product);
+        $activeImages = ProductImage::query()
+            ->with('attributeValues')
             ->where('product_id', $product->getKey())
             ->where('status', 'active')
-            ->count();
+            ->get();
 
-        if ($activeCount + $count > 8) {
+        if ($activeImages->count() > $limits['total']) {
             throw ValidationException::withMessages([
-                'images' => 'A product can have a maximum of 8 active images.',
+                'images' => "A product can have a maximum of {$limits['total']} active images.",
             ]);
+        }
+
+        $entireCount = $activeImages->filter(fn (ProductImage $image): bool => $image->attributeValues->isEmpty())->count();
+        $entireLimit = $limits['has_primary_variant'] ? $limits['entire_product'] : $limits['total'];
+
+        if ($entireCount > $entireLimit) {
+            throw ValidationException::withMessages([
+                'images' => "A product can have a maximum of {$entireLimit} entire product images.",
+            ]);
+        }
+
+        if (! $limits['has_primary_variant']) {
+            return;
+        }
+
+        foreach ($limits['value_ids'] as $valueId) {
+            $count = $activeImages
+                ->filter(fn (ProductImage $image): bool => $image->attributeValues->pluck('id')->contains($valueId))
+                ->count();
+
+            if ($count > $limits['per_variant_value']) {
+                throw ValidationException::withMessages([
+                    'images' => "A product can have a maximum of {$limits['per_variant_value']} images per {$limits['attribute_label']} value.",
+                ]);
+            }
         }
     }
 
-    private function assertCanHaveActiveImages(Product $product): void
+    /**
+     * @param array<int, array{attribute_value_id: int|null, files: array<int, UploadedFile>}> $groups
+     */
+    private function assertCanAddUploadGroups(Product $product, array $groups): void
     {
+        $limits = $this->imageLimits($product);
+        $newTotal = collect($groups)->sum(fn (array $group): int => count($group['files']));
         $activeCount = ProductImage::query()
             ->where('product_id', $product->getKey())
             ->where('status', 'active')
             ->count();
 
-        if ($activeCount > 8) {
+        if ($activeCount + $newTotal > $limits['total']) {
             throw ValidationException::withMessages([
-                'images' => 'A product can have a maximum of 8 active images.',
+                'images' => "A product can have a maximum of {$limits['total']} active images.",
             ]);
         }
+
+        $newEntireCount = collect($groups)
+            ->filter(fn (array $group): bool => $group['attribute_value_id'] === null)
+            ->sum(fn (array $group): int => count($group['files']));
+        $entireLimit = $limits['has_primary_variant'] ? $limits['entire_product'] : $limits['total'];
+        $activeEntireCount = ProductImage::query()
+            ->where('product_id', $product->getKey())
+            ->where('status', 'active')
+            ->whereDoesntHave('attributeValues')
+            ->count();
+
+        if ($activeEntireCount + $newEntireCount > $entireLimit) {
+            throw ValidationException::withMessages([
+                'images' => "A product can have a maximum of {$entireLimit} entire product images.",
+            ]);
+        }
+
+        if (! $limits['has_primary_variant']) {
+            return;
+        }
+
+        foreach ($limits['value_ids'] as $valueId) {
+            $newValueCount = collect($groups)
+                ->filter(fn (array $group): bool => (int) $group['attribute_value_id'] === (int) $valueId)
+                ->sum(fn (array $group): int => count($group['files']));
+
+            if ($newValueCount === 0) {
+                continue;
+            }
+
+            $activeValueCount = ProductImage::query()
+                ->where('product_id', $product->getKey())
+                ->where('status', 'active')
+                ->whereHas('attributeValues', fn ($query) => $query->whereKey($valueId))
+                ->count();
+
+            if ($activeValueCount + $newValueCount > $limits['per_variant_value']) {
+                throw ValidationException::withMessages([
+                    'images' => "A product can have a maximum of {$limits['per_variant_value']} images per {$limits['attribute_label']} value.",
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @return array{has_primary_variant: bool, total: int, per_variant_value: int, entire_product: int, value_ids: array<int, int>, attribute_label: string}
+     */
+    public function imageLimits(Product $product): array
+    {
+        $mapping = $this->imageAttributeMapping($product);
+        $valueIds = $this->selectableImageAttributeValues($product)
+            ->pluck('id')
+            ->map(fn (int|string $id): int => (int) $id)
+            ->values()
+            ->all();
+        $hasPrimaryVariant = $mapping !== null && $valueIds !== [];
+        $noVariantMax = max(1, (int) config('products.images.no_variant_max', 8));
+        $perVariantValue = max(1, (int) config('products.images.per_variant_value', 2));
+        $entireProduct = max(0, (int) config('products.images.entire_product', 2));
+
+        return [
+            'has_primary_variant' => $hasPrimaryVariant,
+            'total' => $hasPrimaryVariant ? (count($valueIds) * $perVariantValue) + $entireProduct : $noVariantMax,
+            'per_variant_value' => $perVariantValue,
+            'entire_product' => $entireProduct,
+            'value_ids' => $valueIds,
+            'attribute_label' => $mapping?->group?->name ?? 'primary variant',
+        ];
     }
 
     /**

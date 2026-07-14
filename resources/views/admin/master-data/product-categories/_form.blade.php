@@ -80,6 +80,9 @@
                                 <i class="ph-upload me-1"></i>
                                 Choose image
                             </label>
+                            <button type="button" id="clear_image" class="btn btn-link btn-sm text-muted">
+                                Clear
+                            </button>
                             <input id="image" name="image" type="file" accept=".jpg,.jpeg,.png,.webp" class="d-none @error('image') is-invalid @enderror">
                             <p class="text-muted mb-1 mt-2">JPG, JPEG, PNG or WEBP. Max {{ $imageMaxMb }}MB.</p>
                             @if($category?->image_path)<div class="text-muted small text-break">Current: {{ $category->image_path }}</div>@endif
@@ -112,6 +115,8 @@
             const preview = document.getElementById('category_image_preview');
             const placeholder = document.getElementById('category_image_placeholder');
             const remove = document.getElementById('remove_image');
+            const clear = document.getElementById('clear_image');
+            let objectUrl = null;
 
             if (!input || !preview) {
                 return;
@@ -128,7 +133,12 @@
                     remove.checked = false;
                 }
 
-                preview.src = URL.createObjectURL(file);
+                if (objectUrl) {
+                    URL.revokeObjectURL(objectUrl);
+                }
+
+                objectUrl = URL.createObjectURL(file);
+                preview.src = objectUrl;
                 preview.classList.remove('d-none');
 
                 if (placeholder) {
@@ -161,6 +171,43 @@
 
                     if (placeholder) {
                         placeholder.textContent = 'Will remove';
+                        placeholder.classList.remove('d-none');
+                    }
+                });
+            }
+
+            if (clear) {
+                clear.addEventListener('click', function () {
+                    if (objectUrl) {
+                        URL.revokeObjectURL(objectUrl);
+                        objectUrl = null;
+                    }
+
+                    input.value = '';
+
+                    if (remove) {
+                        remove.checked = false;
+                    }
+
+                    const currentSrc = preview.dataset.currentSrc;
+
+                    if (currentSrc) {
+                        preview.src = currentSrc;
+                        preview.classList.remove('d-none');
+
+                        if (placeholder) {
+                            placeholder.textContent = 'Image';
+                            placeholder.classList.add('d-none');
+                        }
+
+                        return;
+                    }
+
+                    preview.removeAttribute('src');
+                    preview.classList.add('d-none');
+
+                    if (placeholder) {
+                        placeholder.textContent = 'Image';
                         placeholder.classList.remove('d-none');
                     }
                 });

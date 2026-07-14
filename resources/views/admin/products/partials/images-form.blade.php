@@ -1,5 +1,6 @@
 @php
     $imageMaxMb = (int) ceil(config('images.product.max_upload_kb', 3072) / 1024);
+    $imageLimits = $imageLimits ?? ['total' => 8, 'has_primary_variant' => false, 'per_variant_value' => 2, 'entire_product' => 2, 'attribute_label' => 'primary variant'];
 @endphp
 
 <div class="card-body">
@@ -14,12 +15,28 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('admin.products.images.store', $product) }}" enctype="multipart/form-data" class="border rounded p-3 mb-3">
+    @php
+        $activeImageCount = $product->images->where('status', 'active')->count();
+        $activeEntireImageCount = $product->images
+            ->where('status', 'active')
+            ->filter(fn ($image) => $image->attributeValues->isEmpty())
+            ->count();
+        $totalRemainingImages = max(0, (int) $imageLimits['total'] - $activeImageCount);
+    @endphp
+
+    <form method="POST" action="{{ route('admin.products.images.store', $product) }}" enctype="multipart/form-data" class="border rounded p-3 mb-3 js-product-images-upload-form" data-total-remaining="{{ $totalRemainingImages }}">
         @csrf
         <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-2 mb-3">
             <div>
                 <div class="fw-semibold">Upload Images</div>
-                <div class="text-muted small">JPG, JPEG, PNG, or WebP. Maximum {{ $imageMaxMb }} MB each. Maximum 8 active images.</div>
+                <div class="text-muted small">
+                    JPG, JPEG, PNG, or WebP. Maximum {{ $imageMaxMb }} MB each.
+                    Maximum {{ $imageLimits['total'] }} active images.
+                    {{ $totalRemainingImages }} upload slot{{ $totalRemainingImages === 1 ? '' : 's' }} remaining.
+                    @if($imageLimits['has_primary_variant'])
+                        {{ $imageLimits['entire_product'] }} entire product and {{ $imageLimits['per_variant_value'] }} per {{ $imageLimits['attribute_label'] }} value.
+                    @endif
+                </div>
                 @if($imageAttributeMapping && $imageAttributeValues->isEmpty())
                     <div class="text-warning small">Select {{ $imageAttributeMapping->group?->name }} values in the Attributes tab before mapping images to them.</div>
                 @elseif(! $imageAttributeMapping)
@@ -42,27 +59,40 @@
 
         <div class="row g-3">
             @php
+                $entireRemainingImages = $imageLimits['has_primary_variant']
+                    ? max(0, (int) $imageLimits['entire_product'] - $activeEntireImageCount)
+                    : $totalRemainingImages;
                 $uploadTargets = collect([[
                     'key' => 'entire',
-                    'label' => 'Entire Product',
+                    'label' => 'Entire Product'.($imageLimits['has_primary_variant'] ? ' (max '.$imageLimits['entire_product'].')' : ' (max '.$imageLimits['total'].')'),
+                    'remaining' => $entireRemainingImages,
                     'input_id' => 'product_images_entire',
                     'name' => 'image_groups[entire][]',
                 ]]);
 
                 if ($imageAttributeMapping && $imageAttributeValues->isNotEmpty()) {
-                    $uploadTargets = $uploadTargets->merge($imageAttributeValues->map(fn ($value) => [
-                        'key' => (string) $value->getKey(),
-                        'label' => ($imageAttributeMapping->group?->name ?? 'Attribute').': '.$value->name,
-                        'input_id' => 'product_images_attribute_'.$value->getKey(),
-                        'name' => 'image_groups['.$value->getKey().'][]',
-                    ]));
+                    $uploadTargets = $uploadTargets->merge($imageAttributeValues->map(function ($value) use ($product, $imageAttributeMapping, $imageLimits) {
+                        $activeValueImageCount = $product->images
+                            ->where('status', 'active')
+                            ->filter(fn ($image) => $image->attributeValues->pluck('id')->contains($value->getKey()))
+                            ->count();
+
+                        return [
+                            'key' => (string) $value->getKey(),
+                            'label' => ($imageAttributeMapping->group?->name ?? 'Attribute').': '.$value->name.' (max '.$imageLimits['per_variant_value'].')',
+                            'remaining' => max(0, (int) $imageLimits['per_variant_value'] - $activeValueImageCount),
+                            'input_id' => 'product_images_attribute_'.$value->getKey(),
+                            'name' => 'image_groups['.$value->getKey().'][]',
+                        ];
+                    }));
                 }
             @endphp
 
             @foreach($uploadTargets as $target)
                 <div class="col-lg-4 col-md-6">
-                    <div class="card border-dashed p-3 mb-0 h-100">
+                    <div class="card border-dashed p-3 mb-0 h-100 js-product-images-upload-card" data-remaining="{{ $target['remaining'] }}" data-label="{{ $target['label'] }}">
                         <div class="fw-semibold mb-2">{{ $target['label'] }}</div>
+                        <div class="text-muted small mb-2">{{ $target['remaining'] }} slot{{ $target['remaining'] === 1 ? '' : 's' }} remaining</div>
                         <div class="js-product-images-preview d-flex flex-wrap gap-2 mb-3">
                             <div class="js-product-images-placeholder rounded bg-light border d-flex align-items-center justify-content-center text-muted" style="width: 96px; height: 96px;">
                                 Images
@@ -73,9 +103,13 @@
                                 <i class="ph-upload me-1"></i>
                                 Choose Images
                             </label>
+                            <button type="button" class="btn btn-link btn-sm text-muted js-product-images-clear">
+                                Clear
+                            </button>
                             <input id="{{ $target['input_id'] }}" name="{{ $target['name'] }}" type="file" class="d-none js-product-images-input" accept="image/jpeg,image/png,image/webp" multiple>
                             <span class="js-product-images-count text-muted small ms-2">No files selected</span>
                         </div>
+                        <div class="js-product-images-error text-danger small mt-2 d-none"></div>
                     </div>
                 </div>
             @endforeach
@@ -191,11 +225,119 @@
 @push('scripts')
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            const uploadForm = document.querySelector('.js-product-images-upload-form');
             const selectAll = document.querySelector('.js-product-image-select-all');
             const checkboxes = Array.from(document.querySelectorAll('.js-product-image-checkbox'));
             const bulkDeleteButton = document.querySelector('.js-bulk-delete-product-images');
             const bulkDeleteForm = document.getElementById('bulk-delete-product-images');
             const previewUrlsByInput = new Map();
+
+            const selectedUploadFiles = function (input) {
+                return Array.from(input.files || [])
+                    .filter(function (file) {
+                        return /^image\/(jpeg|jpg|png|webp)$/i.test(file.type);
+                    });
+            };
+
+            const clearUploadError = function (card) {
+                const error = card ? card.querySelector('.js-product-images-error') : null;
+
+                if (!error) {
+                    return;
+                }
+
+                error.textContent = '';
+                error.classList.add('d-none');
+            };
+
+            const setUploadError = function (card, message) {
+                const error = card ? card.querySelector('.js-product-images-error') : null;
+
+                if (!error) {
+                    return;
+                }
+
+                error.textContent = message;
+                error.classList.remove('d-none');
+            };
+
+            const clearUploadSelection = function (card) {
+                const input = card ? card.querySelector('.js-product-images-input') : null;
+                const uploadPreview = card ? card.querySelector('.js-product-images-preview') : null;
+                const uploadPlaceholder = card ? card.querySelector('.js-product-images-placeholder') : null;
+                const uploadCount = card ? card.querySelector('.js-product-images-count') : null;
+
+                if (!input || !uploadPreview) {
+                    return;
+                }
+
+                (previewUrlsByInput.get(input) || []).forEach(function (url) {
+                    URL.revokeObjectURL(url);
+                });
+                previewUrlsByInput.set(input, []);
+
+                input.value = '';
+
+                Array.from(uploadPreview.querySelectorAll('.js-product-upload-preview')).forEach(function (node) {
+                    node.remove();
+                });
+
+                if (uploadPlaceholder) {
+                    uploadPlaceholder.classList.remove('d-none');
+                }
+
+                if (uploadCount) {
+                    uploadCount.textContent = 'No files selected';
+                }
+
+                clearUploadError(card);
+            };
+
+            const validateUploadSelection = function () {
+                if (!uploadForm) {
+                    return true;
+                }
+
+                let isValid = true;
+                let selectedTotal = 0;
+                const totalRemaining = Number(uploadForm.dataset.totalRemaining || 0);
+
+                document.querySelectorAll('.js-product-images-upload-card').forEach(function (card) {
+                    clearUploadError(card);
+
+                    const input = card.querySelector('.js-product-images-input');
+                    const selectedCount = input ? selectedUploadFiles(input).length : 0;
+                    const remaining = Number(card.dataset.remaining || 0);
+                    selectedTotal += selectedCount;
+
+                    if (selectedCount > remaining) {
+                        isValid = false;
+                        setUploadError(card, 'You can upload only ' + remaining + ' more image' + (remaining === 1 ? '' : 's') + ' here.');
+                    }
+                });
+
+                if (selectedTotal > totalRemaining) {
+                    isValid = false;
+
+                    const firstCardWithFiles = Array.from(document.querySelectorAll('.js-product-images-upload-card'))
+                        .find(function (card) {
+                            const input = card.querySelector('.js-product-images-input');
+                            return input && selectedUploadFiles(input).length > 0;
+                        });
+
+                    setUploadError(firstCardWithFiles, 'You selected ' + selectedTotal + ' images, but only ' + totalRemaining + ' total upload slot' + (totalRemaining === 1 ? '' : 's') + ' remain.');
+                }
+
+                return isValid;
+            };
+
+            if (uploadForm) {
+                uploadForm.addEventListener('submit', function (event) {
+                    if (!validateUploadSelection()) {
+                        event.preventDefault();
+                    }
+                });
+            }
 
             document.querySelectorAll('.js-product-images-input').forEach(function (uploadInput) {
                 uploadInput.addEventListener('change', function () {
@@ -219,10 +361,9 @@
                         node.remove();
                     });
 
-                    const files = Array.from(uploadInput.files || [])
-                        .filter(function (file) {
-                            return /^image\/(jpeg|jpg|png|webp)$/i.test(file.type);
-                        });
+                    clearUploadError(card);
+
+                    const files = selectedUploadFiles(uploadInput);
 
                     if (uploadPlaceholder) {
                         uploadPlaceholder.classList.toggle('d-none', files.length > 0);
@@ -254,6 +395,15 @@
                         wrapper.appendChild(image);
                         uploadPreview.appendChild(wrapper);
                     });
+
+                    validateUploadSelection();
+                });
+            });
+
+            document.querySelectorAll('.js-product-images-clear').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    clearUploadSelection(button.closest('.js-product-images-upload-card'));
+                    validateUploadSelection();
                 });
             });
 

@@ -226,6 +226,9 @@
                                         <i class="ph-upload me-1"></i>
                                         Choose image
                                     </label>
+                                    <button type="button" class="btn btn-link btn-sm text-muted js-clear-image-preview" data-input-id="logo">
+                                        Clear
+                                    </button>
                                     <input id="logo" name="logo" type="file" accept=".jpg,.jpeg,.png,.webp" class="d-none @error('logo') is-invalid @enderror">
                                     <p class="text-muted mb-1 mt-2">JPG, JPEG, PNG or WEBP. Max {{ $logoMaxMb }}MB.</p>
                                     @if($shop?->logo_path)<div class="text-muted small text-break">Current: {{ $shop->logo_path }}</div>@endif
@@ -255,6 +258,9 @@
                                         <i class="ph-upload me-1"></i>
                                         Choose image
                                     </label>
+                                    <button type="button" class="btn btn-link btn-sm text-muted js-clear-image-preview" data-input-id="banner">
+                                        Clear
+                                    </button>
                                     <input id="banner" name="banner" type="file" accept=".jpg,.jpeg,.png,.webp" class="d-none @error('banner') is-invalid @enderror">
                                     <p class="text-muted mb-1 mt-2">JPG, JPEG, PNG or WEBP. Max {{ $bannerMaxMb }}MB.</p>
                                     @if($shop?->banner_path)<div class="text-muted small text-break">Current: {{ $shop->banner_path }}</div>@endif
@@ -381,6 +387,8 @@
                 const preview = document.getElementById(previewId);
                 const placeholder = document.getElementById(placeholderId);
                 const remove = document.getElementById(removeId);
+                const clear = document.querySelector('.js-clear-image-preview[data-input-id="' + inputId + '"]');
+                let objectUrl = null;
 
                 if (!input || !preview) {
                     return;
@@ -397,7 +405,12 @@
                         remove.checked = false;
                     }
 
-                    preview.src = URL.createObjectURL(file);
+                    if (objectUrl) {
+                        URL.revokeObjectURL(objectUrl);
+                    }
+
+                    objectUrl = URL.createObjectURL(file);
+                    preview.src = objectUrl;
                     preview.classList.remove('d-none');
 
                     if (placeholder) {
@@ -425,11 +438,52 @@
                         }
 
                         input.value = '';
+                        if (objectUrl) {
+                            URL.revokeObjectURL(objectUrl);
+                            objectUrl = null;
+                        }
                         preview.removeAttribute('src');
                         preview.classList.add('d-none');
 
                         if (placeholder) {
                             placeholder.textContent = 'Will remove';
+                            placeholder.classList.remove('d-none');
+                        }
+                    });
+                }
+
+                if (clear) {
+                    clear.addEventListener('click', function () {
+                        if (objectUrl) {
+                            URL.revokeObjectURL(objectUrl);
+                            objectUrl = null;
+                        }
+
+                        input.value = '';
+
+                        if (remove) {
+                            remove.checked = false;
+                        }
+
+                        const currentSrc = preview.dataset.currentSrc;
+
+                        if (currentSrc) {
+                            preview.src = currentSrc;
+                            preview.classList.remove('d-none');
+
+                            if (placeholder) {
+                                placeholder.textContent = emptyLabel;
+                                placeholder.classList.add('d-none');
+                            }
+
+                            return;
+                        }
+
+                        preview.removeAttribute('src');
+                        preview.classList.add('d-none');
+
+                        if (placeholder) {
+                            placeholder.textContent = emptyLabel;
                             placeholder.classList.remove('d-none');
                         }
                     });
