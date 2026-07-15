@@ -1,11 +1,11 @@
-{{-- Purpose: Lists products for admin search, filtering, and management. --}}
-@extends('layouts.admin')
+{{-- Purpose: Lists products for the merchant active shop. --}}
+@extends('layouts.merchant')
 
 @section('breadcrumb')
     <x-page-header
         title="Products"
-        :breadcrumbs="['Admin' => route('admin.dashboard'), 'Products' => null]"
-        :action-url="route('admin.products.create')"
+        :breadcrumbs="['Merchant' => route('merchant.dashboard'), 'Products' => null]"
+        :action-url="route('merchant.products.create')"
         action-label="Add Product"
         action-icon="ph-plus"
     />
@@ -13,12 +13,15 @@
 
 @section('content')
     @php
-        $hasFilters = $filters['search'] !== '' || $filters['shop_id'] || $filters['status'];
+        $hasFilters = $filters['search'] !== '' || $filters['status'];
     @endphp
 
     <div class="card">
         <div class="card-header d-flex align-items-center justify-content-between">
-            <h5 class="mb-0">Product List</h5>
+            <div>
+                <h5 class="mb-0">Product List</h5>
+                <div class="text-muted small">{{ $activeShop->name }}</div>
+            </div>
             <a href="#product-filter-collapse" class="text-body collapsed product-filter-toggle" data-bs-toggle="collapse" aria-expanded="false" aria-controls="product-filter-collapse">
                 <i class="ph-arrow-circle-down"></i>
             </a>
@@ -26,27 +29,12 @@
 
         <div class="collapse {{ $hasFilters ? 'show' : '' }}" id="product-filter-collapse">
             <div class="card-body border-bottom">
-                <form method="GET" action="{{ route('admin.products.index') }}" class="row g-3 align-items-end">
-                    <div class="col-md-4">
+                <form method="GET" action="{{ route('merchant.products.index') }}" class="row g-3 align-items-end">
+                    <div class="col-md-6">
                         <label for="search" class="form-label">Search</label>
                         <input id="search" name="search" type="search" value="{{ $filters['search'] }}" class="form-control" placeholder="Product name, slug, or brand">
                     </div>
-                    <div class="col-md-4">
-                        <label for="shop_id" class="form-label">Shop</label>
-                        <select id="shop_id" name="shop_id" class="form-select">
-                            <option value="">All</option>
-                            @foreach($shops as $shop)
-                                <option value="{{ $shop->id }}" @selected((string) $filters['shop_id'] === (string) $shop->id)>
-                                    {{ $shop->name }}
-                                    @if($shop->merchant)
-                                        - {{ $shop->merchant->business_name }}
-                                    @endif
-                                    ({{ ucfirst($shop->status) }})
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label for="status" class="form-label">Status</label>
                         <select id="status" name="status" class="form-select">
                             <option value="">All</option>
@@ -55,12 +43,12 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-md-2 d-flex gap-2">
+                    <div class="col-md-3 d-flex gap-2">
                         <button type="submit" class="btn btn-primary flex-fill">
                             <i class="ph-magnifying-glass me-2"></i>
                             Filter
                         </button>
-                        <a href="{{ route('admin.products.index') }}" class="btn btn-light">Reset</a>
+                        <a href="{{ route('merchant.products.index') }}" class="btn btn-light">Reset</a>
                     </div>
                 </form>
             </div>
@@ -69,26 +57,21 @@
         @if($products->isEmpty())
             <x-empty-state icon="ph-package" title="No products found" message="Create a product or adjust the current filters." />
         @else
-            <form method="POST" action="{{ route('admin.products.bulk-action') }}" class="js-bulk-product-form">
+            <form method="POST" action="{{ route('merchant.products.bulk-action') }}" class="js-bulk-product-form">
                 @csrf
                 <div class="card-body border-bottom d-flex flex-wrap align-items-center gap-2">
                     <div class="input-group" style="max-width: 280px;">
                         <label class="input-group-text" for="bulk_action">Bulk Actions</label>
                         <select id="bulk_action" name="action" class="form-select" required>
                             <option value="">Choose</option>
-                            @if($isTrash)
-                                <option value="restore_trash">Restore as Draft</option>
-                                <option value="force_delete">Delete Permanently</option>
+                            @if($filters['status'] === 'archived')
+                                <option value="restore_archive">Restore from Archive</option>
                             @else
-                                @if($filters['status'] === 'archived')
-                                    <option value="restore_archive">Restore from Archive</option>
-                                @else
-                                    <option value="mark_active">Mark Active</option>
-                                    <option value="mark_inactive">Mark Inactive</option>
-                                    <option value="archive">Archive</option>
-                                @endif
-                                <option value="delete">Delete to Trash</option>
+                                <option value="mark_active">Mark Active</option>
+                                <option value="mark_inactive">Mark Inactive</option>
+                                <option value="archive">Archive</option>
                             @endif
+                            <option value="delete">Delete to Trash</option>
                         </select>
                     </div>
                     <button type="button" class="btn btn-light js-bulk-product-submit">
@@ -106,11 +89,10 @@
                                 <input type="checkbox" class="form-check-input js-select-all-products" aria-label="Select all products">
                             </th>
                             <th>Product</th>
-                            <th>Shop</th>
                             <th>Product Category</th>
                             <th>Brand</th>
                             <th>Status</th>
-                            <th>{{ $isTrash ? 'Deleted Details' : 'Created Date' }}</th>
+                            <th>Created Date</th>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
@@ -135,84 +117,47 @@
                                         </div>
                                     </div>
                                 </td>
-                                <td>
-                                    <div>{{ $product->shop?->name ?? '-' }}</div>
-                                    @if($product->shop?->merchant)
-                                        <div class="fs-sm text-muted">{{ $product->shop->merchant->business_name }}</div>
-                                    @endif
-                                    @if($product->shop && $product->shop->status !== 'active')
-                                        <div class="fs-sm text-muted">({{ ucfirst($product->shop->status) }})</div>
-                                    @endif
-                                </td>
                                 <td>{{ $product->category?->name ?? '-' }}</td>
                                 <td>{{ $product->brand?->name ?? '-' }}</td>
                                 <td>
-                                    @if($isTrash)
-                                        <span class="badge {{ $statuses['trash']['badge_class'] }}">Trash</span>
-                                        <div class="fs-sm text-muted">{{ $statuses[$product->status]['label'] ?? ucfirst($product->status) }} before delete</div>
-                                    @else
-                                        <span class="badge {{ $statuses[$product->status]['badge_class'] ?? 'bg-secondary' }}">
-                                            {{ $statuses[$product->status]['label'] ?? ucfirst($product->status) }}
-                                        </span>
-                                    @endif
+                                    <span class="badge {{ $statuses[$product->status]['badge_class'] ?? 'bg-secondary' }}">
+                                        {{ $statuses[$product->status]['label'] ?? ucfirst($product->status) }}
+                                    </span>
                                 </td>
-                                <td>
-                                    @if($isTrash)
-                                        <div>{{ $product->deleted_at?->format('d M Y H:i') }}</div>
-                                        <div class="fs-sm text-muted">By {{ $product->deletedBy?->name ?? 'System' }}</div>
-                                    @else
-                                        {{ $product->created_at?->format('d M Y') }}
-                                    @endif
-                                </td>
+                                <td>{{ $product->created_at?->format('d M Y') }}</td>
                                 <td class="text-center">
                                     <div class="list-icons justify-content-center">
-                                        @if($isTrash)
-                                            <form method="POST" action="{{ route('admin.products.restore-trash', $product) }}" class="d-inline js-confirm-action-form">
+                                        <a href="{{ route('merchant.products.edit', $product) }}" class="list-icons-item text-primary" data-bs-popup="tooltip" title="{{ $product->status === 'archived' ? 'View' : 'Edit' }}">
+                                            <i class="ph-pencil-simple"></i>
+                                        </a>
+                                        @if($product->status === 'archived')
+                                            <form method="POST" action="{{ route('merchant.products.restore-archive', $product) }}" class="d-inline js-confirm-action-form">
                                                 @csrf
-                                                <button type="button" class="list-icons-item text-success border-0 bg-transparent p-0 js-confirm-action" data-bs-popup="tooltip" title="Restore" data-title="Restore Product" data-message="Restore Product?<br><br>The product will be restored as Draft and must be reviewed before activation." data-confirm-label="Yes, Restore" data-confirm-class="btn-success">
+                                                <button type="button" class="list-icons-item text-success border-0 bg-transparent p-0 js-confirm-action" data-bs-popup="tooltip" title="Restore from Archive" data-title="Restore Product" data-message="Restore this archived product?<br><br>The product will be restored as Draft and must be reviewed before activation." data-confirm-label="Yes, Restore" data-confirm-class="btn-success">
                                                     <i class="ph-arrow-clockwise"></i>
                                                 </button>
                                             </form>
-                                            <form method="POST" action="{{ route('admin.products.force-destroy', $product) }}" class="d-inline js-confirm-action-form">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="button" class="list-icons-item text-danger border-0 bg-transparent p-0 js-confirm-action" data-bs-popup="tooltip" title="Delete Permanently" data-title="Permanently Delete Product" data-message="Permanently Delete Product?<br><br>This action cannot be undone. Product images and related product data will also be permanently removed." data-confirm-label="Yes, Delete Permanently" data-confirm-class="btn-danger">
-                                                    <i class="ph-trash-simple"></i>
-                                                </button>
-                                            </form>
                                         @else
-                                            <a href="{{ route('admin.products.edit', $product) }}" class="list-icons-item text-primary" data-bs-popup="tooltip" title="Edit">
-                                                <i class="ph-pencil-simple"></i>
-                                            </a>
-                                            <form method="POST" action="{{ route('admin.products.duplicate', $product) }}" class="d-inline js-confirm-action-form">
+                                            <form method="POST" action="{{ route('merchant.products.duplicate', $product) }}" class="d-inline js-confirm-action-form">
                                                 @csrf
                                                 <button type="button" class="list-icons-item text-info border-0 bg-transparent p-0 js-confirm-action" data-bs-popup="tooltip" title="Duplicate" data-title="Duplicate Product" data-message="Duplicate this product?<br><br>The product information, attributes, variants, descriptions and images will be copied.<br><br>Stock will be reset to 0, SKUs/barcodes will not be copied, and the new product will be saved as Draft." data-confirm-label="Yes, Duplicate" data-confirm-class="btn-primary">
                                                     <i class="ph-copy"></i>
                                                 </button>
                                             </form>
-                                            @if($product->status === 'archived')
-                                                <form method="POST" action="{{ route('admin.products.restore-archive', $product) }}" class="d-inline js-confirm-action-form">
-                                                    @csrf
-                                                    <button type="button" class="list-icons-item text-success border-0 bg-transparent p-0 js-confirm-action" data-bs-popup="tooltip" title="Restore from Archive" data-title="Restore Product" data-message="Restore this archived product?<br><br>The product will be restored as Draft and must be reviewed before activation." data-confirm-label="Yes, Restore" data-confirm-class="btn-success">
-                                                        <i class="ph-arrow-clockwise"></i>
-                                                    </button>
-                                                </form>
-                                            @else
-                                                <form method="POST" action="{{ route('admin.products.archive', $product) }}" class="d-inline js-confirm-action-form">
-                                                    @csrf
-                                                    <button type="button" class="list-icons-item text-warning border-0 bg-transparent p-0 js-confirm-action" data-bs-popup="tooltip" title="Archive" data-title="Archive Product" data-message="Archive Product?<br><br>This product will be hidden from customers but will remain available in your Archived products.<br><br>You can restore it later." data-confirm-label="Yes, Archive" data-confirm-class="btn-warning">
-                                                        <i class="ph-archive"></i>
-                                                    </button>
-                                                </form>
-                                            @endif
-                                            <form method="POST" action="{{ route('admin.products.destroy', $product) }}" class="d-inline js-confirm-action-form">
+                                            <form method="POST" action="{{ route('merchant.products.archive', $product) }}" class="d-inline js-confirm-action-form">
                                                 @csrf
-                                                @method('DELETE')
-                                                <button type="button" class="list-icons-item text-danger border-0 bg-transparent p-0 js-confirm-action" data-bs-popup="tooltip" title="Delete" data-title="Delete Product" data-message="Delete Product?<br><br>This product will be moved to Trash.<br><br>An administrator can restore it within 45 days. After 45 days, it may be permanently deleted automatically." data-confirm-label="Yes, Delete" data-confirm-class="btn-danger">
-                                                    <i class="ph-trash"></i>
+                                                <button type="button" class="list-icons-item text-warning border-0 bg-transparent p-0 js-confirm-action" data-bs-popup="tooltip" title="Archive" data-title="Archive Product" data-message="Archive Product?<br><br>This product will be hidden from customers but will remain available in your Archived products.<br><br>You can restore it later." data-confirm-label="Yes, Archive" data-confirm-class="btn-warning">
+                                                    <i class="ph-archive"></i>
                                                 </button>
                                             </form>
                                         @endif
+                                        <form method="POST" action="{{ route('merchant.products.destroy', $product) }}" class="d-inline js-confirm-action-form">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="button" class="list-icons-item text-danger border-0 bg-transparent p-0 js-confirm-action" data-bs-popup="tooltip" title="Delete" data-title="Delete Product" data-message="Delete Product?<br><br>This product will be moved to Trash.<br><br>An administrator can restore it within 45 days. After 45 days, it may be permanently deleted automatically." data-confirm-label="Yes, Delete" data-confirm-class="btn-danger">
+                                                <i class="ph-trash"></i>
+                                            </button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>
@@ -231,19 +176,6 @@
         @endif
     </div>
 @endsection
-
-@push('styles')
-    <style>
-        .product-filter-toggle i {
-            display: inline-block;
-            transition: transform 0.2s ease-in-out;
-        }
-
-        .product-filter-toggle:not(.collapsed) i {
-            transform: rotate(180deg);
-        }
-    </style>
-@endpush
 
 @push('scripts')
     <script>
@@ -296,7 +228,7 @@
                 },
                 archive: {
                     title: 'Archive Products',
-                    message: 'Archive selected products?<br><br>These products will be hidden from customers but will remain available in Archived products.',
+                    message: 'Archive selected products?<br><br>These products will be hidden from customers but will remain available in your Archived products.',
                     label: 'Yes, Archive',
                     className: 'btn-warning',
                 },
@@ -310,18 +242,6 @@
                     title: 'Delete Products',
                     message: 'Delete selected products?<br><br>These products will be moved to Trash. An administrator can restore them within 45 days.',
                     label: 'Yes, Delete',
-                    className: 'btn-danger',
-                },
-                restore_trash: {
-                    title: 'Restore Products',
-                    message: 'Restore selected products?<br><br>Products will be restored as Draft and must be reviewed before activation.',
-                    label: 'Yes, Restore',
-                    className: 'btn-success',
-                },
-                force_delete: {
-                    title: 'Permanently Delete Products',
-                    message: 'Permanently delete selected products?<br><br>This action cannot be undone. Product images and related product data will also be permanently removed.',
-                    label: 'Yes, Delete Permanently',
                     className: 'btn-danger',
                 },
             };

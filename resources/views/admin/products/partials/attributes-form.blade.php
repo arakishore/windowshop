@@ -2,6 +2,7 @@
     $selectedAttributeValues = $selectedAttributeValues ?? [];
     $variantMappings = $attributeMappings->filter(fn ($mapping) => $mapping->is_variant)->values();
     $otherMappings = $attributeMappings->reject(fn ($mapping) => $mapping->is_variant)->values();
+    $productRoutePrefix = $productRoutePrefix ?? 'admin';
 @endphp
 
 <div class="card-body">
@@ -11,7 +12,7 @@
             No attributes are configured for this product category.
         </div>
     @else
-        <form method="POST" action="{{ route('admin.products.attributes.update', $product) }}">
+        <form method="POST" action="{{ route($productRoutePrefix.'.products.attributes.update', $product) }}">
             @csrf
             @method('PUT')
 
@@ -82,7 +83,7 @@
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-3">
-                <a href="{{ route('admin.products.index') }}" class="btn btn-light">Cancel</a>
+                <a href="{{ route($productRoutePrefix.'.products.index') }}" class="btn btn-light">Cancel</a>
                 <button type="submit" class="btn btn-primary">
                     <i class="ph-floppy-disk me-2"></i>
                     Save Attributes
@@ -115,7 +116,7 @@
                     </div>
 
                     @if(($variantPreview['new_count'] ?? 0) > 0 && ($variantPreview['total'] ?? 0) <= ($variantPreview['limit'] ?? 100))
-                        <form method="POST" action="{{ route('admin.products.variants.generate', $product) }}">
+                        <form method="POST" action="{{ route($productRoutePrefix.'.products.variants.generate', $product) }}">
                             @csrf
                             <button type="submit" class="btn btn-primary">
                                 <i class="ph-git-branch me-2"></i>

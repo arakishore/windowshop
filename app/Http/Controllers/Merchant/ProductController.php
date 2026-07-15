@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Admin;
+namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\BulkDeleteProductImagesRequest;
@@ -14,30 +14,30 @@ use App\Http\Requests\Admin\UpdateProductImagesRequest;
 use App\Http\Requests\Admin\UpdateProductVariantsRequest;
 use App\Models\Brand;
 use App\Models\Product;
-use App\Models\ProductDescriptionTemplate;
 use App\Models\ProductCategory;
 use App\Models\ProductImage;
 use App\Models\Shop;
+use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Product\ProductAttributeConfigurationService;
 use App\Services\Product\ProductAttributeService;
 use App\Services\Product\ProductDescriptionTemplateService;
 use App\Services\Product\ProductDuplicationService;
 use App\Services\Product\ProductImageService;
-use App\Services\Product\ProductPurgeService;
 use App\Services\Product\ProductVariantGenerationService;
 use App\Services\Product\ProductVariantManagementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ProductController extends Controller
 {
     public function __construct(
+        private readonly MerchantShopContextService $shopContextService,
         private readonly ProductDescriptionTemplateService $descriptionTemplateService,
         private readonly ProductAttributeConfigurationService $attributeConfigurationService,
         private readonly ProductAttributeService $attributeService,
@@ -45,22 +45,20 @@ class ProductController extends Controller
         private readonly ProductVariantManagementService $variantManagementService,
         private readonly ProductImageService $productImageService,
         private readonly ProductDuplicationService $productDuplicationService,
-        private readonly ProductPurgeService $productPurgeService,
     ) {
     }
 
     public function index(Request $request): View
     {
+        $shop = $this->activeShop($request);
         $filters = [
             'search' => trim((string) $request->query('search', '')),
-            'shop_id' => $request->query('shop_id'),
             'status' => $request->query('status'),
         ];
 
-        $isTrash = $filters['status'] === 'trash';
-
-        $products = ($isTrash ? Product::onlyTrashed() : Product::query())
-            ->with(['shop.merchant', 'category', 'brand', 'primaryImage', 'deletedBy'])
+        $products = Product::query()
+            ->with(['shop', 'category', 'brand', 'primaryImage'])
+            ->where('shop_id', $shop->getKey())
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
                 $search = $filters['search'];
 
@@ -70,38 +68,37 @@ class ProductController extends Controller
                         ->orWhereHas('brand', fn ($query) => $query->where('name', 'like', "%{$search}%"));
                 });
             })
-            ->when(is_numeric($filters['shop_id']), fn ($query) => $query->where('shop_id', (int) $filters['shop_id']))
-            ->when(! $isTrash && in_array($filters['status'], array_keys($this->statuses()), true), fn ($query) => $query->where('status', $filters['status']))
+            ->when(in_array($filters['status'], array_keys($this->statuses()), true), fn ($query) => $query->where('status', $filters['status']))
             ->orderByDesc('created_at')
             ->paginate((int) config('admin.pagination.per_page', 15))
             ->withQueryString();
 
-        return view('admin.products.index', [
+        return view('merchant.products.index', [
             'products' => $products,
             'filters' => $filters,
-            ...$this->sharedData(),
-            'shops' => $this->productFilterShops(),
-            'statuses' => $this->statuses(includeTrash: true),
-            'isTrash' => $isTrash,
+            'activeShop' => $shop,
+            'statuses' => $this->statuses(),
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
-        return view('admin.products.create', [
+        $shop = $this->activeShop($request);
+
+        return view('merchant.products.create', [
             'product' => null,
-            ...$this->sharedData(),
+            ...$this->sharedData($shop),
         ]);
     }
 
     public function store(StoreProductQuickCreateRequest $request): RedirectResponse
     {
+        $shop = $this->activeShop($request);
         $data = $request->validated();
-        $actorId = Auth::id();
 
-        $product = DB::transaction(function () use ($data, $actorId): Product {
-            $shop = Shop::query()->findOrFail((int) $data['shop_id']);
+        abort_unless((int) $data['shop_id'] === (int) $shop->getKey(), 404);
 
+        $product = DB::transaction(function () use ($data, $shop): Product {
             $product = Product::create([
                 'merchant_id' => $shop->merchant_id,
                 'shop_id' => $shop->getKey(),
@@ -110,15 +107,12 @@ class ProductController extends Controller
                 'brand_id' => $data['brand_id'] ?? null,
                 'product_name' => $data['product_name'],
                 'slug' => 'pending-'.Str::uuid()->toString(),
-                'status' => 'draft',
-                'created_by' => $actorId,
-                'updated_by' => $actorId,
+                'status' => $data['status'],
+                'created_by' => Auth::id(),
+                'updated_by' => Auth::id(),
             ]);
 
-            $product->updateQuietly([
-                'slug' => $product->slugFromName(),
-            ]);
-
+            $product->updateQuietly(['slug' => $product->slugFromName()]);
             $this->variantManagementService->ensureBaseVariant($product, Auth::user());
 
             return $product;
@@ -126,24 +120,24 @@ class ProductController extends Controller
 
         $generated = $this->descriptionTemplateService->generateForProduct($product);
         $this->descriptionTemplateService->applyToProduct($product);
-        $message = $generated['found']
-            ? 'Product created with description generated from template. Complete the remaining product details from the tabs below.'
-            : 'Product created. No active description template is available for this product category.';
 
         return redirect()
-            ->route('admin.products.edit', $product)
-            ->with($generated['found'] ? 'success' : 'info', $message);
+            ->route('merchant.products.edit', $product)
+            ->with($generated['found'] ? 'success' : 'info', $generated['found']
+                ? 'Product created with description generated from template. Complete the remaining product details from the tabs below.'
+                : 'Product created. No active description template is available for this product category.');
     }
 
-    public function edit(Product $product): View
+    public function edit(Request $request, Product $product): View
     {
+        $shop = $this->authorizeProduct($request, $product);
         $variantFilters = [
-            'search' => request()->query('variant_search', ''),
-            'status' => request()->query('variant_status', ''),
-            'attributes' => request()->query('variant_attributes', []),
+            'search' => $request->query('variant_search', ''),
+            'status' => $request->query('variant_status', ''),
+            'attributes' => $request->query('variant_attributes', []),
         ];
 
-        return view('admin.products.edit', [
+        return view('merchant.products.edit', [
             'product' => $product->load([
                 'shop.merchant',
                 'category.parent',
@@ -155,9 +149,7 @@ class ProductController extends Controller
                 'primaryImage',
             ]),
             'selectedDescriptionTemplate' => $this->descriptionTemplateService->findTemplateForProduct($product),
-            'attributeMappings' => $product->category
-                ? $this->attributeConfigurationService->forCategory($product->category)
-                : collect(),
+            'attributeMappings' => $product->category ? $this->attributeConfigurationService->forCategory($product->category) : collect(),
             'selectedAttributeValues' => $this->attributeService->selectedValues($product),
             'variantPreview' => $this->variantGenerationService->preview($product),
             'variantRows' => $this->variantManagementService->variantsForDisplay($product, $variantFilters),
@@ -166,14 +158,16 @@ class ProductController extends Controller
             'imageAttributeMapping' => $this->productImageService->imageAttributeMapping($product),
             'imageAttributeValues' => $this->productImageService->selectableImageAttributeValues($product),
             'imageLimits' => $this->productImageService->imageLimits($product),
-            ...$this->sharedData($product),
+            ...$this->sharedData($shop, $product),
         ]);
     }
 
     public function update(UpdateProductBasicRequest $request, Product $product): RedirectResponse
     {
+        $shop = $this->authorizeProduct($request, $product);
         $data = $request->validated();
-        $shop = Shop::query()->findOrFail((int) $data['shop_id']);
+
+        abort_unless((int) $data['shop_id'] === (int) $shop->getKey(), 404);
 
         if ($data['status'] === 'active') {
             $this->variantManagementService->assertProductCanBePublished($product);
@@ -193,30 +187,34 @@ class ProductController extends Controller
         ])->save();
 
         return redirect()
-            ->route('admin.products.edit', $product)
+            ->route('merchant.products.edit', $product)
             ->with('success', 'Product basic information updated successfully.');
     }
 
     public function updateAttributes(UpdateProductAttributesRequest $request, Product $product): RedirectResponse
     {
+        $this->authorizeProduct($request, $product);
         $this->attributeService->sync($product, $request->selectedAttributes());
 
         return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => 'attributes'])
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'attributes'])
             ->with('success', 'Product attributes updated successfully.');
     }
 
-    public function duplicate(Product $product): RedirectResponse
+    public function duplicate(Request $request, Product $product): RedirectResponse
     {
-        $duplicate = $this->productDuplicationService->duplicate($product, Auth::user());
+        $shop = $this->authorizeProduct($request, $product);
+        $duplicate = $this->productDuplicationService->duplicate($product, Auth::user(), $shop);
 
         return redirect()
-            ->route('admin.products.edit', $duplicate)
+            ->route('merchant.products.edit', $duplicate)
             ->with('success', 'Product duplicated successfully. Review the details before activating it.');
     }
 
-    public function archive(Product $product): RedirectResponse
+    public function archive(Request $request, Product $product): RedirectResponse
     {
+        $this->authorizeProduct($request, $product);
+
         $product->forceFill([
             'status' => 'archived',
             'deleted_by' => null,
@@ -224,12 +222,13 @@ class ProductController extends Controller
         ])->save();
 
         return redirect()
-            ->route('admin.products.index')
+            ->route('merchant.products.index')
             ->with('success', 'Product archived successfully.');
     }
 
-    public function restoreArchive(Product $product): RedirectResponse
+    public function restoreArchive(Request $request, Product $product): RedirectResponse
     {
+        $this->authorizeProduct($request, $product);
         abort_unless($product->status === 'archived', 404);
 
         $product->forceFill([
@@ -238,71 +237,108 @@ class ProductController extends Controller
         ])->save();
 
         return redirect()
-            ->route('admin.products.index', ['status' => 'archived'])
+            ->route('merchant.products.index', ['status' => 'archived'])
             ->with('success', 'Product restored from archive as draft.');
     }
 
     public function bulkAction(Request $request): RedirectResponse
     {
+        $shop = $this->activeShop($request);
         $data = $request->validate([
-            'action' => ['required', Rule::in(['mark_active', 'mark_inactive', 'archive', 'restore_archive', 'delete', 'restore_trash', 'force_delete'])],
+            'action' => ['required', Rule::in(['mark_active', 'mark_inactive', 'archive', 'restore_archive', 'delete'])],
             'product_ids' => ['required', 'array', 'min:1'],
             'product_ids.*' => ['integer'],
         ]);
 
         $count = match ($data['action']) {
-            'mark_active' => $this->bulkStatus($data['product_ids'], 'active'),
-            'mark_inactive' => $this->bulkStatus($data['product_ids'], 'inactive'),
-            'archive' => $this->bulkArchive($data['product_ids']),
-            'restore_archive' => $this->bulkRestoreArchive($data['product_ids']),
-            'delete' => $this->bulkSoftDelete($data['product_ids']),
-            'restore_trash' => $this->bulkRestoreTrash($data['product_ids']),
-            'force_delete' => $this->bulkForceDelete($data['product_ids']),
+            'mark_active' => $this->bulkStatus($shop, $data['product_ids'], 'active'),
+            'mark_inactive' => $this->bulkStatus($shop, $data['product_ids'], 'inactive'),
+            'archive' => $this->bulkArchive($shop, $data['product_ids']),
+            'restore_archive' => $this->bulkRestoreArchive($shop, $data['product_ids']),
+            'delete' => $this->bulkSoftDelete($shop, $data['product_ids']),
         };
 
         return back()->with('success', "{$count} product(s) updated successfully.");
     }
 
-    public function generateVariants(Product $product): RedirectResponse
+    public function generateVariants(Request $request, Product $product): RedirectResponse
     {
+        $this->authorizeProduct($request, $product);
         $result = $this->variantGenerationService->generate($product, Auth::user());
 
         return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => 'variants'])
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'variants'])
             ->with('success', "{$result['created_count']} product variants generated successfully.");
     }
 
     public function updateVariants(UpdateProductVariantsRequest $request, Product $product): RedirectResponse
     {
-        $updated = $this->variantManagementService->updateVariants(
-            $product,
-            $request->variants(),
-            Auth::user(),
-            $request->defaultVariantId(),
-        );
+        $this->authorizeProduct($request, $product);
+        $updated = $this->variantManagementService->updateVariants($product, $request->variants(), Auth::user(), $request->defaultVariantId());
 
         return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => 'variants'])
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'variants'])
             ->with('success', "{$updated} variant rows updated successfully.");
     }
 
     public function bulkUpdateVariants(BulkUpdateProductVariantsRequest $request, Product $product): RedirectResponse
     {
-        $updated = $this->variantManagementService->bulkUpdate(
-            $product,
-            $request->variantIds(),
-            $request->changes(),
-            Auth::user(),
-            $request->appliesToAll(),
-        );
+        $this->authorizeProduct($request, $product);
+        $updated = $this->variantManagementService->bulkUpdate($product, $request->variantIds(), $request->changes(), Auth::user(), $request->appliesToAll());
 
         return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => 'variants'])
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'variants'])
             ->with('success', "{$updated} variant rows updated successfully.");
+    }
+
+    public function storeImages(StoreProductImagesRequest $request, Product $product): RedirectResponse
+    {
+        $this->authorizeProduct($request, $product);
+
+        if ($request->hasGroupedImages()) {
+            $this->productImageService->uploadGroups($product, $request->imageGroups(), Auth::id());
+        } else {
+            $this->productImageService->upload($product, $request->file('images', []), $request->attributeValueId(), Auth::id());
+        }
+
+        return redirect()
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'images'])
+            ->with('success', 'Product images uploaded successfully.');
+    }
+
+    public function updateImages(UpdateProductImagesRequest $request, Product $product): RedirectResponse
+    {
+        $this->authorizeProduct($request, $product);
+        $this->productImageService->update($product, $request->imageRows(), $request->primaryImageId(), Auth::id());
+
+        return redirect()
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'images'])
+            ->with('success', 'Product images updated successfully.');
+    }
+
+    public function destroyImage(Request $request, Product $product, ProductImage $productImage): RedirectResponse
+    {
+        $this->authorizeProduct($request, $product);
+        $this->productImageService->delete($product, $productImage, Auth::id());
+
+        return redirect()
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'images'])
+            ->with('success', 'Product image deleted successfully.');
+    }
+
+    public function bulkDestroyImages(BulkDeleteProductImagesRequest $request, Product $product): RedirectResponse
+    {
+        $this->authorizeProduct($request, $product);
+        $deleted = $this->productImageService->deleteMany($product, $request->imageIds(), Auth::id());
+
+        return redirect()
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'images'])
+            ->with('success', "{$deleted} product images deleted successfully.");
     }
 
     public function updateDescriptionSeo(UpdateProductDescriptionSeoRequest $request, Product $product): RedirectResponse
     {
+        $this->authorizeProduct($request, $product);
         $data = $request->validated();
         $tab = $request->input('current_tab') === 'seo' ? 'seo' : 'description';
 
@@ -315,79 +351,32 @@ class ProductController extends Controller
         ])->save();
 
         return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => $tab])
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => $tab])
             ->with('success', $tab === 'seo' ? 'Product SEO updated successfully.' : 'Product description updated successfully.');
     }
 
-    public function storeImages(StoreProductImagesRequest $request, Product $product): RedirectResponse
+    public function generateDescriptionSeo(Request $request, Product $product): RedirectResponse
     {
-        if ($request->hasGroupedImages()) {
-            $this->productImageService->uploadGroups($product, $request->imageGroups(), Auth::id());
-        } else {
-            $this->productImageService->upload(
-                $product,
-                $request->file('images', []),
-                $request->attributeValueId(),
-                Auth::id(),
-            );
-        }
-
-        return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => 'images'])
-            ->with('success', 'Product images uploaded successfully.');
-    }
-
-    public function updateImages(UpdateProductImagesRequest $request, Product $product): RedirectResponse
-    {
-        $this->productImageService->update(
-            $product,
-            $request->imageRows(),
-            $request->primaryImageId(),
-            Auth::id(),
-        );
-
-        return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => 'images'])
-            ->with('success', 'Product images updated successfully.');
-    }
-
-    public function destroyImage(Product $product, ProductImage $productImage): RedirectResponse
-    {
-        $this->productImageService->delete($product, $productImage, Auth::id());
-
-        return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => 'images'])
-            ->with('success', 'Product image deleted successfully.');
-    }
-
-    public function bulkDestroyImages(BulkDeleteProductImagesRequest $request, Product $product): RedirectResponse
-    {
-        $deleted = $this->productImageService->deleteMany($product, $request->imageIds(), Auth::id());
-
-        return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => 'images'])
-            ->with('success', "{$deleted} product images deleted successfully.");
-    }
-
-    public function generateDescriptionSeo(Product $product): RedirectResponse
-    {
+        $this->authorizeProduct($request, $product);
         $generated = $this->descriptionTemplateService->generateForProduct($product);
 
         if (! $generated['found']) {
             return redirect()
-                ->route('admin.products.edit', ['product' => $product, 'tab' => 'description'])
+                ->route('merchant.products.edit', ['product' => $product, 'tab' => 'description'])
                 ->with('info', $generated['message']);
         }
 
         $this->descriptionTemplateService->applyToProduct($product, true);
 
         return redirect()
-            ->route('admin.products.edit', ['product' => $product, 'tab' => 'description'])
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'description'])
             ->with('success', 'Product description and SEO regenerated from template.');
     }
 
-    public function destroy(Product $product): RedirectResponse
+    public function destroy(Request $request, Product $product): RedirectResponse
     {
+        $this->authorizeProduct($request, $product);
+
         DB::transaction(function () use ($product): void {
             $product->forceFill([
                 'deleted_by' => Auth::id(),
@@ -398,45 +387,18 @@ class ProductController extends Controller
         });
 
         return redirect()
-            ->route('admin.products.index')
+            ->route('merchant.products.index')
             ->with('success', 'Product deleted successfully.');
-    }
-
-    public function restoreTrash(Product $product): RedirectResponse
-    {
-        abort_unless($product->trashed(), 404);
-
-        DB::transaction(function () use ($product): void {
-            $product->restore();
-            $product->forceFill([
-                'status' => 'draft',
-                'deleted_by' => null,
-                'updated_by' => Auth::id(),
-            ])->save();
-        });
-
-        return redirect()
-            ->route('admin.products.index', ['status' => 'trash'])
-            ->with('success', 'Product restored as draft successfully.');
-    }
-
-    public function forceDestroy(Product $product): RedirectResponse
-    {
-        abort_unless($product->trashed(), 404);
-
-        $this->productPurgeService->purge($product);
-
-        return redirect()
-            ->route('admin.products.index', ['status' => 'trash'])
-            ->with('success', 'Product permanently deleted successfully.');
     }
 
     /**
      * @param array<int, int|string> $productIds
      */
-    private function bulkArchive(array $productIds): int
+    private function bulkArchive(Shop $shop, array $productIds): int
     {
         return Product::query()
+            ->where('shop_id', $shop->getKey())
+            ->where('merchant_id', $shop->merchant_id)
             ->whereIn('id', $productIds)
             ->where('status', '!=', 'archived')
             ->update([
@@ -450,10 +412,12 @@ class ProductController extends Controller
     /**
      * @param array<int, int|string> $productIds
      */
-    private function bulkStatus(array $productIds, string $status): int
+    private function bulkStatus(Shop $shop, array $productIds, string $status): int
     {
-        return DB::transaction(function () use ($productIds, $status): int {
+        return DB::transaction(function () use ($shop, $productIds, $status): int {
             $products = Product::query()
+                ->where('shop_id', $shop->getKey())
+                ->where('merchant_id', $shop->merchant_id)
                 ->whereIn('id', $productIds)
                 ->where('status', '!=', 'archived')
                 ->get();
@@ -478,9 +442,11 @@ class ProductController extends Controller
     /**
      * @param array<int, int|string> $productIds
      */
-    private function bulkRestoreArchive(array $productIds): int
+    private function bulkRestoreArchive(Shop $shop, array $productIds): int
     {
         return Product::query()
+            ->where('shop_id', $shop->getKey())
+            ->where('merchant_id', $shop->merchant_id)
             ->whereIn('id', $productIds)
             ->where('status', 'archived')
             ->update([
@@ -493,10 +459,12 @@ class ProductController extends Controller
     /**
      * @param array<int, int|string> $productIds
      */
-    private function bulkSoftDelete(array $productIds): int
+    private function bulkSoftDelete(Shop $shop, array $productIds): int
     {
-        return DB::transaction(function () use ($productIds): int {
+        return DB::transaction(function () use ($shop, $productIds): int {
             $products = Product::query()
+                ->where('shop_id', $shop->getKey())
+                ->where('merchant_id', $shop->merchant_id)
                 ->whereIn('id', $productIds)
                 ->get();
 
@@ -512,91 +480,58 @@ class ProductController extends Controller
         });
     }
 
-    /**
-     * @param array<int, int|string> $productIds
-     */
-    private function bulkRestoreTrash(array $productIds): int
+    private function activeShop(Request $request): Shop
     {
-        return DB::transaction(function () use ($productIds): int {
-            $products = Product::onlyTrashed()
-                ->whereIn('id', $productIds)
-                ->get();
+        $merchant = $this->shopContextService->activeMerchantForUser($request->user());
+        abort_unless($merchant !== null, 403);
 
-            foreach ($products as $product) {
-                $product->restore();
-                $product->forceFill([
-                    'status' => 'draft',
-                    'deleted_by' => null,
-                    'updated_by' => Auth::id(),
-                ])->save();
-            }
+        $shop = $this->shopContextService->resolveActiveShop(
+            $this->shopContextService->activeShops($merchant),
+            $request->session()->get('active_shop_id'),
+        );
 
-            return $products->count();
-        });
+        abort_unless($shop instanceof Shop, 403);
+
+        return $shop;
     }
 
-    /**
-     * @param array<int, int|string> $productIds
-     */
-    private function bulkForceDelete(array $productIds): int
+    private function authorizeProduct(Request $request, Product $product): Shop
     {
-        $products = Product::onlyTrashed()
-            ->whereIn('id', $productIds)
-            ->get();
+        $shop = $this->activeShop($request);
+        abort_unless((int) $product->shop_id === (int) $shop->getKey(), 404);
+        abort_unless((int) $product->merchant_id === (int) $shop->merchant_id, 404);
 
-        foreach ($products as $product) {
-            $this->productPurgeService->purge($product);
-        }
-
-        return $products->count();
+        return $shop;
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function sharedData(?Product $product = null): array
+    private function sharedData(Shop $shop, ?Product $product = null): array
     {
         return [
-            'shops' => $this->shops($product),
-            'productCategories' => $this->productCategories($product),
-            'brands' => $this->brands($product),
+            'shops' => collect([$shop->loadMissing('merchant', 'rootProductCategory')]),
+            'productCategories' => $this->productCategories($shop, $product),
+            'brands' => $this->brands($shop, $product),
             'statuses' => $this->statuses(),
+            'productRoutePrefix' => 'merchant',
         ];
     }
 
-    private function shops(?Product $product = null): Collection
-    {
-        return Shop::query()
-            ->with(['merchant', 'rootProductCategory'])
-            ->where(function ($query) use ($product): void {
-                $query->whereIn('status', ['pending', 'active']);
-
-                if ($product?->shop_id) {
-                    $query->orWhere('id', $product->shop_id);
-                }
-            })
-            ->orderBy('name')
-            ->get();
-    }
-
-    private function productFilterShops(): Collection
-    {
-        return Shop::query()
-            ->with('merchant')
-            ->where(function ($query): void {
-                $query->whereIn('status', ['pending', 'active'])
-                    ->orWhereHas('products');
-            })
-            ->orderBy('name')
-            ->get();
-    }
-
-    private function productCategories(?Product $product = null): Collection
+    private function productCategories(Shop $shop, ?Product $product = null): Collection
     {
         $categories = ProductCategory::query()
             ->with(['parent.parent', 'children'])
             ->where(function ($query) use ($product): void {
                 $query->where('status', 'active');
+
+                if ($product?->product_category_id) {
+                    $query->orWhere('id', $product->product_category_id);
+                }
+            })
+            ->where(function ($query) use ($shop, $product): void {
+                $query->where('id', $shop->root_product_category_id)
+                    ->orWhereHas('parent', fn ($query) => $query->where('id', $shop->root_product_category_id)->orWhereHas('parent', fn ($query) => $query->where('id', $shop->root_product_category_id)));
 
                 if ($product?->product_category_id) {
                     $query->orWhere('id', $product->product_category_id);
@@ -618,14 +553,8 @@ class ProductController extends Controller
             ->values();
     }
 
-    private function brands(?Product $product = null): Collection
+    private function brands(Shop $shop, ?Product $product = null): Collection
     {
-        $shopRootCategoryIds = $this->shops($product)
-            ->pluck('root_product_category_id')
-            ->filter()
-            ->unique()
-            ->values();
-
         return Brand::query()
             ->with('rootProductCategories:id,name')
             ->where(function ($query) use ($product): void {
@@ -635,8 +564,8 @@ class ProductController extends Controller
                     $query->orWhere('id', $product->brand_id);
                 }
             })
-            ->where(function ($query) use ($product, $shopRootCategoryIds): void {
-                $query->whereHas('rootProductCategories', fn ($query) => $query->whereIn('product_categories.id', $shopRootCategoryIds));
+            ->where(function ($query) use ($shop, $product): void {
+                $query->whereHas('rootProductCategories', fn ($query) => $query->whereKey($shop->root_product_category_id));
 
                 if ($product?->brand_id) {
                     $query->orWhere('id', $product->brand_id);
@@ -647,23 +576,14 @@ class ProductController extends Controller
             ->get();
     }
 
-    /**
-     * @return array<string, array<string, string>>
-     */
-    private function statuses(bool $includeTrash = false): array
+    private function statuses(): array
     {
-        $statuses = [
+        return [
             'draft' => ['label' => 'Draft', 'badge_class' => 'bg-light text-body border'],
             'active' => ['label' => 'Active', 'badge_class' => 'bg-success'],
             'inactive' => ['label' => 'Inactive', 'badge_class' => 'bg-warning'],
             'archived' => ['label' => 'Archived', 'badge_class' => 'bg-secondary'],
         ];
-
-        if ($includeTrash) {
-            $statuses['trash'] = ['label' => 'Trash', 'badge_class' => 'bg-danger'];
-        }
-
-        return $statuses;
     }
 
     private function slugForProduct(Product $product, string $name): string

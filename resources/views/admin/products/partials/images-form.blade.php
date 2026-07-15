@@ -1,6 +1,7 @@
 @php
     $imageMaxMb = (int) ceil(config('images.product.max_upload_kb', 3072) / 1024);
     $imageLimits = $imageLimits ?? ['total' => 8, 'has_primary_variant' => false, 'per_variant_value' => 2, 'entire_product' => 2, 'attribute_label' => 'primary variant'];
+    $productRoutePrefix = $productRoutePrefix ?? 'admin';
 @endphp
 
 <div class="card-body">
@@ -24,7 +25,7 @@
         $totalRemainingImages = max(0, (int) $imageLimits['total'] - $activeImageCount);
     @endphp
 
-    <form method="POST" action="{{ route('admin.products.images.store', $product) }}" enctype="multipart/form-data" class="border rounded p-3 mb-3 js-product-images-upload-form" data-total-remaining="{{ $totalRemainingImages }}">
+    <form method="POST" action="{{ route($productRoutePrefix.'.products.images.store', $product) }}" enctype="multipart/form-data" class="border rounded p-3 mb-3 js-product-images-upload-form" data-total-remaining="{{ $totalRemainingImages }}">
         @csrf
         <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-2 mb-3">
             <div>
@@ -125,12 +126,12 @@
             <div class="text-muted">Upload product images and choose one primary image for product cards and lists.</div>
         </div>
     @else
-        <form id="bulk-delete-product-images" method="POST" action="{{ route('admin.products.images.bulk-destroy', $product) }}" class="d-none">
+        <form id="bulk-delete-product-images" method="POST" action="{{ route($productRoutePrefix.'.products.images.bulk-destroy', $product) }}" class="d-none">
             @csrf
             @method('DELETE')
         </form>
 
-        <form method="POST" action="{{ route('admin.products.images.update', $product) }}">
+        <form method="POST" action="{{ route($productRoutePrefix.'.products.images.update', $product) }}">
             @csrf
             @method('PUT')
 
@@ -214,7 +215,7 @@
         </form>
 
         @foreach($product->images as $image)
-            <form id="delete-product-image-{{ $image->uuid }}" method="POST" action="{{ route('admin.products.images.destroy', ['product' => $product, 'productImage' => $image]) }}" class="d-none">
+            <form id="delete-product-image-{{ $image->uuid }}" method="POST" action="{{ route($productRoutePrefix.'.products.images.destroy', ['product' => $product, 'productImage' => $image]) }}" class="d-none">
                 @csrf
                 @method('DELETE')
             </form>

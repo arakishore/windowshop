@@ -55,14 +55,14 @@
                     </ul>
                 </li>
 
-                <li class="nav-item nav-item-submenu">
-                    <a href="#" class="nav-link">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.products.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.products.*') ? 'active' : '' }}">
                         <i class="ph-package"></i>
                         <span>Catalog</span>
                     </a>
-                    <ul class="nav-group-sub collapse">
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.products.*') ? 'show' : '' }}">
                         <li class="nav-item">
-                            <a href="#" class="nav-link {{ $disabled }}">Products</a>
+                            <a href="{{ route('merchant.products.index') }}" class="nav-link {{ request()->routeIs('merchant.products.*') ? 'active' : '' }}">Products</a>
                         </li>
                         <li class="nav-item">
                             <a href="#" class="nav-link {{ $disabled }}">Categories</a>

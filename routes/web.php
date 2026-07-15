@@ -67,6 +67,20 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('/merchants/{merchant}/shops', MerchantShopController::class)
             ->names('merchants.shops');
         Route::resource('merchants', MerchantController::class);
+        Route::post('products/bulk-action', [ProductController::class, 'bulkAction'])
+            ->name('products.bulk-action');
+        Route::post('products/{product}/duplicate', [ProductController::class, 'duplicate'])
+            ->name('products.duplicate');
+        Route::post('products/{product}/archive', [ProductController::class, 'archive'])
+            ->name('products.archive');
+        Route::post('products/{product}/restore-archive', [ProductController::class, 'restoreArchive'])
+            ->name('products.restore-archive');
+        Route::post('products/{product}/restore-trash', [ProductController::class, 'restoreTrash'])
+            ->withTrashed()
+            ->name('products.restore-trash');
+        Route::delete('products/{product}/force', [ProductController::class, 'forceDestroy'])
+            ->withTrashed()
+            ->name('products.force-destroy');
         Route::put('products/{product}/attributes', [ProductController::class, 'updateAttributes'])
             ->name('products.attributes.update');
         Route::post('products/{product}/images', [ProductController::class, 'storeImages'])

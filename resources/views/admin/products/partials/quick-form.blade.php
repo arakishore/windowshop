@@ -3,9 +3,11 @@
     $selectedCategoryId = old('product_category_id', $product?->product_category_id);
     $selectedBrandId = old('brand_id', $product?->brand_id);
     $selectedStatus = old('status', $product?->status ?? 'draft');
-    $statusOptions = $product ? $statuses : ['draft' => $statuses['draft']];
+    $allowCreateStatusSelection = $allowCreateStatusSelection ?? false;
+    $statusOptions = $product || $allowCreateStatusSelection ? $statuses : ['draft' => $statuses['draft']];
     $includeShortDescription = $includeShortDescription ?? false;
     $selectedShop = $selectedShopId ? $shops->firstWhere('id', (int) $selectedShopId) : null;
+    $productRoutePrefix = $productRoutePrefix ?? 'admin';
 @endphp
 
 @if ($errors->any())
@@ -178,7 +180,7 @@
 @endpush
 
 <div class="card-footer d-flex justify-content-end gap-2">
-    <a href="{{ route('admin.products.index') }}" class="btn btn-light">Cancel</a>
+    <a href="{{ route($productRoutePrefix.'.products.index') }}" class="btn btn-light">Cancel</a>
     <button type="submit" class="btn btn-primary">
         <i class="ph-floppy-disk me-2"></i>
         {{ $submitLabel }}

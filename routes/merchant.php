@@ -6,6 +6,7 @@ use App\Http\Controllers\Merchant\Auth\MerchantProfileController;
 use App\Http\Controllers\Merchant\MerchantDetailsController;
 use App\Http\Controllers\Merchant\MerchantShopController;
 use App\Http\Controllers\Merchant\MerchantShopContextController;
+use App\Http\Controllers\Merchant\ProductController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('merchant')->name('merchant.')->group(function (): void {
@@ -35,6 +36,36 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
 
     Route::middleware(['auth', 'merchant.role', 'merchant.active_shop'])->group(function (): void {
         Route::get('/dashboard', [MerchantAuthController::class, 'dashboard'])->name('dashboard');
+        Route::post('products/bulk-action', [ProductController::class, 'bulkAction'])
+            ->name('products.bulk-action');
+        Route::post('products/{product}/duplicate', [ProductController::class, 'duplicate'])
+            ->name('products.duplicate');
+        Route::post('products/{product}/archive', [ProductController::class, 'archive'])
+            ->name('products.archive');
+        Route::post('products/{product}/restore-archive', [ProductController::class, 'restoreArchive'])
+            ->name('products.restore-archive');
+        Route::put('products/{product}/attributes', [ProductController::class, 'updateAttributes'])
+            ->name('products.attributes.update');
+        Route::post('products/{product}/images', [ProductController::class, 'storeImages'])
+            ->name('products.images.store');
+        Route::put('products/{product}/images', [ProductController::class, 'updateImages'])
+            ->name('products.images.update');
+        Route::delete('products/{product}/images', [ProductController::class, 'bulkDestroyImages'])
+            ->name('products.images.bulk-destroy');
+        Route::delete('products/{product}/images/{productImage}', [ProductController::class, 'destroyImage'])
+            ->name('products.images.destroy');
+        Route::post('products/{product}/variants/generate', [ProductController::class, 'generateVariants'])
+            ->name('products.variants.generate');
+        Route::put('products/{product}/variants', [ProductController::class, 'updateVariants'])
+            ->name('products.variants.update');
+        Route::put('products/{product}/variants/bulk', [ProductController::class, 'bulkUpdateVariants'])
+            ->name('products.variants.bulk-update');
+        Route::put('products/{product}/description-seo', [ProductController::class, 'updateDescriptionSeo'])
+            ->name('products.description-seo.update');
+        Route::post('products/{product}/description-seo/generate', [ProductController::class, 'generateDescriptionSeo'])
+            ->name('products.description-seo.generate');
+        Route::resource('products', ProductController::class)
+            ->except(['show']);
     });
 
 });

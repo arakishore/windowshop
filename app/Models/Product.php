@@ -100,4 +100,9 @@ class Product extends Model
             ->orderBy('sort_order')
             ->orderBy('id');
     }
+
+    public function deletedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by')->withTrashed();
+    }
 }

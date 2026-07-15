@@ -2,10 +2,11 @@
     @php
         $variantRows = $variantRows ?? $product->variants;
         $examples = array_slice($variantPreview['combinations'] ?? [], 0, 4);
-        $hasSelectedVariantAttributes = ($variantPreview['selected_variant_value_count'] ?? 0) > 0;
-        $hasGeneratedVariants = $product->variants->contains(fn ($variant) => $variant->attributes->isNotEmpty());
-        $variantStatuses = ['active' => 'Active', 'inactive' => 'Inactive'];
-    @endphp
+    $hasSelectedVariantAttributes = ($variantPreview['selected_variant_value_count'] ?? 0) > 0;
+    $hasGeneratedVariants = $product->variants->contains(fn ($variant) => $variant->attributes->isNotEmpty());
+    $variantStatuses = ['active' => 'Active', 'inactive' => 'Inactive'];
+    $productRoutePrefix = $productRoutePrefix ?? 'admin';
+@endphp
 
     @error('variants')
         <div class="alert alert-danger">{{ $message }}</div>
@@ -32,7 +33,7 @@
         <div class="alert alert-info border">
             <div class="fw-semibold mb-1">This product currently has one sellable item.</div>
             <div>Add variant attributes in the Attributes tab if this product is available in multiple options.</div>
-            <a href="{{ route('admin.products.edit', ['product' => $product, 'tab' => 'attributes']) }}" class="btn btn-sm btn-primary mt-2">
+            <a href="{{ route($productRoutePrefix.'.products.edit', ['product' => $product, 'tab' => 'attributes']) }}" class="btn btn-sm btn-primary mt-2">
                 <i class="ph-sliders-horizontal me-1"></i>
                 Go to Attributes
             </a>
@@ -59,7 +60,7 @@
                 </div>
 
                 @if(($variantPreview['total'] ?? 0) <= ($variantPreview['limit'] ?? 100))
-                    <form method="POST" action="{{ route('admin.products.variants.generate', $product) }}" class="align-self-lg-start">
+                    <form method="POST" action="{{ route($productRoutePrefix.'.products.variants.generate', $product) }}" class="align-self-lg-start">
                         @csrf
                         <button type="submit" class="btn btn-primary">
                             <i class="ph-git-branch me-2"></i>
@@ -79,7 +80,7 @@
         </div>
     @endif
 
-    <form method="GET" action="{{ route('admin.products.edit', ['product' => $product, 'tab' => 'variants']) }}" class="row g-2 align-items-end mb-3">
+    <form method="GET" action="{{ route($productRoutePrefix.'.products.edit', ['product' => $product, 'tab' => 'variants']) }}" class="row g-2 align-items-end mb-3">
         <input type="hidden" name="tab" value="variants">
         <div class="col-md-3">
             <label class="form-label" for="variant_search">Search</label>
@@ -118,7 +119,7 @@
             Bulk Update
             <i class="ph-info ms-1 text-muted" data-bs-popup="tooltip" title="Enter only the fields you want to change. Blank fields are ignored. Apply to Selected updates checked rows; Apply to All updates every variant for this product."></i>
         </h6>
-        <form id="bulk-variant-form" method="POST" action="{{ route('admin.products.variants.bulk-update', $product) }}">
+        <form id="bulk-variant-form" method="POST" action="{{ route($productRoutePrefix.'.products.variants.bulk-update', $product) }}">
             @csrf
             @method('PUT')
 
@@ -170,7 +171,7 @@
         </form>
     </div>
 
-    <form method="POST" action="{{ route('admin.products.variants.update', $product) }}">
+    <form method="POST" action="{{ route($productRoutePrefix.'.products.variants.update', $product) }}">
         @csrf
         @method('PUT')
 
