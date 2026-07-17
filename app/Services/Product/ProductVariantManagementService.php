@@ -13,6 +13,11 @@ use Illuminate\Validation\ValidationException;
 
 class ProductVariantManagementService
 {
+    public function __construct(
+        private readonly ProductBarcodeService $barcodeService,
+    ) {
+    }
+
     /**
      * Ensure every product has exactly one base sellable row.
      */
@@ -85,6 +90,7 @@ class ProductVariantManagementService
                     ...$changes,
                     'updated_by' => $actor->getKey(),
                 ]);
+                $this->assertBarcodeIsUniqueForShop($product, $variant);
 
                 if ($variant->isDirty()) {
                     $variant->save();
@@ -237,9 +243,10 @@ class ProductVariantManagementService
             ->map(fn ($value): int => (int) $value);
 
         if ($search !== '') {
-            $query->where(function ($query) use ($search): void {
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('sku', 'like', "%{$search}%");
+                $query->where(function ($query) use ($search): void {
+                    $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%")
+                    ->orWhere('barcode', 'like', "%{$search}%");
             });
         }
 
@@ -404,6 +411,17 @@ class ProductVariantManagementService
                 'variants' => 'Selling price must be less than or equal to MRP.',
             ]);
         }
+    }
+
+    private function assertBarcodeIsUniqueForShop(Product $product, ProductVariant $variant): void
+    {
+        $barcode = $this->nullableString($variant->barcode);
+
+        if ($barcode === null || $variant->status !== 'active') {
+            return;
+        }
+
+        $this->barcodeService->assertUnique($barcode, $variant->getKey());
     }
 
     private function nullableString(mixed $value): ?string

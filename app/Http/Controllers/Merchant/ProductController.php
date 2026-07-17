@@ -20,6 +20,7 @@ use App\Models\Shop;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Product\ProductAttributeConfigurationService;
 use App\Services\Product\ProductAttributeService;
+use App\Services\Product\ProductBarcodeService;
 use App\Services\Product\ProductDescriptionTemplateService;
 use App\Services\Product\ProductDuplicationService;
 use App\Services\Product\ProductImageService;
@@ -41,6 +42,7 @@ class ProductController extends Controller
         private readonly ProductDescriptionTemplateService $descriptionTemplateService,
         private readonly ProductAttributeConfigurationService $attributeConfigurationService,
         private readonly ProductAttributeService $attributeService,
+        private readonly ProductBarcodeService $barcodeService,
         private readonly ProductVariantGenerationService $variantGenerationService,
         private readonly ProductVariantManagementService $variantManagementService,
         private readonly ProductImageService $productImageService,
@@ -269,6 +271,18 @@ class ProductController extends Controller
         return redirect()
             ->route('merchant.products.edit', ['product' => $product, 'tab' => 'variants'])
             ->with('success', "{$result['created_count']} product variants generated successfully.");
+    }
+
+    public function generateBarcodes(Request $request, Product $product): RedirectResponse
+    {
+        $this->authorizeProduct($request, $product);
+        $count = $this->barcodeService->generateMissingForProduct($product, Auth::user());
+
+        return redirect()
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'variants'])
+            ->with($count > 0 ? 'success' : 'info', $count > 0
+                ? "{$count} missing barcode(s) generated successfully."
+                : 'All variants already have barcodes.');
     }
 
     public function updateVariants(UpdateProductVariantsRequest $request, Product $product): RedirectResponse

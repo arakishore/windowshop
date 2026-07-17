@@ -11,6 +11,19 @@
         $latestOrders = $dashboard['latest_orders'];
         $recentActivities = $dashboard['recent_activities'];
         $activeShopLabel = $merchantActiveShopContext['activeShopLabel'] ?? 'Active shop';
+        $formatElapsed = static function (int $seconds): string {
+            if ($seconds < 1) {
+                return '-';
+            }
+
+            $hours = intdiv($seconds, 3600);
+            $minutes = intdiv($seconds % 3600, 60);
+            $remainingSeconds = $seconds % 60;
+
+            return $hours > 0
+                ? sprintf('%dh %02dm %02ds', $hours, $minutes, $remainingSeconds)
+                : sprintf('%dm %02ds', $minutes, $remainingSeconds);
+        };
         $cards = [
             ['label' => "Today's Orders", 'value' => number_format($stats['todays_orders']), 'icon' => 'ph-shopping-bag-open', 'color' => 'text-info'],
             ['label' => 'Pending Orders', 'value' => number_format($stats['pending_orders']), 'icon' => 'ph-clock-countdown', 'color' => 'text-warning'],
@@ -57,6 +70,7 @@
                                 <th>Customer</th>
                                 <th>Shop</th>
                                 <th>Total</th>
+                                <th>Time Used</th>
                                 <th>Status</th>
                                 <th class="text-end">Time</th>
                             </tr>
@@ -68,12 +82,13 @@
                                     <td>{{ $order->customer_name ?? 'Customer' }}</td>
                                     <td>{{ $activeShopLabel }}</td>
                                     <td>INR {{ number_format((float) ($order->total_amount ?? $order->grand_total ?? $order->amount ?? 0)) }}</td>
+                                    <td>{{ $formatElapsed((int) ($order->elapsed_seconds ?? 0)) }}</td>
                                     <td><span class="badge bg-info bg-opacity-10 text-info">{{ Str::headline($order->status ?? 'new') }}</span></td>
                                     <td class="text-end text-muted">{{ isset($order->created_at) ? \Illuminate\Support\Carbon::parse($order->created_at)->diffForHumans() : '-' }}</td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">
+                                    <td colspan="7" class="text-center text-muted py-4">
                                         Orders for the active shop will appear here.
                                     </td>
                                 </tr>

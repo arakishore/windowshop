@@ -27,8 +27,12 @@ class OrderCreationService
      *     fulfilment_type?: string,
      *     order_status?: string,
      *     payment_method?: string,
+     *     payment_reference?: string|null,
+     *     upi_txn?: string|null,
+     *     terminal_id?: string|null,
      *     payment_status?: string,
      *     amount_paid?: float|string|int,
+     *     elapsed_seconds?: int,
      *     customer_name?: string|null,
      *     customer_mobile?: string|null,
      *     remarks?: string|null,
@@ -40,7 +44,9 @@ class OrderCreationService
     {
         return DB::transaction(function () use ($data, $actor): Order {
             $shop = Shop::query()->findOrFail((int) $data['shop_id']);
-            $items = $this->buildItems($shop, $data['items'] ?? []);
+            $rows = $this->aggregateItems($data['items'] ?? []);
+            $variants = $this->lockVariants($shop, $rows);
+            $items = $this->buildItems($rows, $variants);
             $orderStatus = (string) ($data['order_status'] ?? Order::STATUS_COMPLETED);
             $paymentStatus = (string) ($data['payment_status'] ?? Order::PAYMENT_PAID);
 
@@ -53,8 +59,12 @@ class OrderCreationService
                 'fulfilment_type' => $data['fulfilment_type'] ?? Order::FULFILMENT_COUNTER,
                 'order_status' => $orderStatus,
                 'payment_method' => $data['payment_method'] ?? Order::PAYMENT_METHOD_CASH,
+                'payment_reference' => $data['payment_reference'] ?? null,
+                'upi_txn' => $data['upi_txn'] ?? null,
+                'terminal_id' => $data['terminal_id'] ?? null,
                 'payment_status' => $paymentStatus,
                 'currency_code' => $data['currency_code'] ?? 'INR',
+                'elapsed_seconds' => max(0, (int) ($data['elapsed_seconds'] ?? 0)),
                 'customer_name' => $data['customer_name'] ?? null,
                 'customer_mobile' => $data['customer_mobile'] ?? null,
                 'remarks' => $data['remarks'] ?? null,
@@ -83,6 +93,7 @@ class OrderCreationService
 
             $this->orderTotalsService->save($order, $calculated['summary'], $calculated['rows']);
             $this->orderStatusService->recordInitial($order, $orderStatus, $actor, 'POS cash sale completed');
+            $this->deductStock($variants, $rows);
 
             return $order->load(['items', 'totals', 'statusHistories']);
         });
@@ -90,9 +101,9 @@ class OrderCreationService
 
     /**
      * @param array<int, array{product_variant_id: int, quantity: int}> $rows
-     * @return array<int, OrderItem>
+     * @return array<int, int>
      */
-    private function buildItems(Shop $shop, array $rows): array
+    private function aggregateItems(array $rows): array
     {
         if ($rows === []) {
             throw ValidationException::withMessages([
@@ -100,10 +111,17 @@ class OrderCreationService
             ]);
         }
 
-        $items = [];
+        $aggregated = [];
 
         foreach ($rows as $index => $row) {
+            $variantId = (int) ($row['product_variant_id'] ?? 0);
             $quantity = (int) ($row['quantity'] ?? 0);
+
+            if ($variantId < 1) {
+                throw ValidationException::withMessages([
+                    "items.{$index}.product_variant_id" => 'A valid product variant is required.',
+                ]);
+            }
 
             if ($quantity < 1) {
                 throw ValidationException::withMessages([
@@ -111,11 +129,57 @@ class OrderCreationService
                 ]);
             }
 
+            $aggregated[$variantId] = ($aggregated[$variantId] ?? 0) + $quantity;
+        }
+
+        return $aggregated;
+    }
+
+    /**
+     * @param array<int, int> $rows
+     * @return array<int, ProductVariant>
+     */
+    private function lockVariants(Shop $shop, array $rows): array
+    {
+        $variants = [];
+
+        foreach ($rows as $variantId => $quantity) {
             $variant = ProductVariant::query()
                 ->with('product.primaryImage')
-                ->whereKey((int) $row['product_variant_id'])
+                ->whereKey($variantId)
                 ->where('shop_id', $shop->getKey())
+                ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($variant->status !== 'active') {
+                throw ValidationException::withMessages([
+                    'items' => "{$variant->name} is not available for sale.",
+                ]);
+            }
+
+            if ((int) $variant->stock_quantity < $quantity) {
+                throw ValidationException::withMessages([
+                    'items' => "Only {$variant->stock_quantity} unit(s) are available for {$variant->product?->product_name}.",
+                ]);
+            }
+
+            $variants[$variantId] = $variant;
+        }
+
+        return $variants;
+    }
+
+    /**
+     * @param array<int, int> $rows
+     * @param array<int, ProductVariant> $variants
+     * @return array<int, OrderItem>
+     */
+    private function buildItems(array $rows, array $variants): array
+    {
+        $items = [];
+
+        foreach ($rows as $variantId => $quantity) {
+            $variant = $variants[$variantId];
             $unitPrice = $this->money($variant->selling_price);
             $lineSubtotal = $this->money((float) $unitPrice * $quantity);
 
@@ -140,6 +204,20 @@ class OrderCreationService
         }
 
         return $items;
+    }
+
+    /**
+     * @param array<int, ProductVariant> $variants
+     * @param array<int, int> $rows
+     */
+    private function deductStock(array $variants, array $rows): void
+    {
+        foreach ($rows as $variantId => $quantity) {
+            $variant = $variants[$variantId];
+            $variant->forceFill([
+                'stock_quantity' => (int) $variant->stock_quantity - $quantity,
+            ])->save();
+        }
     }
 
     private function money(float|string|int $value): string

@@ -3,12 +3,16 @@
 
 <body>
 
-@include('partials.merchant.navbar')
+@unless(request()->routeIs('merchant.pos.*'))
+    @include('partials.merchant.navbar')
+@endunless
 
 <!-- Page content -->
 <div class="page-content">
 
-    @include('partials.merchant.sidebar')
+    @unless(request()->routeIs('merchant.pos.*'))
+        @include('partials.merchant.sidebar')
+    @endunless
 
     <!-- Main content -->
     <div class="content-wrapper">

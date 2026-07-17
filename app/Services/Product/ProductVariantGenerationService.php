@@ -17,6 +17,7 @@ class ProductVariantGenerationService
     public function __construct(
         private readonly ProductAttributeConfigurationService $attributeConfigurationService,
         private readonly ProductVariantManagementService $variantManagementService,
+        private readonly ProductBarcodeService $barcodeService,
     ) {
     }
 
@@ -84,7 +85,7 @@ class ProductVariantGenerationService
 
                 $baseVariant->forceFill([
                     'sku' => $baseVariant->sku ?: $this->uniqueSku($product, $firstCombination, $baseVariant),
-                    'barcode' => $baseVariant->barcode,
+                    'barcode' => $baseVariant->barcode ?: $this->barcodeService->generate($product->shop),
                     'name' => $firstCombination['name'],
                     'mrp' => $variantDefaults['mrp'],
                     'selling_price' => $variantDefaults['selling_price'],
@@ -116,7 +117,7 @@ class ProductVariantGenerationService
                     'product_id' => $product->getKey(),
                     'shop_id' => $product->shop_id,
                     'sku' => $this->uniqueSku($product, $combination),
-                    'barcode' => null,
+                    'barcode' => $this->barcodeService->generate($product->shop),
                     'name' => $combination['name'],
                     'mrp' => $variantDefaults['mrp'],
                     'selling_price' => $variantDefaults['selling_price'],

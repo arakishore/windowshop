@@ -28,6 +28,10 @@ class Order extends Model
     public const STATUS_CANCELLED = 'cancelled';
 
     public const PAYMENT_METHOD_CASH = 'cash';
+    public const PAYMENT_METHOD_UPI = 'upi';
+    public const PAYMENT_METHOD_CARD = 'card';
+    public const PAYMENT_METHOD_WALLET = 'wallet';
+    public const PAYMENT_METHOD_OTHER = 'other';
 
     public const PAYMENT_UNPAID = 'unpaid';
     public const PAYMENT_PAID = 'paid';
@@ -44,6 +48,9 @@ class Order extends Model
         'fulfilment_type',
         'order_status',
         'payment_method',
+        'payment_reference',
+        'upi_txn',
+        'terminal_id',
         'payment_status',
         'currency_code',
         'subtotal',
@@ -54,6 +61,7 @@ class Order extends Model
         'grand_total',
         'amount_paid',
         'change_amount',
+        'elapsed_seconds',
         'customer_name',
         'customer_mobile',
         'remarks',
@@ -74,6 +82,7 @@ class Order extends Model
             'grand_total' => 'decimal:2',
             'amount_paid' => 'decimal:2',
             'change_amount' => 'decimal:2',
+            'elapsed_seconds' => 'integer',
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'deleted_at' => 'datetime',

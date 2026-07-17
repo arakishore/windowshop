@@ -23,6 +23,9 @@ return new class extends Migration
             $table->string('fulfilment_type', 30)->default('counter');
             $table->string('order_status', 30)->default('pending')->index();
             $table->string('payment_method', 30)->default('cash');
+            $table->string('payment_reference')->nullable();
+            $table->string('upi_txn')->nullable();
+            $table->string('terminal_id', 80)->nullable();
             $table->string('payment_status', 30)->default('unpaid')->index();
             $table->string('currency_code', 3)->default('INR');
             $table->decimal('subtotal', 14, 2)->default(0);
@@ -33,6 +36,7 @@ return new class extends Migration
             $table->decimal('grand_total', 14, 2)->default(0);
             $table->decimal('amount_paid', 14, 2)->default(0);
             $table->decimal('change_amount', 14, 2)->default(0);
+            $table->unsignedInteger('elapsed_seconds')->default(0);
             $table->string('customer_name')->nullable();
             $table->string('customer_mobile', 30)->nullable();
             $table->text('remarks')->nullable();

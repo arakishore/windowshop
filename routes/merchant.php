@@ -3,9 +3,11 @@
 use App\Http\Controllers\Merchant\Auth\MerchantAuthController;
 use App\Http\Controllers\Merchant\Auth\MerchantPasswordController;
 use App\Http\Controllers\Merchant\Auth\MerchantProfileController;
+use App\Http\Controllers\Merchant\BarcodeLabelController;
 use App\Http\Controllers\Merchant\MerchantDetailsController;
 use App\Http\Controllers\Merchant\MerchantShopController;
 use App\Http\Controllers\Merchant\MerchantShopContextController;
+use App\Http\Controllers\Merchant\PosController;
 use App\Http\Controllers\Merchant\ProductController;
 use Illuminate\Support\Facades\Route;
 
@@ -36,6 +38,14 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
 
     Route::middleware(['auth', 'merchant.role', 'merchant.active_shop'])->group(function (): void {
         Route::get('/dashboard', [MerchantAuthController::class, 'dashboard'])->name('dashboard');
+        Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
+        Route::get('/pos/search', [PosController::class, 'search'])->name('pos.search');
+        Route::post('/pos/checkout', [PosController::class, 'checkout'])->name('pos.checkout');
+        Route::get('/pos/recent-sales', [PosController::class, 'recentSales'])->name('pos.recent-sales');
+        Route::get('/pos/orders/{order}/receipt', [PosController::class, 'receipt'])->name('pos.receipt');
+        Route::get('/barcodes/labels', [BarcodeLabelController::class, 'index'])->name('barcodes.labels.index');
+        Route::post('/barcodes/generate-missing', [BarcodeLabelController::class, 'generateMissing'])->name('barcodes.generate-missing');
+        Route::post('/barcodes/labels/print', [BarcodeLabelController::class, 'print'])->name('barcodes.labels.print');
         Route::post('products/bulk-action', [ProductController::class, 'bulkAction'])
             ->name('products.bulk-action');
         Route::post('products/{product}/duplicate', [ProductController::class, 'duplicate'])
@@ -56,6 +66,8 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
             ->name('products.images.destroy');
         Route::post('products/{product}/variants/generate', [ProductController::class, 'generateVariants'])
             ->name('products.variants.generate');
+        Route::post('products/{product}/barcodes/generate', [ProductController::class, 'generateBarcodes'])
+            ->name('products.barcodes.generate');
         Route::put('products/{product}/variants', [ProductController::class, 'updateVariants'])
             ->name('products.variants.update');
         Route::put('products/{product}/variants/bulk', [ProductController::class, 'bulkUpdateVariants'])

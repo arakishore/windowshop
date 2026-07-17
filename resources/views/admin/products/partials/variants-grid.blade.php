@@ -80,39 +80,57 @@
         </div>
     @endif
 
-    <form method="GET" action="{{ route($productRoutePrefix.'.products.edit', ['product' => $product, 'tab' => 'variants']) }}" class="row g-2 align-items-end mb-3">
-        <input type="hidden" name="tab" value="variants">
-        <div class="col-md-3">
-            <label class="form-label" for="variant_search">Search</label>
-            <input id="variant_search" name="variant_search" type="text" value="{{ $variantFilters['search'] ?? '' }}" class="form-control" placeholder="Variant or SKU">
-        </div>
-        <div class="col-md-2">
-            <label class="form-label" for="variant_status">Status</label>
-            <select id="variant_status" name="variant_status" class="form-select">
-                <option value="">All</option>
-                @foreach($variantStatuses as $statusValue => $statusLabel)
-                    <option value="{{ $statusValue }}" @selected(($variantFilters['status'] ?? '') === $statusValue)>{{ $statusLabel }}</option>
-                @endforeach
-            </select>
-        </div>
-        @foreach($variantFilterOptions as $option)
+    <div class="d-flex flex-column flex-xl-row justify-content-xl-between gap-3 align-items-xl-end mb-3">
+        <form method="GET" action="{{ route($productRoutePrefix.'.products.edit', ['product' => $product, 'tab' => 'variants']) }}" class="row g-2 align-items-end flex-fill">
+            <input type="hidden" name="tab" value="variants">
+            <div class="col-md-3">
+                <label class="form-label" for="variant_search">Search</label>
+                <input id="variant_search" name="variant_search" type="text" value="{{ $variantFilters['search'] ?? '' }}" class="form-control" placeholder="Variant, SKU or barcode">
+            </div>
             <div class="col-md-2">
-                <label class="form-label" for="variant_attribute_{{ $option['group_id'] }}">{{ $option['group_name'] }}</label>
-                <select id="variant_attribute_{{ $option['group_id'] }}" name="variant_attributes[{{ $option['group_id'] }}]" class="form-select">
+                <label class="form-label" for="variant_status">Status</label>
+                <select id="variant_status" name="variant_status" class="form-select">
                     <option value="">All</option>
-                    @foreach($option['values'] as $value)
-                        <option value="{{ $value['id'] }}" @selected((string) (($variantFilters['attributes'][$option['group_id']] ?? '') ?: '') === (string) $value['id'])>{{ $value['name'] }}</option>
+                    @foreach($variantStatuses as $statusValue => $statusLabel)
+                        <option value="{{ $statusValue }}" @selected(($variantFilters['status'] ?? '') === $statusValue)>{{ $statusLabel }}</option>
                     @endforeach
                 </select>
             </div>
-        @endforeach
-        <div class="col-md-auto">
-            <button type="submit" class="btn btn-light border">
-                <i class="ph-funnel me-2"></i>
-                Filter
-            </button>
-        </div>
-    </form>
+            @foreach($variantFilterOptions as $option)
+                <div class="col-md-2">
+                    <label class="form-label" for="variant_attribute_{{ $option['group_id'] }}">{{ $option['group_name'] }}</label>
+                    <select id="variant_attribute_{{ $option['group_id'] }}" name="variant_attributes[{{ $option['group_id'] }}]" class="form-select">
+                        <option value="">All</option>
+                        @foreach($option['values'] as $value)
+                            <option value="{{ $value['id'] }}" @selected((string) (($variantFilters['attributes'][$option['group_id']] ?? '') ?: '') === (string) $value['id'])>{{ $value['name'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endforeach
+            <div class="col-md-auto">
+                <button type="submit" class="btn btn-light border">
+                    <i class="ph-funnel me-2"></i>
+                    Filter
+                </button>
+            </div>
+        </form>
+
+        @if($productRoutePrefix === 'merchant')
+            <div class="d-flex flex-wrap gap-2">
+                <form method="POST" action="{{ route('merchant.products.barcodes.generate', $product) }}">
+                    @csrf
+                    <button type="submit" class="btn btn-light border">
+                        <i class="ph-barcode me-2"></i>
+                        Generate Missing Barcodes
+                    </button>
+                </form>
+                <a href="{{ route('merchant.barcodes.labels.index', ['q' => $product->product_name]) }}" class="btn btn-primary">
+                    <i class="ph-printer me-2"></i>
+                    Print Labels
+                </a>
+            </div>
+        @endif
+    </div>
 
     <div class="border rounded p-3 mb-3">
         <h6 class="fw-semibold mb-3">

@@ -112,7 +112,9 @@
                                             @endif
                                         </div>
                                         <div>
-                                            <div class="fw-semibold">{{ $product->product_name }}</div>
+                                            <a href="{{ route('merchant.products.edit', $product) }}" class="fw-semibold text-body text-decoration-none">
+                                                {{ $product->product_name }}
+                                            </a>
                                             <code>{{ $product->slug }}</code>
                                         </div>
                                     </div>
