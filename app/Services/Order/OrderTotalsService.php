@@ -36,7 +36,8 @@ class OrderTotalsService
         }
 
         $discountRows = collect($rows)
-            ->filter(fn (array $row): bool => str_contains((string) $row['code'], 'discount') || str_contains((string) $row['code'], 'coupon'));
+            ->filter(fn (array $row): bool => $row['code'] !== OrderTotal::CODE_ITEM_DISCOUNT
+                && (str_contains((string) $row['code'], 'discount') || str_contains((string) $row['code'], 'coupon')));
         $taxRows = collect($rows)
             ->filter(fn (array $row): bool => in_array($row['code'], [OrderTotal::CODE_TAX, OrderTotal::CODE_CGST, OrderTotal::CODE_SGST, OrderTotal::CODE_IGST], true));
         $shippingRows = collect($rows)

@@ -627,6 +627,341 @@ class MerchantPosTest extends TestCase
         ]);
     }
 
+    public function test_pos_checkout_applies_percent_line_discount(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Discount Shirt', 'White / M', 'DISC-M-WHT', 'DISCBAR001');
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 2000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 2, 'discount_type' => 'percent', 'discount_value' => 10],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('order.grand_total', '1798.20');
+
+        $orderId = (int) DB::table('orders')->where('shop_id', $shopId)->value('id');
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $orderId,
+            'product_variant_id' => $fixture['variant_id'],
+            'item_discount_type' => 'percent',
+            'item_discount_value' => 10,
+            'line_discount' => 199.80,
+            'line_total' => 1798.20,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $orderId,
+            'subtotal' => 1998,
+            'discount_total' => 199.80,
+            'grand_total' => 1798.20,
+        ]);
+    }
+
+    public function test_pos_checkout_applies_amount_line_discount_and_order_discounts(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $first = $this->createPosProduct($shopId, 'Amount Shirt', 'White / M', 'AMT-M-WHT', 'AMTBAR001');
+        $secondVariantId = $this->createVariant($shopId, $first['product_id'], 'Black / M', 'AMT-M-BLK', 'AMTBAR002');
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 2000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'order_discount' => [
+                    'type' => 'amount',
+                    'value' => 100,
+                    'reason' => 'Customer Loyalty',
+                    'note' => 'Regular buyer',
+                ],
+                'items' => [
+                    ['product_variant_id' => $first['variant_id'], 'quantity' => 1, 'discount_type' => 'amount', 'discount_value' => 100],
+                    ['product_variant_id' => $secondVariantId, 'quantity' => 1, 'discount_type' => 'percent', 'discount_value' => 10],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('order.grand_total', '1698.10');
+
+        $orderId = (int) DB::table('orders')->where('shop_id', $shopId)->value('id');
+        $this->assertDatabaseHas('orders', [
+            'id' => $orderId,
+            'subtotal' => 1998,
+            'discount_total' => 299.90,
+            'order_discount_type' => 'amount',
+            'order_discount_value' => 100,
+            'order_discount_amount' => 100,
+            'order_discount_reason' => 'Customer Loyalty',
+            'grand_total' => 1698.10,
+        ]);
+        $this->assertDatabaseHas('order_totals', [
+            'order_id' => $orderId,
+            'code' => 'item_discount',
+            'amount' => -199.90,
+        ]);
+        $this->assertDatabaseHas('order_totals', [
+            'order_id' => $orderId,
+            'code' => 'order_discount',
+            'amount' => -100,
+        ]);
+    }
+
+    public function test_pos_checkout_applies_percent_order_discount_after_line_discounts(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Order Discount Shirt', 'White / M', 'OD-M-WHT', 'ODBAR001');
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'order_discount' => ['type' => 'percent', 'value' => 10],
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1, 'discount_type' => 'amount', 'discount_value' => 99],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('order.grand_total', '810.00');
+
+        $this->assertDatabaseHas('orders', [
+            'shop_id' => $shopId,
+            'subtotal' => 999,
+            'discount_total' => 189,
+            'order_discount_type' => 'percent',
+            'order_discount_value' => 10,
+            'order_discount_amount' => 90,
+            'grand_total' => 810,
+        ]);
+    }
+
+    public function test_pos_checkout_rejects_invalid_discounts(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Invalid Discount Shirt', 'White / M', 'BAD-M-WHT', 'BADBAR001');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1, 'discount_type' => 'percent', 'discount_value' => 101],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('items.discount_value');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'order_discount' => ['type' => 'amount', 'value' => 1000],
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1, 'discount_type' => 'amount', 'discount_value' => 999],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('order_discount.discount_value');
+    }
+
+    public function test_pos_receipt_shows_item_and_order_discount_totals(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Receipt Discount Shirt', 'White / M', 'REC-M-WHT', 'RECBAR001');
+        $merchantId = (int) DB::table('shops')->where('id', $shopId)->value('merchant_id');
+
+        DB::table('merchant_profiles')
+            ->where('id', $merchantId)
+            ->update(['gst_number' => '27ABCDE1234F1Z5']);
+
+        foreach ([
+            'receipt.line_item.show_sku' => ['1', 'boolean'],
+            'receipt.footer' => ['Footer note', 'string'],
+            'receipt.return_policy' => ['Returns within 7 days.', 'string'],
+        ] as $key => [$value, $type]) {
+            DB::table('merchant_settings')->insert([
+                'merchant_id' => $merchantId,
+                'group' => 'pos',
+                'setting_key' => $key,
+                'setting_value' => $value,
+                'setting_type' => $type,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'order_discount' => ['type' => 'amount', 'value' => 50],
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1, 'discount_type' => 'amount', 'discount_value' => 100],
+                ],
+            ]);
+
+        $receiptUrl = $response->json('order.receipt_url');
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get($receiptUrl)
+            ->assertOk()
+            ->assertSee('Line Discount')
+            ->assertSee('Item Discount')
+            ->assertSee('Order Discount')
+            ->assertSee('GSTIN : 27ABCDE1234F1Z5')
+            ->assertSee('QR')
+            ->assertSee('SKU: REC-M-WHT')
+            ->assertSee('Footer note')
+            ->assertSee('Returns within 7 days.')
+            ->assertSee('849.00');
+
+        foreach (['receipt.show_gst_number', 'receipt.show_qr_code'] as $key) {
+            DB::table('merchant_settings')->insert([
+                'merchant_id' => $merchantId,
+                'group' => 'pos',
+                'setting_key' => $key,
+                'setting_value' => '0',
+                'setting_type' => 'boolean',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get($receiptUrl)
+            ->assertOk()
+            ->assertDontSee('GSTIN : 27ABCDE1234F1Z5')
+            ->assertDontSee('QR');
+    }
+
+    public function test_pos_can_search_customer_and_add_shipping_address(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $customerId = $this->createCustomer($shopId, 'Delivery Buyer', '9876543210', 'delivery@example.test');
+        $customerUuid = (string) DB::table('merchant_customers')->where('id', $customerId)->value('uuid');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->getJson(route('merchant.pos.customers', ['q' => '9876543210']))
+            ->assertOk()
+            ->assertJsonPath('customers.0.id', $customerId)
+            ->assertJsonPath('customers.0.route_key', $customerUuid)
+            ->assertJsonPath('customers.0.name', 'Delivery Buyer');
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.customers.addresses.store', $customerUuid), [
+                'label' => 'Home',
+                'recipient_name' => 'Delivery Buyer',
+                'recipient_mobile_country_code' => '+91',
+                'recipient_mobile' => '9876543210',
+                'address_line_1' => 'Delivery Line One',
+                'landmark' => 'Near Market',
+                'postal_code' => '560001',
+                'is_default_shipping' => true,
+            ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('address.label', 'Home')
+            ->assertJsonPath('address.address_line_1', 'Delivery Line One');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->getJson(route('merchant.pos.customers.addresses', $customerUuid))
+            ->assertOk()
+            ->assertJsonCount(1, 'addresses')
+            ->assertJsonPath('addresses.0.is_default_shipping', true);
+    }
+
+    public function test_pos_delivery_checkout_requires_address_and_stores_snapshots(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Delivery Shirt', 'White / M', 'DEL-M-WHT', 'DELBAR001');
+        $customerId = $this->createCustomer($shopId, 'Snapshot Buyer', '9876543210', 'snapshot@example.test');
+        $addressId = $this->createCustomerAddress($customerId, 'Snapshot Line One');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'delivery',
+                'customer_id' => $customerId,
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('shipping_address_id');
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'delivery',
+                'customer_id' => $customerId,
+                'shipping_address_id' => $addressId,
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('order.fulfilment_type', 'delivery')
+            ->assertJsonPath('order.customer_name', 'Snapshot Buyer')
+            ->assertJsonPath('order.shipping_address_line_1', 'Snapshot Line One');
+
+        $this->assertDatabaseHas('orders', [
+            'shop_id' => $shopId,
+            'customer_id' => $customerId,
+            'shipping_address_id' => $addressId,
+            'fulfilment_type' => 'delivery',
+            'customer_name' => 'Snapshot Buyer',
+            'customer_mobile' => '9876543210',
+            'customer_email' => 'snapshot@example.test',
+            'shipping_recipient_name' => 'Snapshot Buyer',
+            'shipping_mobile_country_code' => '+91',
+            'shipping_mobile' => '9876543210',
+            'shipping_address_line_1' => 'Snapshot Line One',
+            'shipping_postal_code' => '560001',
+        ]);
+    }
+
     public function test_recent_sales_returns_completed_pos_orders_for_active_shop(): void
     {
         [$userId, $shopId] = $this->merchantShopFixture();
@@ -715,6 +1050,46 @@ class MerchantPosTest extends TestCase
         session(['pos_root_category_id' => $rootCategoryId]);
 
         return [$userId, $shopId];
+    }
+
+    private function createCustomer(int $shopId, string $name, string $mobile, string $email): int
+    {
+        $merchantId = (int) DB::table('shops')->where('id', $shopId)->value('merchant_id');
+
+        return (int) DB::table('merchant_customers')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'merchant_id' => $merchantId,
+            'customer_code' => 'CUS-'.Str::upper(Str::random(6)),
+            'name' => $name,
+            'mobile_country_code' => '+91',
+            'mobile' => $mobile,
+            'mobile_normalized' => '91'.$mobile,
+            'email' => $email,
+            'status' => 'active',
+            'linked_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function createCustomerAddress(int $customerId, string $lineOne): int
+    {
+        return (int) DB::table('merchant_customer_addresses')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'merchant_customer_id' => $customerId,
+            'label' => 'Home',
+            'recipient_name' => 'Snapshot Buyer',
+            'recipient_mobile_country_code' => '+91',
+            'recipient_mobile' => '9876543210',
+            'recipient_mobile_normalized' => '919876543210',
+            'address_line_1' => $lineOne,
+            'postal_code' => '560001',
+            'is_default_shipping' => true,
+            'is_default_billing' => false,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     /**

@@ -33,4 +33,30 @@ return [
             ],
         ],
     ],
+
+    'customer' => [
+        'statuses' => [
+            'active' => [
+                'label' => 'Active',
+                'badge_class' => 'bg-success',
+            ],
+            'inactive' => [
+                'label' => 'Inactive',
+                'badge_class' => 'bg-light text-body border',
+            ],
+        ],
+    ],
+
+    'customer_address' => [
+        'statuses' => [
+            'active' => [
+                'label' => 'Active',
+                'badge_class' => 'bg-success',
+            ],
+            'inactive' => [
+                'label' => 'Inactive',
+                'badge_class' => 'bg-light text-body border',
+            ],
+        ],
+    ],
 ];

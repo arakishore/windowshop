@@ -4,7 +4,10 @@ use App\Http\Controllers\Merchant\Auth\MerchantAuthController;
 use App\Http\Controllers\Merchant\Auth\MerchantPasswordController;
 use App\Http\Controllers\Merchant\Auth\MerchantProfileController;
 use App\Http\Controllers\Merchant\BarcodeLabelController;
+use App\Http\Controllers\Merchant\CustomerController;
+use App\Http\Controllers\Merchant\CustomerAddressController;
 use App\Http\Controllers\Merchant\MerchantDetailsController;
+use App\Http\Controllers\Merchant\MerchantSettingsController;
 use App\Http\Controllers\Merchant\MerchantShopController;
 use App\Http\Controllers\Merchant\MerchantShopContextController;
 use App\Http\Controllers\Merchant\PosController;
@@ -23,6 +26,8 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::put('/profile', [MerchantProfileController::class, 'update'])->name('profile.update');
         Route::get('/details', [MerchantDetailsController::class, 'edit'])->name('details.edit');
         Route::put('/details', [MerchantDetailsController::class, 'update'])->name('details.update');
+        Route::get('/settings', [MerchantSettingsController::class, 'edit'])->name('settings.edit');
+        Route::put('/settings', [MerchantSettingsController::class, 'update'])->name('settings.update');
         Route::get('/change-password', [MerchantPasswordController::class, 'edit'])->name('password.edit');
         Route::put('/change-password', [MerchantPasswordController::class, 'update'])->name('password.update');
         Route::post('/active-shop', [MerchantShopContextController::class, 'update'])->name('active-shop.update');
@@ -40,12 +45,30 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::get('/dashboard', [MerchantAuthController::class, 'dashboard'])->name('dashboard');
         Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
         Route::get('/pos/search', [PosController::class, 'search'])->name('pos.search');
+        Route::get('/pos/customers', [PosController::class, 'customers'])->name('pos.customers');
+        Route::get('/pos/customers/{customer}/addresses', [PosController::class, 'customerAddresses'])->name('pos.customers.addresses');
+        Route::post('/pos/customers/{customer}/addresses', [PosController::class, 'storeCustomerAddress'])->name('pos.customers.addresses.store');
         Route::post('/pos/checkout', [PosController::class, 'checkout'])->name('pos.checkout');
         Route::get('/pos/recent-sales', [PosController::class, 'recentSales'])->name('pos.recent-sales');
         Route::get('/pos/orders/{order}/receipt', [PosController::class, 'receipt'])->name('pos.receipt');
         Route::get('/barcodes/labels', [BarcodeLabelController::class, 'index'])->name('barcodes.labels.index');
         Route::post('/barcodes/generate-missing', [BarcodeLabelController::class, 'generateMissing'])->name('barcodes.generate-missing');
         Route::post('/barcodes/labels/print', [BarcodeLabelController::class, 'print'])->name('barcodes.labels.print');
+        Route::post('customers/{customer}/activate', [CustomerController::class, 'activate'])
+            ->name('customers.activate');
+        Route::post('customers/{customer}/deactivate', [CustomerController::class, 'deactivate'])
+            ->name('customers.deactivate');
+        Route::post('customers/bulk-action', [CustomerController::class, 'bulkAction'])
+            ->name('customers.bulk-action');
+        Route::get('customers/mobile-lookup', [CustomerController::class, 'mobileLookup'])
+            ->name('customers.mobile-lookup');
+        Route::get('customer-addresses/states', [CustomerAddressController::class, 'states'])
+            ->name('customer-addresses.states');
+        Route::get('customer-addresses/cities', [CustomerAddressController::class, 'cities'])
+            ->name('customer-addresses.cities');
+        Route::resource('customers.addresses', CustomerAddressController::class)
+            ->except(['index', 'show']);
+        Route::resource('customers', CustomerController::class);
         Route::post('products/bulk-action', [ProductController::class, 'bulkAction'])
             ->name('products.bulk-action');
         Route::post('products/{product}/duplicate', [ProductController::class, 'duplicate'])

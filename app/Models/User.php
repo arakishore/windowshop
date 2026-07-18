@@ -6,6 +6,7 @@ namespace App\Models;
 use App\Models\Traits\HasUuid;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -54,5 +55,10 @@ class User extends Authenticatable
     public function merchantProfile(): HasOne
     {
         return $this->hasOne(MerchantProfile::class);
+    }
+
+    public function merchantCustomerProfiles(): HasMany
+    {
+        return $this->hasMany(MerchantCustomer::class, 'user_id');
     }
 }

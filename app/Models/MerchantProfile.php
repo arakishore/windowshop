@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Traits\HasUuid;
+use App\Services\Merchant\MerchantSettingsInitializer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -46,6 +47,13 @@ class MerchantProfile extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::created(function (MerchantProfile $merchant): void {
+            app(MerchantSettingsInitializer::class)->initialize((int) $merchant->getKey());
+        });
+    }
+
     public function getRouteKeyName(): string
     {
         return 'uuid';
@@ -74,6 +82,16 @@ class MerchantProfile extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class, 'merchant_id');
+    }
+
+    public function customers(): HasMany
+    {
+        return $this->hasMany(MerchantCustomer::class, 'merchant_id');
+    }
+
+    public function settings(): HasMany
+    {
+        return $this->hasMany(MerchantSetting::class, 'merchant_id');
     }
 
     public function businessAddress(): HasOne

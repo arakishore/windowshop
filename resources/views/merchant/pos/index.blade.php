@@ -7,7 +7,7 @@
     <style>
         .pos-shell {
             --pos-cart-width: 390px;
-            --pos-workspace-height: calc(100vh - 3.5rem);
+            --pos-workspace-height: calc(100vh - 2.5rem);
         }
 
         .pos-toolbar {
@@ -19,7 +19,7 @@
         }
 
         .pos-search-control {
-            min-height: 3rem;
+            min-height: 1.75rem;
             border-radius: .75rem;
         }
 
@@ -83,7 +83,7 @@
         .pos-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 1rem;
+            gap: 0.4rem;
         }
 
         .pos-product-card {
@@ -158,14 +158,14 @@
             border: 1px solid var(--border-color, #ddd);
             border-radius: .85rem;
             background: #fff;
-            padding: 1rem;
+            padding: 0.5rem;
             height: var(--pos-workspace-height);
             overflow: hidden;
         }
 
         .pos-cart-items {
             flex: 1 1 auto;
-            min-height: 56px;
+            
             overflow-y: auto;
             overscroll-behavior: contain;
             padding-right: .25rem;
@@ -183,10 +183,56 @@
 
         .pos-cart-row {
             display: grid;
-            grid-template-columns: 1fr auto;
+            grid-template-columns: minmax(0, 1fr) auto;
             gap: .75rem;
             padding: .75rem 0;
             border-bottom: 1px solid var(--border-color, #e5e7eb);
+        }
+
+        .pos-cart-row > div:first-child {
+            min-width: 0;
+        }
+
+        .pos-cart-product {
+            display: flex;
+            align-items: flex-start;
+            gap: .65rem;
+            min-width: 0;
+        }
+
+        .pos-cart-thumb {
+            width: 2.25rem;
+            height: 2.25rem;
+            flex: 0 0 2.25rem;
+            border: 1px solid var(--border-color, #e5e7eb);
+            border-radius: .4rem;
+            background: var(--gray-100, #f5f5f5);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray-500, #8b96a5);
+        }
+
+        .pos-cart-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .pos-cart-title {
+            min-width: 0;
+        }
+
+        .pos-cart-title .fw-semibold,
+        .pos-cart-title .text-muted {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pos-line-price-stack {
+            min-width: 7.25rem;
         }
 
         .pos-cart-row:last-child {
@@ -203,15 +249,49 @@
 
         .pos-qty-control button {
             border: 0;
-            width: 2rem;
-            height: 2rem;
+            width: 1.75rem;
+            height: 1.55rem;
             background: transparent;
         }
 
         .pos-qty-control span {
-            min-width: 2rem;
+            min-width: 1.9rem;
             text-align: center;
             font-weight: 700;
+        }
+
+        .pos-line-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: .2rem;
+        }
+
+        .pos-line-action {
+            width: 1.45rem;
+            height: 1.45rem;
+            border: 0;
+            border-radius: .35rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            color: var(--gray-600, #6c757d);
+            background: transparent;
+            line-height: 1;
+        }
+
+        .pos-line-action i {
+            font-size: .88rem;
+        }
+
+        .pos-line-action:hover {
+            background: var(--gray-100, #f5f5f5);
+            color: var(--body-color, #1f2937);
+        }
+
+        .pos-line-action.is-active {
+            background: rgba(var(--warning-rgb, 255, 193, 7), .14);
+            color: var(--warning, #f59e0b);
         }
 
         .pos-grand-total {
@@ -232,8 +312,32 @@
 
         .pos-quick-actions .btn {
             min-width: 0;
-            padding-left: .4rem;
-            padding-right: .4rem;
+            padding: .25rem .4rem;
+            font-size: .75rem;
+            line-height: 1.15;
+        }
+
+        .pos-cart-panel .btn-sm:not(.js-pos-complete),
+        .pos-cart-panel .btn-icon.btn-sm {
+            --btn-padding-x: .45rem;
+            --btn-padding-y: .2rem;
+            --btn-font-size: .75rem;
+            min-height: 1.75rem;
+        }
+
+        .pos-cart-panel .btn-icon.btn-sm {
+            width: 1.75rem;
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        .pos-cart-panel .pos-compact-control,
+        .pos-cart-panel .input-group-sm > .input-group-text {
+            min-height: 1.75rem;
+            padding-top: .2rem;
+            padding-bottom: .2rem;
+            font-size: .75rem;
+            line-height: 1.15;
         }
 
         .pos-actions .js-pos-complete {
@@ -312,6 +416,9 @@
         data-items='@json($posItems->keyBy('id')->all())'
         data-checkout-url="{{ route('merchant.pos.checkout') }}"
         data-search-url="{{ route('merchant.pos.search') }}"
+        data-customer-search-url="{{ route('merchant.pos.customers') }}"
+        data-customer-addresses-url-template="{{ route('merchant.pos.customers.addresses', ['customer' => '__CUSTOMER__']) }}"
+        data-customer-address-store-url-template="{{ route('merchant.pos.customers.addresses.store', ['customer' => '__CUSTOMER__']) }}"
         data-recent-sales-url="{{ route('merchant.pos.recent-sales') }}"
         data-shop-id="{{ $selectedShop?->getKey() ?? $activeShop?->getKey() }}"
     >
@@ -325,7 +432,7 @@
                                     <input type="hidden" name="category_id" value="{{ $activeCategoryId }}">
                                 @endif
                                 <div class="input-group input-group-lg">
-                                    <a href="{{ route('merchant.dashboard') }}" class="btn btn-light" title="Dashboard" aria-label="Dashboard">
+                                    <a href="{{ route('merchant.dashboard') }}" class="btn btn-light" data-bs-popup="tooltip" title="Go back to merchant dashboard" aria-label="Go back to merchant dashboard">
                                         <i class="ph-house"></i>
                                     </a>
                                     <span class="input-group-text bg-white"><i class="ph-magnifying-glass"></i></span>
@@ -343,10 +450,10 @@
                                             autofocus
                                         >
                                     </div>
-                                    <button type="button" class="btn btn-light js-pos-search-clear {{ $filters['search'] === '' ? 'd-none' : '' }}" title="Clear search">
+                                    <button type="button" class="btn btn-light js-pos-search-clear {{ $filters['search'] === '' ? 'd-none' : '' }}" data-bs-popup="tooltip" title="Clear product search">
                                         <i class="ph-x"></i>
                                     </button>
-                                    <button type="submit" class="btn btn-primary">
+                                    <button type="submit" class="btn btn-primary" data-bs-popup="tooltip" title="Search products">
                                         <i class="ph-arrow-right"></i>
                                     </button>
                                 </div>
@@ -371,28 +478,28 @@
                             @endif
                             <span class="badge bg-success bg-opacity-10 text-success py-2 px-3">Online</span>
                             <div class="dropdown">
-                                <button type="button" class="btn btn-light btn-icon" data-bs-toggle="dropdown" aria-expanded="false" aria-label="POS actions">
+                                <button type="button" class="btn btn-light btn-icon" data-bs-toggle="dropdown" data-bs-popup="tooltip" title="More POS actions" aria-expanded="false" aria-label="More POS actions">
                                     <i class="ph-dots-three"></i>
                                 </button>
                                 <div class="dropdown-menu dropdown-menu-end">
-                                    <button type="button" class="dropdown-item js-pos-clear">
+                                    <button type="button" class="dropdown-item js-pos-clear" data-bs-popup="tooltip" title="Clear all items from this cart">
                                         <i class="ph-trash me-2"></i>
                                         Clear cart
                                     </button>
-                                    <button type="button" class="dropdown-item js-pos-reprint-last" disabled>
+                                    <button type="button" class="dropdown-item js-pos-reprint-last" disabled data-bs-popup="tooltip" title="Print the most recent completed sale">
                                         <i class="ph-printer me-2"></i>
                                         Reprint last receipt
                                     </button>
-                                    <button type="button" class="dropdown-item js-pos-held-orders">
+                                    <button type="button" class="dropdown-item js-pos-held-orders" data-bs-popup="tooltip" title="View carts parked for later">
                                         <i class="ph-receipt me-2"></i>
                                         Held orders
                                         <span class="badge bg-primary ms-auto js-pos-held-count">0</span>
                                     </button>
-                                    <button type="button" class="dropdown-item js-pos-recent-sales">
+                                    <button type="button" class="dropdown-item js-pos-recent-sales" data-bs-popup="tooltip" title="View recent completed sales">
                                         <i class="ph-clock-counter-clockwise me-2"></i>
                                         Recent sales
                                     </button>
-                                    <button type="button" class="dropdown-item js-pos-shortcuts">
+                                    <button type="button" class="dropdown-item js-pos-shortcuts" data-bs-popup="tooltip" title="Show available POS keyboard shortcuts">
                                         <i class="ph-key me-2"></i>
                                         Keyboard shortcuts
                                     </button>
@@ -464,6 +571,8 @@
             const lastReceiptStorageKey = `windowshop.pos.lastReceipt.${root.dataset.shopId || 'default'}`;
             const cartItems = root.querySelector('.js-pos-cart-items');
             const subtotalEl = root.querySelector('.js-pos-subtotal');
+            const itemDiscountEl = root.querySelector('.js-pos-item-discount');
+            const orderDiscountTotalEl = root.querySelector('.js-pos-order-discount-total');
             const grandTotalEl = root.querySelector('.js-pos-grand-total');
             const elapsedTimeEl = root.querySelector('.js-pos-elapsed-time');
             const searchInput = root.querySelector('.pos-search-control');
@@ -482,20 +591,91 @@
             const heldListEl = root.querySelector('.js-pos-held-list');
             const heldEmptyEl = root.querySelector('.js-pos-held-empty');
             const heldModalEl = document.getElementById('posHeldOrdersModal');
+            const customerModalEl = document.getElementById('posCustomerModal');
             const recentSalesModalEl = document.getElementById('posRecentSalesModal');
             const recentSalesLoadingEl = document.querySelector('.js-pos-recent-loading');
             const recentSalesEmptyEl = document.querySelector('.js-pos-recent-empty');
             const recentSalesListEl = document.querySelector('.js-pos-recent-list');
+            const customerSearchInput = root.querySelector('.js-pos-customer-search');
+            const customerResultsEl = root.querySelector('.js-pos-customer-results');
+            const selectedCustomerNameEls = Array.from(root.querySelectorAll('.js-pos-selected-customer-name'));
+            const selectedCustomerMetaEls = Array.from(root.querySelectorAll('.js-pos-selected-customer-meta'));
+            const clearCustomerButton = root.querySelector('.js-pos-clear-customer');
+            const deliveryPanel = root.querySelector('.js-pos-delivery-panel');
+            const shippingAddressSelect = root.querySelector('.js-pos-shipping-address');
+            const shippingAddressSummaryEls = Array.from(root.querySelectorAll('.js-pos-shipping-address-summary'));
+            const toggleAddressFormButton = root.querySelector('.js-pos-toggle-address-form');
+            const addressForm = root.querySelector('.js-pos-address-form');
+            const saveAddressButton = root.querySelector('.js-pos-save-address');
+            const lineDiscountModalEl = document.getElementById('posLineDiscountModal');
+            const orderDiscountModalEl = document.getElementById('posOrderDiscountModal');
+            const orderDiscountBadge = root.querySelector('.js-pos-order-discount-badge');
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
             let heldCarts = [];
             let timerStartedAt = null;
             let timerElapsedBeforeStart = 0;
             let timerInterval = null;
+            let selectedCustomer = null;
+            let customerAddresses = [];
+            let addSoundContext = null;
+            let orderDiscount = null;
+            let activeLineDiscountVariantId = null;
             const scanQueue = [];
             let scanLookupRunning = false;
             let searchKeyTimings = [];
 
-            const cartTotal = () => Array.from(cart.values()).reduce((sum, row) => sum + (row.price * row.quantity), 0);
+            const refreshTooltips = () => {
+                if (!window.bootstrap?.Tooltip) {
+                    return;
+                }
+
+                root.querySelectorAll('[data-bs-popup="tooltip"]').forEach((element) => {
+                    window.bootstrap.Tooltip.getOrCreateInstance(element);
+                });
+            };
+            const moneyText = (value) => money.format(Number(value) || 0);
+            const compactMoneyText = (value) => moneyText(value).replace(/^INR\s?/, '₹');
+            const lineSubtotal = (row) => Number(row.price) * Number(row.quantity);
+            const calculateDiscount = (baseAmount, discount) => {
+                const type = discount?.type || discount?.discount_type || null;
+                const value = Number(discount?.value ?? discount?.discount_value ?? 0);
+
+                if (!type || !Number.isFinite(value) || value <= 0) {
+                    return { valid: true, amount: 0, message: '' };
+                }
+
+                if (!['percent', 'amount'].includes(type)) {
+                    return { valid: false, amount: 0, message: 'Choose Percent or Amount discount.' };
+                }
+
+                if (type === 'percent' && value > 100) {
+                    return { valid: false, amount: 0, message: 'Discount percent cannot be more than 100.' };
+                }
+
+                const amount = type === 'percent' ? baseAmount * (value / 100) : value;
+                if (amount > baseAmount) {
+                    return { valid: false, amount: 0, message: 'Discount cannot be more than the subtotal.' };
+                }
+
+                return { valid: true, amount: Math.round(amount * 100) / 100, message: '' };
+            };
+            const lineDiscountAmount = (row) => calculateDiscount(lineSubtotal(row), row.discount).amount;
+            const lineTotal = (row) => Math.max(0, lineSubtotal(row) - lineDiscountAmount(row));
+            const cartSubtotal = () => Array.from(cart.values()).reduce((sum, row) => sum + lineSubtotal(row), 0);
+            const cartItemDiscount = () => Array.from(cart.values()).reduce((sum, row) => sum + lineDiscountAmount(row), 0);
+            const orderDiscountBase = () => Math.max(0, cartSubtotal() - cartItemDiscount());
+            const orderDiscountAmount = () => calculateDiscount(orderDiscountBase(), orderDiscount).amount;
+            const cartTotal = () => Math.max(0, orderDiscountBase() - orderDiscountAmount());
+            const discountBadge = (discount) => {
+                if (!discount?.type || Number(discount.value || 0) <= 0) {
+                    return '';
+                }
+
+                const value = Number(discount.value);
+                return discount.type === 'percent'
+                    ? `${value.toLocaleString('en-IN')}% OFF`
+                    : `INR ${value.toLocaleString('en-IN')} OFF`;
+            };
             const elapsedSeconds = () => timerElapsedBeforeStart + (timerStartedAt === null ? 0 : Math.max(0, Math.floor((Date.now() - timerStartedAt) / 1000)));
             const selectedFulfilment = () => root.querySelector('input[name="fulfilment_type"]:checked')?.value || 'counter';
             const selectedPaymentMethod = () => paymentMethodInput.value || 'cash';
@@ -503,6 +683,41 @@
             const normalizeSearch = (value) => String(value || '').trim().toLowerCase();
             const compactSearch = (value) => normalizeSearch(value).replace(/[^a-z0-9]/g, '');
             const isCodeSearch = (query) => /[0-9]/.test(query) && /^[a-z0-9\s._/-]+$/i.test(query);
+            const ensureAddSoundContext = () => {
+                if (!window.AudioContext && !window.webkitAudioContext) {
+                    return null;
+                }
+
+                addSoundContext ??= new (window.AudioContext || window.webkitAudioContext)();
+
+                if (addSoundContext.state === 'suspended') {
+                    addSoundContext.resume().catch(() => {});
+                }
+
+                return addSoundContext;
+            };
+            const playAddSound = () => {
+                const context = ensureAddSoundContext();
+
+                if (!context || context.state !== 'running') {
+                    return;
+                }
+
+                const oscillator = context.createOscillator();
+                const gain = context.createGain();
+                const now = context.currentTime;
+
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, now);
+                oscillator.frequency.exponentialRampToValueAtTime(1320, now + 0.07);
+                gain.gain.setValueAtTime(0.0001, now);
+                gain.gain.exponentialRampToValueAtTime(0.14, now + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+                oscillator.connect(gain);
+                gain.connect(context.destination);
+                oscillator.start(now);
+                oscillator.stop(now + 0.13);
+            };
             const searchKeywords = Array.from(productCards.reduce((keywords, card) => {
                 normalizeSearch(card.dataset.search || '')
                     .split(/[^a-z0-9]+/)
@@ -582,6 +797,9 @@
                 cashReceived: cashInput.value,
                 paymentMethod: selectedPaymentMethod(),
                 fulfilmentType: selectedFulfilment(),
+                customer: selectedCustomer,
+                shippingAddressId: shippingAddressSelect?.value || '',
+                orderDiscount,
                 elapsedSeconds: elapsedSeconds(),
                 timerStartedAt,
                 timerElapsedBeforeStart,
@@ -661,12 +879,22 @@
                         ...(currentProduct || row),
                         id: variantId,
                         quantity: Number(row.quantity),
+                        discount: row.discount || null,
                     });
                 });
 
                 cashInput.value = snapshot.cashReceived || '';
                 paymentMethodInput.value = snapshot.paymentMethod || 'cash';
+                selectedCustomer = snapshot.customer || null;
+                orderDiscount = snapshot.orderDiscount || null;
                 setFulfilment(snapshot.fulfilmentType || 'counter');
+                renderSelectedCustomer();
+                renderFulfilment();
+                if (selectedCustomer) {
+                    loadCustomerAddresses(selectedCustomer, snapshot.shippingAddressId || '');
+                } else {
+                    renderAddresses([]);
+                }
                 renderPaymentMethod(false);
 
                 if (cart.size > 0) {
@@ -678,6 +906,115 @@
                 } else {
                     resetTimer();
                 }
+            };
+
+            const customerAddressUrl = (customer, store = false) => {
+                const routeKey = typeof customer === 'object'
+                    ? (customer.route_key || customer.uuid || customer.id)
+                    : customer;
+
+                return (store ? root.dataset.customerAddressStoreUrlTemplate : root.dataset.customerAddressesUrlTemplate)
+                    .replace('__CUSTOMER__', encodeURIComponent(routeKey));
+            };
+            const renderSelectedCustomer = () => {
+                const customerName = selectedCustomer?.name || 'Walk-in Customer';
+                const customerMeta = selectedCustomer
+                    ? [selectedCustomer.customer_code, selectedCustomer.mobile].filter(Boolean).join(' | ')
+                    : 'No customer selected';
+
+                selectedCustomerNameEls.forEach((element) => {
+                    element.textContent = customerName;
+                });
+                selectedCustomerMetaEls.forEach((element) => {
+                    element.textContent = customerMeta;
+                });
+                clearCustomerButton.disabled = !selectedCustomer;
+                toggleAddressFormButton.disabled = !selectedCustomer;
+            };
+            const renderFulfilment = () => {
+                deliveryPanel.classList.toggle('d-none', selectedFulfilment() !== 'delivery');
+                render();
+                saveCart();
+            };
+            const addressLabel = (address) => [
+                address.label,
+                address.address_line_1,
+                address.landmark,
+                address.postal_code,
+            ].filter(Boolean).join(' - ');
+            const renderAddresses = (addresses, selectedId = '') => {
+                customerAddresses = Array.isArray(addresses) ? addresses : [];
+
+                if (!shippingAddressSelect) {
+                    return;
+                }
+
+                if (!selectedCustomer) {
+                    shippingAddressSelect.innerHTML = '<option value="">Select customer first</option>';
+                    shippingAddressSummaryEls.forEach((element) => {
+                        element.textContent = 'Delivery requires a selected customer and address.';
+                    });
+                    return;
+                }
+
+                if (customerAddresses.length === 0) {
+                    shippingAddressSelect.innerHTML = '<option value="">No address found</option>';
+                    shippingAddressSummaryEls.forEach((element) => {
+                        element.textContent = 'Add a shipping address before completing delivery.';
+                    });
+                    return;
+                }
+
+                shippingAddressSelect.innerHTML = '<option value="">Choose shipping address</option>' + customerAddresses.map((address) => (
+                    `<option value="${escapeHtml(address.id)}">${escapeHtml(addressLabel(address))}</option>`
+                )).join('');
+
+                const defaultAddress = customerAddresses.find((address) => address.is_default_shipping) || customerAddresses[0];
+                shippingAddressSelect.value = String(selectedId || defaultAddress?.id || '');
+                renderSelectedAddress();
+            };
+            const renderSelectedAddress = () => {
+                const address = customerAddresses.find((row) => String(row.id) === String(shippingAddressSelect?.value || ''));
+                const addressSummary = address
+                    ? [address.recipient_name, address.address_line_1, address.postal_code].filter(Boolean).join(' | ')
+                    : (selectedCustomer ? 'Choose a shipping address for delivery.' : 'Delivery requires a selected customer and address.');
+                shippingAddressSummaryEls.forEach((element) => {
+                    element.textContent = addressSummary;
+                });
+                saveCart();
+                render();
+            };
+            const loadCustomerAddresses = async (customerId, selectedId = '') => {
+                try {
+                    const response = await fetch(customerAddressUrl(customerId), {
+                        headers: { 'Accept': 'application/json' },
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(payload?.message || 'Unable to load customer addresses.');
+                    }
+
+                    renderAddresses(payload.addresses || [], selectedId);
+                } catch (error) {
+                    renderAddresses([]);
+                    showMessage('Address lookup failed', error.message);
+                }
+            };
+            const selectCustomer = (customer) => {
+                selectedCustomer = customer;
+                customerSearchInput.value = '';
+                customerResultsEl.classList.add('d-none');
+                customerResultsEl.innerHTML = '';
+                renderSelectedCustomer();
+                loadCustomerAddresses(customer);
+                saveCart();
+            };
+            const clearCustomer = () => {
+                selectedCustomer = null;
+                renderSelectedCustomer();
+                renderAddresses([]);
+                saveCart();
             };
 
             const render = () => {
@@ -695,19 +1032,40 @@
                 } else {
                     cartItems.innerHTML = Array.from(cart.values()).map((row) => `
                         <div class="pos-cart-row" data-variant-id="${row.id}">
-                            <div>
-                                <div class="fw-semibold">${escapeHtml(row.product_name)}</div>
-                                <div class="text-muted fs-sm">${escapeHtml(row.variant_name || 'Standard variant')}</div>
-                                <div class="fw-semibold mt-1">${money.format(row.price)}</div>
+                            <div class="pos-cart-product">
+                                <div class="pos-cart-thumb">
+                                    ${row.image_url ? `<img src="${escapeHtml(row.image_url)}" alt="${escapeHtml(row.product_name)}">` : '<i class="ph-image"></i>'}
+                                </div>
+                                <div class="pos-cart-title">
+                                    <div class="fw-semibold">${escapeHtml(row.product_name)} ${row.sku ? `<span class="text-muted fs-sm fw-normal ms-1">${escapeHtml(row.sku)}</span>` : ''}</div>
+                                    <div class="text-muted fs-sm">${escapeHtml(row.variant_name || 'Standard variant')}</div>
+                                    ${lineDiscountAmount(row) > 0 ? `
+                                        <div class="text-warning fs-sm mt-1">
+                                            <i class="ph-tag me-1"></i>- ${moneyText(lineDiscountAmount(row))} (${escapeHtml(discountBadge(row.discount).replace(' OFF', ''))})
+                                        </div>
+                                    ` : ''}
+                                </div>
                             </div>
-                            <div class="text-end">
-                                <button type="button" class="btn btn-light btn-icon btn-sm rounded-pill js-pos-remove" title="Remove">
-                                    <i class="ph-trash"></i>
-                                </button>
+                            <div class="text-end pos-line-price-stack">
+                                <div class="fw-bold">${compactMoneyText(lineTotal(row))}</div>
+                                <div class="text-muted fs-sm">${row.quantity} x ${compactMoneyText(lineTotal(row) / Math.max(1, Number(row.quantity)))}</div>
+                                ${lineDiscountAmount(row) > 0 ? `
+                                    <div class="text-muted fs-sm">
+                                        MRP ${compactMoneyText(lineSubtotal(row))}
+                                    </div>
+                                ` : ''}
                                 <div class="pos-qty-control mt-2">
-                                    <button type="button" class="js-pos-decrease" title="Decrease"><i class="ph-minus"></i></button>
+                                    <button type="button" class="js-pos-decrease" data-bs-popup="tooltip" title="Decrease quantity" aria-label="Decrease quantity"><i class="ph-minus"></i></button>
                                     <span>${row.quantity}</span>
-                                    <button type="button" class="js-pos-increase" title="Increase"><i class="ph-plus"></i></button>
+                                    <button type="button" class="js-pos-increase" data-bs-popup="tooltip" title="Increase quantity" aria-label="Increase quantity"><i class="ph-plus"></i></button>
+                                </div>
+                                <div class="pos-line-actions mt-1">
+                                    <button type="button" class="pos-line-action js-pos-line-discount-open ${lineDiscountAmount(row) > 0 ? 'is-active' : ''}" data-bs-popup="tooltip" title="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}" aria-label="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}">
+                                        <i class="ph-tag"></i>
+                                    </button>
+                                    <button type="button" class="pos-line-action js-pos-remove" data-bs-popup="tooltip" title="Remove item from cart" aria-label="Remove item from cart">
+                                        <i class="ph-trash"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -715,13 +1073,22 @@
                 }
 
                 const total = cartTotal();
+                const subtotal = cartSubtotal();
+                const itemDiscount = cartItemDiscount();
+                const currentOrderDiscountAmount = orderDiscountAmount();
                 const paid = Number.parseFloat(cashInput.value || '0');
                 const isCash = selectedPaymentMethod() === 'cash';
-                subtotalEl.textContent = money.format(total);
-                grandTotalEl.textContent = money.format(total);
+                subtotalEl.textContent = moneyText(subtotal);
+                itemDiscountEl.textContent = moneyText(itemDiscount);
+                orderDiscountTotalEl.textContent = moneyText(currentOrderDiscountAmount);
+                grandTotalEl.textContent = moneyText(total);
+                orderDiscountBadge.textContent = discountBadge(orderDiscount);
+                orderDiscountBadge.classList.toggle('d-none', currentOrderDiscountAmount <= 0);
                 renderTimer();
-                changeEl.textContent = money.format(isCash ? Math.max(0, paid - total) : 0);
-                completeButton.disabled = cart.size === 0 || (isCash && paid < total);
+                changeEl.textContent = moneyText(isCash ? Math.max(0, paid - total) : 0);
+                const deliveryMissing = selectedFulfilment() === 'delivery' && (!selectedCustomer || !shippingAddressSelect?.value);
+                completeButton.disabled = cart.size === 0 || (isCash && paid < total) || deliveryMissing;
+                refreshTooltips();
             };
             const renderPaymentMethod = (persist = true) => {
                 const method = selectedPaymentMethod();
@@ -735,6 +1102,126 @@
                 if (persist) {
                     saveCart();
                 }
+            };
+            const setDiscountMode = (buttons, mode) => {
+                buttons.forEach((button) => {
+                    button.classList.toggle('active', button.dataset.mode === mode);
+                });
+            };
+            const lineDiscountMode = () => document.querySelector('.js-pos-line-discount-mode.active')?.dataset.mode || 'percent';
+            const orderDiscountMode = () => document.querySelector('.js-pos-order-discount-mode.active')?.dataset.mode || 'percent';
+            const updateLineDiscountPreview = () => {
+                const row = cart.get(activeLineDiscountVariantId);
+                if (!row) {
+                    return;
+                }
+
+                const valueInput = document.querySelector('.js-pos-line-discount-value');
+                const errorEl = document.querySelector('.js-pos-line-discount-error');
+                const discount = { type: lineDiscountMode(), value: valueInput?.value || 0 };
+                const calculated = calculateDiscount(lineSubtotal(row), discount);
+
+                document.querySelector('.js-pos-line-discount-label').textContent = discount.type === 'percent' ? 'Discount %' : 'Discount Amount';
+                document.querySelector('.js-pos-line-preview-original').textContent = moneyText(lineSubtotal(row));
+                document.querySelector('.js-pos-line-preview-discount').textContent = moneyText(calculated.amount);
+                document.querySelector('.js-pos-line-preview-total').textContent = moneyText(calculated.valid ? lineSubtotal(row) - calculated.amount : lineSubtotal(row));
+                errorEl.textContent = calculated.message;
+                valueInput?.classList.toggle('is-invalid', !calculated.valid);
+            };
+            const openLineDiscountModal = (variantId) => {
+                const row = cart.get(variantId);
+                if (!row) {
+                    return;
+                }
+
+                activeLineDiscountVariantId = variantId;
+                const mode = row.discount?.type || 'percent';
+                setDiscountMode(Array.from(document.querySelectorAll('.js-pos-line-discount-mode')), mode);
+                document.querySelector('.js-pos-line-discount-product').textContent = row.product_name;
+                document.querySelector('.js-pos-line-discount-value').value = row.discount?.value || '10';
+                document.querySelector('.js-pos-line-discount-remove').disabled = lineDiscountAmount(row) <= 0;
+                updateLineDiscountPreview();
+                window.bootstrap?.Modal.getOrCreateInstance(lineDiscountModalEl).show();
+            };
+            const applyLineDiscount = () => {
+                const row = cart.get(activeLineDiscountVariantId);
+                if (!row) {
+                    return;
+                }
+
+                const value = document.querySelector('.js-pos-line-discount-value')?.value || '';
+                const discount = { type: lineDiscountMode(), value };
+                const calculated = calculateDiscount(lineSubtotal(row), discount);
+
+                if (!calculated.valid || value === '') {
+                    document.querySelector('.js-pos-line-discount-error').textContent = calculated.message || 'Enter a discount value.';
+                    document.querySelector('.js-pos-line-discount-value')?.classList.add('is-invalid');
+                    return;
+                }
+
+                row.discount = Number(value) > 0 ? { type: discount.type, value: Number(value) } : null;
+                window.bootstrap?.Modal.getOrCreateInstance(lineDiscountModalEl).hide();
+                render();
+                saveCart();
+            };
+            const removeLineDiscount = () => {
+                const row = cart.get(activeLineDiscountVariantId);
+                if (row) {
+                    row.discount = null;
+                }
+
+                window.bootstrap?.Modal.getOrCreateInstance(lineDiscountModalEl).hide();
+                render();
+                saveCart();
+            };
+            const updateOrderDiscountPreview = () => {
+                const valueInput = document.querySelector('.js-pos-order-discount-value');
+                const errorEl = document.querySelector('.js-pos-order-discount-error');
+                const discount = { type: orderDiscountMode(), value: valueInput?.value || 0 };
+                const calculated = calculateDiscount(orderDiscountBase(), discount);
+
+                document.querySelector('.js-pos-order-discount-label').textContent = discount.type === 'percent' ? 'Discount Value' : 'Discount Value';
+                document.querySelector('.js-pos-order-preview-subtotal').textContent = moneyText(orderDiscountBase());
+                document.querySelector('.js-pos-order-preview-discount').textContent = moneyText(calculated.amount);
+                document.querySelector('.js-pos-order-preview-total').textContent = moneyText(calculated.valid ? orderDiscountBase() - calculated.amount : orderDiscountBase());
+                errorEl.textContent = calculated.message;
+                valueInput?.classList.toggle('is-invalid', !calculated.valid);
+            };
+            const openOrderDiscountModal = () => {
+                const mode = orderDiscount?.type || 'percent';
+                setDiscountMode(Array.from(document.querySelectorAll('.js-pos-order-discount-mode')), mode);
+                document.querySelector('.js-pos-order-discount-value').value = orderDiscount?.value || '';
+                document.querySelector('.js-pos-order-discount-reason').value = orderDiscount?.reason || '';
+                document.querySelector('.js-pos-order-discount-note').value = orderDiscount?.note || '';
+                document.querySelector('.js-pos-order-discount-remove').disabled = orderDiscountAmount() <= 0;
+                document.querySelector('.js-pos-order-quick-buttons')?.classList.toggle('d-none', mode !== 'percent');
+                updateOrderDiscountPreview();
+                window.bootstrap?.Modal.getOrCreateInstance(orderDiscountModalEl).show();
+            };
+            const applyOrderDiscount = () => {
+                const value = document.querySelector('.js-pos-order-discount-value')?.value || '';
+                const discount = { type: orderDiscountMode(), value };
+                const calculated = calculateDiscount(orderDiscountBase(), discount);
+
+                if (!calculated.valid || value === '') {
+                    document.querySelector('.js-pos-order-discount-error').textContent = calculated.message || 'Enter a discount value.';
+                    document.querySelector('.js-pos-order-discount-value')?.classList.add('is-invalid');
+                    return;
+                }
+
+                orderDiscount = Number(value) > 0 ? {
+                    type: discount.type,
+                    value: Number(value),
+                    reason: document.querySelector('.js-pos-order-discount-reason')?.value || '',
+                    note: document.querySelector('.js-pos-order-discount-note')?.value || '',
+                } : null;
+                window.bootstrap?.Modal.getOrCreateInstance(orderDiscountModalEl).hide();
+                renderPaymentMethod();
+            };
+            const removeOrderDiscount = () => {
+                orderDiscount = null;
+                window.bootstrap?.Modal.getOrCreateInstance(orderDiscountModalEl).hide();
+                renderPaymentMethod();
             };
             const updateSearchSuggestion = () => {
                 if (!searchInput || !searchGhostEl) {
@@ -1074,21 +1561,26 @@
                             <div class="text-muted fs-sm">Order time ${formatElapsed(Number(snapshot.elapsedSeconds || 0))}</div>
                         </div>
                         <div class="d-flex gap-2 flex-shrink-0">
-                            <button type="button" class="btn btn-light btn-sm js-pos-held-delete" data-held-id="${escapeHtml(snapshot.id)}">
+                            <button type="button" class="btn btn-light btn-sm js-pos-held-delete" data-held-id="${escapeHtml(snapshot.id)}" data-bs-popup="tooltip" title="Delete this held cart">
                                 <i class="ph-trash me-1"></i>
                                 Delete
                             </button>
-                            <button type="button" class="btn btn-primary btn-sm js-pos-held-resume" data-held-id="${escapeHtml(snapshot.id)}">
+                            <button type="button" class="btn btn-primary btn-sm js-pos-held-resume" data-held-id="${escapeHtml(snapshot.id)}" data-bs-popup="tooltip" title="Resume this held cart">
                                 <i class="ph-arrow-counter-clockwise me-1"></i>
                                 Resume
                             </button>
                         </div>
                     </div>
                 `).join('');
+                refreshTooltips();
             };
             const clearActiveCart = () => {
                 cart.clear();
                 cashInput.value = '';
+                selectedCustomer = null;
+                orderDiscount = null;
+                renderSelectedCustomer();
+                renderAddresses([]);
                 resetTimer();
                 clearSavedCart();
                 render();
@@ -1188,17 +1680,18 @@
                             <div class="fw-semibold mt-1">INR ${escapeHtml(sale.grand_total)}</div>
                         </div>
                         <div class="d-flex gap-2 flex-shrink-0">
-                            <a href="${escapeHtml(sale.receipt_url)}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">
+                            <a href="${escapeHtml(sale.receipt_url)}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" data-bs-popup="tooltip" title="Open receipt for this sale">
                                 <i class="ph-receipt me-1"></i>
                                 View receipt
                             </a>
-                            <a href="${escapeHtml(sale.print_url)}" target="_blank" rel="noopener" class="btn btn-light btn-sm">
+                            <a href="${escapeHtml(sale.print_url)}" target="_blank" rel="noopener" class="btn btn-light btn-sm" data-bs-popup="tooltip" title="Open printable receipt">
                                 <i class="ph-printer me-1"></i>
                                 Print
                             </a>
                         </div>
                     </div>
                 `).join('');
+                refreshTooltips();
             };
 
             const rememberProduct = (item) => {
@@ -1240,11 +1733,13 @@
                         ...product,
                         id: variantId,
                         quantity: 1,
+                        discount: null,
                     });
                 }
 
                 render();
                 saveCart();
+                playAddSound();
                 return { added: true, product };
             };
 
@@ -1266,6 +1761,8 @@
             };
 
             root.addEventListener('click', (event) => {
+                ensureAddSoundContext();
+
                 const addButton = event.target.closest('.js-pos-add');
                 const addCard = event.target.closest('.js-pos-add-card');
                 const cartRow = event.target.closest('.pos-cart-row');
@@ -1302,6 +1799,11 @@
                     return;
                 }
 
+                if (event.target.closest('.js-pos-order-discount')) {
+                    openOrderDiscountModal();
+                    return;
+                }
+
                 if (event.target.closest('.js-pos-reprint-last')) {
                     const receipt = lastReceipt();
                     if (receipt?.printUrl) {
@@ -1325,7 +1827,9 @@
                 }
 
                 const variantId = cartRow.dataset.variantId;
-                if (event.target.closest('.js-pos-remove')) {
+                if (event.target.closest('.js-pos-line-discount-open')) {
+                    openLineDiscountModal(variantId);
+                } else if (event.target.closest('.js-pos-remove')) {
                     cart.delete(variantId);
                     render();
                     saveCart();
@@ -1365,6 +1869,8 @@
             });
 
             document.addEventListener('keydown', (event) => {
+                ensureAddSoundContext();
+
                 if (event.key === '/' && !isTypingTarget(event.target)) {
                     event.preventDefault();
                     searchInput?.focus();
@@ -1437,12 +1943,169 @@
                 saveCart();
             });
             paymentMethodInput.addEventListener('change', renderPaymentMethod);
+            lineDiscountModalEl?.addEventListener('input', updateLineDiscountPreview);
+            orderDiscountModalEl?.addEventListener('input', updateOrderDiscountPreview);
+            lineDiscountModalEl?.addEventListener('click', (event) => {
+                const modeButton = event.target.closest('.js-pos-line-discount-mode');
+                if (modeButton) {
+                    setDiscountMode(Array.from(document.querySelectorAll('.js-pos-line-discount-mode')), modeButton.dataset.mode);
+                    updateLineDiscountPreview();
+                    return;
+                }
+
+                if (event.target.closest('.js-pos-line-discount-apply')) {
+                    applyLineDiscount();
+                    return;
+                }
+
+                if (event.target.closest('.js-pos-line-discount-remove')) {
+                    removeLineDiscount();
+                }
+            });
+            orderDiscountModalEl?.addEventListener('click', (event) => {
+                const modeButton = event.target.closest('.js-pos-order-discount-mode');
+                if (modeButton) {
+                    setDiscountMode(Array.from(document.querySelectorAll('.js-pos-order-discount-mode')), modeButton.dataset.mode);
+                    document.querySelector('.js-pos-order-quick-buttons')?.classList.toggle('d-none', modeButton.dataset.mode !== 'percent');
+                    updateOrderDiscountPreview();
+                    return;
+                }
+
+                const quickButton = event.target.closest('.js-pos-order-quick');
+                if (quickButton) {
+                    setDiscountMode(Array.from(document.querySelectorAll('.js-pos-order-discount-mode')), 'percent');
+                    document.querySelector('.js-pos-order-quick-buttons')?.classList.remove('d-none');
+                    document.querySelector('.js-pos-order-discount-value').value = quickButton.dataset.value;
+                    updateOrderDiscountPreview();
+                    return;
+                }
+
+                if (event.target.closest('.js-pos-order-discount-apply')) {
+                    applyOrderDiscount();
+                    return;
+                }
+
+                if (event.target.closest('.js-pos-order-discount-remove')) {
+                    removeOrderDiscount();
+                }
+            });
+            customerModalEl?.addEventListener('shown.bs.modal', () => {
+                customerSearchInput?.focus();
+                customerSearchInput?.select();
+            });
             root.querySelectorAll('input[name="fulfilment_type"]').forEach((input) => {
-                input.addEventListener('change', saveCart);
+                input.addEventListener('change', renderFulfilment);
+            });
+            shippingAddressSelect?.addEventListener('change', renderSelectedAddress);
+            clearCustomerButton?.addEventListener('click', clearCustomer);
+            customerResultsEl?.addEventListener('click', (event) => {
+                const button = event.target.closest('.js-pos-select-customer');
+                if (!button) {
+                    return;
+                }
+
+                selectCustomer(JSON.parse(button.dataset.customer || '{}'));
+            });
+            let customerSearchTimeout = null;
+            customerSearchInput?.addEventListener('input', () => {
+                window.clearTimeout(customerSearchTimeout);
+                const query = customerSearchInput.value.trim();
+
+                if (query.length < 2) {
+                    customerResultsEl.classList.add('d-none');
+                    customerResultsEl.innerHTML = '';
+                    return;
+                }
+
+                customerSearchTimeout = window.setTimeout(async () => {
+                    try {
+                        const response = await fetch(`${root.dataset.customerSearchUrl}?q=${encodeURIComponent(query)}`, {
+                            headers: { 'Accept': 'application/json' },
+                        });
+                        const payload = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(payload?.message || 'Unable to search customers.');
+                        }
+
+                        const customers = payload.customers || [];
+                        customerResultsEl.classList.remove('d-none');
+                        customerResultsEl.innerHTML = customers.length === 0 ? `
+                            <div class="list-group-item text-muted">
+                                No customer found for "${escapeHtml(query)}".
+                            </div>
+                        ` : customers.map((customer) => `
+                            <button type="button" class="list-group-item list-group-item-action py-2 js-pos-select-customer" data-customer="${escapeHtml(JSON.stringify(customer))}" data-bs-popup="tooltip" title="Use this customer for the sale">
+                                <div class="fw-semibold">${escapeHtml(customer.name)}</div>
+                                <div class="text-muted fs-sm">${escapeHtml([customer.customer_code, customer.mobile, customer.email].filter(Boolean).join(' | '))}</div>
+                            </button>
+                        `).join('');
+                        refreshTooltips();
+                    } catch (error) {
+                        customerResultsEl.classList.remove('d-none');
+                        customerResultsEl.innerHTML = `<div class="list-group-item text-danger">${escapeHtml(error.message)}</div>`;
+                    }
+                }, 250);
+            });
+            root.querySelector('.js-pos-toggle-address-form')?.addEventListener('click', () => {
+                addressForm.classList.toggle('d-none');
+            });
+            root.querySelector('.js-pos-cancel-address')?.addEventListener('click', () => {
+                addressForm.classList.add('d-none');
+            });
+            saveAddressButton?.addEventListener('click', async () => {
+                if (!selectedCustomer) {
+                    showMessage('Select customer first', 'Please select a customer before adding an address.');
+                    return;
+                }
+
+                const data = {
+                    label: root.querySelector('.js-pos-address-label')?.value || '',
+                    recipient_name: root.querySelector('.js-pos-address-recipient')?.value || selectedCustomer.name,
+                    recipient_mobile_country_code: root.querySelector('.js-pos-address-country-code')?.value || selectedCustomer.mobile_country_code || '+91',
+                    recipient_mobile: root.querySelector('.js-pos-address-mobile')?.value || selectedCustomer.mobile || '',
+                    address_line_1: root.querySelector('.js-pos-address-line1')?.value || '',
+                    address_line_2: root.querySelector('.js-pos-address-line2')?.value || '',
+                    landmark: root.querySelector('.js-pos-address-landmark')?.value || '',
+                    postal_code: root.querySelector('.js-pos-address-postal')?.value || '',
+                    is_default_shipping: customerAddresses.length === 0,
+                };
+
+                saveAddressButton.disabled = true;
+                try {
+                    const response = await fetch(customerAddressUrl(selectedCustomer, true), {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify(data),
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(firstError(payload) || 'Unable to save address.');
+                    }
+
+                    addressForm.querySelectorAll('input').forEach((input) => {
+                        if (!input.classList.contains('js-pos-address-country-code')) {
+                            input.value = '';
+                        }
+                    });
+                    addressForm.classList.add('d-none');
+                    renderAddresses([...customerAddresses, payload.address], payload.address.id);
+                } catch (error) {
+                    showMessage('Address save failed', error.message);
+                } finally {
+                    saveAddressButton.disabled = false;
+                }
             });
             loadHeldCarts();
             restoreCart();
             renderLastReceiptButton();
+            renderSelectedCustomer();
+            renderFulfilment();
             filterProducts();
             render();
 
@@ -1470,10 +2133,20 @@
                             amount_paid: cash,
                             elapsed_seconds: elapsedSeconds(),
                             fulfilment_type: selectedFulfilment(),
+                            customer_id: selectedCustomer?.id || null,
+                            shipping_address_id: selectedFulfilment() === 'delivery' ? (shippingAddressSelect?.value || null) : null,
+                            order_discount: orderDiscount ? {
+                                type: orderDiscount.type,
+                                value: orderDiscount.value,
+                                reason: orderDiscount.reason || null,
+                                note: orderDiscount.note || null,
+                            } : null,
                             payment_method: method,
                             items: Array.from(cart.values()).map((row) => ({
                                 product_variant_id: Number(row.id),
                                 quantity: row.quantity,
+                                discount_type: row.discount?.type || null,
+                                discount_value: row.discount?.value || null,
                             })),
                         }),
                     });

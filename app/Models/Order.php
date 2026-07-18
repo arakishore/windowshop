@@ -19,6 +19,7 @@ class Order extends Model
 
     public const FULFILMENT_COUNTER = 'counter';
     public const FULFILMENT_PICKUP = 'pickup';
+    public const FULFILMENT_DELIVERY = 'delivery';
 
     public const STATUS_PENDING = 'pending';
     public const STATUS_CONFIRMED = 'confirmed';
@@ -38,12 +39,16 @@ class Order extends Model
     public const PAYMENT_REFUNDED = 'refunded';
     public const PAYMENT_PARTIALLY_REFUNDED = 'partially_refunded';
 
+    public const DISCOUNT_TYPE_PERCENT = 'percent';
+    public const DISCOUNT_TYPE_AMOUNT = 'amount';
+
     protected $fillable = [
         'uuid',
         'order_number',
         'merchant_id',
         'shop_id',
         'customer_id',
+        'shipping_address_id',
         'created_source',
         'fulfilment_type',
         'order_status',
@@ -59,11 +64,27 @@ class Order extends Model
         'tax_total',
         'rounding_adjustment',
         'grand_total',
+        'order_discount_type',
+        'order_discount_value',
+        'order_discount_amount',
+        'order_discount_reason',
+        'order_discount_note',
         'amount_paid',
         'change_amount',
         'elapsed_seconds',
         'customer_name',
         'customer_mobile',
+        'customer_email',
+        'shipping_recipient_name',
+        'shipping_mobile_country_code',
+        'shipping_mobile',
+        'shipping_address_line_1',
+        'shipping_address_line_2',
+        'shipping_landmark',
+        'shipping_city',
+        'shipping_state',
+        'shipping_country',
+        'shipping_postal_code',
         'remarks',
         'created_by',
         'updated_by',
@@ -80,6 +101,8 @@ class Order extends Model
             'tax_total' => 'decimal:2',
             'rounding_adjustment' => 'decimal:2',
             'grand_total' => 'decimal:2',
+            'order_discount_value' => 'decimal:2',
+            'order_discount_amount' => 'decimal:2',
             'amount_paid' => 'decimal:2',
             'change_amount' => 'decimal:2',
             'elapsed_seconds' => 'integer',
@@ -106,7 +129,12 @@ class Order extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'customer_id')->withTrashed();
+        return $this->belongsTo(MerchantCustomer::class, 'customer_id')->withTrashed();
+    }
+
+    public function shippingAddress(): BelongsTo
+    {
+        return $this->belongsTo(MerchantCustomerAddress::class, 'shipping_address_id')->withTrashed();
     }
 
     public function items(): HasMany

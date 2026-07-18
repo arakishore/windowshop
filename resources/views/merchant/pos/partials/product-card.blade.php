@@ -9,6 +9,8 @@
     data-sku="{{ $item['sku'] }}"
     data-barcode="{{ $item['barcode'] }}"
     data-search="{{ Str::lower(trim($item['product_name'].' '.$item['variant_name'].' '.$item['sku'].' '.$item['barcode'].' '.$item['category_name'].' '.$item['attribute_search'])) }}"
+    data-bs-popup="tooltip"
+    title="{{ $item['stock'] > 0 ? 'Click to add this item to cart' : 'This item is out of stock' }}"
     role="{{ $item['stock'] > 0 ? 'button' : 'group' }}"
     tabindex="{{ $item['stock'] > 0 ? '0' : '-1' }}"
 >
@@ -31,15 +33,17 @@
 
         <div class="d-flex align-items-end justify-content-between gap-2 mt-auto">
             <div>
-                <div class="fw-bold fs-6">INR {{ number_format($item['price'], 2) }}</div>
+                <div class="fw-bold fs-7">INR {{ number_format($item['price'], 2) }}</div>
                 <div class="fs-sm {{ $stockClass }}">{{ number_format($item['stock']) }} in stock</div>
             </div>
             <button
                 type="button"
                 class="btn btn-primary btn-icon rounded-pill js-pos-add"
                 data-variant-id="{{ $item['id'] }}"
+                data-bs-popup="tooltip"
                 {{ $item['stock'] < 1 ? 'disabled' : '' }}
-                title="Add to cart"
+                title="{{ $item['stock'] > 0 ? 'Add this item to cart' : 'This item is out of stock' }}"
+                aria-label="{{ $item['stock'] > 0 ? 'Add this item to cart' : 'This item is out of stock' }}"
             >
                 <i class="ph-plus"></i>
             </button>

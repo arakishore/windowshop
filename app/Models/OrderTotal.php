@@ -9,6 +9,8 @@ class OrderTotal extends Model
 {
     public const CODE_SUBTOTAL = 'subtotal';
     public const CODE_PRODUCT_DISCOUNT = 'product_discount';
+    public const CODE_ITEM_DISCOUNT = 'item_discount';
+    public const CODE_ORDER_DISCOUNT = 'order_discount';
     public const CODE_OFFER_DISCOUNT = 'offer_discount';
     public const CODE_COUPON_DISCOUNT = 'coupon_discount';
     public const CODE_SHIPPING = 'shipping';

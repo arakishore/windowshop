@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Controller;
+use App\Models\MerchantCustomer;
+use App\Models\MerchantCustomerAddress;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Services\Merchant\MerchantShopContextService;
+use App\Services\Merchant\MerchantCustomerAddressService;
+use App\Services\Merchant\MerchantSettingsService;
 use App\Services\Merchant\PosProductSearchService;
 use App\Services\Order\OrderCreationService;
 use App\Services\Product\ProductImageService;
@@ -28,6 +32,8 @@ class PosController extends Controller
         private readonly ProductImageService $productImageService,
         private readonly OrderCreationService $orderCreationService,
         private readonly PosProductSearchService $posProductSearchService,
+        private readonly MerchantCustomerAddressService $customerAddressService,
+        private readonly MerchantSettingsService $settings,
     ) {
     }
 
@@ -73,7 +79,9 @@ class PosController extends Controller
         $data = $request->validate([
             'amount_paid' => ['required', 'numeric', 'min:0'],
             'elapsed_seconds' => ['nullable', 'integer', 'min:0'],
-            'fulfilment_type' => ['required', Rule::in(['counter', 'pickup'])],
+            'fulfilment_type' => ['required', Rule::in(['counter', 'pickup', 'delivery'])],
+            'customer_id' => ['nullable', 'integer'],
+            'shipping_address_id' => ['nullable', 'integer'],
             'payment_method' => ['required', Rule::in([
                 Order::PAYMENT_METHOD_CASH,
                 Order::PAYMENT_METHOD_UPI,
@@ -84,19 +92,29 @@ class PosController extends Controller
             'payment_reference' => ['nullable', 'string', 'max:255'],
             'upi_txn' => ['nullable', 'string', 'max:255'],
             'terminal_id' => ['nullable', 'string', 'max:80'],
+            'order_discount' => ['nullable', 'array'],
+            'order_discount.type' => ['nullable', Rule::in([Order::DISCOUNT_TYPE_PERCENT, Order::DISCOUNT_TYPE_AMOUNT])],
+            'order_discount.value' => ['nullable', 'numeric', 'min:0'],
+            'order_discount.reason' => ['nullable', 'string', 'max:80'],
+            'order_discount.note' => ['nullable', 'string', 'max:500'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_variant_id' => ['required', 'integer'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'items.*.discount_type' => ['nullable', Rule::in([Order::DISCOUNT_TYPE_PERCENT, Order::DISCOUNT_TYPE_AMOUNT])],
+            'items.*.discount_value' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $order = $this->orderCreationService->create([
             'shop_id' => $shop->getKey(),
             'created_source' => 'pos',
             'fulfilment_type' => $data['fulfilment_type'],
+            'customer_id' => $data['customer_id'] ?? null,
+            'shipping_address_id' => $data['shipping_address_id'] ?? null,
             'payment_method' => $data['payment_method'],
             'payment_reference' => $data['payment_reference'] ?? null,
             'upi_txn' => $data['upi_txn'] ?? null,
             'terminal_id' => $data['terminal_id'] ?? null,
+            'order_discount' => $data['order_discount'] ?? [],
             'payment_status' => 'paid',
             'order_status' => 'completed',
             'amount_paid' => $data['amount_paid'],
@@ -113,6 +131,9 @@ class PosController extends Controller
                 'amount_paid' => $order->amount_paid,
                 'change_amount' => $order->change_amount,
                 'payment_method' => $order->payment_method,
+                'fulfilment_type' => $order->fulfilment_type,
+                'customer_name' => $order->customer_name,
+                'shipping_address_line_1' => $order->shipping_address_line_1,
                 'payment_reference' => $order->payment_reference,
                 'upi_txn' => $order->upi_txn,
                 'terminal_id' => $order->terminal_id,
@@ -122,6 +143,87 @@ class PosController extends Controller
                 'print_url' => route('merchant.pos.receipt', ['order' => $order->getKey(), 'print' => 1]),
             ],
         ]);
+    }
+
+    public function customers(Request $request): JsonResponse
+    {
+        $shop = $this->activeShop($request);
+        $query = trim((string) $request->query('q', ''));
+
+        if ($query === '') {
+            return response()->json(['customers' => []]);
+        }
+
+        $customers = MerchantCustomer::query()
+            ->where('merchant_id', $shop->merchant_id)
+            ->where('status', MerchantCustomer::STATUS_ACTIVE)
+            ->where(function ($builder) use ($query): void {
+                $builder->where('name', 'like', "%{$query}%")
+                    ->orWhere('mobile', 'like', "%{$query}%")
+                    ->orWhere('mobile_normalized', 'like', "%{$query}%")
+                    ->orWhere('email', 'like', "%{$query}%")
+                    ->orWhere('customer_code', 'like', "%{$query}%");
+            })
+            ->withCount(['addresses' => fn ($builder) => $builder->where('status', MerchantCustomerAddress::STATUS_ACTIVE)])
+            ->orderBy('name')
+            ->limit(10)
+            ->get()
+            ->map(fn (MerchantCustomer $customer): array => [
+                'id' => $customer->getKey(),
+                'route_key' => $customer->getRouteKey(),
+                'name' => $customer->name,
+                'customer_code' => $customer->customer_code,
+                'mobile' => $customer->mobile,
+                'mobile_country_code' => $customer->mobile_country_code,
+                'email' => $customer->email,
+                'addresses_count' => $customer->addresses_count,
+            ])
+            ->values();
+
+        return response()->json(['customers' => $customers]);
+    }
+
+    public function customerAddresses(Request $request, MerchantCustomer $customer): JsonResponse
+    {
+        $this->authorizePosCustomer($request, $customer);
+
+        return response()->json([
+            'addresses' => $customer->addresses()
+                ->with(['city', 'state', 'country'])
+                ->where('status', MerchantCustomerAddress::STATUS_ACTIVE)
+                ->orderByDesc('is_default_shipping')
+                ->orderBy('label')
+                ->get()
+                ->map(fn (MerchantCustomerAddress $address): array => $this->addressPayload($address))
+                ->values(),
+        ]);
+    }
+
+    public function storeCustomerAddress(Request $request, MerchantCustomer $customer): JsonResponse
+    {
+        $this->authorizePosCustomer($request, $customer);
+        $data = $request->validate([
+            'label' => ['required', 'string', 'max:80'],
+            'recipient_name' => ['required', 'string', 'max:150'],
+            'recipient_mobile_country_code' => ['nullable', 'string', 'max:10'],
+            'recipient_mobile' => ['required', 'string', 'max:30'],
+            'address_line_1' => ['required', 'string', 'max:190'],
+            'address_line_2' => ['nullable', 'string', 'max:190'],
+            'landmark' => ['nullable', 'string', 'max:150'],
+            'postal_code' => ['nullable', 'string', 'max:20'],
+            'is_default_shipping' => ['nullable', 'boolean'],
+        ]);
+
+        $address = $this->customerAddressService->create($customer, [
+            ...$data,
+            'is_default_billing' => false,
+            'status' => MerchantCustomerAddress::STATUS_ACTIVE,
+        ]);
+
+        return response()->json([
+            'message' => 'Address added successfully.',
+            'address' => $this->addressPayload($address),
+        ], 201);
     }
 
     public function search(Request $request): JsonResponse
@@ -157,6 +259,23 @@ class PosController extends Controller
             'activeShop' => $shop,
             'autoPrint' => $request->boolean('print'),
             'order' => $orderModel,
+            'receiptSettings' => [
+                'showShopName' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_shop_name', true),
+                'showAddress' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_address', true),
+                'showPhone' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_phone', true),
+                'showGstNumber' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_gst_number', true),
+                'showCustomer' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_customer', true),
+                'showCashier' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_cashier', true),
+                'showOrderNumber' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_order_number', true),
+                'showBarcode' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_barcode', false),
+                'showQrCode' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_qr_code', true),
+                'showTaxBreakdown' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_tax_breakdown', true),
+                'showItemSku' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.line_item.show_sku', false),
+                'showItemHsnCode' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.line_item.show_hsn_code', false),
+                'showHsnSummary' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.line_item.show_hsn_summary', false),
+                'footerText' => (string) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.footer', 'Thank you for shopping with us.'),
+                'returnPolicy' => (string) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.return_policy', ''),
+            ],
         ]);
     }
 
@@ -199,6 +318,34 @@ class PosController extends Controller
         abort_unless($shop instanceof Shop, 403);
 
         return $shop;
+    }
+
+    private function authorizePosCustomer(Request $request, MerchantCustomer $customer): Shop
+    {
+        $shop = $this->activeShop($request);
+        abort_unless((int) $customer->merchant_id === (int) $shop->merchant_id, 404);
+        abort_unless($customer->status === MerchantCustomer::STATUS_ACTIVE, 404);
+
+        return $shop;
+    }
+
+    private function addressPayload(MerchantCustomerAddress $address): array
+    {
+        return [
+            'id' => $address->getKey(),
+            'label' => $address->label,
+            'recipient_name' => $address->recipient_name,
+            'recipient_mobile_country_code' => $address->recipient_mobile_country_code,
+            'recipient_mobile' => $address->recipient_mobile,
+            'address_line_1' => $address->address_line_1,
+            'address_line_2' => $address->address_line_2,
+            'landmark' => $address->landmark,
+            'city' => $address->city?->name,
+            'state' => $address->state?->name,
+            'country' => $address->country?->name,
+            'postal_code' => $address->postal_code,
+            'is_default_shipping' => $address->is_default_shipping,
+        ];
     }
 
     /**

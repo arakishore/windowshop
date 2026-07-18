@@ -18,7 +18,8 @@ return new class extends Migration
             $table->string('order_number')->unique();
             $table->foreignId('merchant_id')->constrained('merchant_profiles')->restrictOnDelete();
             $table->foreignId('shop_id')->constrained('shops')->restrictOnDelete();
-            $table->foreignId('customer_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('customer_id')->nullable()->constrained('merchant_customers')->nullOnDelete();
+            $table->foreignId('shipping_address_id')->nullable()->constrained('merchant_customer_addresses')->nullOnDelete();
             $table->string('created_source', 30)->default('pos')->index();
             $table->string('fulfilment_type', 30)->default('counter');
             $table->string('order_status', 30)->default('pending')->index();
@@ -34,11 +35,27 @@ return new class extends Migration
             $table->decimal('tax_total', 14, 2)->default(0);
             $table->decimal('rounding_adjustment', 14, 2)->default(0);
             $table->decimal('grand_total', 14, 2)->default(0);
+            $table->string('order_discount_type', 20)->nullable();
+            $table->decimal('order_discount_value', 14, 2)->nullable();
+            $table->decimal('order_discount_amount', 14, 2)->default(0);
+            $table->string('order_discount_reason', 80)->nullable();
+            $table->text('order_discount_note')->nullable();
             $table->decimal('amount_paid', 14, 2)->default(0);
             $table->decimal('change_amount', 14, 2)->default(0);
             $table->unsignedInteger('elapsed_seconds')->default(0);
-            $table->string('customer_name')->nullable();
+            $table->string('customer_name', 150)->nullable();
             $table->string('customer_mobile', 30)->nullable();
+            $table->string('customer_email', 190)->nullable();
+            $table->string('shipping_recipient_name', 150)->nullable();
+            $table->string('shipping_mobile_country_code', 10)->nullable();
+            $table->string('shipping_mobile', 30)->nullable();
+            $table->string('shipping_address_line_1', 190)->nullable();
+            $table->string('shipping_address_line_2', 190)->nullable();
+            $table->string('shipping_landmark', 150)->nullable();
+            $table->string('shipping_city', 120)->nullable();
+            $table->string('shipping_state', 120)->nullable();
+            $table->string('shipping_country', 120)->nullable();
+            $table->string('shipping_postal_code', 20)->nullable();
             $table->text('remarks')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
@@ -52,6 +69,7 @@ return new class extends Migration
             $table->index(['shop_id', 'order_status'], 'orders_shop_status_idx');
             $table->index(['shop_id', 'payment_status'], 'orders_shop_payment_status_idx');
             $table->index('customer_id', 'orders_customer_idx');
+            $table->index('shipping_address_id', 'orders_shipping_address_idx');
             $table->index('deleted_at', 'orders_deleted_at_idx');
         });
     }

@@ -27,6 +27,8 @@ return new class extends Migration
             $table->decimal('unit_price', 14, 2)->default(0);
             $table->decimal('unit_discount', 14, 2)->default(0);
             $table->decimal('line_subtotal', 14, 2)->default(0);
+            $table->string('item_discount_type', 20)->nullable();
+            $table->decimal('item_discount_value', 14, 2)->nullable();
             $table->decimal('line_discount', 14, 2)->default(0);
             $table->decimal('line_tax', 14, 2)->default(0);
             $table->decimal('line_total', 14, 2)->default(0);

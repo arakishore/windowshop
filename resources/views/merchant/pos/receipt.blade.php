@@ -106,15 +106,56 @@
 
             return $name;
         };
+        $itemDiscountTotal = $order->items->sum(fn ($item) => (float) $item->line_discount);
+        $orderDiscountTotal = (float) $order->order_discount_amount;
+        $receiptSettings = $receiptSettings ?? [];
+        $showShopName = $receiptSettings['showShopName'] ?? true;
+        $showAddress = $receiptSettings['showAddress'] ?? true;
+        $showPhone = $receiptSettings['showPhone'] ?? true;
+        $showGstNumber = $receiptSettings['showGstNumber'] ?? true;
+        $showCustomer = $receiptSettings['showCustomer'] ?? true;
+        $showCashier = $receiptSettings['showCashier'] ?? true;
+        $showOrderNumber = $receiptSettings['showOrderNumber'] ?? true;
+        $showBarcode = $receiptSettings['showBarcode'] ?? false;
+        $showQrCode = $receiptSettings['showQrCode'] ?? true;
+        $showTaxBreakdown = $receiptSettings['showTaxBreakdown'] ?? true;
+        $showItemSku = $receiptSettings['showItemSku'] ?? false;
+        $showItemHsnCode = $receiptSettings['showItemHsnCode'] ?? false;
+        $showHsnSummary = $receiptSettings['showHsnSummary'] ?? false;
+        $footerText = trim((string) ($receiptSettings['footerText'] ?? 'Thank you for shopping with us.'));
+        $returnPolicy = trim((string) ($receiptSettings['returnPolicy'] ?? ''));
+        $itemHsnCode = static fn ($item): ?string => data_get($item->metadata, 'hsn_code') ?: data_get($item->metadata, 'hsn');
+        $hsnSummary = $order->items
+            ->map(function ($item) use ($itemHsnCode): ?array {
+                $hsnCode = $itemHsnCode($item);
+
+                if (! $hsnCode) {
+                    return null;
+                }
+
+                return [
+                    'hsn' => $hsnCode,
+                    'taxable' => (float) $item->line_total,
+                    'tax' => (float) $item->line_tax,
+                ];
+            })
+            ->filter()
+            ->groupBy('hsn')
+            ->map(fn ($items, $hsn): array => [
+                'hsn' => $hsn,
+                'taxable' => $items->sum('taxable'),
+                'tax' => $items->sum('tax'),
+            ])
+            ->values();
     @endphp
 
     <div class="receipt-page">
         <div class="receipt-toolbar">
-            <a href="{{ route('merchant.pos.index') }}" class="btn btn-light">
+            <a href="{{ route('merchant.pos.index') }}" class="btn btn-light" data-bs-popup="tooltip" title="Return to POS">
                 <i class="ph-arrow-left me-1"></i>
                 Back
             </a>
-            <button type="button" class="btn btn-light" onclick="window.print()">
+            <button type="button" class="btn btn-light" onclick="window.print()" data-bs-popup="tooltip" title="Print this receipt">
                 <i class="ph-printer me-1"></i>
                 Print
             </button>
@@ -122,30 +163,46 @@
 
         <article class="receipt-paper">
             <div class="text-center">
-                <div class="fw-bold fs-6">{{ $activeShop->name }}</div>
-                <div>{{ $activeShop->address_line_1 }}</div>
-                @if($activeShop->address_line_2)
-                    <div>{{ $activeShop->address_line_2 }}</div>
+                @if($showShopName)
+                    <div class="fw-bold fs-6">{{ $activeShop->name }}</div>
                 @endif
-                @if($cityLine !== '')
-                    <div>{{ $cityLine }}</div>
+                @if($showAddress)
+                    @if($activeShop->address_line_1)
+                        <div>{{ $activeShop->address_line_1 }}</div>
+                    @endif
+                    @if($activeShop->address_line_2)
+                        <div>{{ $activeShop->address_line_2 }}</div>
+                    @endif
+                    @if($cityLine !== '')
+                        <div>{{ $cityLine }}</div>
+                    @endif
                 @endif
-                @if($activeShop->merchant?->gst_number)
+                @if($showPhone && $activeShop->mobile)
+                    <div>Phone : {{ $activeShop->mobile }}</div>
+                @endif
+                @if($showGstNumber && $activeShop->merchant?->gst_number)
                     <div>GSTIN : {{ $activeShop->merchant->gst_number }}</div>
                 @endif
             </div>
 
             <div class="receipt-rule"></div>
 
-            <div class="receipt-row">
-                <span class="fw-bold">Invoice :</span>
-                <span class="fw-bold">{{ $order->order_number }}</span>
-            </div>
+            @if($showOrderNumber)
+                <div class="receipt-row">
+                    <span class="fw-bold">Invoice :</span>
+                    <span class="fw-bold">{{ $order->order_number }}</span>
+                </div>
+            @endif
             <div class="receipt-row">
                 <span>Date :</span>
                 <span>{{ $order->created_at?->format('d-M-Y h:i A') }}</span>
             </div>
-            <div>Cashier: {{ $order->createdBy?->name ?? auth()->user()?->name ?? 'Staff' }}</div>
+            @if($showCashier)
+                <div>Cashier: {{ $order->createdBy?->name ?? auth()->user()?->name ?? 'Staff' }}</div>
+            @endif
+            @if($showCustomer && ($order->customer_name || $order->customer_mobile))
+                <div>Customer: {{ $order->customer_name ?: 'Customer' }}{{ $order->customer_mobile ? ' / '.$order->customer_mobile : '' }}</div>
+            @endif
 
             <div class="receipt-rule"></div>
 
@@ -154,10 +211,26 @@
                 @if($item->variant_name)
                     <div>{{ $item->variant_name }}</div>
                 @endif
+                @if($showItemSku && $item->sku)
+                    <div>SKU: {{ $item->sku }}</div>
+                @endif
+                @if($showItemHsnCode && $itemHsnCode($item))
+                    <div>HSN: {{ $itemHsnCode($item) }}</div>
+                @endif
                 <div class="receipt-row">
                     <span>{{ $item->quantity }} x {{ number_format((float) $item->unit_price, 2) }}</span>
-                    <span>{{ number_format((float) $item->line_total, 2) }}</span>
+                    <span>{{ number_format((float) $item->line_subtotal, 2) }}</span>
                 </div>
+                @if((float) $item->line_discount > 0)
+                    <div class="receipt-row">
+                        <span>Line Discount</span>
+                        <span>-{{ number_format((float) $item->line_discount, 2) }}</span>
+                    </div>
+                    <div class="receipt-row">
+                        <span>Line Total</span>
+                        <span>{{ number_format((float) $item->line_total, 2) }}</span>
+                    </div>
+                @endif
             @endforeach
 
             <div class="receipt-rule"></div>
@@ -167,13 +240,34 @@
                 <span>{{ number_format((float) $order->subtotal, 2) }}</span>
             </div>
             <div class="receipt-row">
-                <span>Discount</span>
-                <span>{{ number_format((float) $order->discount_total, 2) }}</span>
+                <span>Item Discount</span>
+                <span>{{ number_format($itemDiscountTotal, 2) }}</span>
             </div>
             <div class="receipt-row">
-                <span>Tax</span>
-                <span>{{ number_format((float) $order->tax_total, 2) }}</span>
+                <span>Order Discount</span>
+                <span>{{ number_format($orderDiscountTotal, 2) }}</span>
             </div>
+            @if($showTaxBreakdown)
+                <div class="receipt-row">
+                    <span>Tax</span>
+                    <span>{{ number_format((float) $order->tax_total, 2) }}</span>
+                </div>
+            @endif
+
+            @if($showHsnSummary && $hsnSummary->isNotEmpty())
+                <div class="receipt-rule"></div>
+                <div class="fw-bold">HSN Summary</div>
+                @foreach($hsnSummary as $summary)
+                    <div class="receipt-row">
+                        <span>{{ $summary['hsn'] }} Taxable</span>
+                        <span>{{ number_format((float) $summary['taxable'], 2) }}</span>
+                    </div>
+                    <div class="receipt-row">
+                        <span>{{ $summary['hsn'] }} GST</span>
+                        <span>{{ number_format((float) $summary['tax'], 2) }}</span>
+                    </div>
+                @endforeach
+            @endif
 
             <div class="receipt-rule"></div>
 
@@ -214,16 +308,26 @@
 
             <div class="receipt-rule"></div>
 
-            <div class="receipt-barcode"></div>
-            <div class="text-center">{{ $order->order_number }}</div>
-            <div class="receipt-qr">QR</div>
-            <div class="text-center text-muted">Scan to view</div>
+            @if($showBarcode)
+                <div class="receipt-barcode"></div>
+                <div class="text-center">{{ $order->order_number }}</div>
+            @endif
+            @if($showQrCode)
+                <div class="receipt-qr">QR</div>
+                <div class="text-center text-muted">Scan to view</div>
+            @endif
 
-            <div class="receipt-rule"></div>
-            <div class="text-center">
-                <div>Thank you for shopping!</div>
-                <div>Visit Again</div>
-            </div>
+            @if($footerText !== '' || $returnPolicy !== '')
+                <div class="receipt-rule"></div>
+                <div class="text-center">
+                    @if($footerText !== '')
+                        <div>{!! nl2br(e($footerText)) !!}</div>
+                    @endif
+                    @if($returnPolicy !== '')
+                        <div class="text-muted mt-1">{!! nl2br(e($returnPolicy)) !!}</div>
+                    @endif
+                </div>
+            @endif
         </article>
     </div>
 @endsection

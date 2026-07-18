@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\MerchantCustomer;
 use App\Models\Order;
 use App\Models\OrderTotal;
 use App\Models\Product;
@@ -185,6 +186,38 @@ class OrderFoundationTest extends TestCase
         $this->assertStringStartsWith('ORD-'.now()->format('Ymd').'-', $first);
         $this->assertNotSame($first, $second);
         $this->assertStringEndsWith('000002', $second);
+    }
+
+    public function test_order_creation_copies_customer_snapshot_from_database(): void
+    {
+        [$user, $shop, $variant] = $this->orderFixture();
+        $customer = MerchantCustomer::query()->create([
+            'merchant_id' => $shop->merchant_id,
+            'customer_code' => 'CUS-000001',
+            'name' => 'Database Customer',
+            'mobile_country_code' => '+91',
+            'mobile' => '9876543210',
+            'mobile_normalized' => '919876543210',
+            'email' => 'database-customer@example.test',
+            'status' => MerchantCustomer::STATUS_ACTIVE,
+        ]);
+
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $shop->getKey(),
+            'customer_id' => $customer->getKey(),
+            'customer_name' => 'Spoofed Customer',
+            'customer_mobile' => '0000000000',
+            'customer_email' => 'spoofed@example.test',
+            'amount_paid' => 500,
+            'items' => [
+                ['product_variant_id' => $variant->getKey(), 'quantity' => 1],
+            ],
+        ], $user)->refresh();
+
+        $this->assertSame($customer->getKey(), $order->customer_id);
+        $this->assertSame('Database Customer', $order->customer_name);
+        $this->assertSame('9876543210', $order->customer_mobile);
+        $this->assertSame('database-customer@example.test', $order->customer_email);
     }
 
     public function test_product_force_deletion_does_not_remove_historical_order_items_or_snapshots(): void

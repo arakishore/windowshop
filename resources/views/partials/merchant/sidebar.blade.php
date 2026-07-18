@@ -45,7 +45,7 @@
 
                 <li class="nav-item">
                     <a href="{{ route('merchant.pos.index') }}" class="nav-link {{ request()->routeIs('merchant.pos.*') ? 'active' : '' }}">
-                        <i class="ph-cash-register"></i>
+                        <i class="ph-desktop"></i>
                         <span>POS</span>
                     </a>
                 </li>
@@ -105,7 +105,7 @@
                 </li>
 
                 <li class="nav-item">
-                    <a href="#" class="nav-link {{ $disabled }}">
+                    <a href="{{ route('merchant.customers.index') }}" class="nav-link {{ request()->routeIs('merchant.customers.*') ? 'active' : '' }}">
                         <i class="ph-users-three"></i>
                         <span>Customers</span>
                     </a>
@@ -118,8 +118,8 @@
                     </a>
                 </li>
 
-                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.password.*') ? 'nav-item-expanded nav-item-open' : '' }}">
-                    <a href="#" class="nav-link {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.password.*') ? 'active' : '' }}">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.password.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.password.*') ? 'active' : '' }}">
                         <i class="ph-user-gear"></i>
                         <span>Account</span>
                     </a>
@@ -129,6 +129,9 @@
                         </li>
                         <li class="nav-item">
                             <a href="{{ route('merchant.details.edit') }}" class="nav-link {{ request()->routeIs('merchant.details.*') ? 'active' : '' }}">Merchant Details</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.settings.edit') }}" class="nav-link {{ request()->routeIs('merchant.settings.*') ? 'active' : '' }}">Settings</a>
                         </li>
                         <li class="nav-item">
                             <a href="{{ route('merchant.password.edit') }}" class="nav-link {{ request()->routeIs('merchant.password.*') ? 'active' : '' }}">Change Password</a>

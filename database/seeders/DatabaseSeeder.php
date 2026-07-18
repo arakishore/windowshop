@@ -21,5 +21,6 @@ class DatabaseSeeder extends Seeder
 
         // Uncomment to seed demo data in development only.
         $this->call(DemoSeeder::class);
+        $this->call(MerchantSettingsSeeder::class);
     }
 }
