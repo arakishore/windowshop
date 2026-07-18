@@ -11,6 +11,7 @@ use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\POS\DiscountService;
+use App\Services\POS\CashRoundingService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -22,6 +23,7 @@ class OrderCreationService
         private readonly OrderTotalsService $orderTotalsService,
         private readonly OrderStatusService $orderStatusService,
         private readonly DiscountService $discountService,
+        private readonly CashRoundingService $cashRoundingService,
     ) {
     }
 
@@ -38,6 +40,7 @@ class OrderCreationService
      *     upi_txn?: string|null,
      *     terminal_id?: string|null,
      *     payment_status?: string,
+     *     cash_rounding?: array{method?: string, applyTo?: array<int, string>|string},
      *     order_discount?: array{type?: string|null, value?: mixed, reason?: string|null, note?: string|null},
      *     amount_paid?: float|string|int,
      *     elapsed_seconds?: int,
@@ -57,7 +60,8 @@ class OrderCreationService
             $variants = $this->lockVariants($shop, $rows);
             $items = $this->buildItems($rows, $variants);
             $orderStatus = (string) ($data['order_status'] ?? Order::STATUS_COMPLETED);
-            $paymentStatus = (string) ($data['payment_status'] ?? Order::PAYMENT_PAID);
+            $requestedPaymentStatus = isset($data['payment_status']) ? (string) $data['payment_status'] : null;
+            $paymentStatus = $requestedPaymentStatus ?? Order::PAYMENT_UNPAID;
             $customerSnapshot = $this->customerSnapshot($shop, $data);
             $shippingSnapshot = $this->shippingSnapshot($shop, $data, $customerSnapshot['customer_id']);
             $orderDiscount = $this->orderDiscount($items, $data['order_discount'] ?? []);
@@ -110,15 +114,12 @@ class OrderCreationService
             $createdItems = $order->items()->get();
             $calculated = $this->orderTotalsService->calculate(
                 $createdItems,
-                $this->totalsRows($createdItems, $orderDiscount, $data['totals'] ?? []),
+                $this->totalsRows($createdItems, $orderDiscount, $data['totals'] ?? [], $data),
                 $data['amount_paid'] ?? 0,
             );
 
-            if ($paymentStatus === Order::PAYMENT_PAID && (float) $calculated['summary']['amount_paid'] < (float) $calculated['summary']['grand_total']) {
-                throw ValidationException::withMessages([
-                    'amount_paid' => 'The amount paid must be at least the grand total for a paid cash sale.',
-                ]);
-            }
+            $paymentStatus = $this->resolvePaymentStatus($requestedPaymentStatus, $calculated['summary']);
+            $order->forceFill(['payment_status' => $paymentStatus]);
 
             $this->orderTotalsService->save($order, $calculated['summary'], $calculated['rows']);
             $this->orderStatusService->recordInitial($order, $orderStatus, $actor, 'POS cash sale completed');
@@ -126,6 +127,55 @@ class OrderCreationService
 
             return $order->load(['items', 'totals', 'statusHistories']);
         });
+    }
+
+    /**
+     * @param array<string, string> $summary
+     */
+    private function resolvePaymentStatus(?string $requestedStatus, array $summary): string
+    {
+        if ($requestedStatus !== null && ! in_array($requestedStatus, $this->supportedPaymentStatuses(), true)) {
+            throw ValidationException::withMessages([
+                'payment_status' => 'The selected payment status is invalid.',
+            ]);
+        }
+
+        $amountPaid = (float) $summary['amount_paid'];
+        $grandTotal = (float) $summary['grand_total'];
+
+        if ($requestedStatus === Order::PAYMENT_PAID && $amountPaid < $grandTotal) {
+            throw ValidationException::withMessages([
+                'amount_paid' => 'The amount paid must be at least the grand total for a paid sale.',
+            ]);
+        }
+
+        if (in_array($requestedStatus, [Order::PAYMENT_REFUNDED, Order::PAYMENT_PARTIALLY_REFUNDED], true)) {
+            return $requestedStatus;
+        }
+
+        if ($grandTotal <= 0 || $amountPaid >= $grandTotal) {
+            return Order::PAYMENT_PAID;
+        }
+
+        if ($amountPaid <= 0) {
+            return Order::PAYMENT_UNPAID;
+        }
+
+        return Order::PAYMENT_PARTIALLY_PAID;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function supportedPaymentStatuses(): array
+    {
+        return [
+            Order::PAYMENT_UNPAID,
+            Order::PAYMENT_PARTIALLY_PAID,
+            Order::PAYMENT_PAID,
+            Order::PAYMENT_REFUNDED,
+            Order::PAYMENT_PARTIALLY_REFUNDED,
+        ];
     }
 
     /**
@@ -386,9 +436,10 @@ class OrderCreationService
      * @param \Illuminate\Support\Collection<int, OrderItem> $items
      * @param array{type: string|null, value: string|null, amount: string, reason: string|null, note: string|null} $orderDiscount
      * @param array<int, array<string, mixed>> $extraRows
+     * @param array<string, mixed> $data
      * @return array<int, array<string, mixed>>
      */
-    private function totalsRows(Collection $items, array $orderDiscount, array $extraRows): array
+    private function totalsRows(Collection $items, array $orderDiscount, array $extraRows, array $data): array
     {
         $rows = [];
         $itemDiscount = $this->money($items->sum(fn (OrderItem $item): float => (float) $item->line_discount));
@@ -419,7 +470,40 @@ class OrderCreationService
             ];
         }
 
+        $roundingAdjustment = $this->roundingAdjustment($items, $orderDiscount, $data);
+        if ($roundingAdjustment !== 0.0) {
+            $rows[] = [
+                'code' => OrderTotal::CODE_ROUNDING,
+                'title' => 'Round Off',
+                'amount' => $roundingAdjustment,
+                'sort_order' => 90,
+                'source' => 'pos',
+                'metadata' => [
+                    'method' => $data['cash_rounding']['method'] ?? 'nearest',
+                    'payment_method' => $data['payment_method'] ?? Order::PAYMENT_METHOD_CASH,
+                ],
+            ];
+        }
+
         return [...$rows, ...$extraRows];
+    }
+
+    /**
+     * @param Collection<int, OrderItem> $items
+     * @param array{type: string|null, value: string|null, amount: string, reason: string|null, note: string|null} $orderDiscount
+     * @param array<string, mixed> $data
+     */
+    private function roundingAdjustment(Collection $items, array $orderDiscount, array $data): float
+    {
+        $baseTotal = $items->sum(fn (OrderItem $item): float => (float) $item->line_subtotal)
+            - $items->sum(fn (OrderItem $item): float => (float) $item->line_discount)
+            - (float) $orderDiscount['amount'];
+
+        return $this->cashRoundingService->adjustment(
+            $baseTotal,
+            (string) ($data['payment_method'] ?? Order::PAYMENT_METHOD_CASH),
+            (array) ($data['cash_rounding'] ?? ['method' => 'nearest', 'applyTo' => []]),
+        );
     }
 
     private function money(float|string|int $value): string

@@ -124,6 +124,24 @@
         $showHsnSummary = $receiptSettings['showHsnSummary'] ?? false;
         $footerText = trim((string) ($receiptSettings['footerText'] ?? 'Thank you for shopping with us.'));
         $returnPolicy = trim((string) ($receiptSettings['returnPolicy'] ?? ''));
+        $posCurrency = $posCurrency ?? [
+            'symbol' => '₹',
+            'decimal_places' => 2,
+            'thousands_separator' => ',',
+            'decimal_separator' => '.',
+            'symbol_position' => 'before',
+        ];
+        $formatReceiptMoney = static function (float|int|string $value) use ($posCurrency): string {
+            $amount = number_format(
+                (float) $value,
+                (int) ($posCurrency['decimal_places'] ?? 2),
+                (string) ($posCurrency['decimal_separator'] ?? '.'),
+                (string) ($posCurrency['thousands_separator'] ?? ','),
+            );
+            $symbol = (string) ($posCurrency['symbol'] ?? '₹');
+
+            return ($posCurrency['symbol_position'] ?? 'before') === 'before' ? $symbol.$amount : $amount.' '.$symbol;
+        };
         $itemHsnCode = static fn ($item): ?string => data_get($item->metadata, 'hsn_code') ?: data_get($item->metadata, 'hsn');
         $hsnSummary = $order->items
             ->map(function ($item) use ($itemHsnCode): ?array {
@@ -218,17 +236,17 @@
                     <div>HSN: {{ $itemHsnCode($item) }}</div>
                 @endif
                 <div class="receipt-row">
-                    <span>{{ $item->quantity }} x {{ number_format((float) $item->unit_price, 2) }}</span>
-                    <span>{{ number_format((float) $item->line_subtotal, 2) }}</span>
+                    <span>{{ $item->quantity }} x {{ $formatReceiptMoney($item->unit_price) }}</span>
+                    <span>{{ $formatReceiptMoney($item->line_subtotal) }}</span>
                 </div>
                 @if((float) $item->line_discount > 0)
                     <div class="receipt-row">
                         <span>Line Discount</span>
-                        <span>-{{ number_format((float) $item->line_discount, 2) }}</span>
+                        <span>-{{ $formatReceiptMoney($item->line_discount) }}</span>
                     </div>
                     <div class="receipt-row">
                         <span>Line Total</span>
-                        <span>{{ number_format((float) $item->line_total, 2) }}</span>
+                        <span>{{ $formatReceiptMoney($item->line_total) }}</span>
                     </div>
                 @endif
             @endforeach
@@ -237,20 +255,20 @@
 
             <div class="receipt-row">
                 <span>Subtotal</span>
-                <span>{{ number_format((float) $order->subtotal, 2) }}</span>
+                <span>{{ $formatReceiptMoney($order->subtotal) }}</span>
             </div>
             <div class="receipt-row">
                 <span>Item Discount</span>
-                <span>{{ number_format($itemDiscountTotal, 2) }}</span>
+                <span>{{ $formatReceiptMoney($itemDiscountTotal) }}</span>
             </div>
             <div class="receipt-row">
                 <span>Order Discount</span>
-                <span>{{ number_format($orderDiscountTotal, 2) }}</span>
+                <span>{{ $formatReceiptMoney($orderDiscountTotal) }}</span>
             </div>
             @if($showTaxBreakdown)
                 <div class="receipt-row">
                     <span>Tax</span>
-                    <span>{{ number_format((float) $order->tax_total, 2) }}</span>
+                    <span>{{ $formatReceiptMoney($order->tax_total) }}</span>
                 </div>
             @endif
 
@@ -260,11 +278,11 @@
                 @foreach($hsnSummary as $summary)
                     <div class="receipt-row">
                         <span>{{ $summary['hsn'] }} Taxable</span>
-                        <span>{{ number_format((float) $summary['taxable'], 2) }}</span>
+                        <span>{{ $formatReceiptMoney($summary['taxable']) }}</span>
                     </div>
                     <div class="receipt-row">
                         <span>{{ $summary['hsn'] }} GST</span>
-                        <span>{{ number_format((float) $summary['tax'], 2) }}</span>
+                        <span>{{ $formatReceiptMoney($summary['tax']) }}</span>
                     </div>
                 @endforeach
             @endif
@@ -273,7 +291,7 @@
 
             <div class="receipt-row receipt-total">
                 <span>TOTAL</span>
-                <span>{{ number_format((float) $order->grand_total, 2) }}</span>
+                <span>{{ $formatReceiptMoney($order->grand_total) }}</span>
             </div>
             <div class="receipt-row">
                 <span>Payment</span>
@@ -281,7 +299,7 @@
             </div>
             <div class="receipt-row">
                 <span>{{ Str::headline($order->payment_method) }}</span>
-                <span>{{ number_format((float) $order->amount_paid, 2) }}</span>
+                <span>{{ $formatReceiptMoney($order->amount_paid) }}</span>
             </div>
             @if($order->payment_reference)
                 <div class="receipt-row">
@@ -303,7 +321,7 @@
             @endif
             <div class="receipt-row">
                 <span>Change</span>
-                <span>{{ number_format((float) $order->change_amount, 2) }}</span>
+                <span>{{ $formatReceiptMoney($order->change_amount) }}</span>
             </div>
 
             <div class="receipt-rule"></div>

@@ -8,6 +8,7 @@
         .pos-shell {
             --pos-cart-width: 390px;
             --pos-workspace-height: calc(100vh - 2.5rem);
+            --pos-product-tile-size: 180px;
         }
 
         .pos-toolbar {
@@ -82,7 +83,7 @@
 
         .pos-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(var(--pos-product-tile-size), 1fr));
             gap: 0.4rem;
         }
 
@@ -409,10 +410,39 @@
         $activeShops = $shopContext['shops'];
         $selectedShop = $shopContext['activeShop'];
         $shopLabel = $shopContext['activeShopLabel'];
+        $posPreferences = $posPreferences ?? ['tileSize' => 'spacious', 'tileSizePx' => 180, 'playAddSound' => true];
+        $posSettings = $posSettings ?? [
+            'paymentMethods' => ['cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card', 'credit' => 'Credit'],
+            'defaultPaymentMethod' => 'cash',
+            'cashRounding' => ['method' => 'nearest', 'applyTo' => ['cash']],
+            'allowOrderDiscount' => true,
+            'allowItemDiscount' => true,
+            'playAddSound' => true,
+        ];
+        $posCurrency = $posCurrency ?? [
+            'currency' => 'INR',
+            'symbol' => '₹',
+            'decimal_places' => 2,
+            'thousands_separator' => ',',
+            'decimal_separator' => '.',
+            'symbol_position' => 'before',
+        ];
+        $formatPosMoney = static function (float|int|string $value) use ($posCurrency): string {
+            $amount = number_format(
+                (float) $value,
+                (int) ($posCurrency['decimal_places'] ?? 2),
+                (string) ($posCurrency['decimal_separator'] ?? '.'),
+                (string) ($posCurrency['thousands_separator'] ?? ','),
+            );
+            $symbol = (string) ($posCurrency['symbol'] ?? '₹');
+
+            return ($posCurrency['symbol_position'] ?? 'before') === 'before' ? $symbol.$amount : $amount.' '.$symbol;
+        };
     @endphp
 
     <div
         class="pos-shell js-pos-root"
+        style="--pos-product-tile-size: {{ (int) ($posPreferences['tileSizePx'] ?? 180) }}px;"
         data-items='@json($posItems->keyBy('id')->all())'
         data-checkout-url="{{ route('merchant.pos.checkout') }}"
         data-search-url="{{ route('merchant.pos.search') }}"
@@ -421,6 +451,9 @@
         data-customer-address-store-url-template="{{ route('merchant.pos.customers.addresses.store', ['customer' => '__CUSTOMER__']) }}"
         data-recent-sales-url="{{ route('merchant.pos.recent-sales') }}"
         data-shop-id="{{ $selectedShop?->getKey() ?? $activeShop?->getKey() }}"
+        data-play-add-sound="{{ ($posPreferences['playAddSound'] ?? true) ? '1' : '0' }}"
+        data-currency-config='@json($posCurrency)'
+        data-pos-settings='@json($posSettings)'
     >
         <div class="pos-content">
             <div class="pos-main-column">
@@ -559,12 +592,14 @@
                 return;
             }
 
-            const money = new Intl.NumberFormat('en-IN', {
-                style: 'currency',
-                currency: 'INR',
-                currencyDisplay: 'code',
-            });
             const products = JSON.parse(root.dataset.items || '{}');
+            const shouldPlayAddSound = root.dataset.playAddSound !== '0';
+            const currencyConfig = JSON.parse(root.dataset.currencyConfig || '{}');
+            const posSettings = JSON.parse(root.dataset.posSettings || '{}');
+            const paymentMethodLabels = posSettings.paymentMethods || { cash: 'Cash' };
+            const cashRounding = posSettings.cashRounding || { method: 'nearest', applyTo: ['cash'] };
+            const allowOrderDiscount = posSettings.allowOrderDiscount !== false;
+            const allowItemDiscount = posSettings.allowItemDiscount !== false;
             const cart = new Map();
             const storageKey = `windowshop.pos.cart.${root.dataset.shopId || 'default'}`;
             const heldStorageKey = `windowshop.pos.held.${root.dataset.shopId || 'default'}`;
@@ -573,6 +608,8 @@
             const subtotalEl = root.querySelector('.js-pos-subtotal');
             const itemDiscountEl = root.querySelector('.js-pos-item-discount');
             const orderDiscountTotalEl = root.querySelector('.js-pos-order-discount-total');
+            const roundingRowEl = root.querySelector('.js-pos-rounding-row');
+            const roundingAdjustmentEl = root.querySelector('.js-pos-rounding-adjustment');
             const grandTotalEl = root.querySelector('.js-pos-grand-total');
             const elapsedTimeEl = root.querySelector('.js-pos-elapsed-time');
             const searchInput = root.querySelector('.pos-search-control');
@@ -633,8 +670,19 @@
                     window.bootstrap.Tooltip.getOrCreateInstance(element);
                 });
             };
-            const moneyText = (value) => money.format(Number(value) || 0);
-            const compactMoneyText = (value) => moneyText(value).replace(/^INR\s?/, '₹');
+            const moneyText = (value) => {
+                const places = Number(currencyConfig.decimal_places ?? 2);
+                const decimal = String(currencyConfig.decimal_separator ?? '.');
+                const thousand = String(currencyConfig.thousands_separator ?? ',');
+                const symbol = String(currencyConfig.symbol ?? '₹');
+                const fixed = (Number(value) || 0).toFixed(places);
+                const [whole, fraction] = fixed.split('.');
+                const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, thousand);
+                const amount = fraction === undefined ? grouped : `${grouped}${decimal}${fraction}`;
+
+                return (currencyConfig.symbol_position ?? 'before') === 'before' ? `${symbol}${amount}` : `${amount} ${symbol}`;
+            };
+            const compactMoneyText = moneyText;
             const lineSubtotal = (row) => Number(row.price) * Number(row.quantity);
             const calculateDiscount = (baseAmount, discount) => {
                 const type = discount?.type || discount?.discount_type || null;
@@ -665,7 +713,27 @@
             const cartItemDiscount = () => Array.from(cart.values()).reduce((sum, row) => sum + lineDiscountAmount(row), 0);
             const orderDiscountBase = () => Math.max(0, cartSubtotal() - cartItemDiscount());
             const orderDiscountAmount = () => calculateDiscount(orderDiscountBase(), orderDiscount).amount;
-            const cartTotal = () => Math.max(0, orderDiscountBase() - orderDiscountAmount());
+            const unroundedCartTotal = () => Math.max(0, orderDiscountBase() - orderDiscountAmount());
+            const cashRoundingApplies = () => {
+                const applyTo = Array.isArray(cashRounding.applyTo) ? cashRounding.applyTo : String(cashRounding.applyTo || '').split(',');
+
+                return applyTo.includes('all') || applyTo.includes(selectedPaymentMethod());
+            };
+            const roundingAdjustment = () => {
+                const total = unroundedCartTotal();
+                if (!cashRoundingApplies()) {
+                    return 0;
+                }
+
+                const rounded = cashRounding.method === 'up'
+                    ? Math.ceil(total)
+                    : cashRounding.method === 'down'
+                        ? Math.floor(total)
+                        : Math.round(total);
+
+                return Math.round((rounded - total) * 100) / 100;
+            };
+            const cartTotal = () => Math.max(0, Math.round((unroundedCartTotal() + roundingAdjustment()) * 100) / 100);
             const discountBadge = (discount) => {
                 if (!discount?.type || Number(discount.value || 0) <= 0) {
                     return '';
@@ -674,16 +742,24 @@
                 const value = Number(discount.value);
                 return discount.type === 'percent'
                     ? `${value.toLocaleString('en-IN')}% OFF`
-                    : `INR ${value.toLocaleString('en-IN')} OFF`;
+                    : `${moneyText(value)} OFF`;
             };
             const elapsedSeconds = () => timerElapsedBeforeStart + (timerStartedAt === null ? 0 : Math.max(0, Math.floor((Date.now() - timerStartedAt) / 1000)));
             const selectedFulfilment = () => root.querySelector('input[name="fulfilment_type"]:checked')?.value || 'counter';
-            const selectedPaymentMethod = () => paymentMethodInput.value || 'cash';
+            const selectedPaymentMethod = () => {
+                const method = paymentMethodInput.value || Object.keys(paymentMethodLabels)[0] || 'cash';
+
+                return Object.prototype.hasOwnProperty.call(paymentMethodLabels, method) ? method : Object.keys(paymentMethodLabels)[0] || 'cash';
+            };
             const isTypingTarget = (target) => ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || target?.isContentEditable;
             const normalizeSearch = (value) => String(value || '').trim().toLowerCase();
             const compactSearch = (value) => normalizeSearch(value).replace(/[^a-z0-9]/g, '');
             const isCodeSearch = (query) => /[0-9]/.test(query) && /^[a-z0-9\s._/-]+$/i.test(query);
             const ensureAddSoundContext = () => {
+                if (!shouldPlayAddSound) {
+                    return null;
+                }
+
                 if (!window.AudioContext && !window.webkitAudioContext) {
                     return null;
                 }
@@ -697,6 +773,10 @@
                 return addSoundContext;
             };
             const playAddSound = () => {
+                if (!shouldPlayAddSound) {
+                    return;
+                }
+
                 const context = ensureAddSoundContext();
 
                 if (!context || context.state !== 'running') {
@@ -793,13 +873,16 @@
             const cartSnapshot = (overrides = {}) => ({
                 id: overrides.id || `hold-${Date.now()}-${Math.random().toString(16).slice(2)}`,
                 label: overrides.label || '',
-                items: Array.from(cart.values()),
+                items: Array.from(cart.values()).map((row) => ({
+                    ...row,
+                    discount: allowItemDiscount ? row.discount : null,
+                })),
                 cashReceived: cashInput.value,
                 paymentMethod: selectedPaymentMethod(),
                 fulfilmentType: selectedFulfilment(),
                 customer: selectedCustomer,
                 shippingAddressId: shippingAddressSelect?.value || '',
-                orderDiscount,
+                orderDiscount: allowOrderDiscount ? orderDiscount : null,
                 elapsedSeconds: elapsedSeconds(),
                 timerStartedAt,
                 timerElapsedBeforeStart,
@@ -879,14 +962,16 @@
                         ...(currentProduct || row),
                         id: variantId,
                         quantity: Number(row.quantity),
-                        discount: row.discount || null,
+                        discount: allowItemDiscount ? (row.discount || null) : null,
                     });
                 });
 
                 cashInput.value = snapshot.cashReceived || '';
-                paymentMethodInput.value = snapshot.paymentMethod || 'cash';
+                paymentMethodInput.value = Object.prototype.hasOwnProperty.call(paymentMethodLabels, snapshot.paymentMethod)
+                    ? snapshot.paymentMethod
+                    : (posSettings.defaultPaymentMethod || Object.keys(paymentMethodLabels)[0] || 'cash');
                 selectedCustomer = snapshot.customer || null;
-                orderDiscount = snapshot.orderDiscount || null;
+                orderDiscount = allowOrderDiscount ? (snapshot.orderDiscount || null) : null;
                 setFulfilment(snapshot.fulfilmentType || 'counter');
                 renderSelectedCustomer();
                 renderFulfilment();
@@ -1060,9 +1145,11 @@
                                     <button type="button" class="js-pos-increase" data-bs-popup="tooltip" title="Increase quantity" aria-label="Increase quantity"><i class="ph-plus"></i></button>
                                 </div>
                                 <div class="pos-line-actions mt-1">
-                                    <button type="button" class="pos-line-action js-pos-line-discount-open ${lineDiscountAmount(row) > 0 ? 'is-active' : ''}" data-bs-popup="tooltip" title="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}" aria-label="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}">
-                                        <i class="ph-tag"></i>
-                                    </button>
+                                    ${allowItemDiscount ? `
+                                        <button type="button" class="pos-line-action js-pos-line-discount-open ${lineDiscountAmount(row) > 0 ? 'is-active' : ''}" data-bs-popup="tooltip" title="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}" aria-label="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}">
+                                            <i class="ph-tag"></i>
+                                        </button>
+                                    ` : ''}
                                     <button type="button" class="pos-line-action js-pos-remove" data-bs-popup="tooltip" title="Remove item from cart" aria-label="Remove item from cart">
                                         <i class="ph-trash"></i>
                                     </button>
@@ -1076,14 +1163,23 @@
                 const subtotal = cartSubtotal();
                 const itemDiscount = cartItemDiscount();
                 const currentOrderDiscountAmount = orderDiscountAmount();
+                const currentRoundingAdjustment = roundingAdjustment();
                 const paid = Number.parseFloat(cashInput.value || '0');
                 const isCash = selectedPaymentMethod() === 'cash';
                 subtotalEl.textContent = moneyText(subtotal);
                 itemDiscountEl.textContent = moneyText(itemDiscount);
                 orderDiscountTotalEl.textContent = moneyText(currentOrderDiscountAmount);
+                if (roundingRowEl && roundingAdjustmentEl) {
+                    roundingRowEl.classList.toggle('d-none', currentRoundingAdjustment === 0);
+                    roundingAdjustmentEl.textContent = `${currentRoundingAdjustment < 0 ? '-' : ''}${moneyText(Math.abs(currentRoundingAdjustment))}`;
+                    roundingAdjustmentEl.classList.toggle('text-danger', currentRoundingAdjustment < 0);
+                    roundingAdjustmentEl.classList.toggle('text-success', currentRoundingAdjustment > 0);
+                }
                 grandTotalEl.textContent = moneyText(total);
-                orderDiscountBadge.textContent = discountBadge(orderDiscount);
-                orderDiscountBadge.classList.toggle('d-none', currentOrderDiscountAmount <= 0);
+                if (orderDiscountBadge) {
+                    orderDiscountBadge.textContent = discountBadge(orderDiscount);
+                    orderDiscountBadge.classList.toggle('d-none', currentOrderDiscountAmount <= 0);
+                }
                 renderTimer();
                 changeEl.textContent = moneyText(isCash ? Math.max(0, paid - total) : 0);
                 const deliveryMissing = selectedFulfilment() === 'delivery' && (!selectedCustomer || !shippingAddressSelect?.value);
@@ -1092,9 +1188,11 @@
             };
             const renderPaymentMethod = (persist = true) => {
                 const method = selectedPaymentMethod();
-                paidLabelEl.textContent = method === 'cash' ? 'Cash Received' : 'Amount Paid';
+                paidLabelEl.textContent = method === 'cash' ? 'Cash Received' : (method === 'credit' ? 'Credit Due' : 'Amount Paid');
 
-                if (method !== 'cash') {
+                if (method === 'credit') {
+                    cashInput.value = '0.00';
+                } else if (method !== 'cash') {
                     cashInput.value = cartTotal().toFixed(2);
                 }
 
@@ -1129,6 +1227,10 @@
                 valueInput?.classList.toggle('is-invalid', !calculated.valid);
             };
             const openLineDiscountModal = (variantId) => {
+                if (!allowItemDiscount) {
+                    return;
+                }
+
                 const row = cart.get(variantId);
                 if (!row) {
                     return;
@@ -1144,6 +1246,10 @@
                 window.bootstrap?.Modal.getOrCreateInstance(lineDiscountModalEl).show();
             };
             const applyLineDiscount = () => {
+                if (!allowItemDiscount) {
+                    return;
+                }
+
                 const row = cart.get(activeLineDiscountVariantId);
                 if (!row) {
                     return;
@@ -1179,15 +1285,27 @@
                 const errorEl = document.querySelector('.js-pos-order-discount-error');
                 const discount = { type: orderDiscountMode(), value: valueInput?.value || 0 };
                 const calculated = calculateDiscount(orderDiscountBase(), discount);
+                const previewBase = calculated.valid ? orderDiscountBase() - calculated.amount : orderDiscountBase();
+                const previewTotal = Math.max(0, previewBase + (cashRoundingApplies()
+                    ? (cashRounding.method === 'up'
+                        ? Math.ceil(previewBase)
+                        : cashRounding.method === 'down'
+                            ? Math.floor(previewBase)
+                            : Math.round(previewBase)) - previewBase
+                    : 0));
 
                 document.querySelector('.js-pos-order-discount-label').textContent = discount.type === 'percent' ? 'Discount Value' : 'Discount Value';
                 document.querySelector('.js-pos-order-preview-subtotal').textContent = moneyText(orderDiscountBase());
                 document.querySelector('.js-pos-order-preview-discount').textContent = moneyText(calculated.amount);
-                document.querySelector('.js-pos-order-preview-total').textContent = moneyText(calculated.valid ? orderDiscountBase() - calculated.amount : orderDiscountBase());
+                document.querySelector('.js-pos-order-preview-total').textContent = moneyText(previewTotal);
                 errorEl.textContent = calculated.message;
                 valueInput?.classList.toggle('is-invalid', !calculated.valid);
             };
             const openOrderDiscountModal = () => {
+                if (!allowOrderDiscount) {
+                    return;
+                }
+
                 const mode = orderDiscount?.type || 'percent';
                 setDiscountMode(Array.from(document.querySelectorAll('.js-pos-order-discount-mode')), mode);
                 document.querySelector('.js-pos-order-discount-value').value = orderDiscount?.value || '';
@@ -1199,6 +1317,10 @@
                 window.bootstrap?.Modal.getOrCreateInstance(orderDiscountModalEl).show();
             };
             const applyOrderDiscount = () => {
+                if (!allowOrderDiscount) {
+                    return;
+                }
+
                 const value = document.querySelector('.js-pos-order-discount-value')?.value || '';
                 const discount = { type: orderDiscountMode(), value };
                 const calculated = calculateDiscount(orderDiscountBase(), discount);
@@ -1557,7 +1679,7 @@
                     <div class="border rounded p-3 d-flex flex-column flex-sm-row gap-3 justify-content-between align-items-sm-center">
                         <div class="min-w-0">
                             <div class="fw-semibold text-truncate">${escapeHtml(snapshot.label || 'Walk-in customer')}</div>
-                            <div class="text-muted fs-sm">${heldNumber(snapshot, index)} · ${heldItemCount(snapshot)} item(s) · ${money.format(heldTotal(snapshot))}</div>
+                            <div class="text-muted fs-sm">${heldNumber(snapshot, index)} · ${heldItemCount(snapshot)} item(s) · ${moneyText(heldTotal(snapshot))}</div>
                             <div class="text-muted fs-sm">Order time ${formatElapsed(Number(snapshot.elapsedSeconds || 0))}</div>
                         </div>
                         <div class="d-flex gap-2 flex-shrink-0">
@@ -1677,7 +1799,7 @@
                         <div class="min-w-0">
                             <div class="fw-semibold text-truncate">${escapeHtml(sale.number)}</div>
                             <div class="text-muted fs-sm">${escapeHtml(sale.created_at || '-')}</div>
-                            <div class="fw-semibold mt-1">INR ${escapeHtml(sale.grand_total)}</div>
+                            <div class="fw-semibold mt-1">${escapeHtml(moneyText(sale.grand_total))}</div>
                         </div>
                         <div class="d-flex gap-2 flex-shrink-0">
                             <a href="${escapeHtml(sale.receipt_url)}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" data-bs-popup="tooltip" title="Open receipt for this sale">
@@ -2112,7 +2234,7 @@
             async function completeSale() {
                 const total = cartTotal();
                 const method = selectedPaymentMethod();
-                const cash = method === 'cash' ? Number.parseFloat(cashInput.value || '0') : total;
+                const cash = method === 'cash' ? Number.parseFloat(cashInput.value || '0') : (method === 'credit' ? 0 : total);
 
                 if (cart.size === 0 || (method === 'cash' && cash < total)) {
                     return;
@@ -2135,7 +2257,7 @@
                             fulfilment_type: selectedFulfilment(),
                             customer_id: selectedCustomer?.id || null,
                             shipping_address_id: selectedFulfilment() === 'delivery' ? (shippingAddressSelect?.value || null) : null,
-                            order_discount: orderDiscount ? {
+                            order_discount: allowOrderDiscount && orderDiscount ? {
                                 type: orderDiscount.type,
                                 value: orderDiscount.value,
                                 reason: orderDiscount.reason || null,
@@ -2145,8 +2267,8 @@
                             items: Array.from(cart.values()).map((row) => ({
                                 product_variant_id: Number(row.id),
                                 quantity: row.quantity,
-                                discount_type: row.discount?.type || null,
-                                discount_value: row.discount?.value || null,
+                                discount_type: allowItemDiscount ? (row.discount?.type || null) : null,
+                                discount_value: allowItemDiscount ? (row.discount?.value || null) : null,
                             })),
                         }),
                     });
@@ -2183,6 +2305,7 @@
                 cash: 'Cash',
                 upi: 'UPI',
                 card: 'Card',
+                credit: 'Credit',
                 wallet: 'Wallet',
                 other: 'Other',
             }[method] || 'Cash';
@@ -2400,9 +2523,9 @@
                     </div>
                     <div class="fw-bold fs-5 mb-1">Sale complete</div>
                     <div class="text-muted mb-3">${escapeHtml(order.number)}</div>
-                    <div class="display-6 fw-bold mb-2">INR ${escapeHtml(order.grand_total)}</div>
+                    <div class="display-6 fw-bold mb-2">${escapeHtml(moneyText(order.grand_total))}</div>
                     <div class="text-muted">
-                        Change INR ${escapeHtml(order.change_amount)}
+                        Change ${escapeHtml(moneyText(order.change_amount))}
                     </div>
                     <div class="text-muted mt-1">
                         ${escapeHtml(paymentMethodLabel(order.payment_method))}

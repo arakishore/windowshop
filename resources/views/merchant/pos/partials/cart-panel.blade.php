@@ -15,11 +15,9 @@
                     <i class="ph-magnifying-glass"></i>
                 </button>
                 <select class="form-select form-select-sm w-auto pos-compact-control js-pos-payment-method" id="pos_payment_method" aria-label="Payment method" data-bs-popup="tooltip" title="Choose how the customer is paying">
-                    <option value="cash" selected>Cash</option>
-                    <option value="upi">UPI</option>
-                    <option value="card">Card</option>
-                    <option value="wallet">Wallet</option>
-                    <option value="other">Other</option>
+                    @foreach (($posSettings['paymentMethods'] ?? ['cash' => 'Cash']) as $method => $label)
+                        <option value="{{ $method }}" @selected(($posSettings['defaultPaymentMethod'] ?? 'cash') === $method)>{{ $label }}</option>
+                    @endforeach
                 </select>
             </div>
         </div>
@@ -69,28 +67,32 @@
             <div class="collapse" id="posTotalsBreakdown">
                 <div class="d-flex justify-content-between mb-2">
                     <span class="text-muted">Subtotal</span>
-                    <span class="fw-semibold js-pos-subtotal">INR 0.00</span>
+                    <span class="fw-semibold js-pos-subtotal">{{ $formatPosMoney(0) }}</span>
                 </div>
                 <div class="d-flex justify-content-between mb-2">
                     <span class="text-muted">Discount</span>
-                    <span class="fw-semibold text-danger js-pos-item-discount">INR 0.00</span>
+                    <span class="fw-semibold text-danger js-pos-item-discount">{{ $formatPosMoney(0) }}</span>
                 </div>
                 <div class="d-flex justify-content-between mb-2">
                     <span class="text-muted">Order Discount</span>
-                    <span class="fw-semibold text-danger js-pos-order-discount-total">INR 0.00</span>
+                    <span class="fw-semibold text-danger js-pos-order-discount-total">{{ $formatPosMoney(0) }}</span>
                 </div>
                 <div class="d-flex justify-content-between mb-2">
                     <span class="text-muted">Shipping</span>
-                    <span class="fw-semibold">INR 0.00</span>
+                    <span class="fw-semibold">{{ $formatPosMoney(0) }}</span>
                 </div>
                 <div class="d-flex justify-content-between mb-3">
                     <span class="text-muted">Tax</span>
-                    <span class="fw-semibold">INR 0.00</span>
+                    <span class="fw-semibold">{{ $formatPosMoney(0) }}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-3 js-pos-rounding-row d-none">
+                    <span class="text-muted">Round Off</span>
+                    <span class="fw-semibold js-pos-rounding-adjustment">{{ $formatPosMoney(0) }}</span>
                 </div>
             </div>
             <div class="d-flex justify-content-between align-items-center border-top pt-1">
                 <span class="fw-bold">Grand Total</span>
-                <span class="fw-bold pos-grand-total js-pos-grand-total">INR 0.00</span>
+                <span class="fw-bold pos-grand-total js-pos-grand-total">{{ $formatPosMoney(0) }}</span>
             </div>
             <div class="d-flex justify-content-between align-items-center mt-2">
                 <span class="text-muted">
@@ -104,18 +106,20 @@
         <div class="mt-2">
             <label for="pos_cash_received" class="form-label fw-semibold js-pos-paid-label">Cash Received</label>
             <div class="input-group input-group-sm">
-                <span class="input-group-text">INR</span>
+                <span class="input-group-text">{{ $posCurrency['currency'] ?? 'INR' }}</span>
                 <input type="number" min="0" step="0.01" class="form-control pos-compact-control js-pos-cash-received" id="pos_cash_received" placeholder="0.00" data-bs-popup="tooltip" title="Enter the amount received from customer">
             </div>
             <div class="d-flex justify-content-between align-items-center mt-1">
                 <span class="text-muted">Change</span>
-                <span class="fw-bold fs-5 js-pos-change">INR 0.00</span>
+                <span class="fw-bold fs-5 js-pos-change">{{ $formatPosMoney(0) }}</span>
             </div>
-            <button type="button" class="btn btn-light btn-sm w-100 mt-2 js-pos-order-discount" data-bs-popup="tooltip" title="Apply discount to the whole order">
-                <i class="ph-tag me-1"></i>
-                Order Discount
-                <span class="badge bg-primary ms-1 d-none js-pos-order-discount-badge"></span>
-            </button>
+            @if ($posSettings['allowOrderDiscount'] ?? true)
+                <button type="button" class="btn btn-light btn-sm w-100 mt-2 js-pos-order-discount" data-bs-popup="tooltip" title="Apply discount to the whole order">
+                    <i class="ph-tag me-1"></i>
+                    Order Discount
+                    <span class="badge bg-primary ms-1 d-none js-pos-order-discount-badge"></span>
+                </button>
+            @endif
         </div>
 
         <div class="pos-actions mt-2">
@@ -281,15 +285,15 @@
                 <div class="border rounded p-3 mt-3">
                     <div class="d-flex justify-content-between mb-2">
                         <span class="text-muted">Original Line Total</span>
-                        <span class="fw-semibold js-pos-line-preview-original">INR 0.00</span>
+                        <span class="fw-semibold js-pos-line-preview-original">{{ $formatPosMoney(0) }}</span>
                     </div>
                     <div class="d-flex justify-content-between mb-2">
                         <span class="text-muted">Discount</span>
-                        <span class="fw-semibold text-danger js-pos-line-preview-discount">INR 0.00</span>
+                        <span class="fw-semibold text-danger js-pos-line-preview-discount">{{ $formatPosMoney(0) }}</span>
                     </div>
                     <div class="d-flex justify-content-between">
                         <span class="fw-semibold">New Line Total</span>
-                        <span class="fw-bold js-pos-line-preview-total">INR 0.00</span>
+                        <span class="fw-bold js-pos-line-preview-total">{{ $formatPosMoney(0) }}</span>
                     </div>
                 </div>
             </div>
@@ -335,15 +339,15 @@
                 <div class="border rounded p-3 mt-3">
                     <div class="d-flex justify-content-between mb-2">
                         <span class="text-muted">Subtotal</span>
-                        <span class="fw-semibold js-pos-order-preview-subtotal">INR 0.00</span>
+                        <span class="fw-semibold js-pos-order-preview-subtotal">{{ $formatPosMoney(0) }}</span>
                     </div>
                     <div class="d-flex justify-content-between mb-2">
                         <span class="text-muted">Discount</span>
-                        <span class="fw-semibold text-danger js-pos-order-preview-discount">INR 0.00</span>
+                        <span class="fw-semibold text-danger js-pos-order-preview-discount">{{ $formatPosMoney(0) }}</span>
                     </div>
                     <div class="d-flex justify-content-between">
                         <span class="fw-semibold">Grand Total</span>
-                        <span class="fw-bold js-pos-order-preview-total">INR 0.00</span>
+                        <span class="fw-bold js-pos-order-preview-total">{{ $formatPosMoney(0) }}</span>
                     </div>
                 </div>
 

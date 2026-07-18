@@ -31,10 +31,12 @@ class Order extends Model
     public const PAYMENT_METHOD_CASH = 'cash';
     public const PAYMENT_METHOD_UPI = 'upi';
     public const PAYMENT_METHOD_CARD = 'card';
+    public const PAYMENT_METHOD_CREDIT = 'credit';
     public const PAYMENT_METHOD_WALLET = 'wallet';
     public const PAYMENT_METHOD_OTHER = 'other';
 
     public const PAYMENT_UNPAID = 'unpaid';
+    public const PAYMENT_PARTIALLY_PAID = 'partially_paid';
     public const PAYMENT_PAID = 'paid';
     public const PAYMENT_REFUNDED = 'refunded';
     public const PAYMENT_PARTIALLY_REFUNDED = 'partially_refunded';

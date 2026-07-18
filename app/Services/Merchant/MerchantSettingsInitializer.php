@@ -20,6 +20,8 @@ class MerchantSettingsInitializer
             'pos' => [
                 'cash_rounding.method' => ['value' => 'nearest', 'type' => MerchantSetting::TYPE_STRING],
                 'cash_rounding.apply_to' => ['value' => 'cash', 'type' => MerchantSetting::TYPE_STRING],
+                'product.tile_size' => ['value' => 'spacious', 'type' => MerchantSetting::TYPE_STRING],
+                'cart.play_add_sound' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'receipt.show_shop_name' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'receipt.show_address' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'receipt.show_phone' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
@@ -27,7 +29,7 @@ class MerchantSettingsInitializer
                 'receipt.show_customer' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'receipt.show_cashier' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'receipt.show_order_number' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
-                'receipt.show_barcode' => ['value' => false, 'type' => MerchantSetting::TYPE_BOOLEAN],
+                'receipt.show_barcode' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'receipt.show_qr_code' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'receipt.show_tax_breakdown' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'receipt.line_item.show_sku' => ['value' => false, 'type' => MerchantSetting::TYPE_BOOLEAN],
@@ -46,15 +48,13 @@ class MerchantSettingsInitializer
             ],
             'product' => [
                 'barcode.auto_generate' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
-                'default_visibility' => ['value' => 'public', 'type' => MerchantSetting::TYPE_STRING],
             ],
             'payment' => [
                 'default_payment_method' => ['value' => 'cash', 'type' => MerchantSetting::TYPE_STRING],
                 'allow_cash' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'allow_upi' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'allow_card' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
-                'allow_bank_transfer' => ['value' => false, 'type' => MerchantSetting::TYPE_BOOLEAN],
-                'allow_credit' => ['value' => false, 'type' => MerchantSetting::TYPE_BOOLEAN],
+                'allow_credit' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
             ],
         ];
     }
@@ -80,6 +80,10 @@ class MerchantSettingsInitializer
             ],
             'product' => [
                 'barcode.type',
+                'default_visibility',
+            ],
+            'payment' => [
+                'allow_bank_transfer',
             ],
         ];
     }

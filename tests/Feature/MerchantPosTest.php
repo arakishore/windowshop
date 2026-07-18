@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Order;
+use App\Models\OrderTotal;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\Product\ProductVariantManagementService;
@@ -50,6 +52,8 @@ class MerchantPosTest extends TestCase
         $response->assertSee('Held orders');
         $response->assertSee('Keyboard shortcuts');
         $response->assertSee('Search product name, SKU, or scan barcode');
+        $response->assertSee('--pos-product-tile-size: 180px', false);
+        $response->assertSee('data-play-add-sound="1"', false);
         $response->assertSee('Order time');
         $response->assertSee('Linen Shirt');
         $response->assertSee('White / M');
@@ -564,7 +568,7 @@ class MerchantPosTest extends TestCase
             ->assertSee('Invoice :')
             ->assertSee('Date :')
             ->assertSee('Payment')
-            ->assertSee('Thank you for shopping!')
+            ->assertSee('Thank you for shopping with us.')
             ->assertSee('Linen Shirt')
             ->assertSee('1,998.00');
     }
@@ -627,6 +631,151 @@ class MerchantPosTest extends TestCase
         ]);
     }
 
+    public function test_pos_uses_merchant_payment_settings_for_dropdown_and_checkout(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Payment Settings Shirt', 'White / M', 'PAY-M-WHT', 'PAYBAR001');
+        $merchantId = $this->merchantIdForShop($shopId);
+
+        $this->setMerchantSetting($merchantId, 'payment', 'default_payment_method', 'upi', 'string');
+        $this->setMerchantSetting($merchantId, 'payment', 'allow_cash', '1', 'boolean');
+        $this->setMerchantSetting($merchantId, 'payment', 'allow_upi', '1', 'boolean');
+        $this->setMerchantSetting($merchantId, 'payment', 'allow_card', '0', 'boolean');
+        $this->setMerchantSetting($merchantId, 'payment', 'allow_credit', '0', 'boolean');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.pos.index'))
+            ->assertOk()
+            ->assertSee('<option value="upi" selected>UPI</option>', false)
+            ->assertDontSee('<option value="card"', false)
+            ->assertDontSee('<option value="credit"', false);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'card',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('payment_method');
+    }
+
+    public function test_pos_credit_sale_is_saved_as_unpaid(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Credit Shirt', 'White / M', 'CRED-M-WHT', 'CREDBAR001');
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 0,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'credit',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('order.payment_method', 'credit');
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $response->json('order.id'),
+            'payment_method' => Order::PAYMENT_METHOD_CREDIT,
+            'payment_status' => Order::PAYMENT_UNPAID,
+            'amount_paid' => '0.00',
+        ]);
+    }
+
+    public function test_pos_cash_rounding_setting_is_applied_to_saved_totals(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Rounded Shirt', 'White / M', 'ROUND-M-WHT', 'ROUNDBAR001');
+        $merchantId = $this->merchantIdForShop($shopId);
+
+        DB::table('product_variants')
+            ->where('id', $fixture['variant_id'])
+            ->update(['selling_price' => 999.25]);
+        $this->setMerchantSetting($merchantId, 'pos', 'cash_rounding.method', 'up', 'string');
+        $this->setMerchantSetting($merchantId, 'pos', 'cash_rounding.apply_to', 'cash', 'string');
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('order.grand_total', '1000.00');
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $response->json('order.id'),
+            'subtotal' => '999.25',
+            'rounding_adjustment' => '0.75',
+            'grand_total' => '1000.00',
+        ]);
+        $this->assertDatabaseHas('order_totals', [
+            'order_id' => $response->json('order.id'),
+            'code' => OrderTotal::CODE_ROUNDING,
+            'amount' => '0.75',
+        ]);
+    }
+
+    public function test_pos_discount_settings_are_enforced_at_checkout(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Discount Disabled Shirt', 'White / M', 'NODISC-M-WHT', 'NODISCBAR001');
+        $merchantId = $this->merchantIdForShop($shopId);
+
+        $this->setMerchantSetting($merchantId, 'pos', 'order.allow_order_discount', '0', 'boolean');
+        $this->setMerchantSetting($merchantId, 'pos', 'order.allow_item_discount', '0', 'boolean');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'order_discount' => ['type' => 'percent', 'value' => 10],
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('order_discount');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1, 'discount_type' => 'percent', 'discount_value' => 10],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('items.discount_value');
+    }
+
     public function test_pos_checkout_applies_percent_line_discount(): void
     {
         [$userId, $shopId] = $this->merchantShopFixture();
@@ -646,7 +795,7 @@ class MerchantPosTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('order.grand_total', '1798.20');
+            ->assertJsonPath('order.grand_total', '1798.00');
 
         $orderId = (int) DB::table('orders')->where('shop_id', $shopId)->value('id');
         $this->assertDatabaseHas('order_items', [
@@ -661,7 +810,13 @@ class MerchantPosTest extends TestCase
             'id' => $orderId,
             'subtotal' => 1998,
             'discount_total' => 199.80,
-            'grand_total' => 1798.20,
+            'rounding_adjustment' => -0.20,
+            'grand_total' => 1798,
+        ]);
+        $this->assertDatabaseHas('order_totals', [
+            'order_id' => $orderId,
+            'code' => OrderTotal::CODE_ROUNDING,
+            'amount' => -0.20,
         ]);
     }
 
@@ -692,7 +847,7 @@ class MerchantPosTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('order.grand_total', '1698.10');
+            ->assertJsonPath('order.grand_total', '1698.00');
 
         $orderId = (int) DB::table('orders')->where('shop_id', $shopId)->value('id');
         $this->assertDatabaseHas('orders', [
@@ -703,7 +858,8 @@ class MerchantPosTest extends TestCase
             'order_discount_value' => 100,
             'order_discount_amount' => 100,
             'order_discount_reason' => 'Customer Loyalty',
-            'grand_total' => 1698.10,
+            'rounding_adjustment' => -0.10,
+            'grand_total' => 1698,
         ]);
         $this->assertDatabaseHas('order_totals', [
             'order_id' => $orderId,
@@ -714,6 +870,11 @@ class MerchantPosTest extends TestCase
             'order_id' => $orderId,
             'code' => 'order_discount',
             'amount' => -100,
+        ]);
+        $this->assertDatabaseHas('order_totals', [
+            'order_id' => $orderId,
+            'code' => OrderTotal::CODE_ROUNDING,
+            'amount' => -0.10,
         ]);
     }
 
@@ -834,7 +995,7 @@ class MerchantPosTest extends TestCase
             ->assertSee('Item Discount')
             ->assertSee('Order Discount')
             ->assertSee('GSTIN : 27ABCDE1234F1Z5')
-            ->assertSee('QR')
+            ->assertSee('<div class="receipt-qr">QR</div>', false)
             ->assertSee('SKU: REC-M-WHT')
             ->assertSee('Footer note')
             ->assertSee('Returns within 7 days.')
@@ -858,7 +1019,7 @@ class MerchantPosTest extends TestCase
             ->get($receiptUrl)
             ->assertOk()
             ->assertDontSee('GSTIN : 27ABCDE1234F1Z5')
-            ->assertDontSee('QR');
+            ->assertDontSee('<div class="receipt-qr">QR</div>', false);
     }
 
     public function test_pos_can_search_customer_and_add_shipping_address(): void
@@ -1070,6 +1231,28 @@ class MerchantPosTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    private function merchantIdForShop(int $shopId): int
+    {
+        return (int) DB::table('shops')->where('id', $shopId)->value('merchant_id');
+    }
+
+    private function setMerchantSetting(int $merchantId, string $group, string $key, string $value, string $type): void
+    {
+        DB::table('merchant_settings')->updateOrInsert(
+            [
+                'merchant_id' => $merchantId,
+                'group' => $group,
+                'setting_key' => $key,
+            ],
+            [
+                'setting_value' => $value,
+                'setting_type' => $type,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
     }
 
     private function createCustomerAddress(int $customerId, string $lineOne): int

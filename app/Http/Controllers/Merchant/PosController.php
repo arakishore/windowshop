@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
+use App\Services\Admin\AdminSettingsService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Merchant\MerchantCustomerAddressService;
 use App\Services\Merchant\MerchantSettingsService;
@@ -20,6 +21,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -34,6 +36,7 @@ class PosController extends Controller
         private readonly PosProductSearchService $posProductSearchService,
         private readonly MerchantCustomerAddressService $customerAddressService,
         private readonly MerchantSettingsService $settings,
+        private readonly AdminSettingsService $adminSettings,
     ) {
     }
 
@@ -64,12 +67,25 @@ class PosController extends Controller
             ->orderBy('product_name')
             ->limit(self::POS_PRODUCT_LOAD_LIMIT)
             ->get();
+        $tileSize = (string) $this->settings->get((int) $shop->merchant_id, 'pos', 'product.tile_size', 'spacious');
+        $posSettings = $this->posSettings((int) $shop->merchant_id);
 
         return view('merchant.pos.index', [
             'activeShop' => $shop,
             'categories' => $this->categoriesForShop($shop, $categoryIds),
             'filters' => $filters,
             'posItems' => $this->posItems($products, ''),
+            'posCurrency' => $this->adminSettings->currencyConfig(),
+            'posSettings' => $posSettings,
+            'posPreferences' => [
+                'tileSize' => in_array($tileSize, ['compact', 'comfortable', 'spacious'], true) ? $tileSize : 'spacious',
+                'tileSizePx' => match ($tileSize) {
+                    'compact' => 130,
+                    'comfortable' => 150,
+                    default => 180,
+                },
+                'playAddSound' => $posSettings['playAddSound'],
+            ],
         ]);
     }
 
@@ -82,13 +98,7 @@ class PosController extends Controller
             'fulfilment_type' => ['required', Rule::in(['counter', 'pickup', 'delivery'])],
             'customer_id' => ['nullable', 'integer'],
             'shipping_address_id' => ['nullable', 'integer'],
-            'payment_method' => ['required', Rule::in([
-                Order::PAYMENT_METHOD_CASH,
-                Order::PAYMENT_METHOD_UPI,
-                Order::PAYMENT_METHOD_CARD,
-                Order::PAYMENT_METHOD_WALLET,
-                Order::PAYMENT_METHOD_OTHER,
-            ])],
+            'payment_method' => ['required', Rule::in(array_keys($this->availablePaymentMethods((int) $shop->merchant_id)))],
             'payment_reference' => ['nullable', 'string', 'max:255'],
             'upi_txn' => ['nullable', 'string', 'max:255'],
             'terminal_id' => ['nullable', 'string', 'max:80'],
@@ -103,6 +113,11 @@ class PosController extends Controller
             'items.*.discount_type' => ['nullable', Rule::in([Order::DISCOUNT_TYPE_PERCENT, Order::DISCOUNT_TYPE_AMOUNT])],
             'items.*.discount_value' => ['nullable', 'numeric', 'min:0'],
         ]);
+        $posSettings = $this->posSettings((int) $shop->merchant_id);
+
+        $this->ensurePosDiscountsAllowed($data, $posSettings);
+
+        $currencyConfig = $this->adminSettings->currencyConfig();
 
         $order = $this->orderCreationService->create([
             'shop_id' => $shop->getKey(),
@@ -111,11 +126,12 @@ class PosController extends Controller
             'customer_id' => $data['customer_id'] ?? null,
             'shipping_address_id' => $data['shipping_address_id'] ?? null,
             'payment_method' => $data['payment_method'],
+            'currency_code' => $currencyConfig['currency'] ?? 'INR',
             'payment_reference' => $data['payment_reference'] ?? null,
             'upi_txn' => $data['upi_txn'] ?? null,
             'terminal_id' => $data['terminal_id'] ?? null,
             'order_discount' => $data['order_discount'] ?? [],
-            'payment_status' => 'paid',
+            'cash_rounding' => $posSettings['cashRounding'],
             'order_status' => 'completed',
             'amount_paid' => $data['amount_paid'],
             'elapsed_seconds' => $data['elapsed_seconds'] ?? 0,
@@ -143,6 +159,90 @@ class PosController extends Controller
                 'print_url' => route('merchant.pos.receipt', ['order' => $order->getKey(), 'print' => 1]),
             ],
         ]);
+    }
+
+    /**
+     * @return array{
+     *     paymentMethods: array<string, string>,
+     *     defaultPaymentMethod: string,
+     *     cashRounding: array{method: string, applyTo: array<int, string>},
+     *     allowOrderDiscount: bool,
+     *     allowItemDiscount: bool,
+     *     playAddSound: bool
+     * }
+     */
+    private function posSettings(int $merchantId): array
+    {
+        $paymentMethods = $this->availablePaymentMethods($merchantId);
+        $defaultPaymentMethod = (string) $this->settings->get($merchantId, 'payment', 'default_payment_method', Order::PAYMENT_METHOD_CASH);
+
+        if (! array_key_exists($defaultPaymentMethod, $paymentMethods)) {
+            $defaultPaymentMethod = array_key_first($paymentMethods) ?: Order::PAYMENT_METHOD_CASH;
+        }
+
+        $applyTo = (string) $this->settings->get($merchantId, 'pos', 'cash_rounding.apply_to', Order::PAYMENT_METHOD_CASH);
+
+        return [
+            'paymentMethods' => $paymentMethods,
+            'defaultPaymentMethod' => $defaultPaymentMethod,
+            'cashRounding' => [
+                'method' => (string) $this->settings->get($merchantId, 'pos', 'cash_rounding.method', 'nearest'),
+                'applyTo' => $applyTo === 'all' ? ['all'] : array_values(array_filter(explode(',', $applyTo))),
+            ],
+            'allowOrderDiscount' => (bool) $this->settings->get($merchantId, 'pos', 'order.allow_order_discount', true),
+            'allowItemDiscount' => (bool) $this->settings->get($merchantId, 'pos', 'order.allow_item_discount', true),
+            'playAddSound' => (bool) $this->settings->get($merchantId, 'pos', 'cart.play_add_sound', true),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function availablePaymentMethods(int $merchantId): array
+    {
+        $methods = [
+            Order::PAYMENT_METHOD_CASH => ['setting' => 'allow_cash', 'label' => 'Cash'],
+            Order::PAYMENT_METHOD_UPI => ['setting' => 'allow_upi', 'label' => 'UPI'],
+            Order::PAYMENT_METHOD_CARD => ['setting' => 'allow_card', 'label' => 'Card'],
+            Order::PAYMENT_METHOD_CREDIT => ['setting' => 'allow_credit', 'label' => 'Credit'],
+        ];
+
+        $available = [];
+        foreach ($methods as $method => $config) {
+            if ((bool) $this->settings->get($merchantId, 'payment', $config['setting'], true)) {
+                $available[$method] = $config['label'];
+            }
+        }
+
+        return $available !== [] ? $available : [Order::PAYMENT_METHOD_CASH => 'Cash'];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array{allowOrderDiscount: bool, allowItemDiscount: bool} $posSettings
+     */
+    private function ensurePosDiscountsAllowed(array $data, array $posSettings): void
+    {
+        if (! $posSettings['allowOrderDiscount'] && $this->hasOrderDiscount($data['order_discount'] ?? null)) {
+            throw ValidationException::withMessages([
+                'order_discount' => 'Order discount is disabled in merchant POS settings.',
+            ]);
+        }
+
+        if (! $posSettings['allowItemDiscount']) {
+            foreach ($data['items'] ?? [] as $item) {
+                if (! empty($item['discount_type']) && (float) ($item['discount_value'] ?? 0) > 0) {
+                    throw ValidationException::withMessages([
+                        'items.discount_value' => 'Item discount is disabled in merchant POS settings.',
+                    ]);
+                }
+            }
+        }
+    }
+
+    private function hasOrderDiscount(mixed $discount): bool
+    {
+        return is_array($discount) && ! empty($discount['type']) && (float) ($discount['value'] ?? 0) > 0;
     }
 
     public function customers(Request $request): JsonResponse
@@ -259,6 +359,7 @@ class PosController extends Controller
             'activeShop' => $shop,
             'autoPrint' => $request->boolean('print'),
             'order' => $orderModel,
+            'posCurrency' => $this->adminSettings->currencyConfig(),
             'receiptSettings' => [
                 'showShopName' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_shop_name', true),
                 'showAddress' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_address', true),

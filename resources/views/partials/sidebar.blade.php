@@ -61,6 +61,14 @@
 								</span>
 							</a>
 						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.settings.edit') }}" class="nav-link {{ request()->routeIs('admin.settings.*') ? 'active' : '' }}">
+								<i class="ph-gear"></i>
+								<span>
+									Settings
+								</span>
+							</a>
+						</li>
 
 						<li class="nav-item nav-item-submenu {{ $isMasterDataActive ? 'nav-item-expanded nav-item-open' : '' }}">
 							<a href="#" class="nav-link {{ $isMasterDataActive ? 'active' : '' }}">

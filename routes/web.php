@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Admin\Auth\AdminAuthController;
+use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupController;
@@ -103,6 +104,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->name('products.description-seo.generate');
         Route::resource('products', ProductController::class)
             ->except(['show']);
+        Route::get('settings', [AdminSettingsController::class, 'edit'])->name('settings.edit');
+        Route::put('settings', [AdminSettingsController::class, 'update'])->name('settings.update');
     });
 
 });

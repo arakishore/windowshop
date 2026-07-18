@@ -55,7 +55,6 @@
                     @if ($hasError)
                         <div class="invalid-feedback d-block">{{ $errors->first($meta['errorKey']) }}</div>
                     @endif
-                    <div class="form-text">{{ $meta['fullKey'] }}</div>
                 </div>
             @endforeach
         </div>

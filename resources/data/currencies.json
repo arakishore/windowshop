@@ -1,0 +1,492 @@
+[
+    {
+        "code":  "AED",
+        "name":  "UAE Dirham",
+        "label":  "AED - UAE Dirham",
+        "symbol":  "AED",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "ARS",
+        "name":  "Argentine Peso",
+        "label":  "ARS - Argentine Peso",
+        "symbol":  "ARS$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ".",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "AUD",
+        "name":  "Australian Dollar",
+        "label":  "AUD - Australian Dollar",
+        "symbol":  "A$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "BDT",
+        "name":  "Bangladeshi Taka",
+        "label":  "BDT - Bangladeshi Taka",
+        "symbol":  "৳",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "BHD",
+        "name":  "Bahraini Dinar",
+        "label":  "BHD - Bahraini Dinar",
+        "symbol":  "BHD",
+        "symbol_first":  true,
+        "decimals":  3,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "BRL",
+        "name":  "Brazilian Real",
+        "label":  "BRL - Brazilian Real",
+        "symbol":  "R$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ".",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "CAD",
+        "name":  "Canadian Dollar",
+        "label":  "CAD - Canadian Dollar",
+        "symbol":  "C$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "CHF",
+        "name":  "Swiss Franc",
+        "label":  "CHF - Swiss Franc",
+        "symbol":  "CHF",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  "\u0027",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "CLP",
+        "name":  "Chilean Peso",
+        "label":  "CLP - Chilean Peso",
+        "symbol":  "CLP$",
+        "symbol_first":  true,
+        "decimals":  0,
+        "thousands_separator":  ".",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "CNY",
+        "name":  "Chinese Yuan",
+        "label":  "CNY - Chinese Yuan",
+        "symbol":  "¥",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "COP",
+        "name":  "Colombian Peso",
+        "label":  "COP - Colombian Peso",
+        "symbol":  "COL$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ".",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "CZK",
+        "name":  "Czech Koruna",
+        "label":  "CZK - Czech Koruna",
+        "symbol":  "Kč",
+        "symbol_first":  false,
+        "decimals":  2,
+        "thousands_separator":  " ",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "DKK",
+        "name":  "Danish Krone",
+        "label":  "DKK - Danish Krone",
+        "symbol":  "kr",
+        "symbol_first":  false,
+        "decimals":  2,
+        "thousands_separator":  ".",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "EGP",
+        "name":  "Egyptian Pound",
+        "label":  "EGP - Egyptian Pound",
+        "symbol":  "E£",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "EUR",
+        "name":  "Euro",
+        "label":  "EUR - Euro",
+        "symbol":  "€",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "GBP",
+        "name":  "British Pound",
+        "label":  "GBP - British Pound",
+        "symbol":  "£",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "GHS",
+        "name":  "Ghanaian Cedi",
+        "label":  "GHS - Ghanaian Cedi",
+        "symbol":  "₵",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "HKD",
+        "name":  "Hong Kong Dollar",
+        "label":  "HKD - Hong Kong Dollar",
+        "symbol":  "HK$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "IDR",
+        "name":  "Indonesian Rupiah",
+        "label":  "IDR - Indonesian Rupiah",
+        "symbol":  "Rp",
+        "symbol_first":  true,
+        "decimals":  0,
+        "thousands_separator":  ".",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "ILS",
+        "name":  "Israeli New Shekel",
+        "label":  "ILS - Israeli New Shekel",
+        "symbol":  "₪",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "INR",
+        "name":  "Indian Rupee",
+        "label":  "INR - Indian Rupee",
+        "symbol":  "₹",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "JOD",
+        "name":  "Jordanian Dinar",
+        "label":  "JOD - Jordanian Dinar",
+        "symbol":  "JOD",
+        "symbol_first":  true,
+        "decimals":  3,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "JPY",
+        "name":  "Japanese Yen",
+        "label":  "JPY - Japanese Yen",
+        "symbol":  "¥",
+        "symbol_first":  true,
+        "decimals":  0,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "KES",
+        "name":  "Kenyan Shilling",
+        "label":  "KES - Kenyan Shilling",
+        "symbol":  "KSh",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "KRW",
+        "name":  "South Korean Won",
+        "label":  "KRW - South Korean Won",
+        "symbol":  "₩",
+        "symbol_first":  true,
+        "decimals":  0,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "KWD",
+        "name":  "Kuwaiti Dinar",
+        "label":  "KWD - Kuwaiti Dinar",
+        "symbol":  "KWD",
+        "symbol_first":  true,
+        "decimals":  3,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "LKR",
+        "name":  "Sri Lankan Rupee",
+        "label":  "LKR - Sri Lankan Rupee",
+        "symbol":  "Rs",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "MXN",
+        "name":  "Mexican Peso",
+        "label":  "MXN - Mexican Peso",
+        "symbol":  "Mex$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "MYR",
+        "name":  "Malaysian Ringgit",
+        "label":  "MYR - Malaysian Ringgit",
+        "symbol":  "RM",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "NGN",
+        "name":  "Nigerian Naira",
+        "label":  "NGN - Nigerian Naira",
+        "symbol":  "₦",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "NOK",
+        "name":  "Norwegian Krone",
+        "label":  "NOK - Norwegian Krone",
+        "symbol":  "kr",
+        "symbol_first":  false,
+        "decimals":  2,
+        "thousands_separator":  " ",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "NPR",
+        "name":  "Nepalese Rupee",
+        "label":  "NPR - Nepalese Rupee",
+        "symbol":  "₨",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "NZD",
+        "name":  "New Zealand Dollar",
+        "label":  "NZD - New Zealand Dollar",
+        "symbol":  "NZ$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "OMR",
+        "name":  "Omani Rial",
+        "label":  "OMR - Omani Rial",
+        "symbol":  "OMR",
+        "symbol_first":  true,
+        "decimals":  3,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "PEN",
+        "name":  "Peruvian Sol",
+        "label":  "PEN - Peruvian Sol",
+        "symbol":  "S/",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "PHP",
+        "name":  "Philippine Peso",
+        "label":  "PHP - Philippine Peso",
+        "symbol":  "₱",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "PKR",
+        "name":  "Pakistani Rupee",
+        "label":  "PKR - Pakistani Rupee",
+        "symbol":  "₨",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "PLN",
+        "name":  "Polish ZÅ‚oty",
+        "label":  "PLN - Polish ZÅ‚oty",
+        "symbol":  "zł",
+        "symbol_first":  false,
+        "decimals":  2,
+        "thousands_separator":  " ",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "QAR",
+        "name":  "Qatari Riyal",
+        "label":  "QAR - Qatari Riyal",
+        "symbol":  "QAR",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "RUB",
+        "name":  "Russian Ruble",
+        "label":  "RUB - Russian Ruble",
+        "symbol":  "₽",
+        "symbol_first":  false,
+        "decimals":  2,
+        "thousands_separator":  " ",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "SAR",
+        "name":  "Saudi Riyal",
+        "label":  "SAR - Saudi Riyal",
+        "symbol":  "SAR",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "SEK",
+        "name":  "Swedish Krona",
+        "label":  "SEK - Swedish Krona",
+        "symbol":  "kr",
+        "symbol_first":  false,
+        "decimals":  2,
+        "thousands_separator":  " ",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "SGD",
+        "name":  "Singapore Dollar",
+        "label":  "SGD - Singapore Dollar",
+        "symbol":  "S$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "THB",
+        "name":  "Thai Baht",
+        "label":  "THB - Thai Baht",
+        "symbol":  "฿",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "TRY",
+        "name":  "Turkish Lira",
+        "label":  "TRY - Turkish Lira",
+        "symbol":  "₺",
+        "symbol_first":  false,
+        "decimals":  2,
+        "thousands_separator":  ".",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "TWD",
+        "name":  "New Taiwan Dollar",
+        "label":  "TWD - New Taiwan Dollar",
+        "symbol":  "NT$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "USD",
+        "name":  "United States Dollar",
+        "label":  "USD - United States Dollar",
+        "symbol":  "$",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    },
+    {
+        "code":  "VND",
+        "name":  "Vietnamese Dong",
+        "label":  "VND - Vietnamese Dong",
+        "symbol":  "₫",
+        "symbol_first":  false,
+        "decimals":  0,
+        "thousands_separator":  ".",
+        "decimal_separator":  ","
+    },
+    {
+        "code":  "ZAR",
+        "name":  "South African Rand",
+        "label":  "ZAR - South African Rand",
+        "symbol":  "R",
+        "symbol_first":  true,
+        "decimals":  2,
+        "thousands_separator":  ",",
+        "decimal_separator":  "."
+    }
+]

@@ -56,6 +56,81 @@
             gap: .75rem 1rem;
         }
 
+        .payment-methods-table {
+            min-width: 720px;
+        }
+
+        .payment-methods-table th {
+            font-size: .72rem;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            color: var(--gray-600, #6c757d);
+            background: var(--gray-100, #f5f5f5);
+        }
+
+        .payment-method-code {
+            font-size: .75rem;
+            color: var(--gray-600, #6c757d);
+        }
+
+        .pos-tile-size-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: .75rem;
+        }
+
+        .pos-tile-size-option {
+            min-height: 7rem;
+            padding: .8rem;
+            border: 1px solid var(--border-color, #ddd);
+            border-radius: .375rem;
+            text-align: center;
+            cursor: pointer;
+            background: #fff;
+        }
+
+        .pos-tile-size-option:has(input:checked) {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb, 13, 110, 253), .06);
+            box-shadow: 0 0 0 .125rem rgba(var(--primary-rgb, 13, 110, 253), .12);
+        }
+
+        .pos-tile-size-icon {
+            width: 4.5rem;
+            height: 3.2rem;
+            margin: 0 auto .45rem;
+            display: grid;
+            gap: .25rem;
+            justify-content: center;
+            align-content: center;
+            border-radius: .35rem;
+            background: var(--gray-100, #f5f5f5);
+        }
+
+        .pos-tile-size-icon span {
+            display: block;
+            width: .8rem;
+            height: .8rem;
+            border-radius: .15rem;
+            background: var(--gray-300, #d1d5db);
+        }
+
+        .pos-tile-size-icon.is-compact {
+            grid-template-columns: repeat(4, .8rem);
+        }
+
+        .pos-tile-size-icon.is-comfortable {
+            grid-template-columns: repeat(3, .8rem);
+        }
+
+        .pos-tile-size-icon.is-spacious {
+            grid-template-columns: repeat(2, 1.15rem);
+        }
+
+        .pos-tile-size-icon.is-spacious span {
+            width: 1.15rem;
+        }
+
         .receipt-settings-layout {
             display: grid;
             grid-template-columns: minmax(0, 1fr) 340px;
@@ -148,7 +223,8 @@
         }
 
         @media (max-width: 575.98px) {
-            .merchant-settings-grid {
+            .merchant-settings-grid,
+            .pos-tile-size-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -160,8 +236,6 @@
         $oldSettings = old('settings', []);
         $selectOptions = [
             'pos.cash_rounding.method' => ['nearest' => 'Nearest', 'up' => 'Up', 'down' => 'Down'],
-            'product.default_visibility' => ['public' => 'Public'],
-            'payment.default_payment_method' => ['cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card'],
         ];
         $field = function (string $group, string $key) use ($settings, $defaults, $oldSettings) {
             return [
@@ -275,20 +349,15 @@
                                         @endforeach
                                     </div>
                                     <div class="text-muted fs-sm mt-2 js-cash-rounding-method-example">Example: Rs 1043.28 becomes Rs 1043.00.</div>
-                                    <div class="form-text">{{ $cashMethod['fullKey'] }}</div>
                                 </div>
-                            </div>
-
-                            <div class="alert alert-info mt-3 mb-0">
-                                <i class="ph-info me-1"></i>
-                                Cash rounding is applied only after discounts, shipping and taxes are calculated.
                             </div>
                         </div>
                     </div>
 
                     <div class="card merchant-settings-card">
                         <div class="card-header">
-                            <h5 class="mb-0">Payment Methods</h5>
+                            <h5 class="mb-0">Apply Rounding To</h5>
+                            <div class="text-muted fs-sm mt-1">Choose which payment methods use cash rounding in POS.</div>
                         </div>
                         <div class="card-body">
                             <input type="hidden" name="{{ $cashApply['name'] }}" class="js-cash-rounding-apply-value" value="{{ $applyValue }}">
@@ -307,14 +376,65 @@
                             @if ($errors->has($cashApply['errorKey']))
                                 <div class="invalid-feedback d-block">{{ $errors->first($cashApply['errorKey']) }}</div>
                             @endif
-                            <div class="form-text">pos.cash_rounding.apply_to</div>
                         </div>
                     </div>
 
                     <div class="alert alert-info">
                         <i class="ph-info me-1"></i>
-                        Rounding affects only the final payable amount. Product prices, taxes, discounts and reports continue to use the exact calculated values.
+                        Cash rounding is applied only to the final payable amount after discounts, shipping and taxes are calculated. Product prices, taxes, discounts and reports continue to use the exact calculated values.
                     </div>
+
+                    @php
+                        $tileSize = $field('pos', 'product.tile_size');
+                        $tileOptions = [
+                            'compact' => ['label' => 'Compact', 'px' => 130, 'cells' => 12],
+                            'comfortable' => ['label' => 'Comfortable', 'px' => 150, 'cells' => 6],
+                            'spacious' => ['label' => 'Spacious', 'px' => 180, 'cells' => 4],
+                        ];
+                    @endphp
+                    <div class="card merchant-settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Product Tiles</h5>
+                            <div class="text-muted fs-sm mt-1">Control how product cards appear inside POS.</div>
+                        </div>
+                        <div class="card-body">
+                            <label class="form-label fw-semibold d-block">Tile size</label>
+                            <div class="pos-tile-size-grid">
+                                @foreach ($tileOptions as $size => $option)
+                                    <label class="pos-tile-size-option" for="{{ $tileSize['id'] }}_{{ $size }}">
+                                        <input
+                                            type="radio"
+                                            class="form-check-input visually-hidden"
+                                            id="{{ $tileSize['id'] }}_{{ $size }}"
+                                            name="{{ $tileSize['name'] }}"
+                                            value="{{ $size }}"
+                                            @checked($tileSize['value'] === $size)
+                                        >
+                                        <div class="pos-tile-size-icon is-{{ $size }}" aria-hidden="true">
+                                            @for ($i = 0; $i < $option['cells']; $i++)
+                                                <span></span>
+                                            @endfor
+                                        </div>
+                                        <div class="fw-semibold">{{ $option['label'] }} ({{ $option['px'] }} px)</div>
+                                    </label>
+                                @endforeach
+                            </div>
+                            @if ($errors->has($tileSize['errorKey']))
+                                <div class="invalid-feedback d-block">{{ $errors->first($tileSize['errorKey']) }}</div>
+                            @endif
+                            <div class="text-muted fs-sm mt-2">How wide each product tile is. Smaller fits more per row; larger is easier to tap on touch screens.</div>
+                        </div>
+                    </div>
+
+                    @include('merchant.settings.partials.setting-card', [
+                        'title' => 'Cart Feedback',
+                        'description' => 'Control feedback when products are added to the cart.',
+                        'fields' => [
+                            ['group' => 'pos', 'key' => 'cart.play_add_sound', 'label' => 'Play a sound when an item is added to the cart', 'kind' => 'boolean'],
+                        ],
+                        'field' => $field,
+                        'selectOptions' => $selectOptions,
+                    ])
 
                     @include('merchant.settings.partials.setting-card', [
                         'title' => 'Order Defaults',
@@ -373,33 +493,88 @@
                         'field' => $field,
                         'selectOptions' => $selectOptions,
                     ])
-
-                    @include('merchant.settings.partials.setting-card', [
-                        'title' => 'Visibility',
-                        'description' => 'Default storefront visibility for newly created products.',
-                        'fields' => [
-                            ['group' => 'product', 'key' => 'default_visibility', 'label' => 'Default visibility', 'kind' => 'select'],
-                        ],
-                        'field' => $field,
-                        'selectOptions' => $selectOptions,
-                    ])
                 </div>
 
                 <div class="tab-pane fade" id="settings_payments" role="tabpanel">
-                    @include('merchant.settings.partials.setting-card', [
-                        'title' => 'Accepted Payment Methods',
-                        'description' => 'Choose payment methods available during checkout.',
-                        'fields' => [
-                            ['group' => 'payment', 'key' => 'default_payment_method', 'label' => 'Default payment method', 'kind' => 'select'],
-                            ['group' => 'payment', 'key' => 'allow_cash', 'label' => 'Cash', 'kind' => 'boolean'],
-                            ['group' => 'payment', 'key' => 'allow_upi', 'label' => 'UPI', 'kind' => 'boolean'],
-                            ['group' => 'payment', 'key' => 'allow_card', 'label' => 'Card', 'kind' => 'boolean'],
-                            ['group' => 'payment', 'key' => 'allow_bank_transfer', 'label' => 'Bank Transfer', 'kind' => 'boolean'],
-                            ['group' => 'payment', 'key' => 'allow_credit', 'label' => 'Credit', 'kind' => 'boolean'],
-                        ],
-                        'field' => $field,
-                        'selectOptions' => $selectOptions,
-                    ])
+                    @php
+                        $paymentDefault = $field('payment', 'default_payment_method');
+                        $paymentMethods = [
+                            'cash' => ['setting' => 'allow_cash', 'label' => 'Cash', 'type' => 'Cash', 'badges' => []],
+                            'card' => ['setting' => 'allow_card', 'label' => 'Card', 'type' => 'Card', 'badges' => ['Requires reference']],
+                            'upi' => ['setting' => 'allow_upi', 'label' => 'UPI', 'type' => 'Digital', 'badges' => ['Requires reference']],
+                            'credit' => ['setting' => 'allow_credit', 'label' => 'Credit', 'type' => 'Credit', 'badges' => ['Pay later']],
+                        ];
+                    @endphp
+
+                    <div class="card merchant-settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Payment Methods</h5>
+                            <div class="text-muted fs-sm mt-1">Turn manual tender types on or off for POS checkout.</div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0 payment-methods-table">
+                                <thead>
+                                    <tr>
+                                        <th>Method</th>
+                                        <th>Type</th>
+                                        <th>Configuration</th>
+                                        <th class="text-center">Default</th>
+                                        <th class="text-center">Active</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($paymentMethods as $method => $methodConfig)
+                                    @php
+                                        $methodField = $field('payment', $methodConfig['setting']);
+                                        $hasError = $errors->has($methodField['errorKey']);
+                                    @endphp
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">{{ $methodConfig['label'] }}</div>
+                                            <div class="payment-method-code">{{ $method }}</div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary bg-opacity-10 text-body">{{ $methodConfig['type'] }}</span>
+                                            @foreach ($methodConfig['badges'] as $badge)
+                                                <span class="badge bg-light text-muted border ms-1">{{ $badge }}</span>
+                                            @endforeach
+                                        </td>
+                                        <td class="text-muted">-</td>
+                                        <td class="text-center">
+                                            <input
+                                                type="radio"
+                                                class="form-check-input"
+                                                id="{{ $paymentDefault['id'] }}_{{ $method }}"
+                                                name="{{ $paymentDefault['name'] }}"
+                                                value="{{ $method }}"
+                                                @checked($paymentDefault['value'] === $method)
+                                                aria-label="Use {{ $methodConfig['label'] }} as default payment method"
+                                            >
+                                        </td>
+                                        <td class="text-center">
+                                            <input type="hidden" name="{{ $methodField['name'] }}" value="0">
+                                            <input
+                                                type="checkbox"
+                                                class="form-check-input {{ $hasError ? 'is-invalid' : '' }}"
+                                                id="{{ $methodField['id'] }}"
+                                                name="{{ $methodField['name'] }}"
+                                                value="1"
+                                                @checked((bool) $methodField['value'])
+                                                aria-label="Enable {{ $methodConfig['label'] }} at checkout"
+                                            >
+                                            @if ($hasError)
+                                                <div class="invalid-feedback d-block">{{ $errors->first($methodField['errorKey']) }}</div>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                            @if ($errors->has($paymentDefault['errorKey']))
+                                <div class="invalid-feedback d-block px-3 pb-3">{{ $errors->first($paymentDefault['errorKey']) }}</div>
+                            @endif
+                        </div>
+                    </div>
                 </div>
 
                 <div class="tab-pane fade" id="settings_receipts" role="tabpanel">

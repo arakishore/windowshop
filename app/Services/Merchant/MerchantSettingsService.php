@@ -81,6 +81,10 @@ class MerchantSettingsService
         if ($group === 'pos' && $key === 'cash_rounding.apply_to' && ! $this->validCashRoundingApplyTo((string) $value)) {
             throw new InvalidArgumentException('Cash rounding apply_to contains an unsupported payment method.');
         }
+
+        if ($group === 'pos' && $key === 'product.tile_size' && ! in_array($value, ['compact', 'comfortable', 'spacious'], true)) {
+            throw new InvalidArgumentException('POS product tile size must be compact, comfortable, or spacious.');
+        }
     }
 
     private function validCashRoundingApplyTo(string $value): bool

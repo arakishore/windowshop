@@ -41,17 +41,21 @@ class MerchantSettingsFoundationTest extends TestCase
         $this->assertSame($expectedCount, MerchantSetting::query()->where('merchant_id', $merchant->getKey())->count());
         $this->assertSame('nearest', $this->settings()->get($merchant->getKey(), 'pos', 'cash_rounding.method'));
         $this->assertSame('cash', $this->settings()->get($merchant->getKey(), 'pos', 'cash_rounding.apply_to'));
+        $this->assertSame('spacious', $this->settings()->get($merchant->getKey(), 'pos', 'product.tile_size'));
+        $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'cart.play_add_sound'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'order.allow_order_discount'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'order.allow_item_discount'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'receipt.show_gst_number'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'receipt.show_qr_code'));
+        $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'receipt.show_barcode'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'receipt.show_tax_breakdown'));
         $this->assertFalse($this->settings()->get($merchant->getKey(), 'pos', 'receipt.line_item.show_sku'));
         $this->assertFalse($this->settings()->get($merchant->getKey(), 'pos', 'receipt.line_item.show_hsn_code'));
         $this->assertFalse($this->settings()->get($merchant->getKey(), 'pos', 'receipt.line_item.show_hsn_summary'));
         $this->assertSame('Thank you for shopping with us.', $this->settings()->get($merchant->getKey(), 'pos', 'receipt.footer'));
         $this->assertSame('', $this->settings()->get($merchant->getKey(), 'pos', 'receipt.return_policy'));
-        $this->assertFalse($this->settings()->get($merchant->getKey(), 'payment', 'allow_credit'));
+        $this->assertTrue($this->settings()->get($merchant->getKey(), 'payment', 'allow_credit'));
+        $this->assertFalse($this->settings()->has($merchant->getKey(), 'payment', 'allow_bank_transfer'));
 
         $this->assertDatabaseHas('merchant_settings', [
             'merchant_id' => $merchant->getKey(),
@@ -88,6 +92,11 @@ class MerchantSettingsFoundationTest extends TestCase
             'merchant_id' => $merchant->getKey(),
             'group' => 'product',
             'setting_key' => 'barcode.type',
+        ]);
+        $this->assertDatabaseMissing('merchant_settings', [
+            'merchant_id' => $merchant->getKey(),
+            'group' => 'product',
+            'setting_key' => 'default_visibility',
         ]);
     }
 
@@ -197,8 +206,18 @@ class MerchantSettingsFoundationTest extends TestCase
             ->assertSee('POS')
             ->assertSee('Cash Rounding')
             ->assertSee('Example: Rs 1043.28 becomes Rs 1043.00.')
+            ->assertSee('Apply Rounding To')
+            ->assertSee('Choose which payment methods use cash rounding in POS.')
+            ->assertSee('Product Tiles')
+            ->assertSee('Compact (130 px)')
+            ->assertSee('Comfortable (150 px)')
+            ->assertSee('Spacious (180 px)')
+            ->assertSee('Play a sound when an item is added to the cart')
             ->assertSee('UPI')
             ->assertDontSee('Cash on Delivery')
+            ->assertDontSee('pos.cash_rounding.method')
+            ->assertDontSee('pos.cash_rounding.apply_to')
+            ->assertDontSee('pos.receipt.footer')
             ->assertSee('Receipts')
             ->assertSee('What to show')
             ->assertSee('GST Number')
@@ -213,7 +232,16 @@ class MerchantSettingsFoundationTest extends TestCase
             ->assertSee('Live Preview')
             ->assertSee('Demo Retail Store')
             ->assertSee('POS-1001')
-            ->assertSee('Accepted Payment Methods')
+            ->assertSee('Payment Methods')
+            ->assertSee('Turn manual tender types on or off for POS checkout.')
+            ->assertSee('Method')
+            ->assertSee('Configuration')
+            ->assertSee('Default')
+            ->assertSee('Active')
+            ->assertSee('Requires reference')
+            ->assertSee('Pay later')
+            ->assertDontSee('Bank Transfer')
+            ->assertDontSee('Cheque')
             ->assertSee('Thank you for shopping with us.')
             ->assertSee('Save Changes');
     }
@@ -229,6 +257,8 @@ class MerchantSettingsFoundationTest extends TestCase
                     'pos' => [
                         'cash_rounding.method' => 'down',
                         'cash_rounding.apply_to' => 'all',
+                        'product.tile_size' => 'compact',
+                        'cart.play_add_sound' => '0',
                         'receipt.show_shop_name' => '1',
                         'receipt.show_address' => '1',
                         'receipt.show_phone' => '1',
@@ -255,14 +285,12 @@ class MerchantSettingsFoundationTest extends TestCase
                     ],
                     'product' => [
                         'barcode.auto_generate' => '1',
-                        'default_visibility' => 'public',
                     ],
                     'payment' => [
                         'default_payment_method' => 'upi',
                         'allow_cash' => '1',
                         'allow_upi' => '1',
                         'allow_card' => '0',
-                        'allow_bank_transfer' => '0',
                         'allow_credit' => '0',
                     ],
                 ],
@@ -273,6 +301,8 @@ class MerchantSettingsFoundationTest extends TestCase
             ->assertSessionHas('success', 'Merchant settings updated successfully.');
 
         $this->assertSame('down', $this->settings()->get($merchant->getKey(), 'pos', 'cash_rounding.method'));
+        $this->assertSame('compact', $this->settings()->get($merchant->getKey(), 'pos', 'product.tile_size'));
+        $this->assertFalse($this->settings()->get($merchant->getKey(), 'pos', 'cart.play_add_sound'));
         $this->assertSame('Visit again.', $this->settings()->get($merchant->getKey(), 'pos', 'receipt.footer'));
         $this->assertFalse($this->settings()->get($merchant->getKey(), 'pos', 'receipt.show_gst_number'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'receipt.show_barcode'));
@@ -368,6 +398,22 @@ class MerchantSettingsFoundationTest extends TestCase
             'setting_type' => MerchantSetting::TYPE_STRING,
         ]);
 
+        MerchantSetting::query()->create([
+            'merchant_id' => $merchant->getKey(),
+            'group' => 'product',
+            'setting_key' => 'default_visibility',
+            'setting_value' => 'public',
+            'setting_type' => MerchantSetting::TYPE_STRING,
+        ]);
+
+        MerchantSetting::query()->create([
+            'merchant_id' => $merchant->getKey(),
+            'group' => 'payment',
+            'setting_key' => 'allow_bank_transfer',
+            'setting_value' => '0',
+            'setting_type' => MerchantSetting::TYPE_BOOLEAN,
+        ]);
+
         $this->initializer()->initialize($merchant->getKey());
 
         foreach (['product.search.mode', 'cart.auto_clear_after_sale', 'cash_rounding.precision', 'cash_rounding.enabled', 'receipt.show_logo', 'receipt.header_text'] as $key) {
@@ -390,6 +436,16 @@ class MerchantSettingsFoundationTest extends TestCase
             'merchant_id' => $merchant->getKey(),
             'group' => 'product',
             'setting_key' => 'barcode.type',
+        ]);
+        $this->assertDatabaseMissing('merchant_settings', [
+            'merchant_id' => $merchant->getKey(),
+            'group' => 'product',
+            'setting_key' => 'default_visibility',
+        ]);
+        $this->assertDatabaseMissing('merchant_settings', [
+            'merchant_id' => $merchant->getKey(),
+            'group' => 'payment',
+            'setting_key' => 'allow_bank_transfer',
         ]);
     }
 

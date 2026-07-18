@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(SystemFoundationSeeder::class);
         $this->call(SuperAdminSeeder::class);
+        $this->call(AdminSettingsSeeder::class);
 
         // Uncomment to seed demo data in development only.
         $this->call(DemoSeeder::class);

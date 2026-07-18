@@ -33,7 +33,7 @@
 
         <div class="d-flex align-items-end justify-content-between gap-2 mt-auto">
             <div>
-                <div class="fw-bold fs-7">INR {{ number_format($item['price'], 2) }}</div>
+                <div class="fw-bold fs-7">{{ $formatPosMoney($item['price']) }}</div>
                 <div class="fs-sm {{ $stockClass }}">{{ number_format($item['stock']) }} in stock</div>
             </div>
             <button

@@ -246,7 +246,40 @@ class OrderFoundationTest extends TestCase
         $this->assertSame('SKU-RED-M', $item->sku);
     }
 
-    public function test_order_creation_rolls_back_when_paid_cash_amount_is_short(): void
+    public function test_order_creation_marks_short_payment_as_partially_paid(): void
+    {
+        [$user, $shop, $variant] = $this->orderFixture();
+
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $shop->getKey(),
+            'amount_paid' => 10,
+            'items' => [
+                ['product_variant_id' => $variant->getKey(), 'quantity' => 1],
+            ],
+        ], $user)->refresh();
+
+        $this->assertSame(Order::PAYMENT_PARTIALLY_PAID, $order->payment_status);
+        $this->assertSame('10.00', $order->amount_paid);
+        $this->assertSame('0.00', $order->change_amount);
+    }
+
+    public function test_order_creation_marks_zero_payment_as_unpaid(): void
+    {
+        [$user, $shop, $variant] = $this->orderFixture();
+
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $shop->getKey(),
+            'amount_paid' => 0,
+            'items' => [
+                ['product_variant_id' => $variant->getKey(), 'quantity' => 1],
+            ],
+        ], $user)->refresh();
+
+        $this->assertSame(Order::PAYMENT_UNPAID, $order->payment_status);
+        $this->assertSame('0.00', $order->amount_paid);
+    }
+
+    public function test_order_creation_rejects_explicit_paid_status_when_amount_is_short(): void
     {
         [$user, $shop, $variant] = $this->orderFixture();
 
@@ -255,6 +288,7 @@ class OrderFoundationTest extends TestCase
         try {
             app(OrderCreationService::class)->create([
                 'shop_id' => $shop->getKey(),
+                'payment_status' => Order::PAYMENT_PAID,
                 'amount_paid' => 10,
                 'items' => [
                     ['product_variant_id' => $variant->getKey(), 'quantity' => 1],
