@@ -112,10 +112,6 @@
                             <input name="restock_by_default" value="1" type="checkbox" class="form-check-input" @checked(old('restock_by_default', request()->boolean('new') ? true : $selectedReason?->restock_by_default))>
                             <span class="form-check-label">Restock items by default</span>
                         </label>
-                        <label class="form-check mb-3">
-                            <input name="requires_manager_override" value="1" type="checkbox" class="form-check-input" @checked(old('requires_manager_override', request()->boolean('new') ? false : $selectedReason?->requires_manager_override))>
-                            <span class="form-check-label">Requires manager override</span>
-                        </label>
                         <label class="form-check">
                             <input name="status" value="active" type="checkbox" class="form-check-input" @checked(old('status', request()->boolean('new') ? 'active' : $selectedReason?->status) === 'active')>
                             <span class="form-check-label">Active</span>

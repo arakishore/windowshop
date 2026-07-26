@@ -7,7 +7,7 @@
         :breadcrumbs="['Merchant' => route('merchant.dashboard'), 'Sales History' => null]"
         :action-url="route('merchant.pos.index')"
         action-label="Open POS"
-        action-icon="ph-cash-register"
+        action-icon="ph-desktop"
         action-class="btn-primary"
     />
 @endsection
@@ -136,7 +136,7 @@
                             <td>{{ $paymentMethods[$order->payment_method] ?? Str::headline($order->payment_method) }}</td>
                             <td>
                                 @if($order->payment_status === \App\Models\Order::PAYMENT_REFUNDED)
-                                    <span class="badge bg-secondary bg-opacity-10 text-secondary">Refunded</span>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger">Refunded</span>
                                 @elseif($order->payment_status === \App\Models\Order::PAYMENT_PARTIALLY_REFUNDED)
                                     <span class="badge bg-warning bg-opacity-10 text-warning">Partially refunded</span>
                                 @else
@@ -145,7 +145,25 @@
                             </td>
                             <td class="text-end fw-semibold">{{ $money($order->grand_total) }}</td>
                             <td class="text-center">
-                                <a href="{{ route('merchant.sales.show', $order) }}" class="list-icons-item" data-bs-popup="tooltip" title="View sale"><i class="ph-dots-three-vertical"></i></a>
+                                <div class="dropdown">
+                                    <button type="button" class="btn btn-light btn-icon btn-sm rounded-pill" data-bs-toggle="dropdown" data-bs-popup="tooltip" title="Sale actions" aria-expanded="false" aria-label="Sale actions for {{ $order->order_number }}">
+                                        <i class="ph-dots-three-vertical"></i>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-end">
+                                        <a href="{{ route('merchant.sales.show', $order) }}" class="dropdown-item">
+                                            <i class="ph-eye me-2"></i>
+                                            View
+                                        </a>
+                                        <a href="{{ route('merchant.pos.receipt', ['order' => $order->getKey(), 'print' => 1]) }}" target="_blank" rel="noopener" class="dropdown-item">
+                                            <i class="ph-printer me-2"></i>
+                                            Print receipt
+                                        </a>
+                                        <a href="{{ route('merchant.sales.refund', $order) }}" class="dropdown-item text-warning">
+                                            <i class="ph-arrow-counter-clockwise me-2"></i>
+                                            Refund / Return
+                                        </a>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                     @empty

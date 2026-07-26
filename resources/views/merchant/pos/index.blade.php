@@ -1874,6 +1874,14 @@
                 `).join('');
                 refreshTooltips();
             };
+            const openCustomerModal = () => {
+                if (window.bootstrap?.Modal && customerModalEl) {
+                    window.bootstrap.Modal.getOrCreateInstance(customerModalEl).show();
+                    return;
+                }
+
+                document.querySelector('.js-pos-open-customer-modal')?.click();
+            };
 
             const rememberProduct = (item) => {
                 const variantId = String(item.variant_id || item.id || '');
@@ -2087,6 +2095,12 @@
                 if (event.altKey && event.key.toLowerCase() === 'h') {
                     event.preventDefault();
                     showHeldOrders();
+                    return;
+                }
+
+                if (event.altKey && event.key.toLowerCase() === 'c') {
+                    event.preventDefault();
+                    openCustomerModal();
                     return;
                 }
 
@@ -2576,6 +2590,10 @@
                         <kbd>Alt+H</kbd>
                     </div>
                     <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                        <span>Customer search</span>
+                        <kbd>Alt+C</kbd>
+                    </div>
+                    <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
                         <span>Reprint last receipt</span>
                         <kbd>Alt+R</kbd>
                     </div>
@@ -2583,7 +2601,7 @@
             `;
 
             if (typeof bootbox === 'undefined') {
-                window.alert('Keyboard shortcuts\n\n/ Focus search\nF4 Hold order\nF9 Checkout\nAlt+H Held orders\nAlt+R Reprint last receipt');
+                window.alert('Keyboard shortcuts\n\n/ Focus search\nF4 Hold order\nF9 Checkout\nAlt+H Held orders\nAlt+C Customer search\nAlt+R Reprint last receipt');
                 return;
             }
 

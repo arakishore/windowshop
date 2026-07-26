@@ -129,6 +129,7 @@ class SalesHistoryController extends Controller
         $data = $request->validate([
             'return_reason_id' => ['required', 'integer'],
             'refund_method' => ['required', Rule::in(array_keys(['original' => 'Original'] + $this->paymentMethods()))],
+            'notes' => ['nullable', 'string', 'max:500'],
             'items' => ['required', 'array'],
             'items.*.quantity' => ['nullable', 'integer', 'min:0'],
             'items.*.do_not_restock' => ['nullable', 'boolean'],

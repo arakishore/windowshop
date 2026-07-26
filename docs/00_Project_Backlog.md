@@ -60,3 +60,16 @@ Planned areas to design next:
 - customer login
 - password reset
 - mobile device tokens
+
+## Pending POS Enhancements
+
+- Add optional POS payment reference fields when needed:
+  - UPI transaction/reference number for UPI payments
+  - Terminal/Auth reference for card payments
+  - Optional generic payment reference for manual reconciliation
+- Keep these fields hidden for Cash unless a clear business need appears.
+- Store references in existing order fields:
+  - `payment_reference`
+  - `upi_txn`
+  - `terminal_id`
+- Continue showing saved references on receipts and sales detail pages.

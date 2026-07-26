@@ -16,6 +16,18 @@
             return ($posCurrency['symbol_position'] ?? 'before') === 'before' ? $symbol.$amount : $amount.' '.$symbol;
         };
         $canRefund = collect($refundableQuantities)->sum() > 0;
+        $itemDiscount = max(0, (float) $order->discount_total - (float) $order->order_discount_amount);
+        $paymentReference = collect([
+            $order->payment_reference ? 'Reference: '.$order->payment_reference : null,
+            $order->upi_txn ? 'UPI: '.$order->upi_txn : null,
+            $order->terminal_id ? 'Terminal: '.$order->terminal_id : null,
+        ])->filter()->implode(' | ');
+        $fulfilmentLabel = Str::headline($order->fulfilment_type ?: \App\Models\Order::FULFILMENT_COUNTER);
+        $fulfilmentClass = match ($order->fulfilment_type) {
+            \App\Models\Order::FULFILMENT_PICKUP => 'bg-info bg-opacity-10 text-info',
+            \App\Models\Order::FULFILMENT_DELIVERY => 'bg-primary bg-opacity-10 text-primary',
+            default => 'bg-secondary bg-opacity-10 text-secondary',
+        };
     @endphp
 
     <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
@@ -24,8 +36,9 @@
                 <a href="{{ route('merchant.sales.index') }}" class="text-body"><i class="ph-arrow-left"></i></a>
                 <h3 class="mb-0">{{ $order->order_number }}</h3>
                 @if($order->payment_status === \App\Models\Order::PAYMENT_REFUNDED)
-                    <span class="badge bg-secondary bg-opacity-10 text-secondary">Refunded</span>
+                    <span class="badge bg-danger bg-opacity-10 text-danger">Refunded</span>
                 @endif
+                <span class="badge {{ $fulfilmentClass }}">{{ $fulfilmentLabel }}</span>
             </div>
             <div class="text-muted">{{ $activeShop->name }} · {{ $order->created_at?->format('d-m-Y h:i A') }} · {{ $order->createdBy?->name ?? 'Staff' }}</div>
         </div>
@@ -86,15 +99,17 @@
                                 <th>Reference</th>
                                 <th>Paid at</th>
                                 <th class="text-end">Tendered</th>
+                                <th class="text-end">Change</th>
                                 <th class="text-end">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td>{{ Str::headline($order->payment_method) }}</td>
-                                <td>{{ $order->payment_reference ?: '-' }}</td>
+                                <td>{{ $paymentReference !== '' ? $paymentReference : '-' }}</td>
                                 <td>{{ $order->created_at?->format('d-m-Y h:i A') }}</td>
                                 <td class="text-end">{{ $money($order->amount_paid) }}</td>
+                                <td class="text-end">{{ $money($order->change_amount) }}</td>
                                 <td class="text-end fw-semibold">{{ $money($order->grand_total) }}</td>
                             </tr>
                         </tbody>
@@ -105,19 +120,80 @@
 
         <div class="col-xl-3">
             <div class="card">
+                <div class="card-header"><h5 class="mb-0">Sale Summary</h5></div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between gap-3 mb-2">
+                        <span class="text-muted">Fulfilment</span>
+                        <span class="badge {{ $fulfilmentClass }}">{{ $fulfilmentLabel }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between gap-3 mb-2">
+                        <span class="text-muted">Customer</span>
+                        <span class="text-end">{{ $order->customer_name ?: 'Walk-in' }}</span>
+                    </div>
+                    @if($order->customer_mobile)
+                        <div class="d-flex justify-content-between gap-3 mb-2">
+                            <span class="text-muted">Mobile</span>
+                            <span>{{ $order->customer_mobile }}</span>
+                        </div>
+                    @endif
+                    @if($order->fulfilment_type === \App\Models\Order::FULFILMENT_DELIVERY)
+                        <hr>
+                        <div class="text-muted mb-1">Delivery Address</div>
+                        <div>
+                            {{ collect([
+                                $order->shipping_address_line_1,
+                                $order->shipping_address_line_2,
+                                $order->shipping_landmark,
+                                $order->shipping_city,
+                                $order->shipping_state,
+                                $order->shipping_postal_code,
+                            ])->filter()->implode(', ') ?: '-' }}
+                        </div>
+                    @endif
+                </div>
+            </div>
+
+            <div class="card">
                 <div class="card-header"><h5 class="mb-0">Totals</h5></div>
                 <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-6"><div class="text-muted">Subtotal</div><div>{{ $money($order->subtotal) }}</div></div>
-                        <div class="col-6"><div class="text-muted">Discount</div><div>{{ $money($order->discount_total) }}</div></div>
-                        <div class="col-6"><div class="text-muted">Tax</div><div>{{ $money($order->tax_total) }}</div></div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Subtotal</span>
+                        <span class="fw-semibold">{{ $money($order->subtotal) }}</span>
                     </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Discount</span>
+                        <span class="fw-semibold text-danger">{{ $money($itemDiscount) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Order Discount</span>
+                        <span class="fw-semibold text-danger">{{ $money($order->order_discount_amount) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Shipping</span>
+                        <span class="fw-semibold">{{ $money($order->shipping_total) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Tax</span>
+                        <span class="fw-semibold">{{ $money($order->tax_total) }}</span>
+                    </div>
+                    @if((float) $order->rounding_adjustment !== 0.0)
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Round off</span>
+                            <span class="fw-semibold">{{ $money($order->rounding_adjustment) }}</span>
+                        </div>
+                    @endif
                     <hr>
-                    <div class="fw-bold">Grand total</div>
-                    <h5>{{ $money($order->grand_total) }}</h5>
-                    <div class="row g-3 mt-1">
-                        <div class="col-6"><div class="text-muted">Paid</div><div>{{ $money($order->amount_paid) }}</div></div>
-                        <div class="col-6"><div class="text-muted">Change</div><div>{{ $money($order->change_amount) }}</div></div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="fw-bold">Grand Total</span>
+                        <span class="fw-bold">{{ $money($order->grand_total) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Tendered</span>
+                        <span class="fw-semibold">{{ $money($order->amount_paid) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">Change</span>
+                        <span class="fw-semibold">{{ $money($order->change_amount) }}</span>
                     </div>
                 </div>
             </div>
@@ -138,11 +214,6 @@
                     </div>
                 </div>
             @endif
-
-            <div class="card">
-                <div class="card-header"><h5 class="mb-0">Customer</h5></div>
-                <div class="card-body text-muted">{{ $order->customer_name ?: 'Walk-in' }}</div>
-            </div>
         </div>
     </div>
 @endsection

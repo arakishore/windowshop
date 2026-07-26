@@ -38,6 +38,7 @@ class OrderRefundService
      * @param array{
      *     return_reason_id: int,
      *     refund_method: string,
+     *     notes?: string|null,
      *     items: array<int|string, array{quantity?: int|string|null, do_not_restock?: mixed}>
      * } $data
      */
@@ -81,6 +82,9 @@ class OrderRefundService
                 'refund_total' => $refundTotal,
                 'status' => OrderRefund::STATUS_COMPLETED,
                 'created_by' => $actor->getKey(),
+                'metadata' => [
+                    'notes' => $this->nullableString($data['notes'] ?? null),
+                ],
             ]);
 
             foreach ($rows as $row) {
@@ -111,6 +115,7 @@ class OrderRefundService
                 'metadata' => [
                     'refund_number' => $refund->refund_number,
                     'refund_total' => $refundTotal,
+                    'notes' => $this->nullableString($data['notes'] ?? null),
                 ],
             ]);
 
@@ -190,5 +195,12 @@ class OrderRefundService
     private function money(float|string|int $value): string
     {
         return number_format(round((float) $value, 2), 2, '.', '');
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 }

@@ -181,21 +181,21 @@ This document tracks the modules and user-facing features currently implemented 
 ### Customer Management
 
 - Merchant-scoped customer list
-- Search by name, mobile, email, and customer code
-- Status filter
+- Search by name, mobile, and customer code
+- Order by newest, orders high-to-low, or orders low-to-high
 - Create customer
 - View customer
 - Edit customer
-- Activate customer
-- Deactivate customer
 - Soft delete customer with confirmation
-- Bulk customer actions
+- Bulk customer soft delete
 - Customer summary
 - Customer order history
 - Mobile lookup for duplicate prevention
 - Merchant scoping prevents access to another merchant's customers
 - Customer code generation
 - Customer snapshot stored on POS orders
+- Horizontal customer create/edit form layout
+- Generated customer code hidden on create and shown only after creation
 
 ### Customer Addresses
 
@@ -242,12 +242,15 @@ This document tracks the modules and user-facing features currently implemented 
 - Default walk-in customer state
 - Customer search/select modal
 - Search customer by mobile, name, email, or customer code
+- Quick-add walk-in customer by mobile number from POS
+- Existing customer reuse by mobile across shops under the same merchant
 - Add shipping address from POS
 - Counter fulfilment
 - Pickup fulfilment
 - Delivery fulfilment
 - Delivery requires selected customer and address
 - Customer and address snapshots stored on order
+- POS More Actions dropdown closes on outside click, Escape, or action selection
 
 ### POS Payments
 
@@ -329,13 +332,54 @@ This document tracks the modules and user-facing features currently implemented 
   - Footer text
   - Return policy
 
+## Merchant Sales and Returns
+
+- Sales section in merchant sidebar
+- POS sales history list
+- Sales filters:
+  - Payment status
+  - Payment method
+  - Customer
+  - Date range
+  - Search by order number, customer, mobile, or cashier
+- Sales summary:
+  - Total sales
+  - Transactions
+  - Items sold
+  - Average sale
+- Sale detail page
+- Refund page for completed POS sales
+- Refund processing:
+  - Return reason selection
+  - Refund method selection
+  - Line-level refund quantities
+  - Remaining refundable quantity calculation
+  - Line-level do-not-restock override
+  - Stock increment when restocked
+  - Refund subtotal, tax, and total calculation
+  - Full and partial payment status updates
+  - Refund status history entry
+- Return reason management:
+  - List/search return reasons
+  - Create return reason
+  - Edit return reason
+  - Delete return reason
+  - Sort order
+  - Restock-by-default flag
+  - Manager-override flag
+  - Active/inactive return reason status
+- Default merchant return reasons seeded during merchant settings initialization
+
 ## Order Foundation
 
 - Orders table
 - Order items table
+- Order refunds table
+- Order refund items table
 - Order totals table
 - Order status histories table
 - Order creation service
+- Order refund service
 - Order totals service
 - Order status service
 - Order number service
@@ -345,6 +389,7 @@ This document tracks the modules and user-facing features currently implemented 
 - Order discount fields
 - Rounding adjustment field
 - Payment status fields
+- Order to refunds relationship
 
 ## Product Foundation
 

@@ -27,8 +27,8 @@
                 </div>
                 <div class="text-muted">Pick the lines + quantities to refund. Stock follows the selected reason by default, then can be changed per line.</div>
             </div>
-            <button type="submit" class="btn btn-primary">
-                <i class="ph-check me-2"></i>
+            <button type="submit" class="btn btn-warning">
+                <i class="ph-arrow-counter-clockwise me-2"></i>
                 Process refund
             </button>
         </div>
@@ -112,6 +112,12 @@
                             </select>
                         </div>
 
+                        <div class="mb-3">
+                            <label for="refund_notes" class="form-label">Notes <span class="text-muted">(optional)</span></label>
+                            <textarea id="refund_notes" name="notes" rows="3" maxlength="500" class="form-control @error('notes') is-invalid @enderror" placeholder="Manager note, customer comment, or item condition">{{ old('notes') }}</textarea>
+                            @error('notes')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
                         <hr>
                         <h6>Totals</h6>
                         <div class="d-flex justify-content-between text-muted">
@@ -137,8 +143,10 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: '{{ $posCurrency['currency'] ?? 'INR' }}' });
+            const form = document.querySelector('.js-refund-form');
             const reason = document.querySelector('.js-return-reason');
             const checkboxes = Array.from(document.querySelectorAll('.js-do-not-restock'));
+            let confirmedSubmit = false;
 
             function applyReasonDefault() {
                 const selected = reason.options[reason.selectedIndex];
@@ -172,6 +180,44 @@
                 if (event.target.closest('.js-refund-qty')) {
                     updateTotals();
                 }
+            });
+            form?.addEventListener('submit', (event) => {
+                if (confirmedSubmit) {
+                    return;
+                }
+
+                event.preventDefault();
+                const message = 'Process this refund?<br><br>This will update stock/payment status and cannot be undone.';
+
+                if (typeof bootbox === 'undefined') {
+                    if (window.confirm('Process this refund?\n\nThis will update stock/payment status and cannot be undone.')) {
+                        confirmedSubmit = true;
+                        form.submit();
+                    }
+                    return;
+                }
+
+                bootbox.confirm({
+                    title: 'Process refund?',
+                    message,
+                    centerVertical: true,
+                    buttons: {
+                        cancel: {
+                            label: 'Cancel',
+                            className: 'btn-light',
+                        },
+                        confirm: {
+                            label: 'Process refund',
+                            className: 'btn-warning',
+                        },
+                    },
+                    callback: (confirmed) => {
+                        if (confirmed) {
+                            confirmedSubmit = true;
+                            form.submit();
+                        }
+                    },
+                });
             });
             applyReasonDefault();
             updateTotals();

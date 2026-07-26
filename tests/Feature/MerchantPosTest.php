@@ -1243,6 +1243,7 @@ class MerchantPosTest extends TestCase
             ->post(route('merchant.sales.refund.process', $order), [
                 'return_reason_id' => $reasonId,
                 'refund_method' => 'cash',
+                'notes' => 'Customer returned sealed items.',
                 'items' => [
                     $firstItem->getKey() => ['quantity' => 2, 'do_not_restock' => 1],
                     $secondItem->getKey() => ['quantity' => 1],
@@ -1258,6 +1259,9 @@ class MerchantPosTest extends TestCase
             'reason_name' => 'Wrong item sold',
             'refund_total' => '2997.00',
         ]);
+        $this->assertSame('Customer returned sealed items.', DB::table('order_refunds')
+            ->where('order_id', $order->getKey())
+            ->value('metadata->notes'));
         $this->assertSame(Order::PAYMENT_REFUNDED, $order->refresh()->payment_status);
     }
 

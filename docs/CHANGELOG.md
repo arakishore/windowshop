@@ -27,13 +27,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) co
 - POS line item discounts and order discounts with percent/amount modes, validation, live previews, discount badges, and receipt totals.
 - Centralized POS discount and cash rounding services.
 - Order foundation with orders, order items, order totals, status histories, customer/address snapshots, discount fields, rounding adjustment, and payment status resolution.
-- Merchant customer management with merchant scoping, search, status filter, create/view/edit, activate/deactivate, soft delete, bulk actions, mobile lookup, summary, and order history.
+- Merchant customer management with merchant scoping, search, create/view/edit, soft delete, bulk delete, mobile lookup, summary, and order history.
 - Customer addresses CRUD with shipping/billing defaults and location lookups.
 - Merchant settings foundation using generic grouped settings with typed values, initializer, seeder, and settings UI.
 - Admin global settings foundation using generic grouped settings with regional and currency settings.
 - Static JSON catalogues for timezones and currencies with reusable catalog readers.
 - POS receipt settings for shop, customer, cashier, GST, tax, barcode, QR, SKU, HSN, footer, and return policy display.
 - Merchant payment method settings applied to POS checkout, including Cash, UPI, Card, and Credit.
+- Merchant Sales section with POS sales history, sale detail, refund screen, and completed refund records.
+- Merchant return reason management with default seeded return reasons for new and existing merchants.
+- POS refund processing with line-level refundable quantities, optional restock override, refund totals, payment status updates, and refund status history.
+- POS quick-add customer flow from the customer modal with mobile-only creation, duplicate mobile reuse, and auto-selection for the current cart.
+- Customer list order-count sorting.
 
 ### Changed
 
@@ -49,12 +54,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) co
 - POS payment dropdown and checkout validation now use merchant payment settings.
 - POS cash rounding now affects displayed and saved payable totals.
 - DEV-stage settings defaults and migrations are kept clean instead of preserving obsolete settings.
+- Merchant customer status controls are hidden from merchant UI; customer removal is handled through soft delete while login/account state remains owned by `users`.
+- Customer list now shows mobile number in one line, removes the email column, and supports order-count sorting.
+- Customer create/edit form now uses horizontal Bootstrap form layout and hides generated customer code on create.
+- POS More Actions dropdown now closes on outside click, Escape, and action selection.
+- POS receipt success modal uses shared currency formatting to avoid checkout-success JavaScript errors.
 
 ### Removed
 
 - Removed separate Shop Categories module and `shop_categories` table.
 - Removed shop-category-to-product-category mapping module and table.
 - Removed obsolete merchant settings including product search mode, cart auto-clear toggle, cash rounding enable/precision, receipt logo/header text, product barcode type, default product visibility, and bank transfer payment option.
+- Removed merchant-facing customer active/inactive filter, actions, badge, and profile controls.
 
 ### Security
 
