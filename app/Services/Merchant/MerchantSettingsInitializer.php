@@ -7,7 +7,10 @@ use Illuminate\Support\Facades\DB;
 
 class MerchantSettingsInitializer
 {
-    public function __construct(private readonly MerchantSettingsService $settings)
+    public function __construct(
+        private readonly MerchantSettingsService $settings,
+        private readonly MerchantReturnReasonInitializer $returnReasons,
+    )
     {
     }
 
@@ -106,6 +109,8 @@ class MerchantSettingsInitializer
                     }
                 }
             }
+
+            $this->returnReasons->initialize($merchantId);
         });
     }
 

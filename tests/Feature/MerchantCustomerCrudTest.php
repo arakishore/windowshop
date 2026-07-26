@@ -31,7 +31,7 @@ class MerchantCustomerCrudTest extends TestCase
         }
     }
 
-    public function test_merchant_can_list_search_and_filter_own_customers(): void
+    public function test_merchant_can_list_and_search_own_customers(): void
     {
         [$user, $merchant, $shop] = $this->merchantFixture('Customer List Merchant');
         [, $otherMerchant] = $this->merchantFixture('Other List Merchant');
@@ -53,18 +53,43 @@ class MerchantCustomerCrudTest extends TestCase
         $response = $this
             ->actingAs($user)
             ->withSession(['active_shop_id' => $shop->getKey()])
-            ->get(route('merchant.customers.index', ['status' => MerchantCustomer::STATUS_INACTIVE]));
+            ->get(route('merchant.customers.index'));
 
         $response
             ->assertOk()
+            ->assertSee('Asha Searchable')
             ->assertSee('Inactive Buyer')
-            ->assertDontSee('Asha Searchable')
             ->assertDontSee('Other Merchant Buyer');
 
         $this->assertSame($other->merchant_id, $otherMerchant->getKey());
     }
 
-    public function test_merchant_can_create_view_edit_toggle_and_delete_customer(): void
+    public function test_merchant_can_sort_customers_by_order_count(): void
+    {
+        [$user, $merchant, $shop] = $this->merchantFixture('Customer Sort Merchant');
+        $many = $this->customer($merchant, 'Many Orders', '9876543210', 'many@example.test');
+        $few = $this->customer($merchant, 'Few Orders', '9876543211', 'few@example.test');
+        $none = $this->customer($merchant, 'No Orders', '9876543212', 'none@example.test');
+        $this->order($merchant, $shop, $many, 'ORD-MANY-001', 100);
+        $this->order($merchant, $shop, $many, 'ORD-MANY-002', 100);
+        $this->order($merchant, $shop, $few, 'ORD-FEW-001', 100);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->get(route('merchant.customers.index', ['sort' => 'orders_desc']))
+            ->assertOk()
+            ->assertSeeInOrder(['Many Orders', 'Few Orders', 'No Orders']);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->get(route('merchant.customers.index', ['sort' => 'orders_asc']))
+            ->assertOk()
+            ->assertSeeInOrder(['No Orders', 'Few Orders', 'Many Orders']);
+    }
+
+    public function test_merchant_can_create_view_edit_and_delete_customer(): void
     {
         [$user, $merchant, $shop] = $this->merchantFixture('Customer Crud Merchant');
 
@@ -109,69 +134,31 @@ class MerchantCustomerCrudTest extends TestCase
         $this
             ->actingAs($user)
             ->withSession(['active_shop_id' => $shop->getKey()])
-            ->post(route('merchant.customers.deactivate', $customer))
-            ->assertRedirect();
-        $this->assertSame(MerchantCustomer::STATUS_INACTIVE, $customer->refresh()->status);
-
-        $this
-            ->actingAs($user)
-            ->withSession(['active_shop_id' => $shop->getKey()])
-            ->post(route('merchant.customers.activate', $customer))
-            ->assertRedirect();
-        $this->assertSame(MerchantCustomer::STATUS_ACTIVE, $customer->refresh()->status);
-
-        $this
-            ->actingAs($user)
-            ->withSession(['active_shop_id' => $shop->getKey()])
             ->delete(route('merchant.customers.destroy', $customer))
             ->assertRedirect(route('merchant.customers.index'));
 
         $this->assertSoftDeleted('merchant_customers', ['id' => $customer->getKey()]);
     }
 
-    public function test_merchant_can_bulk_update_customers_and_scope_to_own_records(): void
+    public function test_merchant_can_bulk_delete_customers_and_scope_to_own_records(): void
     {
         [$user, $merchant, $shop] = $this->merchantFixture('Bulk Customer Merchant');
         [, $otherMerchant] = $this->merchantFixture('Other Bulk Customer Merchant');
-        $first = $this->customer($merchant, 'Bulk First', '9876543210', 'bulk-first@example.test', MerchantCustomer::STATUS_INACTIVE);
-        $second = $this->customer($merchant, 'Bulk Second', '9876543211', 'bulk-second@example.test', MerchantCustomer::STATUS_INACTIVE);
-        $other = $this->customer($otherMerchant, 'Bulk Other', '9876543212', 'bulk-other@example.test', MerchantCustomer::STATUS_INACTIVE);
-
-        $this
-            ->actingAs($user)
-            ->withSession(['active_shop_id' => $shop->getKey()])
-            ->post(route('merchant.customers.bulk-action'), [
-                'action' => 'mark_active',
-                'customer_ids' => [$first->getKey(), $second->getKey(), $other->getKey()],
-            ])
-            ->assertRedirect();
-
-        $this->assertSame(MerchantCustomer::STATUS_ACTIVE, $first->refresh()->status);
-        $this->assertSame(MerchantCustomer::STATUS_ACTIVE, $second->refresh()->status);
-        $this->assertSame(MerchantCustomer::STATUS_INACTIVE, $other->refresh()->status);
-
-        $this
-            ->actingAs($user)
-            ->withSession(['active_shop_id' => $shop->getKey()])
-            ->post(route('merchant.customers.bulk-action'), [
-                'action' => 'mark_inactive',
-                'customer_ids' => [$first->getKey(), $other->getKey()],
-            ])
-            ->assertRedirect();
-
-        $this->assertSame(MerchantCustomer::STATUS_INACTIVE, $first->refresh()->status);
-        $this->assertSame(MerchantCustomer::STATUS_INACTIVE, $other->refresh()->status);
+        $first = $this->customer($merchant, 'Bulk First', '9876543210', 'bulk-first@example.test');
+        $second = $this->customer($merchant, 'Bulk Second', '9876543211', 'bulk-second@example.test');
+        $other = $this->customer($otherMerchant, 'Bulk Other', '9876543212', 'bulk-other@example.test');
 
         $this
             ->actingAs($user)
             ->withSession(['active_shop_id' => $shop->getKey()])
             ->post(route('merchant.customers.bulk-action'), [
                 'action' => 'delete',
-                'customer_ids' => [$first->getKey(), $other->getKey()],
+                'customer_ids' => [$first->getKey(), $second->getKey(), $other->getKey()],
             ])
             ->assertRedirect();
 
         $this->assertSoftDeleted('merchant_customers', ['id' => $first->getKey()]);
+        $this->assertSoftDeleted('merchant_customers', ['id' => $second->getKey()]);
         $this->assertFalse($other->refresh()->trashed());
     }
 
@@ -364,12 +351,6 @@ class MerchantCustomerCrudTest extends TestCase
                 'mobile' => '9876543219',
                 'status' => MerchantCustomer::STATUS_ACTIVE,
             ])
-            ->assertNotFound();
-
-        $this
-            ->actingAs($user)
-            ->withSession(['active_shop_id' => $shop->getKey()])
-            ->post(route('merchant.customers.deactivate', $otherCustomer))
             ->assertNotFound();
 
         $this

@@ -156,6 +156,11 @@ class Order extends Model
         return $this->hasMany(OrderStatusHistory::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(OrderRefund::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by')->withTrashed();

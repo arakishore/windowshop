@@ -1065,6 +1065,51 @@ class MerchantPosTest extends TestCase
             ->assertJsonPath('addresses.0.is_default_shipping', true);
     }
 
+    public function test_pos_can_quick_add_walk_in_customer_by_mobile(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $merchantId = $this->merchantIdForShop($shopId);
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.customers.store'), [
+                'mobile_country_code' => '+91',
+                'mobile' => '9876543210',
+            ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('created', true)
+            ->assertJsonPath('customer.name', 'Walk-in Customer - 9876543210')
+            ->assertJsonPath('customer.mobile', '9876543210');
+
+        $customerId = (int) $response->json('customer.id');
+        $this->assertDatabaseHas('merchant_customers', [
+            'id' => $customerId,
+            'merchant_id' => $merchantId,
+            'mobile_normalized' => '919876543210',
+            'status' => 'active',
+        ]);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.customers.store'), [
+                'name' => 'Duplicate Buyer',
+                'mobile_country_code' => '+91',
+                'mobile' => '9876543210',
+            ])
+            ->assertOk()
+            ->assertJsonPath('created', false)
+            ->assertJsonPath('customer.id', $customerId);
+
+        $this->assertSame(1, DB::table('merchant_customers')
+            ->where('merchant_id', $merchantId)
+            ->where('mobile_normalized', '919876543210')
+            ->count());
+    }
+
     public function test_pos_delivery_checkout_requires_address_and_stores_snapshots(): void
     {
         [$userId, $shopId] = $this->merchantShopFixture();
@@ -1153,6 +1198,67 @@ class MerchantPosTest extends TestCase
 
         $this->assertStringContainsString('/merchant/pos/orders/', $response->json('sales.0.receipt_url'));
         $this->assertStringContainsString('print=1', $response->json('sales.0.print_url'));
+    }
+
+    public function test_merchant_can_refund_sale_with_line_level_restock_override(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $first = $this->createPosProduct($shopId, 'Knorr Chicken Stock Cubes 8pk', 'Default', 'KNOR-CB', 'KNOR-BAR');
+        $second = $this->createPosProduct($shopId, 'KitKat 4-Finger 41.5g', 'Default', 'KITKAT-4', 'KITKAT-BAR');
+        $merchantId = $this->merchantIdForShop($shopId);
+        $reasonId = (int) DB::table('merchant_return_reasons')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'merchant_id' => $merchantId,
+            'code' => 'wrong_item',
+            'name' => 'Wrong item sold',
+            'sort_order' => 2,
+            'restock_by_default' => true,
+            'requires_manager_override' => false,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 2997,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $first['variant_id'], 'quantity' => 2],
+                    ['product_variant_id' => $second['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertOk();
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $firstItem = $order->items->firstWhere('product_variant_id', $first['variant_id']);
+        $secondItem = $order->items->firstWhere('product_variant_id', $second['variant_id']);
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.refund.process', $order), [
+                'return_reason_id' => $reasonId,
+                'refund_method' => 'cash',
+                'items' => [
+                    $firstItem->getKey() => ['quantity' => 2, 'do_not_restock' => 1],
+                    $secondItem->getKey() => ['quantity' => 1],
+                ],
+            ]);
+
+        $response->assertRedirect(route('merchant.sales.show', $order));
+        $this->assertSame(10, (int) DB::table('product_variants')->where('id', $first['variant_id'])->value('stock_quantity'));
+        $this->assertSame(12, (int) DB::table('product_variants')->where('id', $second['variant_id'])->value('stock_quantity'));
+        $this->assertDatabaseHas('order_refunds', [
+            'order_id' => $order->getKey(),
+            'return_reason_id' => $reasonId,
+            'reason_name' => 'Wrong item sold',
+            'refund_total' => '2997.00',
+        ]);
+        $this->assertSame(Order::PAYMENT_REFUNDED, $order->refresh()->payment_status);
     }
 
     /**

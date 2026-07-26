@@ -11,12 +11,14 @@ use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
-use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Merchant\MerchantCustomerAddressService;
+use App\Services\Merchant\MerchantCustomerService;
+use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Merchant\MerchantSettingsService;
 use App\Services\Merchant\PosProductSearchService;
 use App\Services\Order\OrderCreationService;
 use App\Services\Product\ProductImageService;
+use App\Services\Shared\MobileNumberNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -35,6 +37,7 @@ class PosController extends Controller
         private readonly OrderCreationService $orderCreationService,
         private readonly PosProductSearchService $posProductSearchService,
         private readonly MerchantCustomerAddressService $customerAddressService,
+        private readonly MerchantCustomerService $customerService,
         private readonly MerchantSettingsService $settings,
         private readonly AdminSettingsService $adminSettings,
     ) {
@@ -256,7 +259,6 @@ class PosController extends Controller
 
         $customers = MerchantCustomer::query()
             ->where('merchant_id', $shop->merchant_id)
-            ->where('status', MerchantCustomer::STATUS_ACTIVE)
             ->where(function ($builder) use ($query): void {
                 $builder->where('name', 'like', "%{$query}%")
                     ->orWhere('mobile', 'like', "%{$query}%")
@@ -269,18 +271,49 @@ class PosController extends Controller
             ->limit(10)
             ->get()
             ->map(fn (MerchantCustomer $customer): array => [
-                'id' => $customer->getKey(),
-                'route_key' => $customer->getRouteKey(),
-                'name' => $customer->name,
-                'customer_code' => $customer->customer_code,
-                'mobile' => $customer->mobile,
-                'mobile_country_code' => $customer->mobile_country_code,
-                'email' => $customer->email,
+                ...$this->customerPayload($customer),
                 'addresses_count' => $customer->addresses_count,
             ])
             ->values();
 
         return response()->json(['customers' => $customers]);
+    }
+
+    public function storeCustomer(Request $request, MobileNumberNormalizer $normalizer): JsonResponse
+    {
+        $shop = $this->activeShop($request)->loadMissing('merchant');
+        $data = $request->validate([
+            'name' => ['nullable', 'string', 'max:150'],
+            'mobile_country_code' => ['nullable', 'string', 'max:10'],
+            'mobile' => ['required', 'string', 'max:30'],
+        ]);
+        $mobile = $normalizer->normalize(
+            (string) $data['mobile'],
+            isset($data['mobile_country_code']) ? (string) $data['mobile_country_code'] : null,
+        );
+
+        $customer = MerchantCustomer::query()
+            ->where('merchant_id', $shop->merchant_id)
+            ->where('mobile_normalized', $mobile['mobile_normalized'])
+            ->first();
+        $created = false;
+
+        if (! $customer instanceof MerchantCustomer) {
+            $name = trim((string) ($data['name'] ?? ''));
+            $customer = $this->customerService->create($shop->merchant, [
+                'name' => $name !== '' ? $name : 'Walk-in Customer - '.$mobile['mobile'],
+                'mobile_country_code' => $mobile['country_code'],
+                'mobile' => $mobile['mobile'],
+                'status' => MerchantCustomer::STATUS_ACTIVE,
+            ]);
+            $created = true;
+        }
+
+        return response()->json([
+            'message' => $created ? 'Customer added successfully.' : 'Customer already exists.',
+            'created' => $created,
+            'customer' => $this->customerPayload($customer->refresh()),
+        ], $created ? 201 : 200);
     }
 
     public function customerAddresses(Request $request, MerchantCustomer $customer): JsonResponse
@@ -425,9 +458,24 @@ class PosController extends Controller
     {
         $shop = $this->activeShop($request);
         abort_unless((int) $customer->merchant_id === (int) $shop->merchant_id, 404);
-        abort_unless($customer->status === MerchantCustomer::STATUS_ACTIVE, 404);
 
         return $shop;
+    }
+
+    /**
+     * @return array{id: int, route_key: string, name: string, customer_code: string|null, mobile: string|null, mobile_country_code: string|null, email: string|null}
+     */
+    private function customerPayload(MerchantCustomer $customer): array
+    {
+        return [
+            'id' => $customer->getKey(),
+            'route_key' => $customer->getRouteKey(),
+            'name' => $customer->name,
+            'customer_code' => $customer->customer_code,
+            'mobile' => $customer->mobile,
+            'mobile_country_code' => $customer->mobile_country_code,
+            'email' => $customer->email,
+        ];
     }
 
     private function addressPayload(MerchantCustomerAddress $address): array

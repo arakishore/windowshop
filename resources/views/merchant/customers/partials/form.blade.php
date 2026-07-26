@@ -9,70 +9,94 @@
         <h5 class="mb-0">Customer Details</h5>
     </div>
     <div class="card-body">
+        <input type="hidden" name="status" value="{{ \App\Models\MerchantCustomer::STATUS_ACTIVE }}">
         <div class="row g-3">
-            <div class="col-md-6">
-                <label for="customer_code" class="form-label">Customer Code</label>
-                <input id="customer_code" type="text" value="{{ $customer->exists ? $customer->customer_code : 'CUS-000001 (Auto Generated)' }}" class="form-control" readonly>
-            </div>
-            <div class="col-md-6"></div>
-
-            <div class="col-md-6">
-                <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
-                <input id="name" name="name" type="text" value="{{ old('name', $customer->name) }}" class="form-control @error('name') is-invalid @enderror" maxlength="150" placeholder="e.g. Rahul Sharma" required>
-                @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-            </div>
-            <div class="col-md-6">
-                <label for="mobile" class="form-label">Mobile <span class="text-danger">*</span></label>
-                <div class="input-group">
-                    <select id="mobile_country_code" name="mobile_country_code" class="form-select @error('mobile_country_code') is-invalid @enderror" style="max-width: 112px;">
-                        @foreach($countryCodes as $countryCode)
-                            <option value="{{ $countryCode['code'] }}" @selected($selectedCountryCode === $countryCode['code'])>{{ $countryCode['code'] }}</option>
-                        @endforeach
-                    </select>
-                    <input id="mobile" name="mobile" type="text" value="{{ old('mobile', $customer->mobile) }}" class="form-control @error('mobile') is-invalid @enderror" maxlength="30" placeholder="9876543210" required>
-                    @error('mobile_country_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    @error('mobile')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            @if($customer->exists)
+                <div class="col-md-6">
+                    <div class="row">
+                        <label class="col-sm-4 col-form-label">Customer Code</label>
+                        <div class="col-sm-8">
+                            <div class="form-control-plaintext">
+                                <code>{{ $customer->customer_code }}</code>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                @error('mobile_normalized')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
-                <div class="small mt-1 js-mobile-lookup-feedback"></div>
+                <div class="col-md-6"></div>
+            @endif
+
+            <div class="col-md-6">
+                <div class="row">
+                    <label for="name" class="col-sm-4 col-form-label">Name <span class="text-danger">*</span></label>
+                    <div class="col-sm-8">
+                        <input id="name" name="name" type="text" value="{{ old('name', $customer->name) }}" class="form-control @error('name') is-invalid @enderror" maxlength="150" placeholder="e.g. Rahul Sharma" required>
+                        @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="row">
+                    <label for="mobile" class="col-sm-4 col-form-label">Mobile <span class="text-danger">*</span></label>
+                    <div class="col-sm-8">
+                        <div class="input-group">
+                            <select id="mobile_country_code" name="mobile_country_code" class="form-select @error('mobile_country_code') is-invalid @enderror" style="max-width: 112px;">
+                                @foreach($countryCodes as $countryCode)
+                                    <option value="{{ $countryCode['code'] }}" @selected($selectedCountryCode === $countryCode['code'])>{{ $countryCode['code'] }}</option>
+                                @endforeach
+                            </select>
+                            <input id="mobile" name="mobile" type="text" value="{{ old('mobile', $customer->mobile) }}" class="form-control @error('mobile') is-invalid @enderror" maxlength="30" placeholder="9876543210" required>
+                            @error('mobile_country_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            @error('mobile')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        @error('mobile_normalized')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                        <div class="small mt-1 js-mobile-lookup-feedback"></div>
+                    </div>
+                </div>
             </div>
 
             <div class="col-md-6">
-                <label for="email" class="form-label">Email</label>
-                <input id="email" name="email" type="email" value="{{ old('email', $customer->email) }}" class="form-control @error('email') is-invalid @enderror" maxlength="190" placeholder="rahul@example.com">
-                @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                <div class="row">
+                    <label for="email" class="col-sm-4 col-form-label">Email</label>
+                    <div class="col-sm-8">
+                        <input id="email" name="email" type="email" value="{{ old('email', $customer->email) }}" class="form-control @error('email') is-invalid @enderror" maxlength="190" placeholder="rahul@example.com">
+                        @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                </div>
             </div>
             <div class="col-md-6">
-                <label for="status" class="form-label">Status <span class="text-danger">*</span></label>
-                <select id="status" name="status" class="form-select @error('status') is-invalid @enderror" required>
-                    @foreach($statuses as $value => $status)
-                        <option value="{{ $value }}" @selected(old('status', $customer->status) === $value)>{{ $status['label'] }}</option>
-                    @endforeach
-                </select>
-                @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
-            </div>
-
-            <div class="col-md-6">
-                <label for="date_of_birth" class="form-label">Date of Birth</label>
-                <input id="date_of_birth" name="date_of_birth" type="date" value="{{ old('date_of_birth', $customer->date_of_birth?->format('Y-m-d')) }}" class="form-control @error('date_of_birth') is-invalid @enderror">
-                @error('date_of_birth')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                <div class="row">
+                    <label for="date_of_birth" class="col-sm-4 col-form-label">Date of Birth</label>
+                    <div class="col-sm-8">
+                        <input id="date_of_birth" name="date_of_birth" type="date" value="{{ old('date_of_birth', $customer->date_of_birth?->format('Y-m-d')) }}" class="form-control @error('date_of_birth') is-invalid @enderror">
+                        @error('date_of_birth')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                </div>
             </div>
             <div class="col-md-6">
-                <label for="gender" class="form-label">Gender</label>
-                <select id="gender" name="gender" class="form-select @error('gender') is-invalid @enderror">
-                    <option value="">Select</option>
-                    @foreach($genders as $value => $label)
-                        <option value="{{ $value }}" @selected(old('gender', $customer->gender) === $value)>{{ $label }}</option>
-                    @endforeach
-                </select>
-                @error('gender')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                <div class="row">
+                    <label for="gender" class="col-sm-4 col-form-label">Gender</label>
+                    <div class="col-sm-8">
+                        <select id="gender" name="gender" class="form-select @error('gender') is-invalid @enderror">
+                            <option value="">Select</option>
+                            @foreach($genders as $value => $label)
+                                <option value="{{ $value }}" @selected(old('gender', $customer->gender) === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        @error('gender')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                </div>
             </div>
 
             <div class="col-12">
-                <input type="hidden" name="is_business_customer" value="0">
-                <div class="form-check form-switch">
-                    <input id="is_business_customer" name="is_business_customer" value="1" type="checkbox" class="form-check-input js-business-customer-toggle" @checked($businessChecked)>
-                    <label for="is_business_customer" class="form-check-label">Business Customer</label>
+                <div class="row">
+                    <label class="col-sm-2 col-form-label">Customer Type</label>
+                    <div class="col-sm-10">
+                        <input type="hidden" name="is_business_customer" value="0">
+                        <div class="form-check form-switch form-check-horizontal">
+                            <input id="is_business_customer" name="is_business_customer" value="1" type="checkbox" class="form-check-input js-business-customer-toggle" @checked($businessChecked)>
+                            <label for="is_business_customer" class="form-check-label">Business Customer</label>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -81,23 +105,35 @@
                     <div class="fw-semibold mb-3">Business Details</div>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label for="company_name" class="form-label">Company Name</label>
-                            <input id="company_name" name="company_name" type="text" value="{{ old('company_name', $customer->company_name) }}" class="form-control @error('company_name') is-invalid @enderror" maxlength="150" placeholder="e.g. Rahul Stores">
-                            @error('company_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            <div class="row">
+                                <label for="company_name" class="col-sm-4 col-form-label">Company Name</label>
+                                <div class="col-sm-8">
+                                    <input id="company_name" name="company_name" type="text" value="{{ old('company_name', $customer->company_name) }}" class="form-control @error('company_name') is-invalid @enderror" maxlength="150" placeholder="e.g. Rahul Stores">
+                                    @error('company_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-6">
-                            <label for="gst_number" class="form-label">GST Number</label>
-                            <input id="gst_number" name="gst_number" type="text" value="{{ old('gst_number', $customer->gst_number) }}" class="form-control @error('gst_number') is-invalid @enderror" maxlength="30" placeholder="GSTIN">
-                            @error('gst_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            <div class="row">
+                                <label for="gst_number" class="col-sm-4 col-form-label">GST Number</label>
+                                <div class="col-sm-8">
+                                    <input id="gst_number" name="gst_number" type="text" value="{{ old('gst_number', $customer->gst_number) }}" class="form-control @error('gst_number') is-invalid @enderror" maxlength="30" placeholder="GSTIN">
+                                    @error('gst_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="col-12">
-                <label for="notes" class="form-label">Notes</label>
-                <textarea id="notes" name="notes" rows="4" class="form-control @error('notes') is-invalid @enderror" placeholder="Any useful customer notes">{{ old('notes', $customer->notes) }}</textarea>
-                @error('notes')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                <div class="row">
+                    <label for="notes" class="col-sm-2 col-form-label">Notes</label>
+                    <div class="col-sm-10">
+                        <textarea id="notes" name="notes" rows="4" class="form-control @error('notes') is-invalid @enderror" placeholder="Any useful customer notes">{{ old('notes', $customer->notes) }}</textarea>
+                        @error('notes')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                </div>
             </div>
         </div>
     </div>

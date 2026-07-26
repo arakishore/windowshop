@@ -447,6 +447,7 @@
         data-checkout-url="{{ route('merchant.pos.checkout') }}"
         data-search-url="{{ route('merchant.pos.search') }}"
         data-customer-search-url="{{ route('merchant.pos.customers') }}"
+        data-customer-store-url="{{ route('merchant.pos.customers.store') }}"
         data-customer-addresses-url-template="{{ route('merchant.pos.customers.addresses', ['customer' => '__CUSTOMER__']) }}"
         data-customer-address-store-url-template="{{ route('merchant.pos.customers.addresses.store', ['customer' => '__CUSTOMER__']) }}"
         data-recent-sales-url="{{ route('merchant.pos.recent-sales') }}"
@@ -510,7 +511,7 @@
                                 <span class="badge bg-primary bg-opacity-10 text-primary py-2 px-3">{{ $shopLabel }}</span>
                             @endif
                             <span class="badge bg-success bg-opacity-10 text-success py-2 px-3">Online</span>
-                            <div class="dropdown">
+                            <div class="dropdown js-pos-actions-dropdown">
                                 <button type="button" class="btn btn-light btn-icon" data-bs-toggle="dropdown" data-bs-popup="tooltip" title="More POS actions" aria-expanded="false" aria-label="More POS actions">
                                     <i class="ph-dots-three"></i>
                                 </button>
@@ -635,6 +636,10 @@
             const recentSalesListEl = document.querySelector('.js-pos-recent-list');
             const customerSearchInput = root.querySelector('.js-pos-customer-search');
             const customerResultsEl = root.querySelector('.js-pos-customer-results');
+            const quickCustomerNameInput = root.querySelector('.js-pos-quick-customer-name');
+            const quickCustomerCountryCodeInput = root.querySelector('.js-pos-quick-customer-country-code');
+            const quickCustomerMobileInput = root.querySelector('.js-pos-quick-customer-mobile');
+            const saveCustomerButton = root.querySelector('.js-pos-save-customer');
             const selectedCustomerNameEls = Array.from(root.querySelectorAll('.js-pos-selected-customer-name'));
             const selectedCustomerMetaEls = Array.from(root.querySelectorAll('.js-pos-selected-customer-meta'));
             const clearCustomerButton = root.querySelector('.js-pos-clear-customer');
@@ -660,6 +665,7 @@
             const scanQueue = [];
             let scanLookupRunning = false;
             let searchKeyTimings = [];
+            let quickCustomerMobileFromSearch = '';
 
             const refreshTooltips = () => {
                 if (!window.bootstrap?.Tooltip) {
@@ -670,18 +676,19 @@
                     window.bootstrap.Tooltip.getOrCreateInstance(element);
                 });
             };
-            const moneyText = (value) => {
-                const places = Number(currencyConfig.decimal_places ?? 2);
-                const decimal = String(currencyConfig.decimal_separator ?? '.');
-                const thousand = String(currencyConfig.thousands_separator ?? ',');
-                const symbol = String(currencyConfig.symbol ?? '₹');
-                const fixed = (Number(value) || 0).toFixed(places);
-                const [whole, fraction] = fixed.split('.');
-                const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, thousand);
-                const amount = fraction === undefined ? grouped : `${grouped}${decimal}${fraction}`;
+            const closePosActionDropdowns = () => {
+                root.querySelectorAll('.js-pos-actions-dropdown [data-bs-toggle="dropdown"]').forEach((toggle) => {
+                    if (window.bootstrap?.Dropdown) {
+                        window.bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
+                        return;
+                    }
 
-                return (currencyConfig.symbol_position ?? 'before') === 'before' ? `${symbol}${amount}` : `${amount} ${symbol}`;
+                    toggle.setAttribute('aria-expanded', 'false');
+                    toggle.closest('.dropdown')?.querySelector('.dropdown-menu')?.classList.remove('show');
+                    toggle.closest('.dropdown')?.classList.remove('show');
+                });
             };
+            const moneyText = (value) => formatMoneyText(value, currencyConfig);
             const compactMoneyText = moneyText;
             const lineSubtotal = (row) => Number(row.price) * Number(row.quantity);
             const calculateDiscount = (baseAmount, discount) => {
@@ -1094,6 +1101,58 @@
                 renderSelectedCustomer();
                 loadCustomerAddresses(customer);
                 saveCart();
+            };
+            const saveQuickCustomer = async () => {
+                const mobile = quickCustomerMobileInput?.value.trim() || '';
+
+                if (!mobile) {
+                    showMessage('Mobile required', 'Enter the walk-in customer mobile number.');
+                    quickCustomerMobileInput?.focus();
+                    return;
+                }
+
+                saveCustomerButton.disabled = true;
+                saveCustomerButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving';
+
+                try {
+                    const response = await fetch(root.dataset.customerStoreUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            name: quickCustomerNameInput?.value.trim() || null,
+                            mobile_country_code: quickCustomerCountryCodeInput?.value.trim() || null,
+                            mobile,
+                        }),
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(firstError(payload) || 'Unable to save this customer.');
+                    }
+
+                    selectCustomer(payload.customer);
+                    if (quickCustomerNameInput) {
+                        quickCustomerNameInput.value = '';
+                    }
+                    if (quickCustomerMobileInput) {
+                        quickCustomerMobileInput.value = '';
+                    }
+                    customerResultsEl.classList.remove('d-none');
+                    customerResultsEl.innerHTML = `
+                        <div class="list-group-item text-success">
+                            ${escapeHtml(payload.message || 'Customer selected.')}
+                        </div>
+                    `;
+                } catch (error) {
+                    showMessage('Customer save failed', error.message);
+                } finally {
+                    saveCustomerButton.disabled = false;
+                    saveCustomerButton.innerHTML = '<i class="ph-user-plus me-1"></i>Save & Select';
+                }
             };
             const clearCustomer = () => {
                 selectedCustomer = null;
@@ -1884,6 +1943,9 @@
 
             root.addEventListener('click', (event) => {
                 ensureAddSoundContext();
+                if (event.target.closest('.js-pos-actions-dropdown .dropdown-item')) {
+                    closePosActionDropdowns();
+                }
 
                 const addButton = event.target.closest('.js-pos-add');
                 const addCard = event.target.closest('.js-pos-add-card');
@@ -1990,8 +2052,19 @@
                 addItem(addCard.dataset.variantId);
             });
 
+            document.addEventListener('click', (event) => {
+                if (!event.target.closest('.js-pos-actions-dropdown')) {
+                    closePosActionDropdowns();
+                }
+            });
+
             document.addEventListener('keydown', (event) => {
                 ensureAddSoundContext();
+
+                if (event.key === 'Escape') {
+                    closePosActionDropdowns();
+                    return;
+                }
 
                 if (event.key === '/' && !isTypingTarget(event.target)) {
                     event.preventDefault();
@@ -2120,6 +2193,16 @@
             });
             shippingAddressSelect?.addEventListener('change', renderSelectedAddress);
             clearCustomerButton?.addEventListener('click', clearCustomer);
+            saveCustomerButton?.addEventListener('click', saveQuickCustomer);
+            quickCustomerMobileInput?.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    saveQuickCustomer();
+                }
+            });
+            quickCustomerMobileInput?.addEventListener('input', () => {
+                quickCustomerMobileFromSearch = '';
+            });
             customerResultsEl?.addEventListener('click', (event) => {
                 const button = event.target.closest('.js-pos-select-customer');
                 if (!button) {
@@ -2132,6 +2215,13 @@
             customerSearchInput?.addEventListener('input', () => {
                 window.clearTimeout(customerSearchTimeout);
                 const query = customerSearchInput.value.trim();
+                const digits = query.replace(/\D+/g, '');
+                const quickMobile = quickCustomerMobileInput?.value.trim() || '';
+
+                if (digits.length >= 6 && quickCustomerMobileInput && (quickMobile === '' || quickMobile === quickCustomerMobileFromSearch)) {
+                    quickCustomerMobileInput.value = query;
+                    quickCustomerMobileFromSearch = query;
+                }
 
                 if (query.length < 2) {
                     customerResultsEl.classList.add('d-none');
@@ -2151,6 +2241,10 @@
                         }
 
                         const customers = payload.customers || [];
+                        if (customers.length === 0 && digits.length >= 6 && quickCustomerMobileInput) {
+                            quickCustomerMobileInput.value = query;
+                            quickCustomerMobileFromSearch = query;
+                        }
                         customerResultsEl.classList.remove('d-none');
                         customerResultsEl.innerHTML = customers.length === 0 ? `
                             <div class="list-group-item text-muted">
@@ -2298,6 +2392,29 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
+        }
+
+        function posCurrencyConfig() {
+            const root = document.querySelector('.js-pos-root');
+
+            try {
+                return JSON.parse(root?.dataset.currencyConfig || '{}');
+            } catch (error) {
+                return {};
+            }
+        }
+
+        function formatMoneyText(value, currencyConfig = posCurrencyConfig()) {
+            const places = Number(currencyConfig.decimal_places ?? 2);
+            const decimal = String(currencyConfig.decimal_separator ?? '.');
+            const thousand = String(currencyConfig.thousands_separator ?? ',');
+            const symbol = String(currencyConfig.symbol ?? '₹');
+            const fixed = (Number(value) || 0).toFixed(places);
+            const [whole, fraction] = fixed.split('.');
+            const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, thousand);
+            const amount = fraction === undefined ? grouped : `${grouped}${decimal}${fraction}`;
+
+            return (currencyConfig.symbol_position ?? 'before') === 'before' ? `${symbol}${amount}` : `${amount} ${symbol}`;
         }
 
         function paymentMethodLabel(method) {
@@ -2516,6 +2633,7 @@
         }
 
         function showReceipt(order) {
+            const moneyText = (value) => formatMoneyText(value);
             const message = `
                 <div class="text-center">
                     <div class="d-inline-flex align-items-center justify-content-center bg-success bg-opacity-10 text-success rounded-circle mb-3" style="width: 72px; height: 72px;">

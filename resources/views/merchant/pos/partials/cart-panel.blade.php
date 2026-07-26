@@ -180,6 +180,26 @@
                         <div class="list-group mt-2 js-pos-customer-results">
                             <div class="list-group-item text-muted">Start typing to search customers.</div>
                         </div>
+
+                        <div class="border rounded p-3 mt-3">
+                            <div class="fw-semibold">Quick Add Customer</div>
+                            <div class="text-muted fs-sm mb-3">Save a walk-in customer without leaving POS.</div>
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <input type="text" class="form-control js-pos-quick-customer-name" placeholder="Name optional">
+                                </div>
+                                <input type="hidden" class="js-pos-quick-customer-country-code" value="+91">
+                                <div class="col-12">
+                                    <input type="text" class="form-control js-pos-quick-customer-mobile" placeholder="Mobile number">
+                                </div>
+                                <div class="col-12">
+                                    <button type="button" class="btn btn-primary w-100 js-pos-save-customer" data-bs-popup="tooltip" title="Create and select this customer">
+                                        <i class="ph-user-plus me-1"></i>
+                                        Save & Select
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="col-lg-7">

@@ -19,14 +19,9 @@
                     <h5 class="mb-0">Customer Summary</h5>
                 </div>
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                        <div>
-                            <h5 class="mb-1">{{ $customer->name }}</h5>
-                            <code>{{ $customer->customer_code }}</code>
-                        </div>
-                        <span class="badge {{ $statuses[$customer->status]['badge_class'] ?? 'bg-secondary' }}">
-                            {{ $statuses[$customer->status]['label'] ?? ucfirst($customer->status) }}
-                        </span>
+                    <div class="mb-3">
+                        <h5 class="mb-1">{{ $customer->name }}</h5>
+                        <code>{{ $customer->customer_code }}</code>
                     </div>
                     <div class="row g-2">
                         <div class="col-4">
@@ -50,23 +45,6 @@
                     </div>
                 </div>
                 <div class="card-footer d-flex flex-wrap gap-2">
-                    @if($customer->status === \App\Models\MerchantCustomer::STATUS_ACTIVE)
-                        <form method="POST" action="{{ route('merchant.customers.deactivate', $customer) }}" class="js-confirm-action-form">
-                            @csrf
-                            <button type="button" class="btn btn-warning js-confirm-action" data-title="Deactivate Customer" data-message="Deactivate this customer?" data-confirm-label="Yes, Deactivate" data-confirm-class="btn-warning">
-                                <i class="ph-user-minus me-2"></i>
-                                Deactivate
-                            </button>
-                        </form>
-                    @else
-                        <form method="POST" action="{{ route('merchant.customers.activate', $customer) }}" class="js-confirm-action-form">
-                            @csrf
-                            <button type="button" class="btn btn-success js-confirm-action" data-title="Activate Customer" data-message="Activate this customer?" data-confirm-label="Yes, Activate" data-confirm-class="btn-success">
-                                <i class="ph-user-plus me-2"></i>
-                                Activate
-                            </button>
-                        </form>
-                    @endif
                     <form method="POST" action="{{ route('merchant.customers.destroy', $customer) }}" class="js-confirm-action-form">
                         @csrf
                         @method('DELETE')

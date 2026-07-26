@@ -56,6 +56,21 @@ class MerchantSettingsFoundationTest extends TestCase
         $this->assertSame('', $this->settings()->get($merchant->getKey(), 'pos', 'receipt.return_policy'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'payment', 'allow_credit'));
         $this->assertFalse($this->settings()->has($merchant->getKey(), 'payment', 'allow_bank_transfer'));
+        $this->assertSame(10, DB::table('merchant_return_reasons')->where('merchant_id', $merchant->getKey())->count());
+        $this->assertDatabaseHas('merchant_return_reasons', [
+            'merchant_id' => $merchant->getKey(),
+            'code' => 'wrong_item',
+            'name' => 'Wrong item sold',
+            'restock_by_default' => true,
+            'status' => 'active',
+        ]);
+        $this->assertDatabaseHas('merchant_return_reasons', [
+            'merchant_id' => $merchant->getKey(),
+            'code' => 'defective',
+            'name' => 'Defective / not working',
+            'restock_by_default' => false,
+            'status' => 'active',
+        ]);
 
         $this->assertDatabaseHas('merchant_settings', [
             'merchant_id' => $merchant->getKey(),
@@ -158,11 +173,15 @@ class MerchantSettingsFoundationTest extends TestCase
         MerchantSetting::query()
             ->where('merchant_id', $merchant->getKey())
             ->delete();
+        DB::table('merchant_return_reasons')
+            ->where('merchant_id', $merchant->getKey())
+            ->delete();
 
         $this->seed(MerchantSettingsSeeder::class);
         $this->seed(MerchantSettingsSeeder::class);
 
         $this->assertSame($expectedCount, MerchantSetting::query()->where('merchant_id', $merchant->getKey())->count());
+        $this->assertSame(10, DB::table('merchant_return_reasons')->where('merchant_id', $merchant->getKey())->count());
         $this->assertSame('nearest', $this->settings()->get($merchant->getKey(), 'pos', 'cash_rounding.method'));
     }
 

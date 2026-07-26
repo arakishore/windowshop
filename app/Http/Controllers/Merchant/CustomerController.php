@@ -33,8 +33,11 @@ class CustomerController extends Controller
         $merchant = $this->activeMerchant($request);
         $filters = [
             'search' => trim((string) $request->query('search', '')),
-            'status' => $request->query('status'),
+            'sort' => (string) $request->query('sort', 'latest'),
         ];
+        $sort = in_array($filters['sort'], ['latest', 'orders_desc', 'orders_asc'], true)
+            ? $filters['sort']
+            : 'latest';
 
         $customers = MerchantCustomer::query()
             ->where('merchant_id', $merchant->getKey())
@@ -46,19 +49,19 @@ class CustomerController extends Controller
                     $query->where('name', 'like', "%{$search}%")
                         ->orWhere('mobile', 'like', "%{$search}%")
                         ->orWhere('mobile_normalized', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%")
                         ->orWhere('customer_code', 'like', "%{$search}%");
                 });
             })
-            ->when(in_array($filters['status'], array_keys($this->statuses()), true), fn ($query) => $query->where('status', $filters['status']))
-            ->orderByDesc('created_at')
+            ->when($sort === 'orders_desc', fn ($query) => $query->orderByDesc('orders_count'))
+            ->when($sort === 'orders_asc', fn ($query) => $query->orderBy('orders_count'))
+            ->when($sort === 'latest', fn ($query) => $query->orderByDesc('created_at'))
+            ->orderByDesc('id')
             ->paginate((int) config('admin.pagination.per_page', 15))
             ->withQueryString();
 
         return view('merchant.customers.index', [
             'customers' => $customers,
             'filters' => $filters,
-            'statuses' => $this->statuses(),
         ]);
     }
 
@@ -66,7 +69,6 @@ class CustomerController extends Controller
     {
         return view('merchant.customers.create', [
             'customer' => new MerchantCustomer(['status' => MerchantCustomer::STATUS_ACTIVE]),
-            'statuses' => $this->statuses(),
             'genders' => $this->genders(),
             'mobileLookupUrl' => route('merchant.customers.mobile-lookup'),
             'countryCodes' => $this->countryCodes(),
@@ -87,14 +89,12 @@ class CustomerController extends Controller
     {
         $merchant = $this->activeMerchant($request);
         $data = $request->validate([
-            'action' => ['required', Rule::in(['mark_active', 'mark_inactive', 'delete'])],
+            'action' => ['required', Rule::in(['delete'])],
             'customer_ids' => ['required', 'array', 'min:1'],
             'customer_ids.*' => ['integer'],
         ]);
 
         $count = match ($data['action']) {
-            'mark_active' => $this->bulkStatus($merchant, $data['customer_ids'], MerchantCustomer::STATUS_ACTIVE),
-            'mark_inactive' => $this->bulkStatus($merchant, $data['customer_ids'], MerchantCustomer::STATUS_INACTIVE),
             'delete' => $this->bulkDelete($merchant, $data['customer_ids']),
         };
 
@@ -130,7 +130,6 @@ class CustomerController extends Controller
             'orders' => $orders,
             'addresses' => $addresses,
             'summary' => $summary,
-            'statuses' => $this->statuses(),
             'addressStatuses' => $this->addressStatuses(),
             'activeTab' => $activeTab,
         ]);
@@ -142,7 +141,6 @@ class CustomerController extends Controller
 
         return view('merchant.customers.edit', [
             'customer' => $customer,
-            'statuses' => $this->statuses(),
             'genders' => $this->genders(),
             'mobileLookupUrl' => route('merchant.customers.mobile-lookup', ['ignore' => $customer->getKey()]),
             'countryCodes' => $this->countryCodes(),
@@ -192,22 +190,6 @@ class CustomerController extends Controller
             ->with('success', 'Customer updated successfully.');
     }
 
-    public function activate(Request $request, MerchantCustomer $customer): RedirectResponse
-    {
-        $this->authorizeCustomer($request, $customer);
-        $customer->forceFill(['status' => MerchantCustomer::STATUS_ACTIVE])->save();
-
-        return back()->with('success', 'Customer activated successfully.');
-    }
-
-    public function deactivate(Request $request, MerchantCustomer $customer): RedirectResponse
-    {
-        $this->authorizeCustomer($request, $customer);
-        $customer->forceFill(['status' => MerchantCustomer::STATUS_INACTIVE])->save();
-
-        return back()->with('success', 'Customer deactivated successfully.');
-    }
-
     public function destroy(Request $request, MerchantCustomer $customer): RedirectResponse
     {
         $this->authorizeCustomer($request, $customer);
@@ -232,20 +214,6 @@ class CustomerController extends Controller
         abort_unless((int) $customer->merchant_id === (int) $merchant->getKey(), 404);
 
         return $merchant;
-    }
-
-    /**
-     * @param array<int, int|string> $customerIds
-     */
-    private function bulkStatus(MerchantProfile $merchant, array $customerIds, string $status): int
-    {
-        return MerchantCustomer::query()
-            ->where('merchant_id', $merchant->getKey())
-            ->whereIn('id', $customerIds)
-            ->update([
-                'status' => $status,
-                'updated_at' => now(),
-            ]);
     }
 
     /**
@@ -312,17 +280,6 @@ class CustomerController extends Controller
         }
 
         return '+91';
-    }
-
-    /**
-     * @return array<string, array{label: string, badge_class: string}>
-     */
-    private function statuses(): array
-    {
-        return config('admin.customer.statuses', [
-            MerchantCustomer::STATUS_ACTIVE => ['label' => 'Active', 'badge_class' => 'bg-success'],
-            MerchantCustomer::STATUS_INACTIVE => ['label' => 'Inactive', 'badge_class' => 'bg-light text-body border'],
-        ]);
     }
 
     /**

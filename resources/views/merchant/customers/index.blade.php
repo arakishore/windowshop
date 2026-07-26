@@ -1,4 +1,4 @@
-{{-- Purpose: Lists merchant-scoped customers with search and status filtering. --}}
+{{-- Purpose: Lists merchant-scoped customers with search and soft-delete actions. --}}
 @extends('layouts.merchant')
 
 @section('breadcrumb')
@@ -13,7 +13,7 @@
 
 @section('content')
     @php
-        $hasFilters = $filters['search'] !== '' || $filters['status'];
+        $hasFilters = $filters['search'] !== '' || ($filters['sort'] ?? 'latest') !== 'latest';
     @endphp
 
     <div class="card">
@@ -32,15 +32,14 @@
                 <form method="GET" action="{{ route('merchant.customers.index') }}" class="row g-3 align-items-end">
                     <div class="col-md-6">
                         <label for="search" class="form-label">Search</label>
-                        <input id="search" name="search" type="search" value="{{ $filters['search'] }}" class="form-control" placeholder="Name, mobile, email, or customer code">
+                        <input id="search" name="search" type="search" value="{{ $filters['search'] }}" class="form-control" placeholder="Name, mobile, or customer code">
                     </div>
                     <div class="col-md-3">
-                        <label for="status" class="form-label">Status</label>
-                        <select id="status" name="status" class="form-select">
-                            <option value="">All</option>
-                            @foreach($statuses as $value => $status)
-                                <option value="{{ $value }}" @selected($filters['status'] === $value)>{{ $status['label'] }}</option>
-                            @endforeach
+                        <label for="sort" class="form-label">Order By</label>
+                        <select id="sort" name="sort" class="form-select">
+                            <option value="latest" @selected(($filters['sort'] ?? 'latest') === 'latest')>Newest</option>
+                            <option value="orders_desc" @selected(($filters['sort'] ?? 'latest') === 'orders_desc')>Orders: High to Low</option>
+                            <option value="orders_asc" @selected(($filters['sort'] ?? 'latest') === 'orders_asc')>Orders: Low to High</option>
                         </select>
                     </div>
                     <div class="col-md-3 d-flex gap-2">
@@ -64,8 +63,6 @@
                         <label class="input-group-text" for="bulk_action">Bulk Actions</label>
                         <select id="bulk_action" name="action" class="form-select" required>
                             <option value="">Choose</option>
-                            <option value="mark_active">Mark Active</option>
-                            <option value="mark_inactive">Mark Inactive</option>
                             <option value="delete">Delete</option>
                         </select>
                     </div>
@@ -86,8 +83,6 @@
                             </th>
                             <th>Customer</th>
                             <th>Mobile</th>
-                            <th>Email</th>
-                            <th>Status</th>
                             <th>Orders</th>
                             <th>Created Date</th>
                             <th class="text-center">Actions</th>
@@ -104,14 +99,7 @@
                                 <div><code>{{ $customer->customer_code }}</code></div>
                             </td>
                             <td>
-                                <div>{{ $customer->mobile }}</div>
-                                <div class="text-muted small">{{ $customer->mobile_country_code }}</div>
-                            </td>
-                            <td>{{ $customer->email ?: '-' }}</td>
-                            <td>
-                                <span class="badge {{ $statuses[$customer->status]['badge_class'] ?? 'bg-secondary' }}">
-                                    {{ $statuses[$customer->status]['label'] ?? ucfirst($customer->status) }}
-                                </span>
+                                {{ collect([$customer->mobile_country_code, $customer->mobile])->filter()->implode(' ') }}
                             </td>
                             <td>{{ $customer->orders_count }}</td>
                             <td>{{ $customer->created_at?->format('d M Y') }}</td>
@@ -156,18 +144,6 @@
             const selectAll = document.querySelector('.js-select-all-customers');
             const selectedCount = document.querySelector('.js-selected-count');
             const bulkMessages = {
-                mark_active: {
-                    title: 'Mark Customers Active',
-                    message: 'Mark selected customers as Active?',
-                    label: 'Yes, Mark Active',
-                    className: 'btn-success',
-                },
-                mark_inactive: {
-                    title: 'Mark Customers Inactive',
-                    message: 'Mark selected customers as Inactive?',
-                    label: 'Yes, Mark Inactive',
-                    className: 'btn-warning',
-                },
                 delete: {
                     title: 'Delete Customers',
                     message: 'Delete selected customers?<br><br>Orders will keep their customer snapshots, but selected customer profiles will move to trash.',

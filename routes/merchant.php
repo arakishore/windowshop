@@ -12,6 +12,8 @@ use App\Http\Controllers\Merchant\MerchantShopController;
 use App\Http\Controllers\Merchant\MerchantShopContextController;
 use App\Http\Controllers\Merchant\PosController;
 use App\Http\Controllers\Merchant\ProductController;
+use App\Http\Controllers\Merchant\ReturnReasonController;
+use App\Http\Controllers\Merchant\SalesHistoryController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('merchant')->name('merchant.')->group(function (): void {
@@ -46,18 +48,20 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
         Route::get('/pos/search', [PosController::class, 'search'])->name('pos.search');
         Route::get('/pos/customers', [PosController::class, 'customers'])->name('pos.customers');
+        Route::post('/pos/customers', [PosController::class, 'storeCustomer'])->name('pos.customers.store');
         Route::get('/pos/customers/{customer}/addresses', [PosController::class, 'customerAddresses'])->name('pos.customers.addresses');
         Route::post('/pos/customers/{customer}/addresses', [PosController::class, 'storeCustomerAddress'])->name('pos.customers.addresses.store');
         Route::post('/pos/checkout', [PosController::class, 'checkout'])->name('pos.checkout');
         Route::get('/pos/recent-sales', [PosController::class, 'recentSales'])->name('pos.recent-sales');
         Route::get('/pos/orders/{order}/receipt', [PosController::class, 'receipt'])->name('pos.receipt');
+        Route::get('/sales', [SalesHistoryController::class, 'index'])->name('sales.index');
+        Route::get('/sales/{order}', [SalesHistoryController::class, 'show'])->name('sales.show');
+        Route::get('/sales/{order}/refund', [SalesHistoryController::class, 'refund'])->name('sales.refund');
+        Route::post('/sales/{order}/refund', [SalesHistoryController::class, 'processRefund'])->name('sales.refund.process');
+        Route::resource('return-reasons', ReturnReasonController::class)->only(['index', 'store', 'update', 'destroy']);
         Route::get('/barcodes/labels', [BarcodeLabelController::class, 'index'])->name('barcodes.labels.index');
         Route::post('/barcodes/generate-missing', [BarcodeLabelController::class, 'generateMissing'])->name('barcodes.generate-missing');
         Route::post('/barcodes/labels/print', [BarcodeLabelController::class, 'print'])->name('barcodes.labels.print');
-        Route::post('customers/{customer}/activate', [CustomerController::class, 'activate'])
-            ->name('customers.activate');
-        Route::post('customers/{customer}/deactivate', [CustomerController::class, 'deactivate'])
-            ->name('customers.deactivate');
         Route::post('customers/bulk-action', [CustomerController::class, 'bulkAction'])
             ->name('customers.bulk-action');
         Route::get('customers/mobile-lookup', [CustomerController::class, 'mobileLookup'])

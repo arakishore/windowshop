@@ -50,6 +50,21 @@
                     </a>
                 </li>
 
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.sales.*') || request()->routeIs('merchant.return-reasons.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.sales.*') || request()->routeIs('merchant.return-reasons.*') ? 'active' : '' }}">
+                        <i class="ph-receipt"></i>
+                        <span>Sales</span>
+                    </a>
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.sales.*') || request()->routeIs('merchant.return-reasons.*') ? 'show' : '' }}">
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.sales.index') }}" class="nav-link {{ request()->routeIs('merchant.sales.*') ? 'active' : '' }}">Sales History</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.return-reasons.index') }}" class="nav-link {{ request()->routeIs('merchant.return-reasons.*') ? 'active' : '' }}">Return reasons</a>
+                        </li>
+                    </ul>
+                </li>
+
                 <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.shops.*') ? 'nav-item-expanded nav-item-open' : '' }}">
                     <a href="#" class="nav-link {{ request()->routeIs('merchant.shops.*') ? 'active' : '' }}">
                         <i class="ph-storefront"></i>
@@ -94,13 +109,6 @@
                     <a href="#" class="nav-link {{ $disabled }}">
                         <i class="ph-tag"></i>
                         <span>Offers</span>
-                    </a>
-                </li>
-
-                <li class="nav-item">
-                    <a href="#" class="nav-link {{ $disabled }}">
-                        <i class="ph-receipt"></i>
-                        <span>Orders</span>
                     </a>
                 </li>
 
