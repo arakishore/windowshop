@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ProductAttributeGroup;
 use App\Models\ProductAttributeGroupValue;
+use App\Models\ProductCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -52,6 +53,50 @@ class AdminProductAttributeCrudTest extends TestCase
         $response->assertSee('product-attributes-table');
         $response->assertSee('DataTable');
         $response->assertDontSee('Showing 1 to', false);
+    }
+
+    public function test_admin_can_view_product_attribute_reference_with_values_and_shop_type_mapping(): void
+    {
+        $admin = $this->createAdminUser();
+        $apparel = ProductCategory::query()->create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Apparel',
+            'slug' => 'apparel',
+            'status' => 'active',
+            'sort_order' => 1,
+        ]);
+        $sleeve = $this->createGroup([
+            'name' => 'Sleeve',
+            'code' => 'sleeve',
+            'selection_type' => 'single',
+        ]);
+
+        $this->createValue([
+            'product_attribute_group_id' => $sleeve->getKey(),
+            'name' => 'Half Sleeve',
+            'code' => 'half-sleeve',
+        ]);
+
+        DB::table('product_category_attribute_groups')->insert([
+            'root_product_category_id' => $apparel->getKey(),
+            'product_attribute_group_id' => $sleeve->getKey(),
+            'is_required' => false,
+            'is_variant' => false,
+            'is_image_attribute' => false,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.master.product-attribute-reference.index'));
+
+        $response->assertOk();
+        $response->assertSee('Available Product Attributes');
+        $response->assertSee('Sleeve');
+        $response->assertSee('Half Sleeve');
+        $response->assertSee('Apparel');
+        $response->assertSee('Product detail');
     }
 
     public function test_admin_can_create_update_and_delete_product_attribute_group(): void
@@ -235,6 +280,7 @@ class AdminProductAttributeCrudTest extends TestCase
             'name' => $attributes['name'] ?? 'Test Attribute',
             'code' => $attributes['code'] ?? 'test-attribute',
             'description' => $attributes['description'] ?? null,
+            'selection_type' => $attributes['selection_type'] ?? 'single',
             'status' => $attributes['status'] ?? 'active',
             'sort_order' => $attributes['sort_order'] ?? 0,
         ]);

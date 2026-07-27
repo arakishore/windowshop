@@ -39,7 +39,11 @@ class DemoProductSeeder extends Seeder
                 $rootCategoryId = (int) $shop->root_product_category_id;
                 $rootCategoryName = $productCategories['root_names'][$rootCategoryId] ?? '';
 
-                foreach ($this->productsForShop((string) $shop->name, $rootCategoryName) as $product) {
+                $products = $this->productsForShop((string) $shop->name, $rootCategoryName);
+
+                $this->retireStaleDemoProducts((int) $shop->id, (string) $shop->name, $products, $now);
+
+                foreach ($products as $product) {
                     $productCategoryId = $this->categoryIdForProduct($productCategories, $product['category'], $rootCategoryId);
                     $brandId = $this->brandIdForProduct($brands, $product['brand']);
 
@@ -112,6 +116,14 @@ class DemoProductSeeder extends Seeder
         return match ($rootCategoryName) {
             'Beauty & Cosmetics' => $this->beautyProductsForShop($shopName),
             'Jewellery & Accessories' => $this->bagProductsForShop($shopName),
+            'Footwear' => $this->footwearProductsForShop($shopName),
+            'Mobile & Electronics' => $this->electronicsProductsForShop($shopName),
+            'Grocery & Daily Needs' => $this->groceryProductsForShop($shopName),
+            'Cafe & Restaurant' => $this->cafeProductsForShop($shopName),
+            'Home & Furniture' => $this->homeProductsForShop($shopName),
+            'Sports & Fitness' => $this->sportsProductsForShop($shopName),
+            'Books & Stationery' => $this->booksProductsForShop($shopName),
+            'Other' => $this->generalProductsForShop($shopName),
             default => $this->apparelProductsForShop($shopName),
         };
     }
@@ -222,6 +234,171 @@ class DemoProductSeeder extends Seeder
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function footwearProductsForShop(string $shopName): array
+    {
+        $templates = [
+            ['name' => 'Formal Leather Shoes', 'category' => 'Men', 'brand' => 'Bata'],
+            ['name' => 'Casual Sneakers', 'category' => 'Men', 'brand' => 'Mochi'],
+            ['name' => 'Daily Wear Sandals', 'category' => 'Women', 'brand' => 'Bata'],
+            ['name' => 'Comfort Walking Shoes', 'category' => 'Women', 'brand' => 'Relaxo'],
+            ['name' => 'Kids School Shoes', 'category' => 'Kids', 'brand' => 'Bata'],
+            ['name' => 'Sports Floaters', 'category' => 'Men', 'brand' => 'Relaxo'],
+        ];
+
+        $colors = ['Black', 'Brown', 'Tan', 'Navy', 'White', 'Grey'];
+        $styles = ['Classic', 'Comfort', 'Lightweight', 'Premium', 'Everyday'];
+
+        return $this->buildDemoProducts($templates, $colors, $styles, $shopName, 24);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function electronicsProductsForShop(string $shopName): array
+    {
+        $templates = [
+            ['name' => 'Android Smartphone', 'category' => 'Mobile Phones', 'brand' => 'Samsung'],
+            ['name' => 'Wireless Earbuds', 'category' => 'Audio', 'brand' => 'boAt'],
+            ['name' => 'Bluetooth Speaker', 'category' => 'Audio', 'brand' => 'boAt'],
+            ['name' => 'Smart Watch', 'category' => 'Smart Watches', 'brand' => 'Samsung'],
+            ['name' => 'USB Type-C Cable', 'category' => 'Accessories', 'brand' => 'Other'],
+            ['name' => 'Laptop Backpack', 'category' => 'Accessories', 'brand' => 'Wildcraft'],
+            ['name' => 'Student Laptop', 'category' => 'Laptops', 'brand' => 'Samsung'],
+            ['name' => 'Water Purifier Filter', 'category' => 'Accessories', 'brand' => 'Kent'],
+        ];
+
+        $prefixes = ['Essential', 'Pro', 'Compact', 'Premium', 'Everyday', 'Travel'];
+        $modifiers = ['Black', 'Blue', 'Silver', 'White', 'Graphite'];
+
+        return $this->buildDemoProducts($templates, $prefixes, $modifiers, $shopName, 32);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function groceryProductsForShop(string $shopName): array
+    {
+        $templates = [
+            ['name' => 'Basmati Rice Pack', 'category' => 'Staples', 'brand' => 'Tata Sampann'],
+            ['name' => 'Wheat Flour Pack', 'category' => 'Staples', 'brand' => 'Tata Sampann'],
+            ['name' => 'Masala Mix', 'category' => 'Staples', 'brand' => 'Tata Sampann'],
+            ['name' => 'Potato Chips', 'category' => 'Snacks', 'brand' => 'Other'],
+            ['name' => 'Namkeen Pack', 'category' => 'Snacks', 'brand' => 'Other'],
+            ['name' => 'Fruit Juice Bottle', 'category' => 'Beverages', 'brand' => 'Other'],
+            ['name' => 'Hand Wash Refill', 'category' => 'Personal Care', 'brand' => 'Other'],
+            ['name' => 'Floor Cleaner', 'category' => 'Household', 'brand' => 'Other'],
+        ];
+
+        $prefixes = ['Family', 'Value', 'Premium', 'Daily', 'Fresh'];
+        $modifiers = ['500g', '1kg', '2kg', 'Small', 'Large'];
+
+        return $this->buildDemoProducts($templates, $prefixes, $modifiers, $shopName, 32);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function cafeProductsForShop(string $shopName): array
+    {
+        $templates = [
+            ['name' => 'Cappuccino', 'category' => 'Beverages', 'brand' => 'Other'],
+            ['name' => 'Cold Coffee', 'category' => 'Beverages', 'brand' => 'Other'],
+            ['name' => 'Veg Sandwich', 'category' => 'Fast Food', 'brand' => 'Other'],
+            ['name' => 'Cheese Burger', 'category' => 'Fast Food', 'brand' => 'Other'],
+            ['name' => 'Paneer Meal Bowl', 'category' => 'Meals', 'brand' => 'Other'],
+            ['name' => 'Chocolate Muffin', 'category' => 'Bakery', 'brand' => 'Other'],
+            ['name' => 'Brownie Slice', 'category' => 'Desserts', 'brand' => 'Other'],
+        ];
+
+        $prefixes = ['Regular', 'Large', 'Classic', 'House Special', 'Fresh'];
+        $modifiers = ['Hot', 'Iced', 'Cheesy', 'Spicy', 'Sweet'];
+
+        return $this->buildDemoProducts($templates, $prefixes, $modifiers, $shopName, 28);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function homeProductsForShop(string $shopName): array
+    {
+        $templates = [
+            ['name' => 'Wooden Side Table', 'category' => 'Furniture', 'brand' => 'Other'],
+            ['name' => 'Wall Clock', 'category' => 'Home Decor', 'brand' => 'Other'],
+            ['name' => 'Non Stick Pan', 'category' => 'Kitchen', 'brand' => 'Prestige'],
+            ['name' => 'Steel Water Bottle', 'category' => 'Kitchen', 'brand' => 'Milton'],
+            ['name' => 'Dinner Plate Set', 'category' => 'Dining', 'brand' => 'Milton'],
+            ['name' => 'Cotton Bedsheet', 'category' => 'Bedding', 'brand' => 'Bombay Dyeing'],
+            ['name' => 'Pillow Cover Set', 'category' => 'Bedding', 'brand' => 'Bombay Dyeing'],
+        ];
+
+        $prefixes = ['Classic', 'Premium', 'Compact', 'Modern', 'Daily'];
+        $modifiers = ['Brown', 'White', 'Steel', 'Floral', 'Solid'];
+
+        return $this->buildDemoProducts($templates, $prefixes, $modifiers, $shopName, 28);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function sportsProductsForShop(string $shopName): array
+    {
+        $templates = [
+            ['name' => 'Yoga Mat', 'category' => 'Fitness Equipment', 'brand' => 'Decathlon'],
+            ['name' => 'Dumbbell Pair', 'category' => 'Fitness Equipment', 'brand' => 'Decathlon'],
+            ['name' => 'Training T-Shirt', 'category' => 'Sportswear', 'brand' => 'Decathlon'],
+            ['name' => 'Running Shoes', 'category' => 'Sports Shoes', 'brand' => 'Decathlon'],
+            ['name' => 'Gym Gloves', 'category' => 'Accessories', 'brand' => 'Decathlon'],
+            ['name' => 'Outdoor Backpack', 'category' => 'Accessories', 'brand' => 'Wildcraft'],
+        ];
+
+        $prefixes = ['Beginner', 'Pro', 'Lightweight', 'Training', 'Outdoor'];
+        $modifiers = ['Black', 'Blue', 'Red', 'Grey', 'Green'];
+
+        return $this->buildDemoProducts($templates, $prefixes, $modifiers, $shopName, 24);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function booksProductsForShop(string $shopName): array
+    {
+        $templates = [
+            ['name' => 'Story Book', 'category' => 'Books', 'brand' => 'Other'],
+            ['name' => 'Exam Guide', 'category' => 'Books', 'brand' => 'Other'],
+            ['name' => 'Ruled Notebook', 'category' => 'Notebooks', 'brand' => 'Classmate'],
+            ['name' => 'Gel Pen Pack', 'category' => 'Pens', 'brand' => 'Classmate'],
+            ['name' => 'Sketch Pen Set', 'category' => 'Art Supplies', 'brand' => 'Classmate'],
+            ['name' => 'Desk Organizer', 'category' => 'Office Supplies', 'brand' => 'Other'],
+        ];
+
+        $prefixes = ['Student', 'Premium', 'Value', 'Office', 'Creative'];
+        $modifiers = ['Pack', 'Set', 'Edition', 'Large', 'Compact'];
+
+        return $this->buildDemoProducts($templates, $prefixes, $modifiers, $shopName, 24);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function generalProductsForShop(string $shopName): array
+    {
+        $templates = [
+            ['name' => 'Gift Wrapper Roll', 'category' => 'Other', 'brand' => 'Other'],
+            ['name' => 'Utility Storage Box', 'category' => 'Other', 'brand' => 'Other'],
+            ['name' => 'Household Tool Kit', 'category' => 'Other', 'brand' => 'Other'],
+            ['name' => 'Festival Decoration Pack', 'category' => 'Other', 'brand' => 'Other'],
+            ['name' => 'Travel Pouch Set', 'category' => 'Other', 'brand' => 'Other'],
+        ];
+
+        $prefixes = ['Local', 'Useful', 'Everyday', 'Budget', 'Premium'];
+        $modifiers = ['Small', 'Medium', 'Large', 'Assorted', 'Classic'];
+
+        return $this->buildDemoProducts($templates, $prefixes, $modifiers, $shopName, 20);
+    }
+
+    /**
      * @param array<int, array{name: string, category: string, brand: string}> $templates
      * @param array<int, string> $prefixes
      * @param array<int, string> $modifiers
@@ -249,6 +426,27 @@ class DemoProductSeeder extends Seeder
         }
 
         return $products;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $products
+     */
+    private function retireStaleDemoProducts(int $shopId, string $shopName, array $products, mixed $now): void
+    {
+        $wantedNames = collect($products)
+            ->pluck('name')
+            ->all();
+
+        DB::table('products')
+            ->where('shop_id', $shopId)
+            ->whereNull('deleted_at')
+            ->whereNotIn('product_name', $wantedNames)
+            ->where('description', 'like', "%is demo catalogue data for {$shopName}.%")
+            ->update([
+                'status' => 'draft',
+                'deleted_at' => $now,
+                'updated_at' => $now,
+            ]);
     }
 
     /**
@@ -315,7 +513,7 @@ class DemoProductSeeder extends Seeder
         return $rootCategories[Str::lower($name)]
             ?? $rootCategories['unisex']
             ?? $categories['fallback_by_root'][$rootCategoryId]
-            ?? $categories['fallback'];
+            ?? $rootCategoryId;
     }
 
     private function rootCategoryId(int $categoryId, mixed $byId): int

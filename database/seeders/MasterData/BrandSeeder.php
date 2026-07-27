@@ -26,10 +26,13 @@ class BrandSeeder extends Seeder
             'Biba',
             'Blackberrys',
             'Bombay Dyeing',
+            'boAt',
             'Cambridge',
             'Caprese',
             'Chhabra 555',
             'Colorbar',
+            'Classmate',
+            'Decathlon',
             'Fabindia',
             'Flying Machine',
             'Gini & Jony',
@@ -39,9 +42,11 @@ class BrandSeeder extends Seeder
             'J. Hampstead',
             'John Players',
             'Kalyan Silks',
+            'Kent',
             'Libas',
             'Louis Philippe',
             'Lux Cozi',
+            'Milton',
             'Maybelline',
             'Manyavar',
             'Max Fashion',
@@ -57,9 +62,11 @@ class BrandSeeder extends Seeder
             'Park Avenue',
             'Peter England',
             'Pothys',
+            'Prestige',
             'Rangriti',
             'Raymond',
             'Relaxo',
+            'Samsung',
             'Lavie',
             'Lakme',
             'Lino Perros',
@@ -68,10 +75,12 @@ class BrandSeeder extends Seeder
             'Siyaram\'s',
             'Soch',
             'Spykar',
+            'Tata Sampann',
             'Swayamvar',
             'Trends',
             'Van Heusen',
             'Vardhman',
+            'Wildcraft',
             'Westside',
             'W for Woman',
             'Zodiac',
@@ -119,13 +128,28 @@ class BrandSeeder extends Seeder
         $beautyBrands = ['Colorbar', 'Lakme', 'Maybelline', 'Nykaa Cosmetics'];
         $bagBrands = ['Caprese', 'Lavie', 'Lino Perros', 'Mochi'];
         $footwearBrands = ['Bata', 'Relaxo', 'Mochi'];
-        $homeBrands = ['Bombay Dyeing'];
+        $electronicsBrands = ['boAt', 'Kent', 'Samsung'];
+        $groceryBrands = ['Tata Sampann'];
+        $homeBrands = ['Bombay Dyeing', 'Milton', 'Prestige'];
+        $sportsBrands = ['Decathlon', 'Wildcraft'];
+        $booksBrands = ['Classmate'];
         $genericBrands = ['Other'];
 
         Brand::query()
             ->whereNull('deleted_at')
             ->get()
-            ->each(function (Brand $brand) use ($rootCategories, $beautyBrands, $bagBrands, $footwearBrands, $homeBrands, $genericBrands): void {
+            ->each(function (Brand $brand) use (
+                $rootCategories,
+                $beautyBrands,
+                $bagBrands,
+                $footwearBrands,
+                $electronicsBrands,
+                $groceryBrands,
+                $homeBrands,
+                $sportsBrands,
+                $booksBrands,
+                $genericBrands,
+            ): void {
                 $categoryNames = ['Apparel'];
 
                 if (in_array($brand->name, $beautyBrands, true)) {
@@ -134,8 +158,16 @@ class BrandSeeder extends Seeder
                     $categoryNames = ['Jewellery & Accessories'];
                 } elseif (in_array($brand->name, $footwearBrands, true)) {
                     $categoryNames = ['Footwear'];
+                } elseif (in_array($brand->name, $electronicsBrands, true)) {
+                    $categoryNames = ['Mobile & Electronics'];
+                } elseif (in_array($brand->name, $groceryBrands, true)) {
+                    $categoryNames = ['Grocery & Daily Needs'];
                 } elseif (in_array($brand->name, $homeBrands, true)) {
                     $categoryNames = ['Home & Furniture'];
+                } elseif (in_array($brand->name, $sportsBrands, true)) {
+                    $categoryNames = ['Sports & Fitness'];
+                } elseif (in_array($brand->name, $booksBrands, true)) {
+                    $categoryNames = ['Books & Stationery'];
                 } elseif (in_array($brand->name, $genericBrands, true)) {
                     $categoryNames = $rootCategories->keys()->all();
                 }

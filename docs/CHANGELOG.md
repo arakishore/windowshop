@@ -21,7 +21,16 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) co
 - Merchant-side Add Shop module with Shop Type and active/inactive status selection.
 - Category-level product attribute mappings with an `is_variant` flag.
 - Admin Product Attributes tab for category-based attribute selection.
+- Expanded seeded apparel attributes with festival, season, style, length, waist rise, closure, care, and country-of-origin values.
+- Expanded seeded product attributes and root-category mappings for footwear, electronics, beauty, jewellery, grocery, cafe, home, sports, books, and other shop types.
+- Admin Attribute Reference page for viewing active product attributes, values, and mapped shop types in one read-only table.
+- Demo merchants, shops, categories, brands, and products now cover every active root shop type.
 - Merchant product management with variants, images, barcode generation, archive/restore, duplication, bulk actions, Description, and SEO actions.
+- Merchant product create now preselects the active shop and shows only categories under that shop type.
+- Each parent product category now has a selectable `Other` child category for fallback product classification.
+- Merchant read-only Categories & Attributes catalogue page scoped to the active shop's shop type.
+- Merchant catalogue master request workflow with admin review statuses for missing categories and attributes.
+- Approved catalogue requests now apply the requested category or attribute master record.
 - Merchant POS with active-shop product grid, barcode search, auto-add-to-cart, cart quantity controls, held carts, recent sales, and checkout.
 - POS customer selection modal with customer search, delivery address selection, and address creation.
 - POS line item discounts and order discounts with percent/amount modes, validation, live previews, discount badges, and receipt totals.

@@ -163,7 +163,15 @@ This document tracks the modules and user-facing features currently implemented 
 - Product duplicate action
 - Product archive and restore from archive
 - Product tabbed edit flow
+- Product create category list is scoped to the active shop's shop type
+- Each parent product category has a selectable `Other` child category for fallback product classification
+- Read-only merchant Categories & Attributes page scoped to the active shop's shop type
+- Merchant catalogue master request flow for missing category/attribute suggestions
+- Admin catalogue request review with pending, approved, rejected, and needs-info statuses
+- Approved category requests create/activate the category under the requested parent
+- Approved attribute requests create/activate and map the attribute to the shop type
 - Category-scoped attribute selection
+- Apparel seed attributes include occasion/festival, season, style, length, waist rise, closure, care, and country of origin
 - Variant generation
 - Variant update and bulk update
 - Product barcode generation

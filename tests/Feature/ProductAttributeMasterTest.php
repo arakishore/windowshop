@@ -79,6 +79,40 @@ class ProductAttributeMasterTest extends TestCase
             'neck',
             'pattern',
             'occasion',
+            'festival',
+            'season',
+            'style',
+            'length',
+            'waist_rise',
+            'closure',
+            'care',
+            'country_of_origin',
+            'brand_model',
+            'storage',
+            'ram',
+            'warranty',
+            'connectivity',
+            'pack_size',
+            'net_quantity',
+            'flavor',
+            'shelf_life',
+            'diet_type',
+            'food_type',
+            'spice_level',
+            'portion_size',
+            'shade',
+            'skin_type',
+            'finish',
+            'form',
+            'dimensions',
+            'room_type',
+            'assembly_required',
+            'sport_type',
+            'weight',
+            'language',
+            'binding',
+            'subject',
+            'class_standard',
         ], ProductAttributeGroup::query()
             ->orderBy('sort_order')
             ->pluck('code')
@@ -97,6 +131,20 @@ class ProductAttributeMasterTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame('Daily Wear', $occasion->values->firstWhere('code', 'daily-wear')?->name);
+
+        $festival = ProductAttributeGroup::query()
+            ->where('code', 'festival')
+            ->with('values')
+            ->firstOrFail();
+
+        $this->assertSame('Diwali', $festival->values->firstWhere('code', 'diwali')?->name);
+
+        $shade = ProductAttributeGroup::query()
+            ->where('code', 'shade')
+            ->with('values')
+            ->firstOrFail();
+
+        $this->assertSame('Caramel', $shade->values->firstWhere('code', 'caramel')?->name);
     }
 
     public function test_apparel_attribute_mapping_marks_only_color_and_size_as_variant(): void
@@ -160,5 +208,49 @@ class ProductAttributeMasterTest extends TestCase
                 ->pluck('group.code')
                 ->all(),
         );
+    }
+
+    public function test_attribute_seeder_maps_relevant_attributes_to_each_root_shop_type(): void
+    {
+        foreach ([
+            'Apparel',
+            'Footwear',
+            'Mobile & Electronics',
+            'Beauty & Cosmetics',
+            'Jewellery & Accessories',
+            'Grocery & Daily Needs',
+            'Cafe & Restaurant',
+            'Home & Furniture',
+            'Sports & Fitness',
+            'Books & Stationery',
+            'Other',
+        ] as $index => $name) {
+            ProductCategory::query()->create([
+                'parent_id' => null,
+                'name' => $name,
+                'slug' => 'root-'.($index + 1),
+                'status' => 'active',
+                'sort_order' => $index + 1,
+            ]);
+        }
+
+        $this->seed(ProductAttributeSeeder::class);
+
+        $mappedRoots = DB::table('product_category_attribute_groups as mappings')
+            ->join('product_categories as roots', 'roots.id', '=', 'mappings.root_product_category_id')
+            ->join('product_attribute_groups as groups', 'groups.id', '=', 'mappings.product_attribute_group_id')
+            ->select('roots.name as root_name', 'groups.code')
+            ->get()
+            ->groupBy('root_name')
+            ->map(fn ($rows) => $rows->pluck('code')->all());
+
+        $this->assertContains('shade', $mappedRoots->get('Beauty & Cosmetics'));
+        $this->assertContains('storage', $mappedRoots->get('Mobile & Electronics'));
+        $this->assertContains('diet_type', $mappedRoots->get('Grocery & Daily Needs'));
+        $this->assertContains('food_type', $mappedRoots->get('Cafe & Restaurant'));
+        $this->assertContains('room_type', $mappedRoots->get('Home & Furniture'));
+        $this->assertContains('sport_type', $mappedRoots->get('Sports & Fitness'));
+        $this->assertContains('language', $mappedRoots->get('Books & Stationery'));
+        $this->assertContains('warranty', $mappedRoots->get('Other'));
     }
 }

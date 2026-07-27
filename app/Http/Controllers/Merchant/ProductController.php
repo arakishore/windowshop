@@ -556,15 +556,13 @@ class ProductController extends Controller
             ->get();
         $paths = $this->buildCategoryPaths($categories);
 
-        return $categories
+        return $this->flattenCategoryTree($categories
             ->map(function (ProductCategory $category) use ($paths): ProductCategory {
                 return $category
                     ->setAttribute('full_path_label', $paths[$category->getKey()] ?? $category->name)
                     ->setAttribute('root_category_id', $category->rootCategoryId())
                     ->setAttribute('is_selectable_leaf', ! $category->isRoot() && $category->isLeaf());
-            })
-            ->sortBy('full_path_label', SORT_NATURAL | SORT_FLAG_CASE)
-            ->values();
+            }));
     }
 
     private function brands(Shop $shop, ?Product $product = null): Collection
@@ -636,6 +634,24 @@ class ProductController extends Controller
         }
 
         return implode(' > ', $names);
+    }
+
+    private function flattenCategoryTree(Collection $categories, ?int $parentId = null): Collection
+    {
+        $result = collect();
+        $children = $categories
+            ->filter(fn (ProductCategory $category): bool => $category->parent_id === $parentId)
+            ->sortBy([
+                ['sort_order', 'asc'],
+                ['name', 'asc'],
+            ]);
+
+        foreach ($children as $category) {
+            $result->push($category);
+            $result = $result->concat($this->flattenCategoryTree($categories, $category->getKey()));
+        }
+
+        return $result->values();
     }
 
     private function nullable(mixed $value): ?string

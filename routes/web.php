@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
+use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupValueController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryAttributeGroupController;
@@ -39,6 +40,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('master/brands', BrandController::class)
             ->except(['show'])
             ->names('master.brands');
+        Route::get('master/catalogue-requests', [CatalogueMasterRequestController::class, 'index'])
+            ->name('master.catalogue-requests.index');
+        Route::put('master/catalogue-requests/{catalogueMasterRequest}', [CatalogueMasterRequestController::class, 'update'])
+            ->name('master.catalogue-requests.update');
         Route::get('master/product-categories/{productCategory}/attribute-groups', [ProductCategoryAttributeGroupController::class, 'edit'])
             ->name('master.product-categories.attribute-groups.edit');
         Route::put('master/product-categories/{productCategory}/attribute-groups', [ProductCategoryAttributeGroupController::class, 'update'])
@@ -46,6 +51,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('master/product-categories', ProductCategoryController::class)
             ->parameters(['product-categories' => 'productCategory'])
             ->names('master.product-categories');
+        Route::get('master/product-attribute-reference', [ProductAttributeGroupController::class, 'reference'])
+            ->name('master.product-attribute-reference.index');
         Route::resource('master/product-attributes', ProductAttributeGroupController::class)
             ->except(['show'])
             ->parameters(['product-attributes' => 'productAttribute'])

@@ -4,6 +4,7 @@ use App\Http\Controllers\Merchant\Auth\MerchantAuthController;
 use App\Http\Controllers\Merchant\Auth\MerchantPasswordController;
 use App\Http\Controllers\Merchant\Auth\MerchantProfileController;
 use App\Http\Controllers\Merchant\BarcodeLabelController;
+use App\Http\Controllers\Merchant\CatalogueMasterController;
 use App\Http\Controllers\Merchant\CustomerController;
 use App\Http\Controllers\Merchant\CustomerAddressController;
 use App\Http\Controllers\Merchant\MerchantDetailsController;
@@ -54,6 +55,8 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::post('/pos/checkout', [PosController::class, 'checkout'])->name('pos.checkout');
         Route::get('/pos/recent-sales', [PosController::class, 'recentSales'])->name('pos.recent-sales');
         Route::get('/pos/orders/{order}/receipt', [PosController::class, 'receipt'])->name('pos.receipt');
+        Route::get('/catalogue/masters', [CatalogueMasterController::class, 'index'])->name('catalogue-masters.index');
+        Route::post('/catalogue/masters/requests', [CatalogueMasterController::class, 'store'])->name('catalogue-masters.requests.store');
         Route::get('/sales', [SalesHistoryController::class, 'index'])->name('sales.index');
         Route::get('/sales/{order}', [SalesHistoryController::class, 'show'])->name('sales.show');
         Route::get('/sales/{order}/refund', [SalesHistoryController::class, 'refund'])->name('sales.refund');

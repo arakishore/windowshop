@@ -99,6 +99,11 @@ class MerchantProfile extends Model
         return $this->hasMany(ReturnReason::class, 'merchant_id');
     }
 
+    public function catalogueMasterRequests(): HasMany
+    {
+        return $this->hasMany(CatalogueMasterRequest::class, 'merchant_id');
+    }
+
     public function businessAddress(): HasOne
     {
         return $this->hasOne(MerchantAddress::class, 'merchant_id')

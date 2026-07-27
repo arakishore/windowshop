@@ -681,6 +681,34 @@ All merchant-owned foundation tables use the `merchant_` prefix. The merchant ro
 - **Foreign keys:** `merchant_id` -> `merchant_profiles.id` ON DELETE CASCADE; `reviewed_by` -> `users.id` ON DELETE SET NULL.
 - **Soft deletes:** No; verification history is retained while its merchant exists.
 
+### `catalogue_master_requests`
+
+**Purpose:** Stores merchant requests for missing product categories or product attributes, reviewed manually by admin in V1.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGINT UNSIGNED | Primary key |
+| `uuid` | CHAR(36) | Unique public identifier exposed in URLs |
+| `merchant_id` | BIGINT UNSIGNED | References `merchant_profiles.id` |
+| `shop_id` | BIGINT UNSIGNED | Active shop that raised the request |
+| `root_product_category_id` | BIGINT UNSIGNED | Shop type/root category context |
+| `request_type` | VARCHAR(20) | `category` or `attribute` |
+| `suggested_name` | VARCHAR(255) | Merchant suggested category/attribute name |
+| `parent_product_category_id` | BIGINT UNSIGNED, nullable | Suggested parent category for category requests |
+| `description` | TEXT, nullable | Merchant note explaining why it is needed |
+| `example_product_name` | VARCHAR(255), nullable | Example product needing this master value |
+| `status` | VARCHAR(20) | `pending`, `approved`, `rejected`, `needs_info` |
+| `admin_note` | TEXT, nullable | Admin response or rejection/needs-info note |
+| `requested_by` | BIGINT UNSIGNED, nullable | Merchant user who submitted the request |
+| `reviewed_by` | BIGINT UNSIGNED, nullable | Admin user who reviewed the request |
+| `reviewed_at` | TIMESTAMP, nullable | Admin review timestamp |
+| `created_at`, `updated_at` | TIMESTAMP, nullable | Laravel timestamps |
+
+- **Unique constraints:** `uuid`.
+- **Indexes:** (`merchant_id`, `shop_id`, `status`), (`request_type`, `status`); foreign keys also provide indexes.
+- **Foreign keys:** `merchant_id` -> `merchant_profiles.id` ON DELETE CASCADE; `shop_id` -> `shops.id` ON DELETE CASCADE; root/parent categories reference `product_categories.id`; user references use ON DELETE SET NULL.
+- **Soft deletes:** No; requests remain as lightweight review history.
+
 ### Merchant Relationship Summary
 
 ```text
@@ -690,6 +718,7 @@ users
     +-- merchant_documents
     +-- merchant_bank_accounts
     +-- merchant_verifications
+    +-- catalogue_master_requests
 ```
 
 After merchant business data exists, user records should be deactivated or soft deleted instead of physically deleted except under an explicitly reviewed data-retention/legal workflow. Physical deletion of a user cascades the merchant profile and related merchant records by design.

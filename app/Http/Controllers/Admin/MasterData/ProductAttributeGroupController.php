@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\MasterData\StoreProductAttributeGroupRequest;
 use App\Http\Requests\Admin\MasterData\UpdateProductAttributeGroupRequest;
 use App\Models\ProductAttributeGroup;
+use App\Models\ProductCategory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -22,6 +23,29 @@ class ProductAttributeGroupController extends Controller
 
         return view('admin.master-data.product-attributes.index', [
             'groups' => $groups,
+        ]);
+    }
+
+    public function reference(): View
+    {
+        $groups = ProductAttributeGroup::query()
+            ->with([
+                'values' => fn ($query) => $query->where('status', 'active'),
+                'categoryMappings.rootCategory',
+            ])
+            ->where('status', 'active')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        return view('admin.master-data.product-attributes.reference', [
+            'groups' => $groups,
+            'rootCategories' => ProductCategory::query()
+                ->whereNull('parent_id')
+                ->where('status', 'active')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 

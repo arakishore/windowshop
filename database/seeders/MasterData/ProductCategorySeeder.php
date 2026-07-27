@@ -72,6 +72,8 @@ class ProductCategorySeeder extends Seeder
                 'Mobile Phones',
                 'Laptops',
                 'Accessories',
+                'Audio',
+                'Smart Watches',
             ]);
 
             $beauty = $this->createCategory('Beauty & Cosmetics', null, 4);
@@ -88,12 +90,52 @@ class ProductCategorySeeder extends Seeder
                 'Accessories',
             ]);
 
-            $this->createCategory('Grocery & Daily Needs', null, 6);
-            $this->createCategory('Cafe & Restaurant', null, 7);
-            $this->createCategory('Home & Furniture', null, 8);
-            $this->createCategory('Sports & Fitness', null, 9);
-            $this->createCategory('Books & Stationery', null, 10);
+            $grocery = $this->createCategory('Grocery & Daily Needs', null, 6);
+            $this->createChildren($grocery, [
+                'Staples',
+                'Snacks',
+                'Beverages',
+                'Personal Care',
+                'Household',
+            ]);
+
+            $cafe = $this->createCategory('Cafe & Restaurant', null, 7);
+            $this->createChildren($cafe, [
+                'Beverages',
+                'Fast Food',
+                'Meals',
+                'Bakery',
+                'Desserts',
+            ]);
+
+            $home = $this->createCategory('Home & Furniture', null, 8);
+            $this->createChildren($home, [
+                'Furniture',
+                'Home Decor',
+                'Kitchen',
+                'Dining',
+                'Bedding',
+            ]);
+
+            $sports = $this->createCategory('Sports & Fitness', null, 9);
+            $this->createChildren($sports, [
+                'Fitness Equipment',
+                'Sportswear',
+                'Sports Shoes',
+                'Accessories',
+            ]);
+
+            $books = $this->createCategory('Books & Stationery', null, 10);
+            $this->createChildren($books, [
+                'Books',
+                'Notebooks',
+                'Pens',
+                'Art Supplies',
+                'Office Supplies',
+            ]);
             $this->createCategory('Other', null, 11);
+
+            $this->ensureOtherChildForParentCategories();
         });
     }
 
@@ -134,5 +176,19 @@ class ProductCategorySeeder extends Seeder
         ]);
 
         return $category->refresh();
+    }
+
+    private function ensureOtherChildForParentCategories(): void
+    {
+        ProductCategory::query()
+            ->whereNull('deleted_at')
+            ->whereRaw('LOWER(TRIM(name)) <> ?', ['other'])
+            ->whereHas('children', fn ($query) => $query->whereNull('deleted_at')->whereRaw('LOWER(TRIM(name)) <> ?', ['other']))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->each(function (ProductCategory $parent): void {
+                $this->createCategory('Other', $parent, 99);
+            });
     }
 }

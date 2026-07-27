@@ -97,6 +97,16 @@
 									</a>
 								</li>
 								<li class="nav-item">
+									<a href="{{ route('admin.master.product-attribute-reference.index') }}" class="nav-link {{ request()->routeIs('admin.master.product-attribute-reference.*') ? 'active' : '' }}">
+										Attribute Reference
+									</a>
+								</li>
+								<li class="nav-item">
+									<a href="{{ route('admin.master.catalogue-requests.index') }}" class="nav-link {{ request()->routeIs('admin.master.catalogue-requests.*') ? 'active' : '' }}">
+										Catalogue Requests
+									</a>
+								</li>
+								<li class="nav-item">
 									<a href="{{ route('admin.master.description-templates.index') }}" class="nav-link {{ request()->routeIs('admin.master.description-templates.*') ? 'active' : '' }}">
 										Description Templates
 									</a>

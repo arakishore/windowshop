@@ -1,5 +1,5 @@
 @php
-    $selectedShopId = old('shop_id', $product?->shop_id);
+    $selectedShopId = old('shop_id', $product?->shop_id ?? ($shops->count() === 1 ? $shops->first()->getKey() : null));
     $selectedCategoryId = old('product_category_id', $product?->product_category_id);
     $selectedBrandId = old('brand_id', $product?->brand_id);
     $selectedStatus = old('status', $product?->status ?? 'draft');

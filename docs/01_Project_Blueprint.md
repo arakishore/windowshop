@@ -56,6 +56,8 @@ References:
 ```text
 Merchant creates product
 -> Product category and attributes are selected
+-> Merchant can review available categories and attributes for the active shop type
+-> Missing categories or attributes can be requested for admin review
 -> Variants are created or generated
 -> MRP, selling price, stock, SKU, and barcode are stored per variant
 -> Product becomes searchable in active-shop POS

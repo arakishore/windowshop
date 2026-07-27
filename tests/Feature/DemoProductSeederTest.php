@@ -78,8 +78,47 @@ class DemoProductSeederTest extends TestCase
         $this->assertTrue($bagProducts->every(
             fn ($product): bool => $product->root_category === 'Jewellery & Accessories'
                 && $product->category === 'Bags'
-                && ! str_contains(strtolower((string) $product->product_name), 't-shirt'),
+            && ! str_contains(strtolower((string) $product->product_name), 't-shirt'),
         ));
+    }
+
+    public function test_demo_data_covers_every_active_root_shop_type_with_products(): void
+    {
+        $this->seed(SystemFoundationSeeder::class);
+        $this->seed(DemoMerchantSeeder::class);
+        $this->seed(DemoShopSeeder::class);
+        $this->seed(DemoProductSeeder::class);
+
+        $rootCategories = DB::table('product_categories')
+            ->whereNull('parent_id')
+            ->where('status', 'active')
+            ->whereNull('deleted_at')
+            ->pluck('name', 'id');
+
+        $this->assertGreaterThan(0, $rootCategories->count());
+
+        foreach ($rootCategories as $rootCategoryId => $rootCategoryName) {
+            $shopIds = DB::table('shops')
+                ->where('root_product_category_id', $rootCategoryId)
+                ->whereNull('deleted_at')
+                ->pluck('id');
+
+            $this->assertGreaterThan(
+                0,
+                $shopIds->count(),
+                "Missing demo shop for {$rootCategoryName}.",
+            );
+
+            $this->assertGreaterThan(
+                0,
+                DB::table('products')
+                    ->whereIn('shop_id', $shopIds)
+                    ->where('root_product_category_id', $rootCategoryId)
+                    ->whereNull('deleted_at')
+                    ->count(),
+                "Missing demo products for {$rootCategoryName}.",
+            );
+        }
     }
 
     private function productsForShop(string $shopSlug)
