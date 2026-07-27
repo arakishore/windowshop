@@ -298,3 +298,9 @@ Deferred:
 - Screenshots from browser verification.
 - Exchange policy settings such as exchange window, bill required, item condition, and category/product eligibility.
 - Dedicated Exchange-module reason list, separate from refund/return reasons.
+- Non-restocked Returns report:
+  - Shows refund and exchange returned items where stock was not incremented.
+  - Default view shows the last 30 days.
+  - Date filters are allowed only within the last 1 year.
+  - Older records stay in refund/exchange audit tables but are hidden from this operational report.
+  - Suggested filters: date range, store, Refund/Exchange type, product/SKU, customer, cashier, and review status.

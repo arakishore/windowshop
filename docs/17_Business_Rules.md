@@ -80,6 +80,7 @@ This is the canonical register for approved WindowShop business behavior. Each r
 - Reservations are atomic, time-bounded, and released on expiry or cancellation.
 - Every manual adjustment records actor, quantity delta, reason, and reference.
 - Sellable, reserved, damaged, returned, and unavailable quantities remain distinguishable.
+- Non-restocked return/exchange items are audit records; operational reports should default to recent records and show at most the last 1 year, without deleting older source records.
 
 ## Coupons
 

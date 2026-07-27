@@ -393,6 +393,10 @@ This document tracks the modules and user-facing features currently implemented 
   - Active/inactive return reason status
 - Default merchant return reasons seeded during merchant settings initialization
 - `Exchange` is excluded from default return reasons and hidden from refund reason selection
+- Planned Non-restocked Returns report:
+  - Lists refund/exchange returned items where `Restock` was unchecked
+  - Defaults to last 30 days and limits date filtering to the last 1 year
+  - Keeps older audit records in source refund/exchange tables, but hides them from this operational report
 
 ## Order Foundation
 
