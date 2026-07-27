@@ -286,8 +286,8 @@ Routes and checks:
 Tests:
 
 - Added exchange tests for historical discounted returned value, replacement source, stock updates, exchangeable quantity after refunds/exchanges, and credit adjustment.
-- Added regression coverage for Search/Scan + Dropdown default, Search-only mode, Dropdown-only mode, tax-aware returned value, report exclusion, settlement difference, and hidden Exchange return reasons.
-- Exact result: `php artisan test tests\Feature\MerchantSettingsFoundationTest.php tests\Feature\MerchantPosTest.php` passed, 58 tests and 418 assertions.
+- Added regression coverage for Search/Scan + Dropdown default, Search-only mode, Dropdown-only mode, original price display, exchange help modal, non-restock guidance, tax-aware returned value, report exclusion, settlement difference, and hidden Exchange return reasons.
+- Exact result: `php artisan test tests\Feature\MerchantSettingsFoundationTest.php tests\Feature\MerchantPosTest.php` passed, 58 tests and 425 assertions.
 
 Deferred:
 

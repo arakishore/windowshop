@@ -47,10 +47,16 @@
                 </div>
                 <div class="text-muted">Original: {{ $order->order_number }}. Returned value uses the original sold line price after item discount.</div>
             </div>
-            <button type="submit" class="btn btn-warning">
-                <i class="ph-swap me-2"></i>
-                Process exchange
-            </button>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#exchangeHelpModal" aria-label="How exchange works">
+                    <i class="ph-question me-1"></i>
+                    Help
+                </button>
+                <button type="submit" class="btn btn-warning">
+                    <i class="ph-swap me-2"></i>
+                    Process exchange
+                </button>
+            </div>
         </div>
 
         @if($errors->any())
@@ -86,6 +92,7 @@
                             <thead class="table-light">
                                 <tr>
                                     <th>Product</th>
+                                    <th class="text-end" style="width: 180px;">Original prices</th>
                                     <th style="width: 220px;">Exchange qty</th>
                                     <th class="text-end">Return value</th>
                                     <th style="width: 190px;">Stock</th>
@@ -101,6 +108,11 @@
                                         <td>
                                             <div class="fw-semibold">{{ $item->product_name }}</div>
                                             <code>{{ $item->sku ?: $item->barcode ?: '-' }}</code>
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="small text-muted">MRP {{ $money($item->unit_mrp) }}</div>
+                                            <div class="small text-muted">Selling {{ $money($item->unit_price) }}</div>
+                                            <div class="fw-semibold">Paid / item {{ $money($unitReturnValue) }}</div>
                                         </td>
                                         <td>
                                             <input
@@ -229,6 +241,65 @@
             </div>
         </div>
     </form>
+
+    <div class="modal fade" id="exchangeHelpModal" tabindex="-1" aria-labelledby="exchangeHelpModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exchangeHelpModalLabel">How exchange works</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="fw-semibold mb-2">Process</div>
+                        <ol class="mb-0 ps-3">
+                            <li>Scan or add the old item from the original sale.</li>
+                            <li>Set the exchange quantity and keep Restock checked only if the item returns to stock.</li>
+                            <li>Add the replacement item by scan, SKU, name, or dropdown.</li>
+                            <li>Collect extra, refund balance, or complete an even exchange.</li>
+                        </ol>
+                    </div>
+                    <div class="border rounded p-3 bg-light">
+                        <div class="fw-semibold mb-2">Example only</div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Old item MRP</span>
+                            <span>{{ $money(1999) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Old item selling price</span>
+                            <span>{{ $money(1499) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Paid / item after discount</span>
+                            <span>{{ $money(1399) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Replacement item</span>
+                            <span>{{ $money(1699) }}</span>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-between fw-semibold">
+                            <span>Customer pays extra</span>
+                            <span>{{ $money(300) }}</span>
+                        </div>
+                    </div>
+                    <div class="text-muted small mt-3">
+                        Exchange value always uses the original paid item value from the old bill, not today's product price.
+                    </div>
+                    <div class="mt-3">
+                        <div class="fw-semibold mb-2">Do not restock if</div>
+                        <ul class="mb-0 ps-3">
+                            <li>The item is damaged or used.</li>
+                            <li>The seal or packaging is broken.</li>
+                            <li>The item is expiry-sensitive and cannot be resold.</li>
+                            <li>The returned item condition is unclear.</li>
+                            <li>Manager approval says it should stay out of stock.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')

@@ -45,6 +45,8 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) co
 - Refund and exchange line stock controls now use positive `Restock` wording instead of negative `Do NOT restock` wording.
 - Exchange returned-value calculation is isolated and tax-aware; replacement order operational paid amount is excluded from sales/collection reporting.
 - Documented that Exchange is a separate workflow/policy concept, not a refund/return reason.
+- Exchange screen now shows original MRP, selling price, and paid amount per item beside exchange quantity.
+- Exchange screen now includes a static help modal explaining the exchange flow, example, and non-restock guidance.
 
 ### Changed
 

@@ -368,6 +368,8 @@ This document tracks the modules and user-facing features currently implemented 
   - Original line quantity selection
   - Old item scan/search to increment returned line quantities
   - Remaining exchangeable quantity calculation
+  - Original MRP, selling price, and paid amount per item shown beside exchange quantity for cashier verification
+  - Static "How exchange works" help modal with a simple exchange example and non-restock guidance
   - Returned value based on original tax-exclusive order-item sold value after item discount plus prorated line tax
   - Replacement item scan/search by barcode, SKU, or product name using POS search behavior
   - Exact barcode/SKU replacement matches can be added without a dropdown
