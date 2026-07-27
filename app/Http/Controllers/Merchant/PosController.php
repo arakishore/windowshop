@@ -419,6 +419,8 @@ class PosController extends Controller
 
         $orders = Order::query()
             ->where('shop_id', $shop->getKey())
+            // Keep recent sales as real POS collections only. Exchange replacement
+            // orders are operational records; settlement lives on order_exchanges.
             ->where('created_source', Order::SOURCE_POS)
             ->where('order_status', Order::STATUS_COMPLETED)
             ->latest()

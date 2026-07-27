@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\OrderExchange;
 use App\Models\ReturnReason;
 use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
+use App\Services\Merchant\MerchantSettingsService;
 use App\Services\Merchant\MerchantShopContextService;
+use App\Services\Order\OrderExchangeService;
 use App\Services\Order\OrderRefundService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +22,9 @@ class SalesHistoryController extends Controller
     public function __construct(
         private readonly MerchantShopContextService $shopContextService,
         private readonly AdminSettingsService $adminSettings,
+        private readonly MerchantSettingsService $settings,
         private readonly OrderRefundService $refundService,
+        private readonly OrderExchangeService $exchangeService,
     ) {
     }
 
@@ -38,6 +43,9 @@ class SalesHistoryController extends Controller
         $query = Order::query()
             ->with(['customer', 'createdBy'])
             ->where('shop_id', $shop->getKey())
+            // Exchange replacement orders carry operational paid status so receipts/stock work,
+            // but actual newly collected/refunded money lives on order_exchanges settlement fields.
+            // Sales and collection reports must therefore stay limited to original POS sales.
             ->where('created_source', Order::SOURCE_POS)
             ->where('order_status', Order::STATUS_COMPLETED)
             ->when($filters['payment_method'] !== '', fn ($query) => $query->where('payment_method', $filters['payment_method']))
@@ -81,6 +89,7 @@ class SalesHistoryController extends Controller
             ],
             'customers' => Order::query()
                 ->where('shop_id', $shop->getKey())
+                ->where('created_source', Order::SOURCE_POS)
                 ->whereNotNull('customer_id')
                 ->select('customer_id', 'customer_name')
                 ->distinct()
@@ -97,8 +106,63 @@ class SalesHistoryController extends Controller
 
         return view('merchant.sales.show', [
             'activeShop' => $shop,
-            'order' => $order->load(['items', 'createdBy', 'refunds.items', 'customer']),
+            'order' => $order->load(['items', 'createdBy', 'refunds.items', 'exchanges.replacementOrder', 'customer']),
             'refundableQuantities' => $this->refundService->refundableQuantities($order->loadMissing('items')),
+            'exchangeableQuantities' => $this->exchangeService->exchangeableQuantities($order->loadMissing('items')),
+            'posCurrency' => $this->adminSettings->currencyConfig(),
+        ]);
+    }
+
+    public function exchange(Request $request, Order $order): View
+    {
+        $shop = $this->authorizeOrder($request, $order);
+        $order->load(['items', 'exchanges.items']);
+
+        return view('merchant.sales.exchange', [
+            'activeShop' => $shop,
+            'order' => $order,
+            'exchangeableQuantities' => $this->exchangeService->exchangeableQuantities($order),
+            'replacementVariants' => $this->replacementSelector((int) $shop->merchant_id) !== 'search'
+                ? $this->replacementVariants($shop)
+                : collect(),
+            'replacementSelector' => $this->replacementSelector((int) $shop->merchant_id),
+            'paymentMethods' => $this->paymentMethods(),
+            'posCurrency' => $this->adminSettings->currencyConfig(),
+        ]);
+    }
+
+    public function processExchange(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+        $data = $request->validate([
+            'settlement_method' => ['required', Rule::in(array_keys($this->paymentMethods()))],
+            'notes' => ['nullable', 'string', 'max:500'],
+            'returned_items' => ['required', 'array'],
+            'returned_items.*.quantity' => ['nullable', 'integer', 'min:0'],
+            'returned_items.*.restock' => ['nullable', 'boolean'],
+            'returned_items.*.do_not_restock' => ['nullable', 'boolean'],
+            'replacement_items' => ['required', 'array'],
+            'replacement_items.*.product_variant_id' => ['nullable', 'integer'],
+            'replacement_items.*.quantity' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $exchange = $this->exchangeService->create($order, $data, $request->user());
+
+        return redirect()
+            ->route('merchant.sales.exchange.receipt', $exchange)
+            ->with('success', 'Exchange processed successfully.');
+    }
+
+    public function exchangeReceipt(Request $request, OrderExchange $exchange): View
+    {
+        $shop = $this->activeShop($request)->load(['city', 'merchant']);
+        abort_unless((int) $exchange->shop_id === (int) $shop->getKey(), 404);
+        abort_unless((int) $exchange->merchant_id === (int) $shop->merchant_id, 404);
+
+        return view('merchant.sales.exchange-receipt', [
+            'activeShop' => $shop,
+            'exchange' => $exchange->load(['items.orderItem', 'replacementOrder.items', 'originalOrder', 'createdBy']),
+            'autoPrint' => $request->boolean('print'),
             'posCurrency' => $this->adminSettings->currencyConfig(),
         ]);
     }
@@ -114,6 +178,7 @@ class SalesHistoryController extends Controller
             'returnReasons' => ReturnReason::query()
                 ->where('merchant_id', $shop->merchant_id)
                 ->where('status', ReturnReason::STATUS_ACTIVE)
+                ->where('code', '!=', 'exchange')
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
@@ -132,6 +197,7 @@ class SalesHistoryController extends Controller
             'notes' => ['nullable', 'string', 'max:500'],
             'items' => ['required', 'array'],
             'items.*.quantity' => ['nullable', 'integer', 'min:0'],
+            'items.*.restock' => ['nullable', 'boolean'],
             'items.*.do_not_restock' => ['nullable', 'boolean'],
         ]);
 
@@ -167,6 +233,28 @@ class SalesHistoryController extends Controller
         return $shop;
     }
 
+    private function replacementSelector(int $merchantId): string
+    {
+        $selector = (string) $this->settings->get($merchantId, 'pos', 'exchange.replacement_selector', 'both');
+
+        return in_array($selector, ['search', 'dropdown', 'both'], true) ? $selector : 'both';
+    }
+
+    private function replacementVariants(Shop $shop)
+    {
+        return \App\Models\ProductVariant::query()
+            ->with('product')
+            ->where('shop_id', $shop->getKey())
+            ->where('status', 'active')
+            ->whereHas('product', fn ($query) => $query
+                ->where('merchant_id', $shop->merchant_id)
+                ->where('shop_id', $shop->getKey())
+                ->where('status', 'active'))
+            ->orderBy('id')
+            ->limit(500)
+            ->get();
+    }
+
     /**
      * @return array<string, string>
      */
@@ -176,6 +264,7 @@ class SalesHistoryController extends Controller
             Order::PAYMENT_METHOD_CASH => 'Cash',
             Order::PAYMENT_METHOD_CARD => 'Card',
             Order::PAYMENT_METHOD_UPI => 'UPI',
+            Order::PAYMENT_METHOD_CREDIT => 'Credit',
             'bank_transfer' => 'Bank Transfer',
             'cheque' => 'Cheque',
         ];

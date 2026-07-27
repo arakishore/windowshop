@@ -13,6 +13,7 @@ class Order extends Model
     use HasUuid, SoftDeletes;
 
     public const SOURCE_POS = 'pos';
+    public const SOURCE_EXCHANGE_REPLACEMENT = 'exchange_replacement';
     public const SOURCE_CUSTOMER_APP = 'customer_app';
     public const SOURCE_ADMIN = 'admin';
     public const SOURCE_API = 'api';
@@ -159,6 +160,16 @@ class Order extends Model
     public function refunds(): HasMany
     {
         return $this->hasMany(OrderRefund::class);
+    }
+
+    public function exchanges(): HasMany
+    {
+        return $this->hasMany(OrderExchange::class, 'original_order_id');
+    }
+
+    public function sourceExchange(): HasMany
+    {
+        return $this->hasMany(OrderExchange::class, 'replacement_order_id');
     }
 
     public function createdBy(): BelongsTo

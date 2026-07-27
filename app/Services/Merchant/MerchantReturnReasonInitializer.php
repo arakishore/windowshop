@@ -21,7 +21,6 @@ class MerchantReturnReasonInitializer
             ['code' => 'expired', 'name' => 'Expired product', 'sort_order' => 6, 'restock_by_default' => false, 'requires_manager_override' => false, 'status' => ReturnReason::STATUS_ACTIVE],
             ['code' => 'price_dispute', 'name' => 'Pricing dispute', 'sort_order' => 7, 'restock_by_default' => true, 'requires_manager_override' => false, 'status' => ReturnReason::STATUS_ACTIVE],
             ['code' => 'duplicate_charge', 'name' => 'Duplicate billing', 'sort_order' => 8, 'restock_by_default' => true, 'requires_manager_override' => false, 'status' => ReturnReason::STATUS_ACTIVE],
-            ['code' => 'exchange', 'name' => 'Exchange', 'sort_order' => 9, 'restock_by_default' => true, 'requires_manager_override' => false, 'status' => ReturnReason::STATUS_ACTIVE],
             ['code' => 'other', 'name' => 'Other', 'sort_order' => 99, 'restock_by_default' => true, 'requires_manager_override' => false, 'status' => ReturnReason::STATUS_ACTIVE],
         ];
     }

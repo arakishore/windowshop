@@ -128,6 +128,7 @@ This document tracks the modules and user-facing features currently implemented 
   - Cash rounding method
   - Cash rounding payment-method scope
   - Product tile size
+  - Exchange replacement selector mode
   - Add-to-cart sound
   - Held order expiry days
   - Allow order discount
@@ -354,11 +355,31 @@ This document tracks the modules and user-facing features currently implemented 
   - Refund method selection
   - Line-level refund quantities
   - Remaining refundable quantity calculation
-  - Line-level do-not-restock override
+  - Positive Restock checkbox per refund line
   - Stock increment when restocked
   - Refund subtotal, tax, and total calculation
   - Full and partial payment status updates
   - Refund status history entry
+- Exchange page for completed POS sales
+- Exchange processing:
+  - Separate Exchange action from Refund/Return
+  - Exchange is not a return reason
+  - Shop exchange promise/policy text belongs in receipt/shop policy settings
+  - Original line quantity selection
+  - Old item scan/search to increment returned line quantities
+  - Remaining exchangeable quantity calculation
+  - Returned value based on original tax-exclusive order-item sold value after item discount plus prorated line tax
+  - Replacement item scan/search by barcode, SKU, or product name using POS search behavior
+  - Exact barcode/SKU replacement matches can be added without a dropdown
+  - Optional replacement dropdown for small shops without scanners
+  - Merchant setting supports Search/Scan only, Dropdown only, or Both
+  - Replacement order creation with `exchange_replacement` source
+  - Sales and collection reports exclude `exchange_replacement` orders
+  - Difference settlement as even, collect extra, refund balance, or credit adjustment
+  - Returned item restock override
+  - Returned stock increment and replacement stock deduction inside one transaction
+  - Exchange status history entry
+  - Printable exchange receipt
 - Return reason management:
   - List/search return reasons
   - Create return reason
@@ -369,6 +390,7 @@ This document tracks the modules and user-facing features currently implemented 
   - Manager-override flag
   - Active/inactive return reason status
 - Default merchant return reasons seeded during merchant settings initialization
+- `Exchange` is excluded from default return reasons and hidden from refund reason selection
 
 ## Order Foundation
 
@@ -376,10 +398,13 @@ This document tracks the modules and user-facing features currently implemented 
 - Order items table
 - Order refunds table
 - Order refund items table
+- Order exchanges table
+- Order exchange return items table
 - Order totals table
 - Order status histories table
 - Order creation service
 - Order refund service
+- Order exchange service
 - Order totals service
 - Order status service
 - Order number service
@@ -390,6 +415,7 @@ This document tracks the modules and user-facing features currently implemented 
 - Rounding adjustment field
 - Payment status fields
 - Order to refunds relationship
+- Order to exchanges relationship
 
 ## Product Foundation
 

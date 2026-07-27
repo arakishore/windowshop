@@ -39,6 +39,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) co
 - POS refund processing with line-level refundable quantities, optional restock override, refund totals, payment status updates, and refund status history.
 - POS quick-add customer flow from the customer modal with mobile-only creation, duplicate mobile reuse, and auto-selection for the current cart.
 - Customer list order-count sorting.
+- POS Exchange V1 with dedicated exchange records, replacement order creation, historical returned-value calculation, exchangeable quantity limits, settlement tracking, stock updates, and printable exchange receipt.
+- Exchange replacement selection now uses POS-style barcode/SKU/name search instead of loading product dropdowns.
+- Merchant POS setting for Exchange replacement selection: Search/Scan only, Dropdown only, or Both.
+- Refund and exchange line stock controls now use positive `Restock` wording instead of negative `Do NOT restock` wording.
+- Exchange returned-value calculation is isolated and tax-aware; replacement order operational paid amount is excluded from sales/collection reporting.
+- Documented that Exchange is a separate workflow/policy concept, not a refund/return reason.
 
 ### Changed
 
@@ -59,6 +65,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) co
 - Customer create/edit form now uses horizontal Bootstrap form layout and hides generated customer code on create.
 - POS More Actions dropdown now closes on outside click, Escape, and action selection.
 - POS receipt success modal uses shared currency formatting to avoid checkout-success JavaScript errors.
+- Exchange is handled as a separate sales action and hidden from return-reason defaults/listing to avoid mixing refunds with item replacement.
 
 ### Removed
 

@@ -76,8 +76,9 @@
                                         <td class="text-end fw-semibold js-line-total">{{ $money($remaining * ((float) $item->line_total / max(1, (int) $item->quantity))) }}</td>
                                         <td>
                                             <label class="form-check">
-                                                <input name="items[{{ $item->getKey() }}][do_not_restock]" value="1" type="checkbox" class="form-check-input js-do-not-restock" @disabled($remaining < 1)>
-                                                <span class="form-check-label">do NOT restock</span>
+                                                <input name="items[{{ $item->getKey() }}][restock]" value="0" type="hidden">
+                                                <input name="items[{{ $item->getKey() }}][restock]" value="1" type="checkbox" class="form-check-input js-restock-line" @checked($remaining > 0) @disabled($remaining < 1)>
+                                                <span class="form-check-label">Restock</span>
                                             </label>
                                         </td>
                                     </tr>
@@ -145,7 +146,7 @@
             const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: '{{ $posCurrency['currency'] ?? 'INR' }}' });
             const form = document.querySelector('.js-refund-form');
             const reason = document.querySelector('.js-return-reason');
-            const checkboxes = Array.from(document.querySelectorAll('.js-do-not-restock'));
+            const checkboxes = Array.from(document.querySelectorAll('.js-restock-line'));
             let confirmedSubmit = false;
 
             function applyReasonDefault() {
@@ -156,7 +157,7 @@
                 const restock = selected.dataset.restock === '1';
                 checkboxes.forEach((checkbox) => {
                     if (!checkbox.disabled) {
-                        checkbox.checked = !restock;
+                        checkbox.checked = restock;
                     }
                 });
             }

@@ -58,6 +58,9 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::get('/sales/{order}', [SalesHistoryController::class, 'show'])->name('sales.show');
         Route::get('/sales/{order}/refund', [SalesHistoryController::class, 'refund'])->name('sales.refund');
         Route::post('/sales/{order}/refund', [SalesHistoryController::class, 'processRefund'])->name('sales.refund.process');
+        Route::get('/sales/{order}/exchange', [SalesHistoryController::class, 'exchange'])->name('sales.exchange');
+        Route::post('/sales/{order}/exchange', [SalesHistoryController::class, 'processExchange'])->name('sales.exchange.process');
+        Route::get('/sales/exchanges/{exchange}/receipt', [SalesHistoryController::class, 'exchangeReceipt'])->name('sales.exchange.receipt');
         Route::resource('return-reasons', ReturnReasonController::class)->only(['index', 'store', 'update', 'destroy']);
         Route::get('/barcodes/labels', [BarcodeLabelController::class, 'index'])->name('barcodes.labels.index');
         Route::post('/barcodes/generate-missing', [BarcodeLabelController::class, 'generateMissing'])->name('barcodes.generate-missing');

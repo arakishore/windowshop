@@ -236,6 +236,7 @@
         $oldSettings = old('settings', []);
         $selectOptions = [
             'pos.cash_rounding.method' => ['nearest' => 'Nearest', 'up' => 'Up', 'down' => 'Down'],
+            'pos.exchange.replacement_selector' => ['both' => 'Search / Scan + Dropdown', 'search' => 'Search / Scan only', 'dropdown' => 'Dropdown only'],
         ];
         $field = function (string $group, string $key) use ($settings, $defaults, $oldSettings) {
             return [
@@ -442,6 +443,16 @@
                         'fields' => [
                             ['group' => 'pos', 'key' => 'order.allow_order_discount', 'label' => 'Allow order discount', 'kind' => 'boolean'],
                             ['group' => 'pos', 'key' => 'order.allow_item_discount', 'label' => 'Allow item discount', 'kind' => 'boolean'],
+                        ],
+                        'field' => $field,
+                        'selectOptions' => $selectOptions,
+                    ])
+
+                    @include('merchant.settings.partials.setting-card', [
+                        'title' => 'Exchange',
+                        'description' => 'Choose how cashiers select replacement items during POS exchange.',
+                        'fields' => [
+                            ['group' => 'pos', 'key' => 'exchange.replacement_selector', 'label' => 'Replacement item selector', 'kind' => 'select'],
                         ],
                         'field' => $field,
                         'selectOptions' => $selectOptions,

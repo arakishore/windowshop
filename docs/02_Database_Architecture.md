@@ -40,6 +40,38 @@ Merchant-created shops also use `shops.root_product_category_id` as Shop Type. M
 
 These master tables are intentionally deferred until WindowShop supports multiple operating countries or regions.
 
+### POS Exchange Tables
+
+POS Exchange V1 uses dedicated exchange tracking tables and keeps replacement items in the normal order tables.
+
+`order_exchanges` stores one completed exchange transaction:
+
+- `original_order_id`: original POS sale.
+- `replacement_order_id`: new replacement order created with `orders.created_source = exchange_replacement`.
+- `returned_total`: total value of returned original lines.
+- `replacement_total`: total value of replacement order.
+- `difference_amount`: signed value, replacement total minus returned total.
+- `amount_collected`: extra collected from customer when replacement is higher.
+- `amount_refunded`: balance returned to customer when replacement is lower and original sale is not credit.
+- `credit_adjustment_amount`: balance adjustment for credit sales.
+- `settlement_type`: `even`, `collect_extra`, `refund_balance`, or `credit_adjustment`.
+- `settlement_method`: cash, UPI, card, credit, or another supported manual method when applicable.
+
+`order_exchange_return_items` stores the original order lines returned during an exchange:
+
+- `order_exchange_id`: parent exchange.
+- `order_item_id`: original sold line.
+- `product_variant_id`: returned variant snapshot link when still available.
+- `quantity`: exchanged quantity.
+- `unit_return_value`: original tax-exclusive `order_items.line_total / order_items.quantity`.
+- `line_tax`: prorated tax from `order_items.line_tax`.
+- `line_total`: tax-exclusive `unit_return_value * quantity`.
+- `restocked`: whether returned stock was added back.
+
+Exchangeable quantity is calculated as ordered quantity minus already refunded quantity minus already exchanged quantity. Exchange `returned_total` uses tax-exclusive returned line value plus prorated tax. Replacement stock is deducted through the normal order creation service; returned stock is incremented only when restocked.
+
+Replacement orders use `orders.created_source = exchange_replacement`. Their `amount_paid` supports operational paid/completed replacement order handling; actual exchange collection/refund is stored on `order_exchanges.amount_collected`, `amount_refunded`, and `credit_adjustment_amount`. Reporting queries must exclude `exchange_replacement` orders from sales and collection totals.
+
 ### Phase 4 (V1): Merchant Foundation
 
 - `merchant_profiles`

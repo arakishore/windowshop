@@ -42,6 +42,7 @@ class MerchantSettingsFoundationTest extends TestCase
         $this->assertSame('nearest', $this->settings()->get($merchant->getKey(), 'pos', 'cash_rounding.method'));
         $this->assertSame('cash', $this->settings()->get($merchant->getKey(), 'pos', 'cash_rounding.apply_to'));
         $this->assertSame('spacious', $this->settings()->get($merchant->getKey(), 'pos', 'product.tile_size'));
+        $this->assertSame('both', $this->settings()->get($merchant->getKey(), 'pos', 'exchange.replacement_selector'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'cart.play_add_sound'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'order.allow_order_discount'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'pos', 'order.allow_item_discount'));
@@ -56,13 +57,17 @@ class MerchantSettingsFoundationTest extends TestCase
         $this->assertSame('', $this->settings()->get($merchant->getKey(), 'pos', 'receipt.return_policy'));
         $this->assertTrue($this->settings()->get($merchant->getKey(), 'payment', 'allow_credit'));
         $this->assertFalse($this->settings()->has($merchant->getKey(), 'payment', 'allow_bank_transfer'));
-        $this->assertSame(10, DB::table('merchant_return_reasons')->where('merchant_id', $merchant->getKey())->count());
+        $this->assertSame(9, DB::table('merchant_return_reasons')->where('merchant_id', $merchant->getKey())->count());
         $this->assertDatabaseHas('merchant_return_reasons', [
             'merchant_id' => $merchant->getKey(),
             'code' => 'wrong_item',
             'name' => 'Wrong item sold',
             'restock_by_default' => true,
             'status' => 'active',
+        ]);
+        $this->assertDatabaseMissing('merchant_return_reasons', [
+            'merchant_id' => $merchant->getKey(),
+            'code' => 'exchange',
         ]);
         $this->assertDatabaseHas('merchant_return_reasons', [
             'merchant_id' => $merchant->getKey(),
@@ -181,7 +186,7 @@ class MerchantSettingsFoundationTest extends TestCase
         $this->seed(MerchantSettingsSeeder::class);
 
         $this->assertSame($expectedCount, MerchantSetting::query()->where('merchant_id', $merchant->getKey())->count());
-        $this->assertSame(10, DB::table('merchant_return_reasons')->where('merchant_id', $merchant->getKey())->count());
+        $this->assertSame(9, DB::table('merchant_return_reasons')->where('merchant_id', $merchant->getKey())->count());
         $this->assertSame('nearest', $this->settings()->get($merchant->getKey(), 'pos', 'cash_rounding.method'));
     }
 
@@ -231,6 +236,9 @@ class MerchantSettingsFoundationTest extends TestCase
             ->assertSee('Compact (130 px)')
             ->assertSee('Comfortable (150 px)')
             ->assertSee('Spacious (180 px)')
+            ->assertSee('Exchange')
+            ->assertSee('Replacement item selector')
+            ->assertSee('Search / Scan + Dropdown')
             ->assertSee('Play a sound when an item is added to the cart')
             ->assertSee('UPI')
             ->assertDontSee('Cash on Delivery')
@@ -277,6 +285,7 @@ class MerchantSettingsFoundationTest extends TestCase
                         'cash_rounding.method' => 'down',
                         'cash_rounding.apply_to' => 'all',
                         'product.tile_size' => 'compact',
+                        'exchange.replacement_selector' => 'dropdown',
                         'cart.play_add_sound' => '0',
                         'receipt.show_shop_name' => '1',
                         'receipt.show_address' => '1',
@@ -321,6 +330,7 @@ class MerchantSettingsFoundationTest extends TestCase
 
         $this->assertSame('down', $this->settings()->get($merchant->getKey(), 'pos', 'cash_rounding.method'));
         $this->assertSame('compact', $this->settings()->get($merchant->getKey(), 'pos', 'product.tile_size'));
+        $this->assertSame('dropdown', $this->settings()->get($merchant->getKey(), 'pos', 'exchange.replacement_selector'));
         $this->assertFalse($this->settings()->get($merchant->getKey(), 'pos', 'cart.play_add_sound'));
         $this->assertSame('Visit again.', $this->settings()->get($merchant->getKey(), 'pos', 'receipt.footer'));
         $this->assertFalse($this->settings()->get($merchant->getKey(), 'pos', 'receipt.show_gst_number'));
@@ -371,6 +381,16 @@ class MerchantSettingsFoundationTest extends TestCase
         $this->expectExceptionMessage('Cash rounding apply_to contains an unsupported payment method.');
 
         $this->settings()->set($merchant->getKey(), 'pos', 'cash_rounding.apply_to', 'cash,cod');
+    }
+
+    public function test_exchange_replacement_selector_rejects_invalid_value(): void
+    {
+        $merchant = $this->merchantFixture('Exchange Selector Merchant');
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Exchange replacement selector must be search, dropdown, or both.');
+
+        $this->settings()->set($merchant->getKey(), 'pos', 'exchange.replacement_selector', 'scanner_only');
     }
 
     public function test_initializer_removes_obsolete_settings(): void

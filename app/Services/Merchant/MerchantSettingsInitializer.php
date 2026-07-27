@@ -24,6 +24,7 @@ class MerchantSettingsInitializer
                 'cash_rounding.method' => ['value' => 'nearest', 'type' => MerchantSetting::TYPE_STRING],
                 'cash_rounding.apply_to' => ['value' => 'cash', 'type' => MerchantSetting::TYPE_STRING],
                 'product.tile_size' => ['value' => 'spacious', 'type' => MerchantSetting::TYPE_STRING],
+                'exchange.replacement_selector' => ['value' => 'both', 'type' => MerchantSetting::TYPE_STRING],
                 'cart.play_add_sound' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'receipt.show_shop_name' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'receipt.show_address' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],

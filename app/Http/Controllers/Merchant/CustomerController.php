@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Merchant\StoreMerchantCustomerRequest;
 use App\Http\Requests\Merchant\UpdateMerchantCustomerRequest;
 use App\Models\LocCountry;
+use App\Models\Order;
 use App\Models\MerchantCustomer;
 use App\Models\MerchantCustomerAddress;
 use App\Models\MerchantProfile;
@@ -110,6 +111,9 @@ class CustomerController extends Controller
             : 'details';
 
         $orders = $customer->orders()
+            // Exchange replacement orders are operational records and their amount_paid
+            // is not newly collected money. Customer spend/history counts original POS sales.
+            ->where('created_source', Order::SOURCE_POS)
             ->latest()
             ->paginate(10, ['*'], 'orders_page')
             ->withQueryString();
@@ -119,10 +123,10 @@ class CustomerController extends Controller
             ->get();
 
         $summary = [
-            'orders_count' => $customer->orders()->count(),
-            'total_spent' => (float) $customer->orders()->sum('grand_total'),
+            'orders_count' => $customer->orders()->where('created_source', Order::SOURCE_POS)->count(),
+            'total_spent' => (float) $customer->orders()->where('created_source', Order::SOURCE_POS)->sum('grand_total'),
             'addresses_count' => $addresses->count(),
-            'last_order_at' => $customer->orders()->latest()->value('created_at'),
+            'last_order_at' => $customer->orders()->where('created_source', Order::SOURCE_POS)->latest()->value('created_at'),
         ];
 
         return view('merchant.customers.show', [

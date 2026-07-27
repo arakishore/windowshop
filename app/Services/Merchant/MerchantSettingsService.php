@@ -85,6 +85,10 @@ class MerchantSettingsService
         if ($group === 'pos' && $key === 'product.tile_size' && ! in_array($value, ['compact', 'comfortable', 'spacious'], true)) {
             throw new InvalidArgumentException('POS product tile size must be compact, comfortable, or spacious.');
         }
+
+        if ($group === 'pos' && $key === 'exchange.replacement_selector' && ! in_array($value, ['search', 'dropdown', 'both'], true)) {
+            throw new InvalidArgumentException('Exchange replacement selector must be search, dropdown, or both.');
+        }
     }
 
     private function validCashRoundingApplyTo(string $value): bool

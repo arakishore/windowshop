@@ -162,6 +162,10 @@
                                             <i class="ph-arrow-counter-clockwise me-2"></i>
                                             Refund / Return
                                         </a>
+                                        <a href="{{ route('merchant.sales.exchange', $order) }}" class="dropdown-item text-info">
+                                            <i class="ph-swap me-2"></i>
+                                            Exchange
+                                        </a>
                                     </div>
                                 </div>
                             </td>

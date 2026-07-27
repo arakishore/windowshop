@@ -39,7 +39,7 @@ class OrderRefundService
      *     return_reason_id: int,
      *     refund_method: string,
      *     notes?: string|null,
-     *     items: array<int|string, array{quantity?: int|string|null, do_not_restock?: mixed}>
+     *     items: array<int|string, array{quantity?: int|string|null, restock?: mixed, do_not_restock?: mixed}>
      * } $data
      */
     public function create(Order $order, array $data, User $actor): OrderRefund
@@ -124,7 +124,7 @@ class OrderRefundService
     }
 
     /**
-     * @param array<int|string, array{quantity?: int|string|null, do_not_restock?: mixed}> $submitted
+     * @param array<int|string, array{quantity?: int|string|null, restock?: mixed, do_not_restock?: mixed}> $submitted
      * @param array<int, int> $refundable
      * @return array<int, array{item: OrderItem, quantity: int, line_tax: string, line_total: string, restocked: bool}>
      */
@@ -152,11 +152,23 @@ class OrderRefundService
                 'quantity' => $quantity,
                 'line_tax' => $this->money((float) $item->line_tax * $ratio),
                 'line_total' => $this->money((float) $item->line_total * $ratio),
-                'restocked' => empty($submitted[$itemId]['do_not_restock']),
+                'restocked' => $this->shouldRestock($submitted[$itemId] ?? []),
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function shouldRestock(array $row): bool
+    {
+        if (array_key_exists('restock', $row)) {
+            return (bool) $row['restock'];
+        }
+
+        return empty($row['do_not_restock']);
     }
 
     private function updateOrderPaymentStatus(Order $order): void

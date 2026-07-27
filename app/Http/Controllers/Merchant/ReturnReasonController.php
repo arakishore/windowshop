@@ -29,6 +29,7 @@ class ReturnReasonController extends Controller
         $search = trim((string) $request->query('search', ''));
         $reasons = ReturnReason::query()
             ->where('merchant_id', $merchant->getKey())
+            ->where('code', '!=', 'exchange')
             ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
                 ->where('code', 'like', "%{$search}%")
                 ->orWhere('name', 'like', "%{$search}%")))
@@ -38,7 +39,7 @@ class ReturnReasonController extends Controller
             ->withQueryString();
 
         $selected = $request->query('reason')
-            ? ReturnReason::query()->where('merchant_id', $merchant->getKey())->where('uuid', $request->query('reason'))->first()
+            ? ReturnReason::query()->where('merchant_id', $merchant->getKey())->where('code', '!=', 'exchange')->where('uuid', $request->query('reason'))->first()
             : $reasons->first();
 
         return view('merchant.return-reasons.index', [

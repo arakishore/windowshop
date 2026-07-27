@@ -2,6 +2,7 @@
 
 namespace App\Services\Merchant;
 
+use App\Models\Order;
 use App\Models\MerchantProfile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -74,6 +75,8 @@ class MerchantDashboardService
         $query = DB::table('orders')
             ->where('shop_id', $activeShopId);
 
+        $this->originalPosSalesOnly($query);
+
         if (Schema::hasColumn('orders', 'created_at')) {
             $query->whereDate('created_at', today());
         }
@@ -90,6 +93,7 @@ class MerchantDashboardService
         foreach (['total_amount', 'grand_total', 'amount'] as $column) {
             if (Schema::hasColumn('orders', $column)) {
                 $query = DB::table('orders')->where('shop_id', $activeShopId);
+                $this->originalPosSalesOnly($query);
 
                 if (Schema::hasColumn('orders', 'created_at')) {
                     $query->whereDate('created_at', today());
@@ -131,9 +135,20 @@ class MerchantDashboardService
 
         return DB::table('orders')
             ->where('shop_id', $activeShopId)
+            ->where('created_source', Order::SOURCE_POS)
             ->when(Schema::hasColumn('orders', 'created_at'), fn ($query) => $query->orderByDesc('created_at'))
             ->limit(5)
             ->get()
             ->all();
+    }
+
+    private function originalPosSalesOnly($query): void
+    {
+        if (Schema::hasColumn('orders', 'created_source')) {
+            // Exchange replacement orders are operational stock/receipt records.
+            // Actual exchange settlement is stored on order_exchanges, so collection
+            // and sales widgets must count only original POS sales.
+            $query->where('created_source', Order::SOURCE_POS);
+        }
     }
 }

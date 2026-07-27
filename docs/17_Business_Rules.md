@@ -60,11 +60,16 @@ This is the canonical register for approved WindowShop business behavior. Each r
 
 ## Returns and Exchanges
 
-**Initial policy: Proposed**
+**Current policy: Approved for POS V1 separation**
 
-- Eligibility depends on product policy, delivery date, condition, and reason.
-- Return/exchange windows are configured, not scattered as code literals.
-- Approval, rejection, receipt, inspection, replacement, and refund are explicit states.
+- Refund/Return and Exchange are separate merchant workflows.
+- A refund/return reason explains why money is being returned or a return is being recorded.
+- `Exchange` must not be used as a refund/return reason because it describes a workflow, not the item condition or refund cause.
+- Shop messages such as "try this, we will exchange it" are exchange policy text and belong in receipt/shop policy settings, not return reasons.
+- POS Exchange V1 captures operational notes on the exchange. Dedicated exchange reasons such as size issue, color change, customer preference, wrong item sold, or defective item are a future Exchange-module setting.
+- Eligibility depends on product policy, sale date, item condition, and shop exchange policy.
+- Return/exchange windows should be configured, not scattered as code literals.
+- Approval, rejection, receipt, inspection, replacement, and refund can become explicit states in later workflow phases.
 - Inventory and financial adjustments occur only at approved workflow points.
 
 ## Inventory

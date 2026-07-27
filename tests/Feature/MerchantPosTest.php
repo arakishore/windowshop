@@ -1237,6 +1237,14 @@ class MerchantPosTest extends TestCase
         $firstItem = $order->items->firstWhere('product_variant_id', $first['variant_id']);
         $secondItem = $order->items->firstWhere('product_variant_id', $second['variant_id']);
 
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.refund', $order))
+            ->assertOk()
+            ->assertSee('Restock')
+            ->assertDontSee('do NOT restock');
+
         $response = $this
             ->actingAs(User::query()->findOrFail($userId))
             ->withSession(['active_shop_id' => $shopId])
@@ -1245,8 +1253,8 @@ class MerchantPosTest extends TestCase
                 'refund_method' => 'cash',
                 'notes' => 'Customer returned sealed items.',
                 'items' => [
-                    $firstItem->getKey() => ['quantity' => 2, 'do_not_restock' => 1],
-                    $secondItem->getKey() => ['quantity' => 1],
+                    $firstItem->getKey() => ['quantity' => 2, 'restock' => 0],
+                    $secondItem->getKey() => ['quantity' => 1, 'restock' => 1],
                 ],
             ]);
 
@@ -1263,6 +1271,466 @@ class MerchantPosTest extends TestCase
             ->where('order_id', $order->getKey())
             ->value('metadata->notes'));
         $this->assertSame(Order::PAYMENT_REFUNDED, $order->refresh()->payment_status);
+    }
+
+    public function test_merchant_can_exchange_sale_using_original_discounted_return_value(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $original = $this->createPosProduct($shopId, 'Original Exchange Shirt', 'Blue / M', 'EX-ORIG', 'EX-ORIG-BAR');
+        $replacement = $this->createPosProduct($shopId, 'Replacement Exchange Shirt', 'Black / L', 'EX-NEW', 'EX-NEW-BAR');
+        DB::table('product_variants')->where('id', $replacement['variant_id'])->update(['selling_price' => 1200]);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1800,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $original['variant_id'], 'quantity' => 2, 'discount_type' => 'amount', 'discount_value' => 198],
+                ],
+            ]);
+
+        $checkout->assertOk();
+        DB::table('product_variants')->where('id', $original['variant_id'])->update(['selling_price' => 5000]);
+
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $originalItem = $order->items->firstWhere('product_variant_id', $original['variant_id']);
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'notes' => 'Customer changed size.',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $replacement['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $exchangeUuid = (string) DB::table('order_exchanges')->value('uuid');
+        $response->assertRedirect(route('merchant.sales.exchange.receipt', $exchangeUuid));
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '900.00',
+            'replacement_total' => '1200.00',
+            'difference_amount' => '300.00',
+            'amount_collected' => '300.00',
+            'settlement_type' => 'collect_extra',
+        ]);
+        $this->assertDatabaseHas('order_exchange_return_items', [
+            'order_item_id' => $originalItem->getKey(),
+            'quantity' => 1,
+            'unit_return_value' => '900.00',
+            'line_total' => '900.00',
+            'restocked' => true,
+        ]);
+        $replacementOrderId = (int) DB::table('order_exchanges')->value('replacement_order_id');
+        $this->assertDatabaseHas('orders', [
+            'id' => $replacementOrderId,
+            'created_source' => Order::SOURCE_EXCHANGE_REPLACEMENT,
+            'amount_paid' => '1200.00',
+            'remarks' => 'Replacement for exchange against '.$order->order_number,
+        ]);
+        $this->assertSame('300.00', number_format((float) DB::table('order_exchanges')->where('original_order_id', $order->getKey())->value('amount_collected'), 2, '.', ''));
+        $this->assertSame(11, (int) DB::table('product_variants')->where('id', $original['variant_id'])->value('stock_quantity'));
+        $this->assertSame(11, (int) DB::table('product_variants')->where('id', $replacement['variant_id'])->value('stock_quantity'));
+    }
+
+    public function test_exchange_returned_value_includes_prorated_tax_without_double_counting(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $original = $this->createPosProduct($shopId, 'Taxed Exchange Shirt', 'Blue / M', 'EX-TAX-OLD', 'EX-TAX-OLD-BAR');
+        $replacement = $this->createPosProduct($shopId, 'Taxed Replacement Shirt', 'Black / L', 'EX-TAX-NEW', 'EX-TAX-NEW-BAR');
+        DB::table('product_variants')->where('id', $replacement['variant_id'])->update(['selling_price' => 1200]);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1800,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $original['variant_id'], 'quantity' => 2, 'discount_type' => 'amount', 'discount_value' => 198],
+                ],
+            ]);
+        $checkout->assertOk();
+
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $originalItem = $order->items->firstWhere('product_variant_id', $original['variant_id']);
+        DB::table('order_items')->where('id', $originalItem->getKey())->update(['line_tax' => '180.00']);
+        $order = $order->fresh('items');
+        $originalItem = $order->items->firstWhere('product_variant_id', $original['variant_id']);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1, 'restock' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $replacement['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '990.00',
+            'replacement_total' => '1200.00',
+            'difference_amount' => '210.00',
+            'amount_collected' => '210.00',
+        ]);
+        $this->assertDatabaseHas('order_exchange_return_items', [
+            'order_item_id' => $originalItem->getKey(),
+            'unit_return_value' => '900.00',
+            'line_tax' => '90.00',
+            'line_total' => '900.00',
+        ]);
+    }
+
+    public function test_exchange_replacement_orders_are_excluded_from_sales_and_collection_totals(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $original = $this->createPosProduct($shopId, 'Report Exchange Shirt', 'Blue / M', 'EX-REP-OLD', 'EX-REP-OLD-BAR');
+        $replacement = $this->createPosProduct($shopId, 'Report Replacement Shirt', 'Black / L', 'EX-REP-NEW', 'EX-REP-NEW-BAR');
+        DB::table('product_variants')->where('id', $replacement['variant_id'])->update(['selling_price' => 1200]);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1800,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $original['variant_id'], 'quantity' => 2, 'discount_type' => 'amount', 'discount_value' => 198],
+                ],
+            ]);
+        $checkout->assertOk();
+
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $originalItem = $order->items->firstWhere('product_variant_id', $original['variant_id']);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1, 'restock' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $replacement['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $replacementOrderNumber = (string) DB::table('orders')
+            ->where('created_source', Order::SOURCE_EXCHANGE_REPLACEMENT)
+            ->value('order_number');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.index'))
+            ->assertOk()
+            ->assertSee('1,800.00')
+            ->assertDontSee('3,000.00')
+            ->assertDontSee($replacementOrderNumber);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.dashboard'))
+            ->assertOk()
+            ->assertSee('INR 1,800')
+            ->assertDontSee('INR 3,000')
+            ->assertDontSee($replacementOrderNumber);
+    }
+
+    public function test_hidden_exchange_return_reason_cannot_appear_in_refund_or_exchange_selectors(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $merchantId = $this->merchantIdForShop($shopId);
+        $product = $this->createPosProduct($shopId, 'Hidden Reason Shirt', 'Blue / M', 'EX-HIDE-OLD', 'EX-HIDE-OLD-BAR');
+        DB::table('merchant_return_reasons')->insert([
+            'uuid' => (string) Str::uuid(),
+            'merchant_id' => $merchantId,
+            'code' => 'exchange',
+            'name' => 'Exchange',
+            'sort_order' => 9,
+            'restock_by_default' => true,
+            'requires_manager_override' => false,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $product['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+        $checkout->assertOk();
+        $order = Order::query()->findOrFail($checkout->json('order.id'));
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.refund', $order))
+            ->assertOk()
+            ->assertDontSee('>Exchange<', false);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.exchange', $order))
+            ->assertOk()
+            ->assertDontSee('return_reason_id')
+            ->assertDontSee('>Exchange<', false);
+    }
+
+    public function test_exchange_page_defaults_to_search_and_dropdown_replacement_selection(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $original = $this->createPosProduct($shopId, 'Search Exchange Shirt', 'Blue / M', 'EX-SCAN-OLD', 'EX-SCAN-OLD-BAR');
+        $this->createPosProduct($shopId, 'Dropdown Replacement Shirt', 'Black / L', 'EX-DROP-NEW', 'EX-DROP-NEW-BAR');
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $original['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+        $checkout->assertOk();
+
+        $order = Order::query()->findOrFail($checkout->json('order.id'));
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.exchange', $order))
+            ->assertOk()
+            ->assertSee('Scan old item')
+            ->assertSee('Search replacement product')
+            ->assertSee('Scan barcode, search SKU, or product name')
+            ->assertSee('Choose replacement product')
+            ->assertSee('js-replacement-dropdown')
+            ->assertSee('Restock')
+            ->assertDontSee('do NOT restock')
+            ->assertSee(route('merchant.pos.search'), false)
+            ->assertDontSee('js-replacement-variant');
+    }
+
+    public function test_exchange_page_can_use_search_only_replacement_selection(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $merchantId = $this->merchantIdForShop($shopId);
+        $this->setMerchantSetting($merchantId, 'pos', 'exchange.replacement_selector', 'search', 'string');
+        $original = $this->createPosProduct($shopId, 'Search Only Exchange Shirt', 'Blue / M', 'EX-SEARCH-OLD', 'EX-SEARCH-OLD-BAR');
+        $this->createPosProduct($shopId, 'Hidden Dropdown Replacement Shirt', 'Black / L', 'EX-SEARCH-NEW', 'EX-SEARCH-NEW-BAR');
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $original['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+        $checkout->assertOk();
+
+        $order = Order::query()->findOrFail($checkout->json('order.id'));
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.exchange', $order))
+            ->assertOk()
+            ->assertSee('Search replacement product')
+            ->assertDontSee('Choose replacement product')
+            ->assertSee('id="exchange_replacement_search"', false)
+            ->assertDontSee('id="exchange_replacement_dropdown"', false);
+    }
+
+    public function test_exchange_page_can_use_dropdown_only_replacement_selection(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $merchantId = $this->merchantIdForShop($shopId);
+        $this->setMerchantSetting($merchantId, 'pos', 'exchange.replacement_selector', 'dropdown', 'string');
+        $original = $this->createPosProduct($shopId, 'Dropdown Only Exchange Shirt', 'Blue / M', 'EX-DROPO-OLD', 'EX-DROPO-OLD-BAR');
+        $this->createPosProduct($shopId, 'Visible Dropdown Replacement Shirt', 'Black / L', 'EX-DROPO-NEW', 'EX-DROPO-NEW-BAR');
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $original['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+        $checkout->assertOk();
+
+        $order = Order::query()->findOrFail($checkout->json('order.id'));
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.exchange', $order))
+            ->assertOk()
+            ->assertSee('Choose replacement product')
+            ->assertSee('id="exchange_replacement_dropdown"', false)
+            ->assertDontSee('Search replacement product')
+            ->assertDontSee('id="exchange_replacement_search"', false);
+    }
+
+    public function test_exchange_quantity_excludes_refunded_and_previously_exchanged_items(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $original = $this->createPosProduct($shopId, 'Limited Exchange Shirt', 'Blue / M', 'EX-LIMIT', 'EX-LIMIT-BAR');
+        $replacement = $this->createPosProduct($shopId, 'Limited Replacement Shirt', 'Black / L', 'EX-LIMIT-NEW', 'EX-LIMIT-NEW-BAR');
+        $merchantId = $this->merchantIdForShop($shopId);
+        $reasonId = (int) DB::table('merchant_return_reasons')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'merchant_id' => $merchantId,
+            'code' => 'wrong_item',
+            'name' => 'Wrong item sold',
+            'sort_order' => 2,
+            'restock_by_default' => true,
+            'requires_manager_override' => false,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1998,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $original['variant_id'], 'quantity' => 2],
+                ],
+            ]);
+        $checkout->assertOk();
+
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $originalItem = $order->items->firstWhere('product_variant_id', $original['variant_id']);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.refund.process', $order), [
+                'return_reason_id' => $reasonId,
+                'refund_method' => 'cash',
+                'items' => [
+                    $originalItem->getKey() => ['quantity' => 1],
+                ],
+            ])
+            ->assertRedirect(route('merchant.sales.show', $order));
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $replacement['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $replacement['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertSessionHasErrors('returned_items.'.$originalItem->getKey().'.quantity');
+    }
+
+    public function test_exchange_balance_on_credit_sale_becomes_credit_adjustment(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $original = $this->createPosProduct($shopId, 'Credit Original Shirt', 'Blue / M', 'EX-CREDIT', 'EX-CREDIT-BAR');
+        $replacement = $this->createPosProduct($shopId, 'Credit Replacement Shirt', 'Black / L', 'EX-CREDIT-NEW', 'EX-CREDIT-NEW-BAR');
+        DB::table('product_variants')->where('id', $replacement['variant_id'])->update(['selling_price' => 500]);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CREDIT,
+                'items' => [
+                    ['product_variant_id' => $original['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+        $checkout->assertOk();
+
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $originalItem = $order->items->firstWhere('product_variant_id', $original['variant_id']);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => Order::PAYMENT_METHOD_CREDIT,
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $replacement['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '999.00',
+            'replacement_total' => '500.00',
+            'difference_amount' => '-499.00',
+            'amount_refunded' => '0.00',
+            'credit_adjustment_amount' => '499.00',
+            'settlement_type' => 'credit_adjustment',
+        ]);
     }
 
     /**

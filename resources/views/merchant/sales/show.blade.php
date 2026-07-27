@@ -16,6 +16,7 @@
             return ($posCurrency['symbol_position'] ?? 'before') === 'before' ? $symbol.$amount : $amount.' '.$symbol;
         };
         $canRefund = collect($refundableQuantities)->sum() > 0;
+        $canExchange = collect($exchangeableQuantities ?? [])->sum() > 0;
         $itemDiscount = max(0, (float) $order->discount_total - (float) $order->order_discount_amount);
         $paymentReference = collect([
             $order->payment_reference ? 'Reference: '.$order->payment_reference : null,
@@ -47,6 +48,12 @@
                 <a href="{{ route('merchant.sales.refund', $order) }}" class="btn btn-primary">
                     <i class="ph-arrow-counter-clockwise me-2"></i>
                     Process refund
+                </a>
+            @endif
+            @if($canExchange)
+                <a href="{{ route('merchant.sales.exchange', $order) }}" class="btn btn-warning">
+                    <i class="ph-swap me-2"></i>
+                    Process exchange
                 </a>
             @endif
             <a href="{{ route('merchant.pos.receipt', ['order' => $order->getKey(), 'print' => 1]) }}" target="_blank" class="btn btn-light">
@@ -210,6 +217,26 @@
                                 </div>
                                 <div class="fw-semibold text-nowrap">-{{ $money($refund->refund_total) }}</div>
                             </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            @if($order->exchanges->isNotEmpty())
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Exchanges against this sale</h5></div>
+                    <div class="list-group list-group-flush">
+                        @foreach($order->exchanges as $exchange)
+                            <a href="{{ route('merchant.sales.exchange.receipt', $exchange) }}" class="list-group-item d-flex justify-content-between gap-3">
+                                <div>
+                                    <div class="fw-semibold">{{ $exchange->exchange_number }}</div>
+                                    <div class="text-muted small">Replacement {{ $exchange->replacementOrder?->order_number ?? '-' }}</div>
+                                </div>
+                                <div class="text-end text-nowrap">
+                                    <div class="fw-semibold">{{ $money($exchange->replacement_total) }}</div>
+                                    <div class="small text-muted">{{ Str::headline($exchange->settlement_type) }}</div>
+                                </div>
+                            </a>
                         @endforeach
                     </div>
                 </div>
