@@ -26,30 +26,81 @@ class TaxSeeder extends Seeder
             throw new RuntimeException('India country record was not found in loc_countries. Run the location seeders before TaxSeeder.');
         }
 
-        $taxClass = $this->upsertTaxClass((int) $countryId);
+        $this->retireLegacyGstClass((int) $countryId);
 
-        foreach ($this->gstRates() as $rateData) {
-            $taxRate = $this->upsertTaxRate($taxClass, $rateData);
+        foreach ($this->gstSlabs() as $slabData) {
+            $taxClass = $this->upsertTaxClass((int) $countryId, $slabData);
+            $taxRate = $this->upsertTaxRate($taxClass, $slabData);
 
-            foreach ($rateData['components'] as $componentData) {
+            foreach ($slabData['components'] as $componentData) {
                 $this->upsertComponent($taxRate, $componentData);
             }
         }
     }
 
-    private function upsertTaxClass(int $countryId): TaxClass
+    private function retireLegacyGstClass(int $countryId): void
+    {
+        $legacyClass = TaxClass::withTrashed()
+            ->where('country_id', $countryId)
+            ->where('code', 'GST')
+            ->first();
+
+        if (! $legacyClass) {
+            return;
+        }
+
+        $now = now();
+
+        TaxRate::withTrashed()
+            ->where('tax_class_id', $legacyClass->getKey())
+            ->get()
+            ->each(function (TaxRate $rate) use ($now): void {
+                $rate->components()->withTrashed()->get()->each(function (TaxRateComponent $component) use ($now): void {
+                    $component->forceFill([
+                        'deleted_by' => null,
+                        'updated_at' => $now,
+                    ])->save();
+
+                    if (! $component->trashed()) {
+                        $component->delete();
+                    }
+                });
+
+                $rate->forceFill([
+                    'status' => TaxRate::STATUS_INACTIVE,
+                    'deleted_by' => null,
+                    'updated_at' => $now,
+                ])->save();
+
+                if (! $rate->trashed()) {
+                    $rate->delete();
+                }
+            });
+
+        $legacyClass->forceFill([
+            'status' => TaxClass::STATUS_INACTIVE,
+            'deleted_by' => null,
+            'updated_at' => $now,
+        ])->save();
+
+        if (! $legacyClass->trashed()) {
+            $legacyClass->delete();
+        }
+    }
+
+    private function upsertTaxClass(int $countryId, array $slabData): TaxClass
     {
         $now = now();
         $taxClass = TaxClass::withTrashed()
             ->where('country_id', $countryId)
-            ->where('code', 'GST')
+            ->where('code', $slabData['code'])
             ->first();
 
         if (! $taxClass) {
             $taxClass = new TaxClass([
                 'uuid' => (string) Str::uuid(),
                 'country_id' => $countryId,
-                'code' => 'GST',
+                'code' => $slabData['code'],
                 'created_at' => $now,
             ]);
         }
@@ -60,10 +111,11 @@ class TaxSeeder extends Seeder
 
         $taxClass->forceFill([
             'country_id' => $countryId,
-            'code' => 'GST',
-            'name' => 'Goods and Services Tax',
-            'description' => 'India GST reference tax class.',
-            'status' => TaxClass::STATUS_INACTIVE,
+            'code' => $slabData['code'],
+            'name' => $slabData['name'],
+            'description' => 'India GST slab tax class.',
+            'sort_order' => $slabData['sort_order'],
+            'status' => TaxClass::STATUS_ACTIVE,
             'updated_at' => $now,
             'created_by' => null,
             'updated_by' => null,
@@ -73,12 +125,12 @@ class TaxSeeder extends Seeder
         return $taxClass;
     }
 
-    private function upsertTaxRate(TaxClass $taxClass, array $rateData): TaxRate
+    private function upsertTaxRate(TaxClass $taxClass, array $slabData): TaxRate
     {
         $now = now();
         $taxRate = TaxRate::withTrashed()
             ->where('tax_class_id', $taxClass->getKey())
-            ->where('name', $rateData['name'])
+            ->where('name', $slabData['name'])
             ->whereDate('effective_from', self::EFFECTIVE_FROM)
             ->first();
 
@@ -86,7 +138,7 @@ class TaxSeeder extends Seeder
             $taxRate = new TaxRate([
                 'uuid' => (string) Str::uuid(),
                 'tax_class_id' => $taxClass->getKey(),
-                'name' => $rateData['name'],
+                'name' => $slabData['name'],
                 'effective_from' => self::EFFECTIVE_FROM,
                 'created_at' => $now,
             ]);
@@ -98,12 +150,12 @@ class TaxSeeder extends Seeder
 
         $taxRate->forceFill([
             'tax_class_id' => $taxClass->getKey(),
-            'name' => $rateData['name'],
-            'total_rate' => $rateData['total_rate'],
+            'name' => $slabData['name'],
+            'total_rate' => $slabData['total_rate'],
             'effective_from' => self::EFFECTIVE_FROM,
             'effective_to' => null,
             'priority' => 0,
-            'status' => TaxRate::STATUS_INACTIVE,
+            'status' => TaxRate::STATUS_ACTIVE,
             'updated_at' => $now,
             'created_by' => null,
             'updated_by' => null,
@@ -149,54 +201,62 @@ class TaxSeeder extends Seeder
         return $component;
     }
 
-    private function gstRates(): array
+    private function gstSlabs(): array
     {
         return [
             [
+                'code' => 'GST_0',
                 'name' => 'GST 0%',
+                'sort_order' => 10,
                 'total_rate' => '0.0000',
-                'components' => [
-                    [
-                        'code' => 'GST',
-                        'name' => 'GST',
-                        'rate' => '0.0000',
-                        'jurisdiction_type' => TaxRateComponent::JURISDICTION_CENTRAL,
-                        'priority' => 1,
-                    ],
-                ],
+                'components' => $this->splitComponents('0.0000'),
             ],
             [
+                'code' => 'GST_025',
                 'name' => 'GST 0.25%',
+                'sort_order' => 20,
                 'total_rate' => '0.2500',
                 'components' => $this->splitComponents('0.1250'),
             ],
             [
+                'code' => 'GST_15',
                 'name' => 'GST 1.5%',
+                'sort_order' => 30,
                 'total_rate' => '1.5000',
                 'components' => $this->splitComponents('0.7500'),
             ],
             [
+                'code' => 'GST_3',
                 'name' => 'GST 3%',
+                'sort_order' => 40,
                 'total_rate' => '3.0000',
                 'components' => $this->splitComponents('1.5000'),
             ],
             [
+                'code' => 'GST_5',
                 'name' => 'GST 5%',
+                'sort_order' => 50,
                 'total_rate' => '5.0000',
                 'components' => $this->splitComponents('2.5000'),
             ],
             [
+                'code' => 'GST_18',
                 'name' => 'GST 18%',
+                'sort_order' => 60,
                 'total_rate' => '18.0000',
                 'components' => $this->splitComponents('9.0000'),
             ],
             [
+                'code' => 'GST_28',
                 'name' => 'GST 28%',
+                'sort_order' => 70,
                 'total_rate' => '28.0000',
                 'components' => $this->splitComponents('14.0000'),
             ],
             [
+                'code' => 'GST_40',
                 'name' => 'GST 40%',
+                'sort_order' => 80,
                 'total_rate' => '40.0000',
                 'components' => $this->splitComponents('20.0000'),
             ],

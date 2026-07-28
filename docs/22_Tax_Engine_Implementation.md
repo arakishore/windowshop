@@ -30,15 +30,15 @@ Codex should complete and report after every step:
 
 ## Step 1: Tax Database Foundation
 
-Status: Planned
+Status: Implemented
 
-Create generic tax master tables:
+Generic tax master tables:
 
 - `tax_classes`
 - `tax_rates`
-- `tax_components` if component-level tax splitting is needed as normalized data
+- `tax_components`
 
-Suggested responsibilities:
+Responsibilities:
 
 | Table | Purpose |
 |---|---|
@@ -49,6 +49,7 @@ Suggested responsibilities:
 Minimum behavior:
 
 - Tax classes can be active or inactive.
+- Tax classes have `sort_order` so admin lists and tax dropdowns can show slabs in a merchant-friendly order.
 - Tax rates support effective date ranges.
 - A tax class can have one active rate for a merchant country/system at a given date.
 - Component rates must sum to the total rate when components are used.
@@ -56,27 +57,58 @@ Minimum behavior:
 
 ## Step 2: India Seed Data
 
-Status: Planned
+Status: Implemented
 
-Seed default India GST tax classes:
+Seed default India GST slab tax classes. A product/category/default tax selection points to the slab tax class, not to one generic GST class.
 
-| Tax class | Total rate |
-|---|---:|
-| Exempt | 0% |
-| GST 5% | 5% |
-| GST 12% | 12% |
-| GST 18% | 18% |
-| GST 28% | 28% |
+Hierarchy:
+
+```text
+Product
+    |
+Tax Class (GST 5%)
+    |
+Effective Tax Rate
+    |
+Components
+    |- CGST
+    `- SGST
+```
+
+Seeded tax classes:
+
+| Sort | Code | Tax class | Active rate |
+|---:|---|---|---:|
+| 10 | GST_0 | GST 0% | 0% |
+| 20 | GST_025 | GST 0.25% | 0.25% |
+| 30 | GST_15 | GST 1.5% | 1.5% |
+| 40 | GST_3 | GST 3% | 3% |
+| 50 | GST_5 | GST 5% | 5% |
+| 60 | GST_18 | GST 18% | 18% |
+| 70 | GST_28 | GST 28% | 28% |
+| 80 | GST_40 | GST 40% | 40% |
+
+Each GST slab tax class has exactly one active seed tax rate. Keep `tax_rates` because future rate changes are represented as new effective-dated rate rows under the same tax class.
+
+Example future history:
+
+| Tax class | Tax rate | Effective from | Effective to |
+|---|---:|---|---|
+| GST 5% | 5% | 2017-07-01 | 2027-03-31 |
+| GST 5% | 6% | 2027-04-01 | null |
 
 Seed component structure:
 
-| Tax class | CGST | SGST | IGST |
-|---|---:|---:|---:|
-| Exempt | 0% | 0% | 0% |
-| GST 5% | 2.5% | 2.5% | 5% |
-| GST 12% | 6% | 6% | 12% |
-| GST 18% | 9% | 9% | 18% |
-| GST 28% | 14% | 14% | 28% |
+| Tax class | CGST | SGST |
+|---|---:|---:|
+| GST 0% | 0% | 0% |
+| GST 0.25% | 0.125% | 0.125% |
+| GST 1.5% | 0.75% | 0.75% |
+| GST 3% | 1.5% | 1.5% |
+| GST 5% | 2.5% | 2.5% |
+| GST 18% | 9% | 9% |
+| GST 28% | 14% | 14% |
+| GST 40% | 20% | 20% |
 
 Required fields:
 
@@ -85,18 +117,21 @@ Required fields:
 - Effective start date
 - Optional effective end date
 - Active status
+- Sort order
 
-Important rule:
+Important rules:
 
 - These rows are default data only. The application must not hardcode GST rates or GST-specific table names into business logic.
+- Do not model India GST as one generic `GST` tax class with many active rates. Product-level selection needs the slab identity, for example `GST_5`.
+- Product/category/merchant tax dropdowns should display slab tax classes such as `GST 5%`, not one generic `Goods and Services Tax` option.
 
 ## Step 3: Merchant Tax Settings
 
-Status: Planned
+Status: Implemented
 
-Add merchant-level tax settings.
+Merchant-level tax settings are stored separately from products and categories.
 
-Settings should support:
+Settings support:
 
 - Country
 - Tax enabled: yes/no
@@ -104,7 +139,7 @@ Settings should support:
 - Price mode: inclusive/exclusive
 - Optional merchant default tax class
 
-Suggested fields:
+Fields:
 
 | Field | Meaning |
 |---|---|
@@ -116,64 +151,121 @@ Suggested fields:
 
 UI behavior:
 
-- When tax is disabled, hide tax fields from product forms, POS, and merchant tax configuration areas where they no longer apply.
+- When tax is disabled, hide tax fields from product forms and other areas where they no longer apply.
 - When tax is enabled, show tax status and price mode clearly in merchant settings.
 - Validate that selected tax classes match the merchant country/tax system.
+- Default tax class dropdowns display slab labels with rate/component context, for example `GST 5% (5.0000% (CGST 2.5000% + SGST 2.5000%))`.
+- Default tax class options follow `tax_classes.sort_order`.
+
+Out of scope for this step:
+
+- POS tax calculation
+- Order tax snapshots
+- Resolver behavior
 
 ## Step 4: Category Default Tax
 
-Status: Planned
+Status: Implemented
 
-Add nullable default tax class support to `product_categories`.
+Nullable default tax class support exists on `product_categories`.
 
-Suggested field:
+Field:
 
 - `default_tax_class_id nullable foreign key`
 
 Behavior:
 
 - Admin users configure sensible category defaults.
-- Merchant category selection automatically loads and displays the category tax.
 - Parent categories remain grouping-only.
-- Selectable leaf categories receive the primary default tax class.
+- Selectable leaf categories can receive a default tax class.
 - Category default tax should be nullable so merchants/categories can fall back to merchant defaults or no tax.
+- Category default tax labels include the slab rate and component summary where available.
+- Category tax class options follow `tax_classes.sort_order`.
 
 Validation:
 
 - Tax class must be active when selected.
-- Tax class must be compatible with the relevant merchant country/tax system when used in merchant workflows.
+- Soft-deleted tax classes are rejected when assigning or changing category defaults.
+- Parent/grouping categories cannot store a default tax class.
+- Existing inactive or soft-deleted assignments are preserved on unrelated category edits so old records can still be inspected safely.
+- Referenced tax classes cannot be force deleted.
 
 ## Step 5: Product Tax Override UX
 
-Status: Planned
+Status: Implemented
 
-Add nullable `tax_class_id` to `products`.
+Product-level tax preference fields exist on `products`:
 
-Resolution rule:
+- `tax_mode enum('inherit', 'override', 'exempt') default 'inherit'`
+- `tax_class_id nullable foreign key`
+
+Why both fields:
+
+| tax_mode | tax_class_id | Meaning |
+|---|---:|---|
+| inherit | null | Use default tax determined from category or merchant settings |
+| override | selected slab tax class | Always use selected tax class, for example GST 5% |
+| exempt | null | Never charge tax |
+
+Product form behavior:
 
 ```text
-products.tax_class_id = null
-=> use category default tax class
+Tax Configuration
 
-products.tax_class_id has value
-=> use product override
-```
+( ) Use Default Tax
+( ) Tax Exempt
+( ) Override Tax Class
 
-Merchant product form behavior:
-
-```text
-Tax: GST 5%
-Automatically selected from category
-
-[ ] Use a different tax for this product
+Tax Class
+[ GST 5% ]
 ```
 
 UX requirements:
 
 - Tax selection is hidden when merchant tax is disabled.
-- Category-derived tax is shown as read-only until override is enabled.
-- Product override must be nullable so removing the override returns the product to category default behavior.
-- Product list/detail screens should indicate whether tax is inherited or overridden.
+- Use Default Tax hides the tax class dropdown.
+- Override Tax Class shows the tax class dropdown and requires an active, non-deleted tax class.
+- Tax Exempt hides the tax class dropdown.
+- Inherit and exempt forcibly store `tax_class_id = null`.
+- The product form shows current category and a default-tax hint without performing final tax resolution.
+- Until Step 6, default/inherited effective tax is shown as a checkout-resolution preview instead of pretending the final resolver already exists.
+- Product list labels use merchant-facing text: `Default`, `Tax Exempt`, or the selected slab name such as `GST 18%`.
+- Override dropdown options display slab tax classes with their active rate/component summary.
+- Override dropdown options follow `tax_classes.sort_order`.
+- This step stores preference only. It does not calculate tax or resolve merchant/category fallback.
+
+Save behavior:
+
+- Missing tax fields preserve the existing product configuration. This supports hidden tax UI and older submit flows.
+- Quick Create always creates products with `tax_mode = inherit` and `tax_class_id = null`.
+- Product duplication preserves the original product's tax configuration.
+
+Validation:
+
+- `tax_mode = override` requires `tax_class_id`.
+- Override tax class must be active.
+- Override tax class must not be soft deleted.
+- `tax_mode = inherit` forces `tax_class_id = null`.
+- `tax_mode = exempt` forces `tax_class_id = null`.
+
+Implemented tests:
+
+- Product saved with inherit.
+- Product saved with override.
+- Product saved with exempt.
+- Override requires tax class.
+- Inactive tax class is rejected.
+- Deleted tax class is rejected.
+- Inherit clears `tax_class_id`.
+- Exempt clears `tax_class_id`.
+- Product edit preserves existing configuration.
+- Product tax configuration is hidden when merchant tax is disabled.
+- Product list shows the tax column.
+- Product tax dropdown displays seeded GST slab classes in sort order.
+
+Future rule:
+
+- Keep `tax_mode` small. Customer-specific exemptions, tax holidays, location rules, and other conditional behavior should be handled by the Step 6 resolver instead of adding product-level modes.
 
 ## Step 6: Tax And Pricing Services
 
@@ -233,7 +325,7 @@ Store historical tax snapshots in:
 
 Snapshots should include:
 
-- Tax class name
+- Tax class name, for example GST 5%
 - Tax class ID where useful for traceability
 - Tax rate ID where useful for traceability
 - Total rate
@@ -297,10 +389,10 @@ Test coverage:
 ## Acceptance Checklist
 
 - Generic tax schema exists and avoids GST-specific table names.
-- India GST defaults are seeded with CGST, SGST, IGST, and effective dates.
+- India GST defaults are seeded as slab tax classes with CGST, SGST, and effective dates.
 - Merchant settings support country, enabled flag, tax system, price mode, and default tax class.
 - Product categories support nullable default tax class.
-- Products support nullable tax override.
+- Products support `tax_mode` with inherit, override, and exempt behavior.
 - Product form displays inherited tax and optional override workflow.
 - Tax/Pricing services centralize all calculations.
 - POS and order creation use the centralized services.

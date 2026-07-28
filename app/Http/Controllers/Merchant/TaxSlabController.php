@@ -36,6 +36,7 @@ class TaxSlabController extends Controller
                     ->orderBy('id'),
             ])
             ->when($countryId, fn ($query, int $countryId) => $query->where('country_id', $countryId))
+            ->orderBy('sort_order')
             ->orderBy('code')
             ->orderBy('name')
             ->get();

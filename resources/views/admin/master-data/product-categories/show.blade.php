@@ -46,7 +46,7 @@
                     </tr>
                     <tr>
                         <th>Default Tax Class</th>
-                        <td>{{ $category->defaultTaxClass?->name ? $category->defaultTaxClass->code.' / '.$category->defaultTaxClass->name : '-' }}</td>
+                        <td>{{ $category->defaultTaxClass?->name ? $category->defaultTaxClass->displayLabel() : '-' }}</td>
                     </tr>
                     <tr>
                         <th>Description</th>
@@ -111,7 +111,7 @@
                             <tr>
                                 <td>{{ $child->name }}</td>
                                 <td><code>{{ $child->slug }}</code></td>
-                                <td>{{ $child->defaultTaxClass?->name ? $child->defaultTaxClass->code.' / '.$child->defaultTaxClass->name : '-' }}</td>
+                                <td>{{ $child->defaultTaxClass?->name ? $child->defaultTaxClass->displayLabel() : '-' }}</td>
                                 <td>{{ $child->sort_order }}</td>
                                 <td>
                                     <span class="badge {{ $statusClasses[$child->status] ?? 'bg-secondary' }}">

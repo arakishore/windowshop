@@ -8,6 +8,18 @@
     $includeShortDescription = $includeShortDescription ?? false;
     $selectedShop = $selectedShopId ? $shops->firstWhere('id', (int) $selectedShopId) : null;
     $productRoutePrefix = $productRoutePrefix ?? 'admin';
+    $taxClasses = $taxClasses ?? collect();
+    $selectedTaxMode = old('tax_mode', $product?->tax_mode ?? 'inherit');
+    $selectedTaxClassId = old('tax_class_id', $product?->tax_class_id);
+    $selectedCategory = $selectedCategoryId ? $productCategories->firstWhere('id', (int) $selectedCategoryId) : null;
+    $selectedCategoryDefaultTaxName = $selectedCategory?->defaultTaxClass?->taxSummaryLabel() ?? 'No Default';
+    $selectedOverrideTaxName = $selectedTaxClassId ? ($taxClasses->firstWhere('id', (int) $selectedTaxClassId)?->taxSummaryLabel() ?? $product?->taxClass?->taxSummaryLabel() ?? 'Selected tax class') : 'Choose Tax Class';
+    $effectiveTaxName = match ($selectedTaxMode) {
+        'override' => $selectedOverrideTaxName,
+        'exempt' => 'No Tax',
+        default => 'Will be resolved during checkout',
+    };
+    $merchantTaxEnabled = (bool) ($merchantTaxEnabled ?? false);
 @endphp
 
 @if ($errors->any())
@@ -56,7 +68,7 @@
             <select id="product_category_id" name="product_category_id" class="form-select @error('product_category_id') is-invalid @enderror" required>
                 <option value="">Select Product Category</option>
                 @foreach($productCategories as $category)
-                    <option value="{{ $category->id }}" data-root-category-id="{{ $category->root_category_id }}" data-selectable="{{ $category->is_selectable_leaf ? '1' : '0' }}" @selected((string) $selectedCategoryId === (string) $category->id) @disabled(! $category->is_selectable_leaf)>
+                    <option value="{{ $category->id }}" data-root-category-id="{{ $category->root_category_id }}" data-selectable="{{ $category->is_selectable_leaf ? '1' : '0' }}" data-default-tax-class-name="{{ $category->defaultTaxClass?->taxSummaryLabel() ?? 'No Default' }}" @selected((string) $selectedCategoryId === (string) $category->id) @disabled(! $category->is_selectable_leaf)>
                         {{ $category->full_path_label ?? $category->name }}
                     </option>
                 @endforeach
@@ -103,6 +115,70 @@
                 @error('short_description')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
         @endif
+
+        @if($product && $merchantTaxEnabled)
+            <div class="col-12">
+                <div class="border-top pt-3 mt-2">
+                    <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-lg-between gap-2 mb-3">
+                        <div>
+                            <div class="fw-semibold">Tax Configuration</div>
+                            <div class="text-muted small">Uses the default tax determined from the category or merchant settings.</div>
+                        </div>
+                        <div class="text-lg-end small">
+                            <div class="text-muted">Current Category</div>
+                            <div class="fw-semibold js-tax-current-category">{{ $selectedCategory?->name ?? $product->category?->name ?? '-' }}</div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-lg-7">
+                            <div class="vstack gap-2">
+                                <label class="form-check border rounded p-3 ps-5 mb-0">
+                                    <input class="form-check-input js-tax-mode" type="radio" name="tax_mode" value="inherit" @checked($selectedTaxMode === 'inherit')>
+                                    <span class="fw-semibold">Use Default Tax</span>
+                                    <span class="d-block text-muted small">Uses the category default now and merchant fallback in future tax resolution.</span>
+                                </label>
+
+                                <label class="form-check border rounded p-3 ps-5 mb-0">
+                                    <input class="form-check-input js-tax-mode" type="radio" name="tax_mode" value="exempt" @checked($selectedTaxMode === 'exempt')>
+                                    <span class="fw-semibold">Tax Exempt</span>
+                                    <span class="d-block text-muted small">Never charge tax for this product.</span>
+                                </label>
+
+                                <label class="form-check border rounded p-3 ps-5 mb-0">
+                                    <input class="form-check-input js-tax-mode" type="radio" name="tax_mode" value="override" @checked($selectedTaxMode === 'override')>
+                                    <span class="fw-semibold">Override Tax Class</span>
+                                    <span class="d-block text-muted small">Always use the selected tax class for this product.</span>
+                                </label>
+                            </div>
+                            @error('tax_mode')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="col-lg-5">
+                            <div class="js-tax-class-wrap">
+                                <label for="tax_class_id" class="form-label">Tax Class <span class="text-danger">*</span></label>
+                                <select id="tax_class_id" name="tax_class_id" class="form-select @error('tax_class_id') is-invalid @enderror">
+                                    <option value="">Select Tax Class</option>
+                                    @foreach($taxClasses as $taxClass)
+                                        <option value="{{ $taxClass->id }}" data-tax-summary="{{ $taxClass->taxSummaryLabel() }}" @selected((string) $selectedTaxClassId === (string) $taxClass->id)>{{ $taxClass->displayLabel() }}</option>
+                                    @endforeach
+                                </select>
+                                @error('tax_class_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+
+                            <div class="bg-light border rounded p-3 mt-3">
+                                <div class="row g-2 small">
+                                    <div class="col-6 text-muted">Default Tax</div>
+                                    <div class="col-6 text-end fw-semibold js-tax-category-default">{{ $selectedCategoryDefaultTaxName }}</div>
+                                    <div class="col-6 text-muted">Effective Tax</div>
+                                    <div class="col-6 text-end fw-semibold js-tax-effective">{{ $effectiveTaxName }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
     </div>
 </div>
 
@@ -112,6 +188,11 @@
             const shopSelect = document.getElementById('shop_id');
             const categorySelect = document.getElementById('product_category_id');
             const brandSelect = document.getElementById('brand_id');
+            const taxClassWrap = document.querySelector('.js-tax-class-wrap');
+            const taxClassSelect = document.getElementById('tax_class_id');
+            const taxCategoryDefault = document.querySelector('.js-tax-category-default');
+            const taxEffective = document.querySelector('.js-tax-effective');
+            const taxCurrentCategory = document.querySelector('.js-tax-current-category');
 
             if (!shopSelect || !categorySelect) {
                 return;
@@ -170,11 +251,53 @@
                 }
             };
 
+            const syncTaxConfiguration = function () {
+                const selectedMode = document.querySelector('.js-tax-mode:checked');
+
+                if (!selectedMode || !taxClassWrap || !taxClassSelect) {
+                    return;
+                }
+
+                const selectedCategory = categorySelect.options[categorySelect.selectedIndex];
+                const categoryDefault = selectedCategory?.dataset.defaultTaxClassName || 'No Default';
+                const categoryName = selectedCategory?.value ? selectedCategory.textContent.trim() : '-';
+                const selectedTaxClass = taxClassSelect.options[taxClassSelect.selectedIndex];
+                const overrideName = selectedTaxClass?.value ? (selectedTaxClass.dataset.taxSummary || selectedTaxClass.textContent.trim()) : 'Choose Tax Class';
+
+                taxClassWrap.hidden = selectedMode.value !== 'override';
+                taxClassSelect.required = selectedMode.value === 'override';
+                taxClassSelect.disabled = selectedMode.value !== 'override';
+
+                if (taxCategoryDefault) {
+                    taxCategoryDefault.textContent = categoryDefault;
+                }
+
+                if (taxCurrentCategory) {
+                    taxCurrentCategory.textContent = categoryName;
+                }
+
+                if (taxEffective) {
+                    taxEffective.textContent = selectedMode.value === 'override'
+                        ? overrideName
+                        : (selectedMode.value === 'exempt' ? 'No Tax' : 'Will be resolved during checkout');
+                }
+            };
+
             if (shopSelect.tagName === 'SELECT') {
                 shopSelect.addEventListener('change', syncCategoryOptions);
             }
 
+            categorySelect.addEventListener('change', syncTaxConfiguration);
+            document.querySelectorAll('.js-tax-mode').forEach(function (radio) {
+                radio.addEventListener('change', syncTaxConfiguration);
+            });
+
+            if (taxClassSelect) {
+                taxClassSelect.addEventListener('change', syncTaxConfiguration);
+            }
+
             syncCategoryOptions();
+            syncTaxConfiguration();
         });
     </script>
 @endpush

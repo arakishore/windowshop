@@ -43,6 +43,7 @@ class TaxClassController extends Controller
                 });
             })
             ->orderBy('country_id')
+            ->orderBy('sort_order')
             ->orderBy('code')
             ->paginate((int) config('admin.pagination.per_page', 15))
             ->withQueryString();

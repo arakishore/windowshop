@@ -47,7 +47,7 @@ class MerchantTaxSlabReferenceTest extends TestCase
         $this->assignMerchantRole($merchant->user);
         [$india, $state] = $this->businessLocation($merchant);
 
-        $gst = $this->taxClass($india, 'GST', 'Goods and Services Tax', TaxClass::STATUS_ACTIVE);
+        $gst = $this->taxClass($india, 'GST_18', 'GST 18%', TaxClass::STATUS_ACTIVE);
         $gst18 = $this->taxRate($gst, 'GST 18%', '18.0000', TaxRate::STATUS_ACTIVE);
         $this->taxComponent($gst18, 'CGST', 'Central GST', '9.0000', TaxRateComponent::JURISDICTION_CENTRAL, 1);
         $this->taxComponent($gst18, 'SGST', 'State GST', '9.0000', TaxRateComponent::JURISDICTION_STATE, 2);
@@ -79,7 +79,7 @@ class MerchantTaxSlabReferenceTest extends TestCase
             ->assertSee('Reference only')
             ->assertSee('Country: '.$india->name)
             ->assertSee('State: '.$state->name)
-            ->assertSee('GST / Goods and Services Tax')
+            ->assertSee('GST_18 / GST 18%')
             ->assertSee('GST 18%')
             ->assertSee('18.0000%')
             ->assertSee('CGST')

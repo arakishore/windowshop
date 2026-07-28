@@ -114,12 +114,12 @@
                             <option value="">No default</option>
                             @foreach ($taxClasses as $taxClass)
                                 <option value="{{ $taxClass->id }}" @selected((string) $selectedTaxClass === (string) $taxClass->id)>
-                                    {{ $taxClass->code }} / {{ $taxClass->name }}
+                                    {{ $taxClass->displayLabel() }}
                                 </option>
                             @endforeach
                         </select>
                         @error('default_tax_class_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        <div class="text-muted fs-sm mt-1">Required when Enable Tax Calculation is Yes. Example: GST / Goods and Services Tax for an India merchant.</div>
+                        <div class="text-muted fs-sm mt-1">Required when Enable Tax Calculation is Yes. Example: GST 5% for an India merchant.</div>
                     </div>
 
                     <div>

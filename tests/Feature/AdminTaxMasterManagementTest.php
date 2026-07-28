@@ -51,12 +51,14 @@ class AdminTaxMasterManagementTest extends TestCase
                 'code' => 'standard',
                 'name' => 'Standard Tax',
                 'description' => 'Country standard rate.',
+                'sort_order' => 25,
                 'status' => 'active',
             ])
             ->assertRedirect(route('admin.master.tax-classes.index'))
             ->assertSessionHas('success', 'Tax class created successfully.');
 
         $taxClass = TaxClass::query()->where('code', 'STANDARD')->firstOrFail();
+        $this->assertSame(25, $taxClass->sort_order);
 
         $this->actingAs($admin)
             ->get(route('admin.master.tax-classes.show', $taxClass))
@@ -76,6 +78,7 @@ class AdminTaxMasterManagementTest extends TestCase
                 'code' => 'REDUCED',
                 'name' => 'Reduced Tax',
                 'description' => null,
+                'sort_order' => 15,
                 'status' => 'inactive',
             ])
             ->assertRedirect(route('admin.master.tax-classes.edit', $taxClass));
@@ -83,6 +86,7 @@ class AdminTaxMasterManagementTest extends TestCase
         $this->assertDatabaseHas('tax_classes', [
             'id' => $taxClass->getKey(),
             'code' => 'REDUCED',
+            'sort_order' => 15,
             'status' => 'inactive',
         ]);
 

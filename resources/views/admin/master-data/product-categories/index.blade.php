@@ -100,7 +100,7 @@
                                 </td>
                                 <td>{{ $category->parent?->name ?? '-' }}</td>
                                 <td class="text-muted">{{ $path }}</td>
-                                <td>{{ $category->defaultTaxClass?->name ? $category->defaultTaxClass->code.' / '.$category->defaultTaxClass->name : '-' }}</td>
+                                <td>{{ $category->defaultTaxClass?->name ? $category->defaultTaxClass->displayLabel() : '-' }}</td>
                                 <td>{{ $category->sort_order }}</td>
                                 <td>
                                     <span class="badge {{ $statusClasses[$category->status] ?? 'bg-secondary' }}">

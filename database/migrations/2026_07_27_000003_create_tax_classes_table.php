@@ -23,6 +23,9 @@ return new class extends Migration
                 ->comment('Stable tax class code within the country');
             $table->string('name');
             $table->text('description')->nullable();
+            $table->unsignedInteger('sort_order')
+                ->default(0)
+                ->index();
             $table->string('status', 30)
                 ->default('active')
                 ->comment('active,inactive,deleted')
@@ -40,6 +43,7 @@ return new class extends Migration
 
             $table->unique(['country_id', 'code'], 'tax_classes_country_code_unique');
             $table->index(['country_id', 'status'], 'tax_classes_country_status_idx');
+            $table->index(['country_id', 'sort_order'], 'tax_classes_country_sort_idx');
             $table->index('code', 'tax_classes_code_idx');
         });
     }

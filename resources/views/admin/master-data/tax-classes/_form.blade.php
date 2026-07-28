@@ -2,6 +2,7 @@
     $isEdit = $taxClass !== null;
     $selectedCountryId = (string) old('country_id', $taxClass?->country_id);
     $selectedStatus = old('status', $taxClass?->status ?? 'active');
+    $selectedSortOrder = old('sort_order', $taxClass?->sort_order ?? 0);
 @endphp
 
 @if ($errors->any())
@@ -44,7 +45,7 @@
                     <i class="ph-question ms-1 text-muted" data-bs-popup="tooltip" title="Stable short code within the selected country. Keep it simple and reusable, such as GST, VAT, STANDARD, ZERO, or EXEMPT."></i>
                 </label>
                 <input id="code" name="code" type="text" value="{{ old('code', $taxClass?->code) }}" class="form-control text-uppercase @error('code') is-invalid @enderror" maxlength="50" required>
-                <div class="form-text">Example: <code>GST</code> for India Goods and Services Tax.</div>
+                <div class="form-text">Example: <code>GST_5</code> for the India GST 5% slab.</div>
                 @error('code')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
@@ -54,8 +55,18 @@
                     <i class="ph-question ms-1 text-muted" data-bs-popup="tooltip" title="Admin-facing display name for this tax class. This name helps users identify the tax system."></i>
                 </label>
                 <input id="name" name="name" type="text" value="{{ old('name', $taxClass?->name) }}" class="form-control @error('name') is-invalid @enderror" required>
-                <div class="form-text">Example: Goods and Services Tax.</div>
+                <div class="form-text">Example: GST 5%.</div>
                 @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+
+            <div class="col-md-2">
+                <label for="sort_order" class="form-label">
+                    Sort Order
+                    <i class="ph-question ms-1 text-muted" data-bs-popup="tooltip" title="Lower numbers appear first in tax class lists and dropdowns. Use this to keep slabs in rate order."></i>
+                </label>
+                <input id="sort_order" name="sort_order" type="number" min="0" value="{{ $selectedSortOrder }}" class="form-control @error('sort_order') is-invalid @enderror">
+                <div class="form-text">Example: GST 5% before GST 18%.</div>
+                @error('sort_order')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
             <div class="col-md-2">

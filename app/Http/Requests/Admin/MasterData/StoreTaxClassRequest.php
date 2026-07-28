@@ -23,6 +23,7 @@ class StoreTaxClassRequest extends FormRequest
             'code' => ['required', 'string', 'max:50'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'sort_order' => ['nullable', 'integer', 'min:0'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
         ];
     }

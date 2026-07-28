@@ -8,6 +8,7 @@ use App\Models\MerchantAddress;
 use App\Models\MerchantProfile;
 use App\Models\MerchantTaxSetting;
 use App\Models\TaxClass;
+use App\Models\TaxRateComponent;
 use App\Models\User;
 use Database\Seeders\MasterData\LocationSeeder;
 use Illuminate\Database\QueryException;
@@ -59,6 +60,7 @@ class MerchantTaxSettingsTest extends TestCase
             ->assertSee('GSTIN: 27ABCDE1234F1Z5')
             ->assertSee('Country: India')
             ->assertSee('Tax system: GST')
+            ->assertSee('GST_5 / GST 5% - 5.0000% (CGST 2.5000% + SGST 2.5000%)')
             ->assertSee('Edit Merchant Details')
             ->assertSee(route('merchant.details.edit'), false)
             ->assertSee('Tax calculation is enabled.')
@@ -310,9 +312,30 @@ class MerchantTaxSettingsTest extends TestCase
 
         $taxClass = TaxClass::query()->create([
             'country_id' => $india->id,
-            'code' => 'GST',
-            'name' => 'Goods and Services Tax',
+            'code' => 'GST_5',
+            'name' => 'GST 5%',
             'status' => TaxClass::STATUS_ACTIVE,
+        ]);
+        $taxRate = $taxClass->rates()->create([
+            'name' => 'GST 5%',
+            'total_rate' => '5.0000',
+            'effective_from' => '2026-01-01',
+            'status' => 'active',
+        ]);
+
+        $taxRate->components()->create([
+            'code' => 'CGST',
+            'name' => 'CGST',
+            'rate' => '2.5000',
+            'jurisdiction_type' => TaxRateComponent::JURISDICTION_CENTRAL,
+            'priority' => 1,
+        ]);
+        $taxRate->components()->create([
+            'code' => 'SGST',
+            'name' => 'SGST',
+            'rate' => '2.5000',
+            'jurisdiction_type' => TaxRateComponent::JURISDICTION_STATE,
+            'priority' => 2,
         ]);
 
         return [$india, $state, $taxClass];

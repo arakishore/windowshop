@@ -77,11 +77,11 @@
                     @foreach(($taxClasses ?? collect()) as $taxClass)
                         <option value="{{ $taxClass->id }}" @selected((string) $selectedDefaultTaxClassId === (string) $taxClass->id)>
                             @if($taxClass->trashed())
-                                {{ $taxClass->code }} / {{ $taxClass->name }} - Deleted (current assignment)
+                                {{ $taxClass->displayLabel() }} - Deleted (current assignment)
                             @elseif($taxClass->status !== \App\Models\TaxClass::STATUS_ACTIVE)
-                                {{ $taxClass->code }} / {{ $taxClass->name }} - Inactive (current assignment)
+                                {{ $taxClass->displayLabel() }} - Inactive (current assignment)
                             @else
-                                {{ $taxClass->code }} / {{ $taxClass->name }}
+                                {{ $taxClass->displayLabel() }}
                             @endif
                         </option>
                     @endforeach

@@ -43,6 +43,8 @@ class StoreProductQuickCreateRequest extends FormRequest
             ],
             'product_name' => ['required', 'string', 'max:255'],
             'status' => ['required', Rule::in(['draft', 'active', 'inactive', 'archived'])],
+            'tax_mode' => ['sometimes', Rule::in(['inherit'])],
+            'tax_class_id' => ['prohibited'],
         ];
     }
 

@@ -13,6 +13,13 @@ class ProductCategoryDefaultTaxService
     {
         return TaxClass::query()
             ->active()
+            ->with(['rates' => fn ($query) => $query
+                ->active()
+                ->with('components')
+                ->orderByDesc('effective_from')
+                ->orderBy('priority')
+                ->orderByDesc('id')])
+            ->orderBy('sort_order')
             ->orderBy('code')
             ->orderBy('name')
             ->get();
@@ -27,7 +34,14 @@ class ProductCategoryDefaultTaxService
             return $taxClasses;
         }
 
-        $current = TaxClass::withTrashed()->find($currentId);
+        $current = TaxClass::withTrashed()
+            ->with(['rates' => fn ($query) => $query
+                ->withTrashed()
+                ->with('components')
+                ->orderByDesc('effective_from')
+                ->orderBy('priority')
+                ->orderByDesc('id')])
+            ->find($currentId);
 
         if (! $current instanceof TaxClass) {
             return $taxClasses;
@@ -36,6 +50,7 @@ class ProductCategoryDefaultTaxService
         return $taxClasses
             ->push($current->setAttribute('is_current_unavailable', true))
             ->sortBy([
+                ['sort_order', 'asc'],
                 ['code', 'asc'],
                 ['name', 'asc'],
             ])

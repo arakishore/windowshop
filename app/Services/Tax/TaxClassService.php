@@ -23,6 +23,7 @@ class TaxClassService
             'code' => strtoupper($data['code']),
             'name' => $data['name'],
             'description' => $this->nullable($data['description'] ?? null),
+            'sort_order' => (int) ($data['sort_order'] ?? 0),
             'status' => $data['status'],
             'created_by' => $actorId,
             'updated_by' => $actorId,
@@ -38,6 +39,7 @@ class TaxClassService
             'code' => strtoupper($data['code']),
             'name' => $data['name'],
             'description' => $this->nullable($data['description'] ?? null),
+            'sort_order' => (int) ($data['sort_order'] ?? 0),
             'status' => $data['status'],
             'updated_by' => Auth::id(),
         ])->save();

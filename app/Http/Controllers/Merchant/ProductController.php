@@ -17,6 +17,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductImage;
 use App\Models\Shop;
+use App\Models\TaxClass;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Product\ProductAttributeConfigurationService;
 use App\Services\Product\ProductAttributeService;
@@ -60,6 +61,7 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->with(['shop', 'category', 'brand', 'primaryImage'])
+            ->with(['taxClass', 'category.defaultTaxClass'])
             ->where('shop_id', $shop->getKey())
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
                 $search = $filters['search'];
@@ -107,6 +109,8 @@ class ProductController extends Controller
                 'root_product_category_id' => $shop->root_product_category_id,
                 'product_category_id' => $data['product_category_id'],
                 'brand_id' => $data['brand_id'] ?? null,
+                'tax_mode' => 'inherit',
+                'tax_class_id' => null,
                 'product_name' => $data['product_name'],
                 'slug' => 'pending-'.Str::uuid()->toString(),
                 'status' => $data['status'],
@@ -142,8 +146,11 @@ class ProductController extends Controller
         return view('merchant.products.edit', [
             'product' => $product->load([
                 'shop.merchant',
+                'merchant.taxSetting',
                 'category.parent',
+                'category.defaultTaxClass.rates.components',
                 'brand',
+                'taxClass.rates.components',
                 'attributes',
                 'variants.attributes.group',
                 'variants.attributes.value',
@@ -181,6 +188,7 @@ class ProductController extends Controller
             'root_product_category_id' => $shop->root_product_category_id,
             'product_category_id' => $data['product_category_id'],
             'brand_id' => $data['brand_id'] ?? null,
+            ...$request->taxConfiguration(),
             'product_name' => $data['product_name'],
             'slug' => $this->slugForProduct($product, $data['product_name']),
             'short_description' => $this->nullable($data['short_description'] ?? null),
@@ -527,6 +535,8 @@ class ProductController extends Controller
             'shops' => collect([$shop->loadMissing('merchant', 'rootProductCategory')]),
             'productCategories' => $this->productCategories($shop, $product),
             'brands' => $this->brands($shop, $product),
+            'taxClasses' => $this->taxClasses(),
+            'merchantTaxEnabled' => $this->merchantTaxEnabled($shop, $product),
             'statuses' => $this->statuses(),
             'productRoutePrefix' => 'merchant',
         ];
@@ -536,6 +546,7 @@ class ProductController extends Controller
     {
         $categories = ProductCategory::query()
             ->with(['parent.parent', 'children'])
+            ->with(['defaultTaxClass.rates.components'])
             ->where(function ($query) use ($product): void {
                 $query->where('status', 'active');
 
@@ -586,6 +597,34 @@ class ProductController extends Controller
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
+    }
+
+    private function taxClasses(): Collection
+    {
+        return TaxClass::query()
+            ->active()
+            ->with(['rates' => fn ($query) => $query
+                ->active()
+                ->with('components')
+                ->orderByDesc('effective_from')
+                ->orderBy('priority')
+                ->orderByDesc('id')])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function merchantTaxEnabled(Shop $shop, ?Product $product = null): bool
+    {
+        if ($product) {
+            $product->loadMissing('merchant.taxSetting');
+
+            return (bool) $product->merchant?->taxSetting?->tax_enabled;
+        }
+
+        $shop->loadMissing('merchant.taxSetting');
+
+        return (bool) $shop->merchant?->taxSetting?->tax_enabled;
     }
 
     private function statuses(): array

@@ -20,6 +20,8 @@ class Product extends Model
         'root_product_category_id',
         'product_category_id',
         'brand_id',
+        'tax_mode',
+        'tax_class_id',
         'primary_image_id',
         'product_name',
         'slug',
@@ -74,6 +76,11 @@ class Product extends Model
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    public function taxClass(): BelongsTo
+    {
+        return $this->belongsTo(TaxClass::class);
     }
 
     public function primaryImage(): BelongsTo

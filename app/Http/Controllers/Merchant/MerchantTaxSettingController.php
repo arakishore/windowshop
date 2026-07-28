@@ -33,9 +33,18 @@ class MerchantTaxSettingController extends Controller
             'setting' => $setting,
             'taxClasses' => TaxClass::query()
                 ->active()
-                ->with('country')
+                ->with([
+                    'country',
+                    'rates' => fn ($query) => $query
+                        ->active()
+                        ->with('components')
+                        ->orderByDesc('effective_from')
+                        ->orderBy('priority')
+                        ->orderByDesc('id'),
+                ])
                 ->when($countryId, fn ($query, int $countryId) => $query->where('country_id', $countryId))
                 ->orderBy('country_id')
+                ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
         ]);

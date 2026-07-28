@@ -5,15 +5,31 @@ namespace App\Http\Requests\Admin;
 use App\Models\Brand;
 use App\Models\ProductCategory;
 use App\Models\Shop;
+use App\Models\TaxClass;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class UpdateProductBasicRequest extends FormRequest
 {
+    private bool $taxConfigurationSubmitted = true;
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (! $this->has('tax_mode')) {
+            $this->taxConfigurationSubmitted = false;
+            $product = $this->route('product');
+
+            $this->merge([
+                'tax_mode' => $product?->tax_mode ?? 'inherit',
+                'tax_class_id' => $product?->tax_class_id,
+            ]);
+        }
     }
 
     /**
@@ -55,6 +71,8 @@ class UpdateProductBasicRequest extends FormRequest
             'product_name' => ['required', 'string', 'max:255'],
             'short_description' => ['nullable', 'string', 'max:255'],
             'status' => ['required', Rule::in(['draft', 'active', 'inactive', 'archived'])],
+            'tax_mode' => ['required', Rule::in(['inherit', 'override', 'exempt'])],
+            'tax_class_id' => ['nullable', 'integer'],
         ];
     }
 
@@ -89,6 +107,38 @@ class UpdateProductBasicRequest extends FormRequest
                 ->exists()) {
                 $validator->errors()->add('brand_id', 'The selected brand is not applicable to the selected shop type.');
             }
+
+            if (! $this->taxConfigurationSubmitted || $this->input('tax_mode') !== 'override') {
+                return;
+            }
+
+            $taxClassId = $this->integer('tax_class_id');
+
+            if ($taxClassId <= 0) {
+                $validator->errors()->add('tax_class_id', 'Choose a tax class when overriding product tax.');
+                return;
+            }
+
+            if (! TaxClass::query()
+                ->whereKey($taxClassId)
+                ->where('status', TaxClass::STATUS_ACTIVE)
+                ->whereNull('deleted_at')
+                ->exists()) {
+                $validator->errors()->add('tax_class_id', 'Choose an active tax class.');
+            }
         });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function taxConfiguration(): array
+    {
+        $mode = $this->input('tax_mode', 'inherit');
+
+        return [
+            'tax_mode' => $mode,
+            'tax_class_id' => $mode === 'override' ? $this->integer('tax_class_id') : null,
+        ];
     }
 }

@@ -38,7 +38,7 @@ class ProductCategoryController extends Controller
         $parentCategories = $this->parentCategories();
 
         $categories = ProductCategory::query()
-            ->with(['parent', 'defaultTaxClass'])
+            ->with(['parent', 'defaultTaxClass.rates.components'])
             ->withCount(['products', 'descriptionTemplates'])
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
                 $search = $filters['search'];
@@ -130,7 +130,7 @@ class ProductCategoryController extends Controller
 
     public function show(ProductCategory $productCategory): View
     {
-        $productCategory->load(['parent', 'defaultTaxClass', 'children' => fn ($query) => $query->with(['defaultTaxClass'])->withCount('products')]);
+        $productCategory->load(['parent', 'defaultTaxClass.rates.components', 'children' => fn ($query) => $query->with(['defaultTaxClass.rates.components'])->withCount('products')]);
 
         return view('admin.master-data.product-categories.show', [
             'category' => $productCategory,

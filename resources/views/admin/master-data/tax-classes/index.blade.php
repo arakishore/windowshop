@@ -72,6 +72,7 @@
                             <th>Country</th>
                             <th>Code</th>
                             <th>Name</th>
+                            <th>Sort</th>
                             <th>Description</th>
                             <th>Status</th>
                             <th>Created</th>
@@ -87,6 +88,7 @@
                                     <div class="fw-semibold">{{ $taxClass->name }}</div>
                                     <div class="fs-sm text-muted">{{ $taxClass->rates_count }} rates</div>
                                 </td>
+                                <td>{{ $taxClass->sort_order }}</td>
                                 <td>{{ \Illuminate\Support\Str::limit((string) $taxClass->description, 90) ?: '-' }}</td>
                                 <td>
                                     @if($taxClass->trashed())

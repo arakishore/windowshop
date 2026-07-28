@@ -91,6 +91,7 @@
                             <th>Product</th>
                             <th>Product Category</th>
                             <th>Brand</th>
+                            <th>Tax</th>
                             <th>Status</th>
                             <th>Created Date</th>
                             <th class="text-center">Actions</th>
@@ -121,6 +122,15 @@
                                 </td>
                                 <td>{{ $product->category?->name ?? '-' }}</td>
                                 <td>{{ $product->brand?->name ?? '-' }}</td>
+                                <td>
+                                    @if(($product->tax_mode ?? 'inherit') === 'override')
+                                        {{ $product->taxClass?->name ?? 'Override' }}
+                                    @elseif(($product->tax_mode ?? 'inherit') === 'exempt')
+                                        Tax Exempt
+                                    @else
+                                        Default
+                                    @endif
+                                </td>
                                 <td>
                                     <span class="badge {{ $statuses[$product->status]['badge_class'] ?? 'bg-secondary' }}">
                                         {{ $statuses[$product->status]['label'] ?? ucfirst($product->status) }}

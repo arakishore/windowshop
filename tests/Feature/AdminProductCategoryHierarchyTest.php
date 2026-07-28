@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ProductCategory;
 use App\Models\TaxClass;
+use App\Models\TaxRateComponent;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -184,7 +185,7 @@ class AdminProductCategoryHierarchyTest extends TestCase
     public function test_selectable_leaf_category_can_store_update_and_clear_default_tax_class(): void
     {
         $admin = $this->createAdminUser();
-        $taxClass = $this->createTaxClass('GST18', 'GST 18%');
+        $taxClass = $this->createTaxClassWithRate('GST18', 'GST 18%', '18.0000', '9.0000');
         $otherTaxClass = $this->createTaxClass('GST5', 'GST 5%');
         $parent = $this->createCategory('Fashion', 'fashion');
 
@@ -207,7 +208,7 @@ class AdminProductCategoryHierarchyTest extends TestCase
             ->get(route('admin.master.product-categories.index'))
             ->assertOk()
             ->assertSee('Default Tax Class')
-            ->assertSee('GST18 / GST 18%');
+            ->assertSee('GST18 / GST 18% - 18.0000% (CGST 9.0000% + SGST 9.0000%)');
 
         $this->actingAs($admin)
             ->get(route('admin.master.product-categories.show', $category))
@@ -537,5 +538,33 @@ class AdminProductCategoryHierarchyTest extends TestCase
             'name' => $name,
             'status' => $status,
         ]);
+    }
+
+    private function createTaxClassWithRate(string $code, string $name, string $totalRate, string $componentRate): TaxClass
+    {
+        $taxClass = $this->createTaxClass($code, $name);
+        $taxRate = $taxClass->rates()->create([
+            'name' => $name,
+            'total_rate' => $totalRate,
+            'effective_from' => '2026-01-01',
+            'status' => 'active',
+        ]);
+
+        $taxRate->components()->create([
+            'code' => 'CGST',
+            'name' => 'CGST',
+            'rate' => $componentRate,
+            'jurisdiction_type' => TaxRateComponent::JURISDICTION_CENTRAL,
+            'priority' => 1,
+        ]);
+        $taxRate->components()->create([
+            'code' => 'SGST',
+            'name' => 'SGST',
+            'rate' => $componentRate,
+            'jurisdiction_type' => TaxRateComponent::JURISDICTION_STATE,
+            'priority' => 2,
+        ]);
+
+        return $taxClass;
     }
 }
