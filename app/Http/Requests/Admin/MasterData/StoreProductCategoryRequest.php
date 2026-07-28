@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Admin\MasterData;
 
+use App\Models\TaxClass;
+use App\Services\Product\ProductCategoryDefaultTaxService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -42,6 +44,13 @@ class StoreProductCategoryRequest extends FormRequest
             ],
             'remove_image' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
+            'default_tax_class_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('tax_classes', 'id')->where(fn ($query) => $query
+                    ->whereNull('deleted_at')
+                    ->where('status', TaxClass::STATUS_ACTIVE)),
+            ],
             'status' => ['required', Rule::in(['active', 'inactive'])],
         ];
     }
@@ -55,6 +64,10 @@ class StoreProductCategoryRequest extends FormRequest
 
             if ($this->selectedDepth() > self::MAX_DEPTH) {
                 $validator->errors()->add('parent_id', 'Product categories can only be nested up to 3 levels for V1.');
+            }
+
+            if ($this->filled('default_tax_class_id') && ! $this->defaultTaxService()->canStoreDefaultTaxClass($this->integer('parent_id') ?: null)) {
+                $validator->errors()->add('default_tax_class_id', 'Default tax class can only be set on selectable leaf categories.');
             }
         });
     }
@@ -103,6 +116,12 @@ class StoreProductCategoryRequest extends FormRequest
     {
         $this->merge([
             'parent_id' => $this->input('parent_id') === '' ? null : $this->input('parent_id'),
+            'default_tax_class_id' => $this->input('default_tax_class_id') === '' ? null : $this->input('default_tax_class_id'),
         ]);
+    }
+
+    protected function defaultTaxService(): ProductCategoryDefaultTaxService
+    {
+        return app(ProductCategoryDefaultTaxService::class);
     }
 }

@@ -87,6 +87,11 @@
 									</a>
 								</li>
 								<li class="nav-item">
+									<a href="{{ route('admin.master.tax-classes.index') }}" class="nav-link {{ request()->routeIs('admin.master.tax-classes.*') || request()->routeIs('admin.master.tax-rates.*') ? 'active' : '' }}">
+										Tax Classes
+									</a>
+								</li>
+								<li class="nav-item">
 									<a href="{{ route('admin.master.product-categories.index') }}" class="nav-link {{ request()->routeIs('admin.master.product-categories.*') ? 'active' : '' }}">
 										Product Categories
 									</a>

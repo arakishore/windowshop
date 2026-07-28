@@ -73,6 +73,7 @@
                             <th>Name</th>
                             <th>Parent Category</th>
                             <th>Category Path</th>
+                            <th>Default Tax Class</th>
                             <th>Sort Order</th>
                             <th>Status</th>
                             <th>Created At</th>
@@ -99,6 +100,7 @@
                                 </td>
                                 <td>{{ $category->parent?->name ?? '-' }}</td>
                                 <td class="text-muted">{{ $path }}</td>
+                                <td>{{ $category->defaultTaxClass?->name ? $category->defaultTaxClass->code.' / '.$category->defaultTaxClass->name : '-' }}</td>
                                 <td>{{ $category->sort_order }}</td>
                                 <td>
                                     <span class="badge {{ $statusClasses[$category->status] ?? 'bg-secondary' }}">

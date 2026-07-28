@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\MasterData\StoreProductCategoryRequest;
 use App\Http\Requests\Admin\MasterData\UpdateProductCategoryRequest;
 use App\Models\ProductCategory;
 use App\Services\Image\ImageVariantService;
+use App\Services\Product\ProductCategoryDefaultTaxService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -22,6 +23,7 @@ class ProductCategoryController extends Controller
 {
     public function __construct(
         private readonly ImageVariantService $imageVariantService,
+        private readonly ProductCategoryDefaultTaxService $categoryDefaultTaxService,
     ) {
     }
 
@@ -36,7 +38,7 @@ class ProductCategoryController extends Controller
         $parentCategories = $this->parentCategories();
 
         $categories = ProductCategory::query()
-            ->with('parent')
+            ->with(['parent', 'defaultTaxClass'])
             ->withCount(['products', 'descriptionTemplates'])
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
                 $search = $filters['search'];
@@ -73,6 +75,7 @@ class ProductCategoryController extends Controller
         return view('admin.master-data.product-categories.create', [
             'category' => null,
             'parentCategories' => $this->parentCategories(),
+            'taxClasses' => $this->categoryDefaultTaxService->taxClassesForForm(),
         ]);
     }
 
@@ -90,6 +93,7 @@ class ProductCategoryController extends Controller
                 'description' => $this->nullable($data['description'] ?? null),
                 'image_path' => null,
                 'sort_order' => (int) ($data['sort_order'] ?? 0),
+                'default_tax_class_id' => $this->categoryDefaultTaxService->defaultTaxClassIdForSave($data, $parentId),
                 'status' => $data['status'],
                 'created_by' => $actorId,
                 'updated_by' => $actorId,
@@ -98,6 +102,8 @@ class ProductCategoryController extends Controller
             $category->updateQuietly([
                 'slug' => $this->slugForCategory($category),
             ]);
+
+            $this->categoryDefaultTaxService->clearDefaultTaxClassForGroupingCategory($parentId);
 
             return $category;
         });
@@ -118,12 +124,13 @@ class ProductCategoryController extends Controller
         return view('admin.master-data.product-categories.edit', [
             'category' => $productCategory,
             'parentCategories' => $this->parentCategories($productCategory),
+            'taxClasses' => $this->categoryDefaultTaxService->taxClassesForForm($productCategory),
         ]);
     }
 
     public function show(ProductCategory $productCategory): View
     {
-        $productCategory->load(['parent', 'children' => fn ($query) => $query->withCount('products')]);
+        $productCategory->load(['parent', 'defaultTaxClass', 'children' => fn ($query) => $query->with(['defaultTaxClass'])->withCount('products')]);
 
         return view('admin.master-data.product-categories.show', [
             'category' => $productCategory,
@@ -148,16 +155,21 @@ class ProductCategoryController extends Controller
             $imagePath = $this->storeImage($request, $productCategory);
         }
 
-        $productCategory->forceFill([
-            'parent_id' => $parentId,
-            'name' => $data['name'],
-            'slug' => $this->slugForCategory($productCategory, $data['name']),
-            'description' => $this->nullable($data['description'] ?? null),
-            'image_path' => $imagePath,
-            'sort_order' => (int) ($data['sort_order'] ?? 0),
-            'status' => $data['status'],
-            'updated_by' => Auth::id(),
-        ])->save();
+        DB::transaction(function () use ($productCategory, $data, $parentId, $imagePath): void {
+            $productCategory->forceFill([
+                'parent_id' => $parentId,
+                'name' => $data['name'],
+                'slug' => $this->slugForCategory($productCategory, $data['name']),
+                'description' => $this->nullable($data['description'] ?? null),
+                'image_path' => $imagePath,
+                'sort_order' => (int) ($data['sort_order'] ?? 0),
+                'default_tax_class_id' => $this->categoryDefaultTaxService->defaultTaxClassIdForSave($data, $parentId, $productCategory),
+                'status' => $data['status'],
+                'updated_by' => Auth::id(),
+            ])->save();
+
+            $this->categoryDefaultTaxService->clearDefaultTaxClassForGroupingCategory($parentId);
+        });
 
         return redirect()
             ->route('admin.master.product-categories.edit', $productCategory)

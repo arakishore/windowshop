@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\ProductCategory;
+use App\Models\TaxClass;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -179,6 +181,304 @@ class AdminProductCategoryHierarchyTest extends TestCase
             ->assertSessionHasErrors('parent_id');
     }
 
+    public function test_selectable_leaf_category_can_store_update_and_clear_default_tax_class(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%');
+        $otherTaxClass = $this->createTaxClass('GST5', 'GST 5%');
+        $parent = $this->createCategory('Fashion', 'fashion');
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.product-categories.store'), [
+                'parent_id' => $parent->getKey(),
+                'name' => 'T-Shirts',
+                'sort_order' => 1,
+                'default_tax_class_id' => $taxClass->getKey(),
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.index'))
+            ->assertSessionHas('success', 'Product category created successfully.');
+
+        $category = ProductCategory::query()->where('name', 'T-Shirts')->firstOrFail();
+        $this->assertSame($taxClass->getKey(), $category->default_tax_class_id);
+        $this->assertTrue($category->defaultTaxClass->is($taxClass));
+
+        $this->actingAs($admin)
+            ->get(route('admin.master.product-categories.index'))
+            ->assertOk()
+            ->assertSee('Default Tax Class')
+            ->assertSee('GST18 / GST 18%');
+
+        $this->actingAs($admin)
+            ->get(route('admin.master.product-categories.show', $category))
+            ->assertOk()
+            ->assertSee('Default Tax Class')
+            ->assertSee('GST18 / GST 18%');
+
+        $this->actingAs($admin)
+            ->put(route('admin.master.product-categories.update', $category), [
+                'parent_id' => $parent->getKey(),
+                'name' => 'T-Shirts',
+                'sort_order' => 1,
+                'default_tax_class_id' => $otherTaxClass->getKey(),
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.edit', $category));
+
+        $this->assertSame($otherTaxClass->getKey(), $category->fresh()->default_tax_class_id);
+
+        $this->actingAs($admin)
+            ->put(route('admin.master.product-categories.update', $category), [
+                'parent_id' => $parent->getKey(),
+                'name' => 'T-Shirts',
+                'sort_order' => 1,
+                'default_tax_class_id' => null,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.edit', $category));
+
+        $this->assertNull($category->fresh()->default_tax_class_id);
+    }
+
+    public function test_inactive_and_soft_deleted_tax_classes_are_rejected_for_category_default(): void
+    {
+        $admin = $this->createAdminUser();
+        $inactiveTaxClass = $this->createTaxClass('GST18', 'GST 18%', 'inactive');
+        $deletedTaxClass = $this->createTaxClass('GST5', 'GST 5%');
+        $deletedTaxClass->delete();
+        $parent = $this->createCategory('Fashion', 'fashion');
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.create'))
+            ->post(route('admin.master.product-categories.store'), [
+                'parent_id' => $parent->getKey(),
+                'name' => 'T-Shirts',
+                'sort_order' => 1,
+                'default_tax_class_id' => $inactiveTaxClass->getKey(),
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.create'))
+            ->assertSessionHasErrors('default_tax_class_id');
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.create'))
+            ->post(route('admin.master.product-categories.store'), [
+                'parent_id' => $parent->getKey(),
+                'name' => 'Shirts',
+                'sort_order' => 1,
+                'default_tax_class_id' => $deletedTaxClass->getKey(),
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.create'))
+            ->assertSessionHasErrors('default_tax_class_id');
+    }
+
+    public function test_grouping_categories_cannot_store_default_tax_class_and_clear_when_becoming_grouping(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%');
+        $root = $this->createCategory('Fashion', 'fashion');
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.create'))
+            ->post(route('admin.master.product-categories.store'), [
+                'parent_id' => null,
+                'name' => 'Root With Tax',
+                'sort_order' => 1,
+                'default_tax_class_id' => $taxClass->getKey(),
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.create'))
+            ->assertSessionHasErrors('default_tax_class_id');
+
+        $leaf = $this->createCategory('T-Shirts', 't-shirts', $root);
+        $leaf->forceFill(['default_tax_class_id' => $taxClass->getKey()])->save();
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.product-categories.store'), [
+                'parent_id' => $leaf->getKey(),
+                'name' => 'Round Neck',
+                'sort_order' => 1,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.index'));
+
+        $this->assertNull($leaf->fresh()->default_tax_class_id);
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.edit', $root))
+            ->put(route('admin.master.product-categories.update', $root), [
+                'parent_id' => null,
+                'name' => 'Fashion',
+                'sort_order' => 1,
+                'default_tax_class_id' => $taxClass->getKey(),
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.edit', $root))
+            ->assertSessionHasErrors('default_tax_class_id');
+    }
+
+    public function test_referenced_tax_class_cannot_be_force_deleted(): void
+    {
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%');
+        $root = $this->createCategory('Fashion', 'fashion');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $root);
+        $category->forceFill(['default_tax_class_id' => $taxClass->getKey()])->save();
+
+        $this->expectException(QueryException::class);
+
+        $taxClass->forceDelete();
+    }
+
+    public function test_edit_page_displays_current_inactive_tax_class_assignment(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%', TaxClass::STATUS_INACTIVE);
+        $root = $this->createCategory('Fashion', 'fashion');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $root);
+        $category->forceFill(['default_tax_class_id' => $taxClass->getKey()])->save();
+
+        $this->actingAs($admin)
+            ->get(route('admin.master.product-categories.edit', $category))
+            ->assertOk()
+            ->assertSee('GST18 / GST 18% - Inactive (current assignment)')
+            ->assertSee('This category currently uses a tax class that is inactive.');
+    }
+
+    public function test_edit_page_displays_current_soft_deleted_tax_class_assignment(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%');
+        $root = $this->createCategory('Fashion', 'fashion');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $root);
+        $category->forceFill(['default_tax_class_id' => $taxClass->getKey()])->save();
+        $taxClass->delete();
+
+        $this->actingAs($admin)
+            ->get(route('admin.master.product-categories.edit', $category))
+            ->assertOk()
+            ->assertSee('GST18 / GST 18% - Deleted (current assignment)')
+            ->assertSee('This category currently uses a tax class that is deleted.');
+    }
+
+    public function test_unrelated_update_preserves_current_inactive_tax_class_assignment(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%', TaxClass::STATUS_INACTIVE);
+        $root = $this->createCategory('Fashion', 'fashion');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $root);
+        $category->forceFill(['default_tax_class_id' => $taxClass->getKey()])->save();
+
+        $this->actingAs($admin)
+            ->put(route('admin.master.product-categories.update', $category), [
+                'parent_id' => $root->getKey(),
+                'name' => 'T-Shirts Updated',
+                'sort_order' => 2,
+                'default_tax_class_id' => $taxClass->getKey(),
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.edit', $category))
+            ->assertSessionHasNoErrors();
+
+        $category->refresh();
+        $this->assertSame('T-Shirts Updated', $category->name);
+        $this->assertSame($taxClass->getKey(), $category->default_tax_class_id);
+    }
+
+    public function test_unrelated_update_preserves_current_soft_deleted_tax_class_assignment(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%');
+        $root = $this->createCategory('Fashion', 'fashion');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $root);
+        $category->forceFill(['default_tax_class_id' => $taxClass->getKey()])->save();
+        $taxClass->delete();
+
+        $this->actingAs($admin)
+            ->put(route('admin.master.product-categories.update', $category), [
+                'parent_id' => $root->getKey(),
+                'name' => 'T-Shirts Updated',
+                'sort_order' => 2,
+                'default_tax_class_id' => $taxClass->getKey(),
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.edit', $category))
+            ->assertSessionHasNoErrors();
+
+        $category->refresh();
+        $this->assertSame('T-Shirts Updated', $category->name);
+        $this->assertSame($taxClass->getKey(), $category->default_tax_class_id);
+    }
+
+    public function test_changing_from_active_tax_class_to_inactive_tax_class_is_rejected(): void
+    {
+        $admin = $this->createAdminUser();
+        $activeTaxClass = $this->createTaxClass('GST18', 'GST 18%');
+        $inactiveTaxClass = $this->createTaxClass('GST5', 'GST 5%', TaxClass::STATUS_INACTIVE);
+        $root = $this->createCategory('Fashion', 'fashion');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $root);
+        $category->forceFill(['default_tax_class_id' => $activeTaxClass->getKey()])->save();
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.edit', $category))
+            ->put(route('admin.master.product-categories.update', $category), [
+                'parent_id' => $root->getKey(),
+                'name' => 'T-Shirts',
+                'sort_order' => 1,
+                'default_tax_class_id' => $inactiveTaxClass->getKey(),
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.edit', $category))
+            ->assertSessionHasErrors('default_tax_class_id');
+
+        $this->assertSame($activeTaxClass->getKey(), $category->fresh()->default_tax_class_id);
+    }
+
+    public function test_changing_from_unavailable_current_tax_class_to_active_tax_class_succeeds(): void
+    {
+        $admin = $this->createAdminUser();
+        $inactiveTaxClass = $this->createTaxClass('GST18', 'GST 18%', TaxClass::STATUS_INACTIVE);
+        $activeTaxClass = $this->createTaxClass('GST5', 'GST 5%');
+        $root = $this->createCategory('Fashion', 'fashion');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $root);
+        $category->forceFill(['default_tax_class_id' => $inactiveTaxClass->getKey()])->save();
+
+        $this->actingAs($admin)
+            ->put(route('admin.master.product-categories.update', $category), [
+                'parent_id' => $root->getKey(),
+                'name' => 'T-Shirts',
+                'sort_order' => 1,
+                'default_tax_class_id' => $activeTaxClass->getKey(),
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.edit', $category))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($activeTaxClass->getKey(), $category->fresh()->default_tax_class_id);
+    }
+
+    public function test_explicitly_clearing_unavailable_current_tax_class_succeeds(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%', TaxClass::STATUS_INACTIVE);
+        $root = $this->createCategory('Fashion', 'fashion');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $root);
+        $category->forceFill(['default_tax_class_id' => $taxClass->getKey()])->save();
+
+        $this->actingAs($admin)
+            ->put(route('admin.master.product-categories.update', $category), [
+                'parent_id' => $root->getKey(),
+                'name' => 'T-Shirts',
+                'sort_order' => 1,
+                'default_tax_class_id' => null,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.edit', $category))
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull($category->fresh()->default_tax_class_id);
+    }
+
     private function createAdminUser(): User
     {
         $user = User::query()->create([
@@ -216,6 +516,26 @@ class AdminProductCategoryHierarchyTest extends TestCase
             'slug' => $slug,
             'status' => 'active',
             'sort_order' => 1,
+        ]);
+    }
+
+    private function createTaxClass(string $code, string $name, string $status = TaxClass::STATUS_ACTIVE): TaxClass
+    {
+        $countryId = DB::table('loc_countries')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Tax Country '.Str::random(6),
+            'iso3' => strtoupper(Str::random(3)),
+            'iso2' => strtoupper(Str::random(2)),
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return TaxClass::query()->create([
+            'country_id' => $countryId,
+            'code' => $code,
+            'name' => $name,
+            'status' => $status,
         ]);
     }
 }

@@ -32,4 +32,14 @@ class MerchantAddress extends Model
     {
         return $this->belongsTo(MerchantProfile::class, 'merchant_id');
     }
+
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(LocCountry::class, 'country_id');
+    }
+
+    public function state(): BelongsTo
+    {
+        return $this->belongsTo(LocState::class, 'state_id');
+    }
 }

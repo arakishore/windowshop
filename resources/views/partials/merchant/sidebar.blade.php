@@ -123,12 +123,12 @@
                     </a>
                 </li>
 
-                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.password.*') ? 'nav-item-expanded nav-item-open' : '' }}">
-                    <a href="#" class="nav-link {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.password.*') ? 'active' : '' }}">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.tax-settings.*') || request()->routeIs('merchant.tax-slabs.*') || request()->routeIs('merchant.password.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.tax-settings.*') || request()->routeIs('merchant.tax-slabs.*') || request()->routeIs('merchant.password.*') ? 'active' : '' }}">
                         <i class="ph-user-gear"></i>
                         <span>Account</span>
                     </a>
-                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.password.*') ? 'show' : '' }}">
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.tax-settings.*') || request()->routeIs('merchant.tax-slabs.*') || request()->routeIs('merchant.password.*') ? 'show' : '' }}">
                         <li class="nav-item">
                             <a href="{{ route('merchant.profile.edit') }}" class="nav-link {{ request()->routeIs('merchant.profile.*') ? 'active' : '' }}">My Profile</a>
                         </li>
@@ -137,6 +137,12 @@
                         </li>
                         <li class="nav-item">
                             <a href="{{ route('merchant.settings.edit') }}" class="nav-link {{ request()->routeIs('merchant.settings.*') ? 'active' : '' }}">Settings</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.tax-settings.edit') }}" class="nav-link {{ request()->routeIs('merchant.tax-settings.*') ? 'active' : '' }}">Tax Settings</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.tax-slabs.index') }}" class="nav-link {{ request()->routeIs('merchant.tax-slabs.*') ? 'active' : '' }}">Tax Slabs</a>
                         </li>
                         <li class="nav-item">
                             <a href="{{ route('merchant.password.edit') }}" class="nav-link {{ request()->routeIs('merchant.password.*') ? 'active' : '' }}">Change Password</a>

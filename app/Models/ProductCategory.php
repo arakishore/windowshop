@@ -21,6 +21,7 @@ class ProductCategory extends Model
         'description',
         'image_path',
         'sort_order',
+        'default_tax_class_id',
         'status',
         'created_by',
         'updated_by',
@@ -35,6 +36,11 @@ class ProductCategory extends Model
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function defaultTaxClass(): BelongsTo
+    {
+        return $this->belongsTo(TaxClass::class, 'default_tax_class_id');
     }
 
     public function children(): HasMany

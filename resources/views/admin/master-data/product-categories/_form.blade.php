@@ -2,6 +2,12 @@
     $isEdit = $category !== null;
     $selectedParentId = old('parent_id', $category?->parent_id);
     $selectedStatus = old('status', $category?->status ?? 'active');
+    $selectedDefaultTaxClassId = old('default_tax_class_id', $category?->default_tax_class_id);
+    $currentUnavailableTaxClass = $isEdit && $category?->default_tax_class_id
+        ? ($taxClasses ?? collect())->firstWhere('id', $category->default_tax_class_id)
+        : null;
+    $currentTaxClassIsUnavailable = $currentUnavailableTaxClass
+        && ($currentUnavailableTaxClass->trashed() || $currentUnavailableTaxClass->status !== \App\Models\TaxClass::STATUS_ACTIVE);
     $removeImage = old('remove_image') && $category?->image_path;
     $imageMaxMb = (int) ceil(config('images.product_category.max_upload_kb', 4096) / 1024);
 @endphp
@@ -59,6 +65,35 @@
                     <option value="inactive" @selected($selectedStatus === 'inactive')>Inactive</option>
                 </select>
                 @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+
+            <div class="col-md-5">
+                <label for="default_tax_class_id" class="form-label">
+                    Default Tax Class
+                    <i class="ph-question ms-1 text-muted" data-bs-popup="tooltip" title="Optional default for selectable leaf categories. Future tax resolution order: product override, category default, merchant default, no tax."></i>
+                </label>
+                <select id="default_tax_class_id" name="default_tax_class_id" class="form-select @error('default_tax_class_id') is-invalid @enderror">
+                    <option value="">No Default</option>
+                    @foreach(($taxClasses ?? collect()) as $taxClass)
+                        <option value="{{ $taxClass->id }}" @selected((string) $selectedDefaultTaxClassId === (string) $taxClass->id)>
+                            @if($taxClass->trashed())
+                                {{ $taxClass->code }} / {{ $taxClass->name }} - Deleted (current assignment)
+                            @elseif($taxClass->status !== \App\Models\TaxClass::STATUS_ACTIVE)
+                                {{ $taxClass->code }} / {{ $taxClass->name }} - Inactive (current assignment)
+                            @else
+                                {{ $taxClass->code }} / {{ $taxClass->name }}
+                            @endif
+                        </option>
+                    @endforeach
+                </select>
+                <div class="form-text">Only selectable leaf categories can store a default tax class. Root or parent categories save this as No Default.</div>
+                @error('default_tax_class_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                @if($currentTaxClassIsUnavailable)
+                    <div class="alert alert-warning mt-2 mb-0 py-2">
+                        <i class="ph-warning-circle me-1"></i>
+                        This category currently uses a tax class that is {{ $currentUnavailableTaxClass->trashed() ? 'deleted' : 'inactive' }}. You may keep it temporarily, choose an active tax class, or select No Default.
+                    </div>
+                @endif
             </div>
 
             <div class="col-12">

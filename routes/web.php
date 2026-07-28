@@ -13,6 +13,9 @@ use App\Http\Controllers\Admin\MasterData\ProductCategoryAttributeGroupControlle
 use App\Http\Controllers\Admin\MasterData\ProductCategoryController;
 use App\Http\Controllers\Admin\MasterData\ProductDescriptionTemplateController;
 use App\Http\Controllers\Admin\MasterData\ShopAudienceController;
+use App\Http\Controllers\Admin\MasterData\TaxClassController;
+use App\Http\Controllers\Admin\MasterData\TaxRateComponentController;
+use App\Http\Controllers\Admin\MasterData\TaxRateController;
 use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantShopController;
 use App\Http\Controllers\Admin\ProductController;
@@ -40,6 +43,25 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('master/brands', BrandController::class)
             ->except(['show'])
             ->names('master.brands');
+        Route::post('master/tax-classes/{taxClass}/restore', [TaxClassController::class, 'restore'])
+            ->withTrashed()
+            ->name('master.tax-classes.restore');
+        Route::post('master/tax-classes/{taxClass}/rates/{taxRate}/restore', [TaxRateController::class, 'restore'])
+            ->withTrashed()
+            ->name('master.tax-classes.rates.restore');
+        Route::resource('master/tax-classes/{taxClass}/rates', TaxRateController::class)
+            ->except(['index', 'show'])
+            ->parameters(['rates' => 'taxRate'])
+            ->names('master.tax-classes.rates');
+        Route::post('master/tax-rates/{taxRate}/components/{component}/restore', [TaxRateComponentController::class, 'restore'])
+            ->withTrashed()
+            ->name('master.tax-rates.components.restore');
+        Route::resource('master/tax-rates/{taxRate}/components', TaxRateComponentController::class)
+            ->except(['index', 'show'])
+            ->parameters(['components' => 'component'])
+            ->names('master.tax-rates.components');
+        Route::resource('master/tax-classes', TaxClassController::class)
+            ->names('master.tax-classes');
         Route::get('master/catalogue-requests', [CatalogueMasterRequestController::class, 'index'])
             ->name('master.catalogue-requests.index');
         Route::put('master/catalogue-requests/{catalogueMasterRequest}', [CatalogueMasterRequestController::class, 'update'])

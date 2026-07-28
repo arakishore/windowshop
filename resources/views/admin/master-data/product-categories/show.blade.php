@@ -45,6 +45,10 @@
                         <td>{{ $path }}</td>
                     </tr>
                     <tr>
+                        <th>Default Tax Class</th>
+                        <td>{{ $category->defaultTaxClass?->name ? $category->defaultTaxClass->code.' / '.$category->defaultTaxClass->name : '-' }}</td>
+                    </tr>
+                    <tr>
                         <th>Description</th>
                         <td>{{ $category->description ?: '-' }}</td>
                     </tr>
@@ -95,6 +99,7 @@
                         <tr>
                             <th>Name</th>
                             <th>Slug</th>
+                            <th>Default Tax Class</th>
                             <th>Sort Order</th>
                             <th>Status</th>
                             <th>Assigned Products</th>
@@ -106,6 +111,7 @@
                             <tr>
                                 <td>{{ $child->name }}</td>
                                 <td><code>{{ $child->slug }}</code></td>
+                                <td>{{ $child->defaultTaxClass?->name ? $child->defaultTaxClass->code.' / '.$child->defaultTaxClass->name : '-' }}</td>
                                 <td>{{ $child->sort_order }}</td>
                                 <td>
                                     <span class="badge {{ $statusClasses[$child->status] ?? 'bg-secondary' }}">

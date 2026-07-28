@@ -11,10 +11,12 @@ use App\Http\Controllers\Merchant\MerchantDetailsController;
 use App\Http\Controllers\Merchant\MerchantSettingsController;
 use App\Http\Controllers\Merchant\MerchantShopController;
 use App\Http\Controllers\Merchant\MerchantShopContextController;
+use App\Http\Controllers\Merchant\MerchantTaxSettingController;
 use App\Http\Controllers\Merchant\PosController;
 use App\Http\Controllers\Merchant\ProductController;
 use App\Http\Controllers\Merchant\ReturnReasonController;
 use App\Http\Controllers\Merchant\SalesHistoryController;
+use App\Http\Controllers\Merchant\TaxSlabController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('merchant')->name('merchant.')->group(function (): void {
@@ -31,6 +33,10 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::put('/details', [MerchantDetailsController::class, 'update'])->name('details.update');
         Route::get('/settings', [MerchantSettingsController::class, 'edit'])->name('settings.edit');
         Route::put('/settings', [MerchantSettingsController::class, 'update'])->name('settings.update');
+        Route::get('/settings/tax', [MerchantTaxSettingController::class, 'edit'])->name('tax-settings.edit');
+        Route::put('/settings/tax', [MerchantTaxSettingController::class, 'update'])->name('tax-settings.update');
+        Route::delete('/settings/tax/{taxSetting}', [MerchantTaxSettingController::class, 'destroy'])->name('tax-settings.destroy');
+        Route::get('/settings/tax-slabs', [TaxSlabController::class, 'index'])->name('tax-slabs.index');
         Route::get('/change-password', [MerchantPasswordController::class, 'edit'])->name('password.edit');
         Route::put('/change-password', [MerchantPasswordController::class, 'update'])->name('password.update');
         Route::post('/active-shop', [MerchantShopContextController::class, 'update'])->name('active-shop.update');

@@ -94,6 +94,11 @@ class MerchantProfile extends Model
         return $this->hasMany(MerchantSetting::class, 'merchant_id');
     }
 
+    public function taxSetting(): HasOne
+    {
+        return $this->hasOne(MerchantTaxSetting::class, 'merchant_id');
+    }
+
     public function returnReasons(): HasMany
     {
         return $this->hasMany(ReturnReason::class, 'merchant_id');
