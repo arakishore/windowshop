@@ -39,7 +39,6 @@ class TaxValidationService
 
         $overlap = TaxRate::query()
             ->where('tax_class_id', $candidate->tax_class_id)
-            ->where('total_rate', $candidate->total_rate)
             ->where('status', TaxRate::STATUS_ACTIVE)
             ->when($ignore?->exists, fn ($query) => $query->whereKeyNot($ignore->getKey()))
             ->whereDate('effective_from', '<=', $to ?? '9999-12-31')
@@ -51,7 +50,7 @@ class TaxValidationService
 
         if ($overlap) {
             throw ValidationException::withMessages([
-                'effective_from' => 'Active tax rates for the same tax class and total rate cannot have overlapping effective periods.',
+                'effective_from' => 'Active tax rates for the same tax class cannot have overlapping effective periods.',
             ]);
         }
     }

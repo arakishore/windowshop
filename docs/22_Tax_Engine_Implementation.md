@@ -269,11 +269,13 @@ Future rule:
 
 ## Step 6: Tax And Pricing Services
 
-Status: Planned
+Status: Implemented
 
-Create centralized services such as:
+Centralized internal services:
 
 - `TaxResolver`
+- `MerchantTaxContext`
+- `EffectiveTaxRateResolver`
 - `TaxCalculator`
 - `PricingEngine`
 
@@ -281,9 +283,11 @@ Responsibilities:
 
 | Service | Responsibility |
 |---|---|
-| `TaxResolver` | Resolve merchant tax status, merchant tax system, product override, category default, and fallback tax class |
-| `TaxCalculator` | Calculate inclusive/exclusive tax amounts, component amounts, taxable amount, and totals |
-| `PricingEngine` | Produce consistent line totals and order totals for POS/order flows |
+| `TaxResolver` | Build merchant tax context and resolve merchant tax status, product override/exemption, category default, merchant default, and no-tax fallback |
+| `MerchantTaxContext` | Carry merchant tax settings such as enabled flag, default tax class, price mode, and business country through one pricing operation |
+| `EffectiveTaxRateResolver` | Select exactly one active effective-dated `tax_rates` row for the resolved tax class |
+| `TaxCalculator` | Calculate inclusive/exclusive line tax, taxable amount, component amounts, and line total |
+| `PricingEngine` | Compose resolver, effective rate resolver, and calculator into one product-line pricing result |
 
 Required behavior:
 
@@ -292,25 +296,111 @@ Required behavior:
 - Return consistent rounded totals.
 - Return component-level tax amounts when components exist.
 - Return a no-tax result when merchant tax is disabled.
+- Return a no-tax result when product `tax_mode = exempt`.
+- Return a no-tax result when no product/category/merchant tax class exists.
 - Avoid tax calculation logic in controllers, Blade files, or JavaScript-only business logic.
+- Financial calculations use integer-scaled decimal arithmetic in the tax service layer, not authoritative PHP floating-point arithmetic.
+- Step 6 DTOs carry immutable scalar values and component DTOs, not Eloquent models.
+- `PricingResult` is an internal service result. Step 7 should introduce a dedicated order snapshot/export DTO instead of reusing nested internal objects as the storage/API contract.
 
-Suggested result shape:
+Resolution order:
+
+1. Merchant tax settings missing or `tax_enabled = false` -> no tax, source `tax_disabled`.
+2. Product `tax_mode = exempt` -> no tax, source `product_exempt`.
+3. Product `tax_mode = override` -> product tax class, source `product_override`.
+4. Product `tax_mode = inherit` with category default -> category tax class, source `category_default`.
+5. Product `tax_mode = inherit` with merchant default -> merchant tax class, source `merchant_default`.
+6. Nothing found -> no tax, source `no_tax_class`.
+
+Invalid configuration policy:
+
+- Invalid stored tax classes throw domain exceptions instead of silently becoming no-tax.
+- Deleted tax classes are rejected.
+- Inactive tax classes are rejected.
+- Tax classes from another merchant business country are rejected.
+- Missing active effective tax rates throw `TaxRateNotFoundException`.
+- Multiple active applicable tax rates for the same date throw `OverlappingTaxRatesException`.
+- Tax-rate components must sum exactly to the total rate at runtime, otherwise `TaxComponentMismatchException` is thrown.
+
+Effective rate selection:
+
+- Compare `effective_from` and `effective_to` using the calendar date from `effective_at`.
+- `effective_from <= effective_at date`.
+- `effective_to is null` or `effective_to >= effective_at date`.
+- Inactive and soft-deleted rates are ignored.
+- If zero rates are configured, their components must still total `0.0000`.
+
+Calculation formulas:
+
+```text
+exclusive:
+line_subtotal = unit_price * quantity
+discount_amount = min(discount_amount, line_subtotal)
+taxable_amount = max(line_subtotal - discount_amount, 0)
+tax_amount = taxable_amount * total_rate / 100
+line_total = taxable_amount + tax_amount
+
+inclusive:
+line_subtotal = unit_price * quantity
+discounted_total = max(line_subtotal - discount_amount, 0)
+taxable_amount = discounted_total / (1 + total_rate / 100)
+tax_amount = discounted_total - taxable_amount
+line_total = discounted_total
+
+no tax:
+line_subtotal = unit_price * quantity
+discount_amount = min(discount_amount, line_subtotal)
+taxable_amount = max(line_subtotal - discount_amount, 0)
+tax_amount = 0
+line_total = taxable_amount
+```
+
+Rounding policy:
+
+- Money values are returned at 2 decimal places.
+- Tax rates are retained at database precision, currently 4 decimal places.
+- Intermediate service calculations use scaled integers.
+- Component amounts are rounded to 2 decimals.
+- Any component rounding remainder is assigned to the last component in stable component order.
+- Component amounts must sum exactly to `tax_amount`.
+
+Input validation:
+
+- Negative unit prices are rejected.
+- Quantity must be greater than zero.
+- Negative discounts are rejected.
+- Discounts greater than line subtotal are capped to the subtotal, preserving the existing zero-taxable-amount behavior.
+
+Implemented result shape:
 
 ```text
 tax_enabled
+resolution_source
 tax_class_id
+tax_class_code
 tax_class_name
 tax_rate_id
+tax_rate_name
 total_rate
 price_mode
 unit_price
 quantity
+line_subtotal
+discount_amount
 taxable_amount
 tax_amount
 component_amounts
-line_subtotal
 line_total
+calculated_at
 ```
+
+Step 6 boundaries:
+
+- No POS integration yet.
+- No order creation changes yet.
+- No receipt changes yet.
+- No refund/exchange/report changes yet.
+- No frontend JavaScript integration yet.
 
 ## Step 7: POS And Order Integration
 

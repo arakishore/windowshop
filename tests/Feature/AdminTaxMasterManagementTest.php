@@ -174,7 +174,7 @@ class AdminTaxMasterManagementTest extends TestCase
         ]);
     }
 
-    public function test_admin_can_manage_tax_rates_and_overlap_is_rejected(): void
+    public function test_same_tax_class_same_rate_overlapping_dates_are_rejected(): void
     {
         $admin = $this->createAdminUser();
         $taxClass = $this->createTaxClass();
@@ -204,24 +204,141 @@ class AdminTaxMasterManagementTest extends TestCase
             ])
             ->assertRedirect(route('admin.master.tax-classes.rates.create', $taxClass))
             ->assertSessionHasErrors('effective_from');
+    }
+
+    public function test_same_tax_class_different_rate_overlapping_dates_are_rejected(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass();
 
         $this->actingAs($admin)
             ->post(route('admin.master.tax-classes.rates.store', $taxClass), [
-                'name' => 'Reduced 2026',
+                'name' => 'GST 5%',
                 'total_rate' => '5.0000',
+                'effective_from' => '2026-01-01',
+                'effective_to' => '2026-12-31',
+                'priority' => 0,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.tax-classes.show', $taxClass));
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.tax-classes.rates.create', $taxClass))
+            ->post(route('admin.master.tax-classes.rates.store', $taxClass), [
+                'name' => 'GST 6%',
+                'total_rate' => '6.0000',
                 'effective_from' => '2026-06-01',
                 'effective_to' => null,
                 'priority' => 10,
                 'status' => 'active',
             ])
+            ->assertRedirect(route('admin.master.tax-classes.rates.create', $taxClass))
+            ->assertSessionHasErrors('effective_from');
+    }
+
+    public function test_adjacent_non_overlapping_tax_rate_dates_are_allowed(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass();
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.tax-classes.rates.store', $taxClass), [
+                'name' => 'GST 5% Old',
+                'total_rate' => '5.0000',
+                'effective_from' => '2026-01-01',
+                'effective_to' => '2026-03-31',
+                'priority' => 0,
+                'status' => 'active',
+            ])
             ->assertRedirect(route('admin.master.tax-classes.show', $taxClass));
 
-        $this->assertDatabaseHas('tax_rates', [
-            'tax_class_id' => $taxClass->getKey(),
-            'name' => 'Reduced 2026',
-            'total_rate' => '5.0000',
-            'status' => 'active',
-        ]);
+        $this->actingAs($admin)
+            ->post(route('admin.master.tax-classes.rates.store', $taxClass), [
+                'name' => 'GST 6% New',
+                'total_rate' => '6.0000',
+                'effective_from' => '2026-04-01',
+                'effective_to' => null,
+                'priority' => 0,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.tax-classes.show', $taxClass))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(2, $taxClass->rates()->count());
+    }
+
+    public function test_tax_rates_for_different_tax_classes_may_overlap(): void
+    {
+        $admin = $this->createAdminUser();
+        $firstTaxClass = $this->createTaxClass(code: 'GST_5');
+        $secondTaxClass = $this->createTaxClass($firstTaxClass->country, 'GST_6');
+
+        foreach ([$firstTaxClass, $secondTaxClass] as $taxClass) {
+            $this->actingAs($admin)
+                ->post(route('admin.master.tax-classes.rates.store', $taxClass), [
+                    'name' => $taxClass->code,
+                    'total_rate' => '5.0000',
+                    'effective_from' => '2026-01-01',
+                    'effective_to' => '2026-12-31',
+                    'priority' => 0,
+                    'status' => 'active',
+                ])
+                ->assertRedirect(route('admin.master.tax-classes.show', $taxClass))
+                ->assertSessionHasNoErrors();
+        }
+
+        $this->assertSame(1, $firstTaxClass->rates()->count());
+        $this->assertSame(1, $secondTaxClass->rates()->count());
+    }
+
+    public function test_inactive_tax_rates_do_not_block_active_tax_rates(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass();
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.tax-classes.rates.store', $taxClass), [
+                'name' => 'Inactive GST 5%',
+                'total_rate' => '5.0000',
+                'effective_from' => '2026-01-01',
+                'effective_to' => '2026-12-31',
+                'priority' => 0,
+                'status' => 'inactive',
+            ])
+            ->assertRedirect(route('admin.master.tax-classes.show', $taxClass));
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.tax-classes.rates.store', $taxClass), [
+                'name' => 'Active GST 6%',
+                'total_rate' => '6.0000',
+                'effective_from' => '2026-06-01',
+                'effective_to' => null,
+                'priority' => 0,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.tax-classes.show', $taxClass))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(2, $taxClass->rates()->count());
+    }
+
+    public function test_admin_can_update_delete_and_restore_tax_rates(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass();
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.tax-classes.rates.store', $taxClass), [
+                'name' => 'Standard 2026',
+                'total_rate' => '18.0000',
+                'effective_from' => '2026-01-01',
+                'effective_to' => '2026-12-31',
+                'priority' => 0,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.tax-classes.show', $taxClass));
+
+        $rate = $taxClass->rates()->firstOrFail();
 
         $this->actingAs($admin)
             ->put(route('admin.master.tax-classes.rates.update', [$taxClass, $rate]), [
