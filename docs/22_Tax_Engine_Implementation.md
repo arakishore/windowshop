@@ -402,33 +402,300 @@ Step 6 boundaries:
 - No refund/exchange/report changes yet.
 - No frontend JavaScript integration yet.
 
-## Step 7: POS And Order Integration
+## Step 7: Order Tax Snapshot And Integration
+
+Status: Partially implemented
+
+Step 7 is intentionally split so schema, snapshot mapping, order creation, POS calculation, and display changes can be reviewed separately.
+
+### Step 7A: Order Tax Snapshot Schema
+
+Status: Implemented
+
+Historical tax snapshot columns now exist at order-item level. This is the primary snapshot location because different items in one order may resolve to different tax classes, rates, or exemption/default sources.
+
+Existing order-item financial mappings:
+
+| Step 6 pricing result | Existing `order_items` column |
+|---|---|
+| `line_subtotal` | `line_subtotal` |
+| `discount_amount` | `line_discount` |
+| `tax_amount` | `line_tax` |
+| `line_total` | `line_total` |
+
+Do not add duplicate financial columns for those values. Existing `order_items.line_subtotal`, `line_discount`, `line_tax`, and `line_total` remain the authoritative saved line totals.
+
+Added `order_items` snapshot columns:
+
+| Column | Meaning |
+|---|---|
+| `tax_enabled` | Whether tax was enabled for this line when the order was created |
+| `tax_resolution_source` | Step 6 source such as `product_override`, `category_default`, or `tax_disabled` |
+| `tax_class_id` | Historical traceability ID only |
+| `tax_class_code` | Tax class code snapshot, for example `GST_5` |
+| `tax_class_name` | Tax class display name snapshot, for example `GST 5%` |
+| `tax_rate_id` | Historical traceability ID only |
+| `tax_rate_name` | Resolved tax rate name snapshot |
+| `tax_rate` | Resolved total rate from `EffectiveTaxRateResult.totalRate` |
+| `price_mode` | `inclusive` or `exclusive` at calculation time |
+| `taxable_amount` | Taxable amount used to calculate the line tax |
+
+Master tax IDs are deliberately not foreign constrained:
+
+- Historical orders must remain valid if tax classes, tax rates, or tax components are renamed, deleted, purged, or replaced.
+- Snapshot IDs are traceability values, not live dependencies.
+- Historical reads must use saved snapshot fields, not current tax master data.
+
+Added `order_item_tax_components`:
+
+| Column | Meaning |
+|---|---|
+| `order_item_id` | Required FK to `order_items`, cascades when an order item is deleted |
+| `tax_component_id` | Historical traceability ID only; no FK to tax master |
+| `component_code` | Component code snapshot, for example `CGST` |
+| `component_name` | Component name snapshot |
+| `jurisdiction_type` | Optional jurisdiction snapshot |
+| `rate` | Component rate snapshot |
+| `amount` | Component tax amount snapshot |
+| `sort_order` | Stable display/report ordering |
+
+Historical immutability rule:
+
+- Pricing/tax results are copied into order snapshot columns at order creation.
+- Existing orders must not be recalculated from current tax masters.
+- Changing merchant defaults, category defaults, product tax mode, tax classes, rates, or components must not alter historical orders.
+
+Step 7A boundaries:
+
+- No POS calculation changes.
+- No `OrderCreationService` changes.
+- No receipt changes.
+- No refund, exchange, or report changes.
+- No frontend changes.
+
+### Step 7B: Order Tax Snapshot DTO/Mapper
+
+Status: Implemented
+
+Dedicated immutable snapshot DTOs and a factory now map a completed Step 6 `PricingResult` into persistence-ready order tax snapshot values. This boundary keeps Step 6 internal pricing DTOs separate from the future order persistence contract.
+
+Created snapshot objects:
+
+- `OrderItemTaxSnapshot`
+- `OrderItemTaxComponentSnapshot`
+- `OrderTaxSnapshotFactory`
+
+`OrderItemTaxSnapshot` fields:
+
+- `taxEnabled`
+- `resolutionSource`
+- `taxClassId`
+- `taxClassCode`
+- `taxClassName`
+- `taxRateId`
+- `taxRateName`
+- `totalRate`
+- `priceMode`
+- `lineSubtotal`
+- `discountAmount`
+- `taxableAmount`
+- `taxAmount`
+- `lineTotal`
+- `components`
+
+`OrderItemTaxComponentSnapshot` fields:
+
+- `taxComponentId`
+- `componentCode`
+- `componentName`
+- `jurisdictionType`
+- `rate`
+- `amount`
+- `sortOrder`
+
+Step 6 result to snapshot mappings:
+
+| Step 6 value | Snapshot field |
+|---|---|
+| `PricingResult.resolution.taxEnabled` / calculation tax flag | `taxEnabled` |
+| `PricingResult.resolution.resolutionSource` | `resolutionSource` |
+| `PricingResult.resolution.taxClassId` | `taxClassId` |
+| `PricingResult.resolution.taxClassCode` | `taxClassCode` |
+| `PricingResult.resolution.taxClassName` | `taxClassName` |
+| `PricingResult.effectiveRate.taxRateId` | `taxRateId` |
+| `PricingResult.effectiveRate.taxRateName` | `taxRateName` |
+| `PricingResult.effectiveRate.totalRate` | `totalRate` |
+| `PricingResult.calculation.priceMode` | `priceMode` |
+| `PricingResult.calculation.lineSubtotal` | `lineSubtotal` |
+| `PricingResult.calculation.discountAmount` | `discountAmount` |
+| `PricingResult.calculation.taxableAmount` | `taxableAmount` |
+| `PricingResult.calculation.taxAmount` | `taxAmount` |
+| `PricingResult.calculation.lineTotal` | `lineTotal` |
+| `PricingResult.calculation.componentAmounts` | `components` |
+
+Snapshot to `order_items` attribute mappings:
+
+| Snapshot field | Database column |
+|---|---|
+| `taxEnabled` | `tax_enabled` |
+| `resolutionSource` | `tax_resolution_source` |
+| `taxClassId` | `tax_class_id` |
+| `taxClassCode` | `tax_class_code` |
+| `taxClassName` | `tax_class_name` |
+| `taxRateId` | `tax_rate_id` |
+| `taxRateName` | `tax_rate_name` |
+| `totalRate` | `tax_rate` |
+| `priceMode` | `price_mode` |
+| `taxableAmount` | `taxable_amount` |
+| `lineSubtotal` | `line_subtotal` |
+| `discountAmount` | `line_discount` |
+| `taxAmount` | `line_tax` |
+| `lineTotal` | `line_total` |
+
+Snapshot to `order_item_tax_components` attribute mappings:
+
+| Snapshot field | Database column |
+|---|---|
+| `taxComponentId` | `tax_component_id` |
+| `componentCode` | `component_code` |
+| `componentName` | `component_name` |
+| `jurisdictionType` | `jurisdiction_type` |
+| `rate` | `rate` |
+| `amount` | `amount` |
+| `sortOrder` | `sort_order` |
+
+Historical immutability rule:
+
+- The factory preserves exact Step 6 string values.
+- It does not query the database, resolve tax, recalculate tax, round values, or mutate the original `PricingResult`.
+- DTOs contain scalar values and nested snapshot DTOs only; they do not expose Eloquent models.
+
+Step 7B boundaries:
+
+- No order item persistence yet.
+- No order component persistence yet.
+- No `OrderCreationService` changes.
+- No POS, receipt, refund, exchange, report, frontend, or migration changes.
+
+### Step 7C: OrderCreationService Integration
+
+Status: Implemented
+
+`OrderCreationService` now prices every newly created order line through the centralized Step 6 `PricingEngine`, converts the result through the Step 7B `OrderTaxSnapshotFactory`, and persists both item-level snapshot columns and `order_item_tax_components` rows.
+
+Authoritative server calculation flow:
+
+1. Accept only supported order item inputs from callers: `product_variant_id`, `quantity`, and existing item discount fields.
+2. Load and lock the authoritative `ProductVariant` and related `Product` from the database.
+3. Confirm the variant belongs to the requested shop and the product belongs to the same shop and merchant.
+4. Use the database `selling_price` and `mrp`; submitted price, tax, subtotal, and total values are ignored.
+5. Calculate the existing server-approved item discount with `DiscountService`.
+6. Pass product, merchant, unit price, quantity, one order-level effective timestamp, and approved line discount to `PricingEngine`.
+7. Convert the `PricingResult` with `OrderTaxSnapshotFactory`.
+8. Create the `order_items` row from the existing product/variant/customer snapshot fields plus snapshot financial/tax attributes.
+9. Create one related `order_item_tax_components` row for every component snapshot. Tax-disabled, exempt, and no-tax-class lines create no component rows.
+
+Order item financial meanings after Step 7C:
+
+| Column | Meaning |
+|---|---|
+| `line_subtotal` | Authoritative unit price multiplied by quantity before discount |
+| `line_discount` | Existing approved item discount amount |
+| `taxable_amount` | Tax base from Step 6 calculation |
+| `line_tax` | Included or added line tax amount |
+| `line_total` | Final customer-payable line amount after item discount and tax handling |
+
+Order-total aggregation rules:
+
+- `subtotal` is still the sum of saved `order_items.line_subtotal`.
+- `discount_total` is still saved line discounts plus existing approved order-level discount/coupon rows.
+- `tax_total` is still saved line tax plus any existing explicit tax total rows.
+- `grand_total` is derived from saved `order_items.line_total`, then existing order-level discount, shipping, explicit tax rows, and rounding rows are applied.
+- This preserves shipping rows, signed discount rows, cash rounding, `amount_paid`, `change_amount`, payment-status resolution, `order_totals` rows, and existing status history behavior.
+- Inclusive tax is not added a second time to `grand_total`.
+- Exclusive tax is included in saved `line_total` and therefore in `grand_total`.
+
+Effective timestamp policy:
+
+- One timestamp is captured at the start of order creation and passed to every line calculation.
+- The same timestamp is used for completion/cancellation timestamps when those statuses are set during creation.
+
+Transaction and rollback behavior:
+
+- Order creation, item creation, component snapshot creation, order-total creation, status history creation, and stock deduction remain inside one database transaction.
+- Tax configuration/rate/component failures stop order creation with a validation error.
+- A failure before commit rolls back orders, items, component rows, totals, status history, and stock changes.
+
+Historical immutability rule:
+
+- Newly created orders read tax values from saved order-item and component snapshots.
+- Later changes to tax classes, rates, components, category defaults, merchant defaults, or product tax modes must not mutate saved order tax snapshots.
+
+Existing caller compatibility:
+
+- POS checkout still calls `OrderCreationService`; POS UI calculation/display integration remains planned for Step 7D.
+- Exchange replacement orders still call `OrderCreationService` and remain compatible.
+- Exchange-return settlement and refund logic are not changed in Step 7C. They must be reviewed later because saved `line_total` now represents the final customer-payable line amount.
+
+POS V1 aggregation behavior:
+
+- `OrderCreationService` currently merges duplicate submitted variants into one order line before pricing.
+- The merged line keeps the first submitted item discount inputs and sums the quantity.
+- This is intentional for POS V1 because the POS cart consolidates identical items.
+- If future workflows require independent lines, such as manual line notes, different discounts per duplicate variant, serial numbers, lot numbers, or warranty details, aggregation should become caller-configurable.
+
+Error response note:
+
+- Step 7C converts tax pricing/configuration failures into `ValidationException` responses so order creation stops clearly and rolls back.
+- A later POS/API error-handling pass may introduce dedicated domain exceptions if callers need to distinguish tax configuration failures from user input validation.
+
+Step 7C boundaries:
+
+- No POS UI or frontend JavaScript changes.
+- No receipt or order-detail display changes.
+- No refund, exchange-return, or report calculation changes.
+- No tax master, resolver, rate resolver, calculator, schema, DTO, or factory changes.
+
+### Step 7D: POS Calculation Integration
+
+Status: Implemented
+
+POS live cart pricing now uses the same backend pricing stack as saved orders.
+
+Implemented flow:
+
+1. POS cart changes are sent to `POST /merchant/pos/pricing`.
+2. The browser sends only supported inputs: variant ID, quantity, item discount inputs, order discount inputs, payment method, and amount paid for display.
+3. The server loads authoritative product, variant, merchant tax settings, category defaults, and product tax overrides.
+4. The server runs `PricingEngine`, maps the result through `OrderTaxSnapshotFactory`, and totals the cart through the same order-total rules used by Step 7C.
+5. The POS UI consumes the returned line and summary values for display.
+6. Checkout still uses `OrderCreationService`; the POS pricing endpoint does not create orders, deduct stock, write totals, or save snapshots.
+
+POS display rules after Step 7D:
+
+- Tax-disabled merchants receive `tax_display_enabled = false`; the POS hides line tax and tax summary rows.
+- Inclusive-tax merchants display customer-facing line totals without adding tax again.
+- Exclusive-tax merchants display separate tax amounts and line totals including added tax.
+- Quantity, item discount, order discount, payment method, and held-cart restore changes trigger full-cart repricing.
+- POS pricing requests are debounced, and newer pricing requests abort older in-flight requests.
+- Checkout is disabled while pricing is pending or failed, including keyboard-triggered checkout attempts.
+- Pricing failures keep the cart intact, show an error/retry state, and do not silently fall back to stale tax totals.
+- The browser performs presentation and cart interaction only; it must not be treated as the pricing authority.
+- Browser-submitted fake subtotal, tax total, grand total, taxable amount, or line tax values are ignored by the pricing endpoint and checkout.
+- Browser cart storage keeps only variant IDs, quantities, and discount inputs; tax rates, classes, price mode, and calculated totals are always reloaded from the server.
+
+Step 7D boundaries:
+
+- No tax calculation service changes.
+- No `OrderCreationService` changes.
+- No snapshot schema, DTO, or factory changes.
+- No receipt, refund, exchange-return, or report changes.
+
+### Step 7E: Receipt And Order Display
 
 Status: Planned
 
-Update POS calculation and order creation to use the centralized tax/pricing services.
-
-Store historical tax snapshots in:
-
-- `order_items`
-- `order_totals`
-
-Snapshots should include:
-
-- Tax class name, for example GST 5%
-- Tax class ID where useful for traceability
-- Tax rate ID where useful for traceability
-- Total rate
-- Component rates
-- Taxable amount
-- Tax amount
-- Line subtotal
-- Line total
-- Price mode
-
-Important rule:
-
-- Order financial records must remain correct even if tax master data changes later.
+Display saved tax snapshots from orders and order items. Do not look up current tax master data for historical tax display.
 
 POS behavior:
 
@@ -439,42 +706,113 @@ POS behavior:
 
 ## Step 8: Receipts, Refunds, Exchanges, Reports, And Tests
 
+Status: Split into smaller planned phases
+
+Step 8 is deliberately split so refund, exchange, reporting, and regression coverage can be reviewed independently. These workflows touch financial records and should not be bundled into one large change.
+
+### Step 8A: Refund Snapshot Integration
+
 Status: Planned
 
-Update affected surfaces:
+Update refund calculation to consume saved order-item tax snapshots.
 
-- POS receipt
-- Sales history
-- Refund calculation
-- Exchange calculation
-- Reports
-- Automated tests
+Refund rules:
 
-Refund and exchange rule:
+- Refunds must use the original saved `order_items.line_tax`, `order_items.line_total`, and component snapshots.
+- Refunds must not recalculate tax from current tax classes, rates, merchant defaults, category defaults, or product tax modes.
+- Partial refunds must prorate from the saved historical order line values.
+- Tax component refund display or storage should preserve original component codes, rates, and names where needed.
 
-- Refunds and exchanges must use the original order-item tax snapshot.
-- They must not recalculate tax using current tax master data.
+Step 8A boundaries:
 
-Receipt/reporting requirements:
+- No exchange logic changes.
+- No report changes.
+- No tax master or pricing-engine changes.
 
-- Show tax total when tax is enabled.
-- Show component breakdown where required by the tax system.
-- Avoid showing tax sections for tax-disabled merchants unless a historical order contains tax.
-- Reports should use saved order snapshots for historical accuracy.
+### Step 8B: Exchange Snapshot Integration
 
-Test coverage:
+Status: Planned
 
-- Tax disabled merchant
-- India GST seed data exists
-- Category default tax resolution
-- Product tax override resolution
-- Inclusive price calculation
-- Exclusive price calculation
-- Component split calculation
-- POS totals equal saved order totals
-- Refund uses original tax snapshot
-- Exchange uses original tax snapshot
-- Tax master changes do not mutate historical orders
+Update exchange return calculation to consume saved order-item tax snapshots.
+
+Exchange rules:
+
+- Exchange returns must use original saved order-item tax values.
+- Exchange returns must not recalculate returned tax using current tax master data.
+- Replacement orders continue to use current `OrderCreationService` pricing, because they are new orders created at exchange time.
+- Existing exchange settlement logic must be reviewed carefully because saved `line_total` now represents the final customer-payable line amount.
+
+Step 8B boundaries:
+
+- No refund logic changes.
+- No report changes.
+- No tax master or pricing-engine changes.
+
+### Step 8C: Reports And Sales History
+
+Status: Planned
+
+Update historical display and reporting surfaces to read saved tax snapshots.
+
+Reporting/display requirements:
+
+- Sales history and order detail views should display saved order and order-item tax values.
+- Reports should use saved `order_items.line_tax`, saved order totals, and component snapshot rows for historical accuracy.
+- Tax master changes after order creation must not change historical report output.
+- Avoid showing tax sections for tax-disabled merchants unless the historical order contains saved tax values.
+
+Step 8C boundaries:
+
+- No refund calculation changes.
+- No exchange calculation changes.
+- No tax master or pricing-engine changes.
+
+### Step 8D: Tax Regression Tests
+
+Status: Planned
+
+Add a focused regression suite around the full tax lifecycle.
+
+Regression coverage should include:
+
+- Tax-disabled merchant.
+- India GST seed data exists.
+- Category default tax resolution.
+- Product tax override resolution.
+- Merchant default fallback.
+- Product exempt behavior.
+- Inclusive price calculation.
+- Exclusive price calculation.
+- Component split calculation.
+- POS displayed totals equal saved order totals.
+- Browser-submitted fake totals remain ignored.
+- Refund uses original tax snapshot.
+- Exchange uses original tax snapshot.
+- Reports use saved order snapshots.
+- Tax master changes do not mutate historical orders.
+
+Step 8D boundaries:
+
+- Prefer focused tests over broad rewrites.
+- Do not introduce new product behavior in regression-only tests.
+
+## Step 9: IGST / Interstate Support
+
+Status: Planned
+
+Add jurisdiction-aware GST selection for interstate transactions.
+
+Planned direction:
+
+- Use merchant origin and customer/delivery destination to decide whether CGST/SGST or IGST applies.
+- Preserve current generic tax schema; do not introduce GST-specific table names.
+- Keep historical snapshots immutable and jurisdiction-aware.
+- Add focused tests for intrastate and interstate orders.
+
+Step 9 boundaries:
+
+- Do not change Step 7 snapshot contracts unless an explicit migration/versioning plan is added.
+- Do not recalculate historical orders when jurisdiction rules are introduced.
 
 ## Acceptance Checklist
 
@@ -487,5 +825,6 @@ Test coverage:
 - Tax/Pricing services centralize all calculations.
 - POS and order creation use the centralized services.
 - Order items and totals store immutable tax snapshots.
-- Receipts, refunds, exchanges, and reports read historical tax snapshots.
-- Automated tests cover disabled tax, inherited tax, overrides, inclusive/exclusive pricing, snapshots, refunds, and exchanges.
+- Receipt and order display read historical tax snapshots.
+- Refunds, exchanges, and reports read historical tax snapshots.
+- Automated tests cover disabled tax, inherited tax, overrides, inclusive/exclusive pricing, snapshots, refunds, exchanges, and reports.

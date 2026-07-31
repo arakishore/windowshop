@@ -17,6 +17,7 @@ use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Merchant\MerchantSettingsService;
 use App\Services\Merchant\PosProductSearchService;
 use App\Services\Order\OrderCreationService;
+use App\Services\POS\PosPricingService;
 use App\Services\Product\ProductImageService;
 use App\Services\Shared\MobileNumberNormalizer;
 use Illuminate\Http\JsonResponse;
@@ -40,6 +41,7 @@ class PosController extends Controller
         private readonly MerchantCustomerService $customerService,
         private readonly MerchantSettingsService $settings,
         private readonly AdminSettingsService $adminSettings,
+        private readonly PosPricingService $posPricingService,
     ) {
     }
 
@@ -161,6 +163,37 @@ class PosController extends Controller
                 'receipt_url' => route('merchant.pos.receipt', $order->getKey()),
                 'print_url' => route('merchant.pos.receipt', ['order' => $order->getKey(), 'print' => 1]),
             ],
+        ]);
+    }
+
+    public function pricing(Request $request): JsonResponse
+    {
+        $shop = $this->activeShop($request);
+        $data = $request->validate([
+            'amount_paid' => ['nullable', 'numeric', 'min:0'],
+            'payment_method' => ['nullable', Rule::in(array_keys($this->availablePaymentMethods((int) $shop->merchant_id)))],
+            'order_discount' => ['nullable', 'array'],
+            'order_discount.type' => ['nullable', Rule::in([Order::DISCOUNT_TYPE_PERCENT, Order::DISCOUNT_TYPE_AMOUNT])],
+            'order_discount.value' => ['nullable', 'numeric', 'min:0'],
+            'order_discount.reason' => ['nullable', 'string', 'max:80'],
+            'order_discount.note' => ['nullable', 'string', 'max:500'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_variant_id' => ['required', 'integer'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'items.*.discount_type' => ['nullable', Rule::in([Order::DISCOUNT_TYPE_PERCENT, Order::DISCOUNT_TYPE_AMOUNT])],
+            'items.*.discount_value' => ['nullable', 'numeric', 'min:0'],
+        ]);
+        $posSettings = $this->posSettings((int) $shop->merchant_id);
+
+        $this->ensurePosDiscountsAllowed($data, $posSettings);
+
+        return response()->json([
+            'pricing' => $this->posPricingService->price(
+                $shop,
+                $data,
+                $posSettings['cashRounding'],
+                now(),
+            ),
         ]);
     }
 

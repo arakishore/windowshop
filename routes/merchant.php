@@ -54,6 +54,7 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::get('/dashboard', [MerchantAuthController::class, 'dashboard'])->name('dashboard');
         Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
         Route::get('/pos/search', [PosController::class, 'search'])->name('pos.search');
+        Route::post('/pos/pricing', [PosController::class, 'pricing'])->name('pos.pricing');
         Route::get('/pos/customers', [PosController::class, 'customers'])->name('pos.customers');
         Route::post('/pos/customers', [PosController::class, 'storeCustomer'])->name('pos.customers.store');
         Route::get('/pos/customers/{customer}/addresses', [PosController::class, 'customerAddresses'])->name('pos.customers.addresses');

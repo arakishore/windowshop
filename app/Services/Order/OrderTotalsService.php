@@ -21,6 +21,7 @@ class OrderTotalsService
         $subtotal = $this->money($items->sum(fn (OrderItem $item): float => (float) $item->line_subtotal));
         $lineDiscount = $this->money($items->sum(fn (OrderItem $item): float => (float) $item->line_discount));
         $lineTax = $this->money($items->sum(fn (OrderItem $item): float => (float) $item->line_tax));
+        $linePayableTotal = $this->money($items->sum(fn (OrderItem $item): float => (float) $item->line_total));
 
         $rows = [[
             'code' => OrderTotal::CODE_SUBTOTAL,
@@ -47,9 +48,17 @@ class OrderTotalsService
 
         $discountTotal = $this->money((float) $lineDiscount + abs($discountRows->sum(fn (array $row): float => min(0, (float) $row['amount']))));
         $shippingTotal = $this->money($shippingRows->sum(fn (array $row): float => (float) $row['amount']));
-        $taxTotal = $this->money((float) $lineTax + $taxRows->sum(fn (array $row): float => (float) $row['amount']));
+        $extraTaxTotal = $this->money($taxRows->sum(fn (array $row): float => (float) $row['amount']));
+        $taxTotal = $this->money((float) $lineTax + (float) $extraTaxTotal);
         $roundingAdjustment = $this->money($roundingRows->sum(fn (array $row): float => (float) $row['amount']));
-        $grandTotal = $this->money((float) $subtotal - (float) $discountTotal + (float) $shippingTotal + (float) $taxTotal + (float) $roundingAdjustment);
+        $orderLevelDiscountTotal = $this->money((float) $discountTotal - (float) $lineDiscount);
+        $grandTotal = $this->money(
+            (float) $linePayableTotal
+            - (float) $orderLevelDiscountTotal
+            + (float) $shippingTotal
+            + (float) $extraTaxTotal
+            + (float) $roundingAdjustment
+        );
         $paid = $this->money($amountPaid);
         $changeAmount = $this->money(max(0, (float) $paid - (float) $grandTotal));
 
@@ -72,6 +81,9 @@ class OrderTotalsService
                 'grand_total' => $grandTotal,
                 'amount_paid' => $paid,
                 'change_amount' => $changeAmount,
+                '_line_payable_total' => $linePayableTotal,
+                '_line_discount_total' => $lineDiscount,
+                '_line_tax_total' => $lineTax,
             ],
             'rows' => collect($rows)->sortBy([['sort_order', 'asc']])->values()->all(),
         ];
@@ -83,6 +95,7 @@ class OrderTotalsService
     public function save(Order $order, array $summary, array $rows): void
     {
         $this->assertGrandTotalMatches($summary);
+        unset($summary['_line_payable_total'], $summary['_line_discount_total'], $summary['_line_tax_total']);
 
         $order->forceFill($summary)->save();
         $order->totals()->delete();
@@ -112,13 +125,29 @@ class OrderTotalsService
 
     private function assertGrandTotalMatches(array $summary): void
     {
-        $expected = $this->money(
-            (float) $summary['subtotal']
-            - (float) $summary['discount_total']
-            + (float) $summary['shipping_total']
-            + (float) $summary['tax_total']
-            + (float) $summary['rounding_adjustment']
-        );
+        if (array_key_exists('_line_payable_total', $summary)) {
+            $orderLevelDiscountTotal = $this->money(
+                (float) $summary['discount_total'] - (float) $summary['_line_discount_total']
+            );
+            $extraTaxTotal = $this->money(
+                (float) $summary['tax_total'] - (float) $summary['_line_tax_total']
+            );
+            $expected = $this->money(
+                (float) $summary['_line_payable_total']
+                - (float) $orderLevelDiscountTotal
+                + (float) $summary['shipping_total']
+                + (float) $extraTaxTotal
+                + (float) $summary['rounding_adjustment']
+            );
+        } else {
+            $expected = $this->money(
+                (float) $summary['subtotal']
+                - (float) $summary['discount_total']
+                + (float) $summary['shipping_total']
+                + (float) $summary['tax_total']
+                + (float) $summary['rounding_adjustment']
+            );
+        }
 
         if ($expected !== $this->money($summary['grand_total'])) {
             throw ValidationException::withMessages([

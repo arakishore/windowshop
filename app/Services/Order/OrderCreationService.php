@@ -4,14 +4,20 @@ namespace App\Services\Order;
 
 use App\Models\MerchantCustomer;
 use App\Models\MerchantCustomerAddress;
+use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderTotal;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\POS\DiscountService;
 use App\Services\POS\CashRoundingService;
+use App\Services\Tax\Exceptions\TaxConfigurationException;
+use App\Services\Tax\OrderTaxSnapshotFactory;
+use App\Services\Tax\PricingEngine;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +30,8 @@ class OrderCreationService
         private readonly OrderStatusService $orderStatusService,
         private readonly DiscountService $discountService,
         private readonly CashRoundingService $cashRoundingService,
+        private readonly PricingEngine $pricingEngine,
+        private readonly OrderTaxSnapshotFactory $orderTaxSnapshotFactory,
     ) {
     }
 
@@ -55,10 +63,12 @@ class OrderCreationService
     public function create(array $data, User $actor): Order
     {
         return DB::transaction(function () use ($data, $actor): Order {
-            $shop = Shop::query()->findOrFail((int) $data['shop_id']);
+            $effectiveAt = now();
+            $shop = Shop::query()->with('merchant')->findOrFail((int) $data['shop_id']);
             $rows = $this->aggregateItems($data['items'] ?? []);
             $variants = $this->lockVariants($shop, $rows);
-            $items = $this->buildItems($rows, $variants);
+            $itemSnapshots = $this->buildItems($rows, $variants, $shop->merchant, $effectiveAt);
+            $items = array_map(fn (array $snapshot): OrderItem => $snapshot['item'], $itemSnapshots);
             $orderStatus = (string) ($data['order_status'] ?? Order::STATUS_COMPLETED);
             $requestedPaymentStatus = isset($data['payment_status']) ? (string) $data['payment_status'] : null;
             $paymentStatus = $requestedPaymentStatus ?? Order::PAYMENT_UNPAID;
@@ -103,12 +113,16 @@ class OrderCreationService
                 'remarks' => $data['remarks'] ?? null,
                 'created_by' => $actor->getKey(),
                 'updated_by' => $actor->getKey(),
-                'completed_at' => $orderStatus === Order::STATUS_COMPLETED ? now() : null,
-                'cancelled_at' => $orderStatus === Order::STATUS_CANCELLED ? now() : null,
+                'completed_at' => $orderStatus === Order::STATUS_COMPLETED ? $effectiveAt : null,
+                'cancelled_at' => $orderStatus === Order::STATUS_CANCELLED ? $effectiveAt : null,
             ]);
 
-            foreach ($items as $item) {
-                $order->items()->create($item->getAttributes());
+            foreach ($itemSnapshots as $snapshot) {
+                $createdItem = $order->items()->create($snapshot['item']->getAttributes());
+
+                foreach ($snapshot['components'] as $componentAttributes) {
+                    $createdItem->taxComponents()->create($componentAttributes);
+                }
             }
 
             $createdItems = $order->items()->get();
@@ -336,11 +350,12 @@ class OrderCreationService
         foreach ($rows as $variantId => $row) {
             $quantity = (int) $row['quantity'];
             $variant = ProductVariant::query()
-                ->with('product.primaryImage')
+                ->with(['product.category', 'product.primaryImage'])
                 ->whereKey($variantId)
                 ->where('shop_id', $shop->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
+            $product = $variant->product;
 
             if ($variant->status !== 'active') {
                 throw ValidationException::withMessages([
@@ -354,6 +369,15 @@ class OrderCreationService
                 ]);
             }
 
+            if (! $product instanceof Product
+                || (int) $product->shop_id !== (int) $shop->getKey()
+                || (int) $product->merchant_id !== (int) $shop->merchant_id
+            ) {
+                throw ValidationException::withMessages([
+                    'items' => "{$variant->name} is not available for this shop.",
+                ]);
+            }
+
             $variants[$variantId] = $variant;
         }
 
@@ -363,9 +387,9 @@ class OrderCreationService
     /**
      * @param array<int, int> $rows
      * @param array<int, ProductVariant> $variants
-     * @return array<int, OrderItem>
+     * @return array<int, array{item: OrderItem, components: array<int, array<string, mixed>>}>
      */
-    private function buildItems(array $rows, array $variants): array
+    private function buildItems(array $rows, array $variants, MerchantProfile $merchant, CarbonInterface $effectiveAt): array
     {
         $items = [];
 
@@ -378,12 +402,30 @@ class OrderCreationService
                 'discount_type' => $row['discount_type'] ?? null,
                 'discount_value' => $row['discount_value'] ?? null,
             ]);
+            $product = $variant->product;
 
-            $items[] = new OrderItem([
+            try {
+                $pricingResult = $this->pricingEngine->calculateProductLine(
+                    product: $product,
+                    merchant: $merchant,
+                    unitPrice: $unitPrice,
+                    quantity: $quantity,
+                    effectiveAt: $effectiveAt,
+                    discountAmount: $discount['amount'],
+                );
+            } catch (TaxConfigurationException $exception) {
+                throw ValidationException::withMessages([
+                    'items' => $exception->getMessage(),
+                ]);
+            }
+
+            $taxSnapshot = $this->orderTaxSnapshotFactory->fromPricingResult($pricingResult);
+
+            $item = new OrderItem(array_merge([
                 'product_id' => $variant->product_id,
                 'product_variant_id' => $variant->getKey(),
-                'product_name' => $variant->product?->product_name ?? 'Product',
-                'product_image' => $variant->product?->primaryImage?->image_path,
+                'product_name' => $product?->product_name ?? 'Product',
+                'product_image' => $product?->primaryImage?->image_path,
                 'variant_name' => $variant->name,
                 'sku' => $variant->sku,
                 'barcode' => $variant->barcode,
@@ -391,14 +433,15 @@ class OrderCreationService
                 'unit_mrp' => $this->money($variant->mrp),
                 'unit_price' => $unitPrice,
                 'unit_discount' => '0.00',
-                'line_subtotal' => $lineSubtotal,
                 'item_discount_type' => $discount['type'],
                 'item_discount_value' => $discount['value'],
-                'line_discount' => $discount['amount'],
-                'line_tax' => '0.00',
-                'line_total' => $this->money((float) $lineSubtotal - (float) $discount['amount']),
                 'metadata' => null,
-            ]);
+            ], $taxSnapshot->toOrderItemAttributes()));
+
+            $items[] = [
+                'item' => $item,
+                'components' => $taxSnapshot->componentAttributes(),
+            ];
         }
 
         return $items;
@@ -495,8 +538,7 @@ class OrderCreationService
      */
     private function roundingAdjustment(Collection $items, array $orderDiscount, array $data): float
     {
-        $baseTotal = $items->sum(fn (OrderItem $item): float => (float) $item->line_subtotal)
-            - $items->sum(fn (OrderItem $item): float => (float) $item->line_discount)
+        $baseTotal = $items->sum(fn (OrderItem $item): float => (float) $item->line_total)
             - (float) $orderDiscount['amount'];
 
         return $this->cashRoundingService->adjustment(

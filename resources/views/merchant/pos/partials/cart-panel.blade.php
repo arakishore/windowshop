@@ -81,9 +81,9 @@
                     <span class="text-muted">Shipping</span>
                     <span class="fw-semibold">{{ $formatPosMoney(0) }}</span>
                 </div>
-                <div class="d-flex justify-content-between mb-3">
+                <div class="d-flex justify-content-between mb-3 js-pos-tax-row d-none">
                     <span class="text-muted">Tax</span>
-                    <span class="fw-semibold">{{ $formatPosMoney(0) }}</span>
+                    <span class="fw-semibold js-pos-tax-total">{{ $formatPosMoney(0) }}</span>
                 </div>
                 <div class="d-flex justify-content-between mb-3 js-pos-rounding-row d-none">
                     <span class="text-muted">Round Off</span>
@@ -94,6 +94,7 @@
                 <span class="fw-bold">Grand Total</span>
                 <span class="fw-bold pos-grand-total js-pos-grand-total">{{ $formatPosMoney(0) }}</span>
             </div>
+            <div class="text-muted fs-sm mt-1 d-none js-pos-pricing-status"></div>
             <div class="d-flex justify-content-between align-items-center mt-2">
                 <span class="text-muted">
                     <i class="ph-timer me-1"></i>

@@ -444,6 +444,7 @@
         class="pos-shell js-pos-root"
         style="--pos-product-tile-size: {{ (int) ($posPreferences['tileSizePx'] ?? 180) }}px;"
         data-items='@json($posItems->keyBy('id')->all())'
+        data-pricing-url="{{ route('merchant.pos.pricing') }}"
         data-checkout-url="{{ route('merchant.pos.checkout') }}"
         data-search-url="{{ route('merchant.pos.search') }}"
         data-customer-search-url="{{ route('merchant.pos.customers') }}"
@@ -609,9 +610,12 @@
             const subtotalEl = root.querySelector('.js-pos-subtotal');
             const itemDiscountEl = root.querySelector('.js-pos-item-discount');
             const orderDiscountTotalEl = root.querySelector('.js-pos-order-discount-total');
+            const taxRowEl = root.querySelector('.js-pos-tax-row');
+            const taxTotalEl = root.querySelector('.js-pos-tax-total');
             const roundingRowEl = root.querySelector('.js-pos-rounding-row');
             const roundingAdjustmentEl = root.querySelector('.js-pos-rounding-adjustment');
             const grandTotalEl = root.querySelector('.js-pos-grand-total');
+            const pricingStatusEl = root.querySelector('.js-pos-pricing-status');
             const elapsedTimeEl = root.querySelector('.js-pos-elapsed-time');
             const searchInput = root.querySelector('.pos-search-control');
             const searchForm = searchInput?.closest('form');
@@ -661,6 +665,12 @@
             let customerAddresses = [];
             let addSoundContext = null;
             let orderDiscount = null;
+            let pricingPayload = null;
+            let pricingRequestId = 0;
+            let pricingTimer = null;
+            let pricingAbortController = null;
+            let pricingPending = false;
+            let pricingFailed = false;
             let activeLineDiscountVariantId = null;
             const scanQueue = [];
             let scanLookupRunning = false;
@@ -690,7 +700,17 @@
             };
             const moneyText = (value) => formatMoneyText(value, currencyConfig);
             const compactMoneyText = moneyText;
-            const lineSubtotal = (row) => Number(row.price) * Number(row.quantity);
+            const pricingNumber = (row, key, fallback = 0) => {
+                const value = row?.pricing?.[key];
+
+                return value === null || value === undefined ? fallback : Number(value);
+            };
+            const summaryNumber = (key, fallback = 0) => {
+                const value = pricingPayload?.summary?.[key];
+
+                return value === null || value === undefined ? fallback : Number(value);
+            };
+            const lineSubtotal = (row) => pricingNumber(row, 'line_subtotal', Number(row.price) * Number(row.quantity));
             const calculateDiscount = (baseAmount, discount) => {
                 const type = discount?.type || discount?.discount_type || null;
                 const value = Number(discount?.value ?? discount?.discount_value ?? 0);
@@ -714,12 +734,13 @@
 
                 return { valid: true, amount: Math.round(amount * 100) / 100, message: '' };
             };
-            const lineDiscountAmount = (row) => calculateDiscount(lineSubtotal(row), row.discount).amount;
-            const lineTotal = (row) => Math.max(0, lineSubtotal(row) - lineDiscountAmount(row));
-            const cartSubtotal = () => Array.from(cart.values()).reduce((sum, row) => sum + lineSubtotal(row), 0);
+            const lineDiscountAmount = (row) => pricingNumber(row, 'line_discount', calculateDiscount(lineSubtotal(row), row.discount).amount);
+            const lineTaxAmount = (row) => pricingNumber(row, 'line_tax', 0);
+            const lineTotal = (row) => pricingNumber(row, 'line_total', Math.max(0, lineSubtotal(row) - lineDiscountAmount(row)));
+            const cartSubtotal = () => summaryNumber('subtotal', Array.from(cart.values()).reduce((sum, row) => sum + lineSubtotal(row), 0));
             const cartItemDiscount = () => Array.from(cart.values()).reduce((sum, row) => sum + lineDiscountAmount(row), 0);
             const orderDiscountBase = () => Math.max(0, cartSubtotal() - cartItemDiscount());
-            const orderDiscountAmount = () => calculateDiscount(orderDiscountBase(), orderDiscount).amount;
+            const orderDiscountAmount = () => Number(pricingPayload?.order_discount?.amount ?? calculateDiscount(orderDiscountBase(), orderDiscount).amount);
             const unroundedCartTotal = () => Math.max(0, orderDiscountBase() - orderDiscountAmount());
             const cashRoundingApplies = () => {
                 const applyTo = Array.isArray(cashRounding.applyTo) ? cashRounding.applyTo : String(cashRounding.applyTo || '').split(',');
@@ -727,6 +748,10 @@
                 return applyTo.includes('all') || applyTo.includes(selectedPaymentMethod());
             };
             const roundingAdjustment = () => {
+                if (pricingPayload?.summary?.rounding_adjustment !== undefined) {
+                    return Number(pricingPayload.summary.rounding_adjustment);
+                }
+
                 const total = unroundedCartTotal();
                 if (!cashRoundingApplies()) {
                     return 0;
@@ -740,7 +765,7 @@
 
                 return Math.round((rounded - total) * 100) / 100;
             };
-            const cartTotal = () => Math.max(0, Math.round((unroundedCartTotal() + roundingAdjustment()) * 100) / 100);
+            const cartTotal = () => summaryNumber('grand_total', Math.max(0, Math.round((unroundedCartTotal() + roundingAdjustment()) * 100) / 100));
             const discountBadge = (discount) => {
                 if (!discount?.type || Number(discount.value || 0) <= 0) {
                     return '';
@@ -877,11 +902,130 @@
                 timerInterval = null;
                 renderTimer();
             };
+            const pricingRequestPayload = () => ({
+                amount_paid: cashInput.value || 0,
+                payment_method: selectedPaymentMethod(),
+                order_discount: allowOrderDiscount && orderDiscount ? {
+                    type: orderDiscount.type,
+                    value: orderDiscount.value,
+                    reason: orderDiscount.reason || null,
+                    note: orderDiscount.note || null,
+                } : null,
+                items: Array.from(cart.values()).map((row) => ({
+                    product_variant_id: Number(row.id),
+                    quantity: row.quantity,
+                    discount_type: allowItemDiscount ? (row.discount?.type || null) : null,
+                    discount_value: allowItemDiscount ? (row.discount?.value || null) : null,
+                })),
+            });
+            const applyPricingPayload = (payload) => {
+                pricingPayload = payload || null;
+                pricingFailed = false;
+                const pricedItems = new Map((pricingPayload?.items || []).map((item) => [String(item.product_variant_id), item]));
+
+                cart.forEach((row, variantId) => {
+                    row.pricing = pricedItems.get(String(variantId)) || null;
+                });
+            };
+            const cancelPricing = () => {
+                pricingRequestId += 1;
+                pricingAbortController?.abort();
+                pricingAbortController = null;
+                pricingPending = false;
+                pricingFailed = false;
+                pricingPayload = null;
+            };
+            const requestPricing = async () => {
+                const requestId = ++pricingRequestId;
+
+                pricingAbortController?.abort();
+                pricingAbortController = null;
+
+                if (cart.size === 0) {
+                    pricingPayload = null;
+                    pricingPending = false;
+                    pricingFailed = false;
+                    cart.forEach((row) => {
+                        row.pricing = null;
+                    });
+                    render();
+                    return;
+                }
+
+                pricingPending = true;
+                pricingFailed = false;
+                render();
+                pricingAbortController = new AbortController();
+
+                try {
+                    const response = await fetch(root.dataset.pricingUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify(pricingRequestPayload()),
+                        signal: pricingAbortController.signal,
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(firstError(payload) || 'Unable to price this cart.');
+                    }
+
+                    if (requestId !== pricingRequestId) {
+                        return;
+                    }
+
+                    applyPricingPayload(payload.pricing);
+                    pricingPending = false;
+                    pricingAbortController = null;
+                    render();
+                    saveCart();
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        return;
+                    }
+
+                    if (requestId !== pricingRequestId) {
+                        return;
+                    }
+
+                    pricingPending = false;
+                    pricingFailed = true;
+                    pricingAbortController = null;
+                    render();
+                    showPosNotice(error.message, 'danger');
+                }
+            };
+            const queuePricing = () => {
+                if (pricingTimer !== null) {
+                    window.clearTimeout(pricingTimer);
+                }
+
+                if (cart.size === 0) {
+                    cancelPricing();
+                    return;
+                }
+
+                if (cart.size > 0) {
+                    pricingPending = true;
+                    pricingFailed = false;
+                    render();
+                }
+
+                pricingTimer = window.setTimeout(() => {
+                    pricingTimer = null;
+                    requestPricing();
+                }, 200);
+            };
             const cartSnapshot = (overrides = {}) => ({
                 id: overrides.id || `hold-${Date.now()}-${Math.random().toString(16).slice(2)}`,
                 label: overrides.label || '',
                 items: Array.from(cart.values()).map((row) => ({
-                    ...row,
+                    id: row.id,
+                    quantity: row.quantity,
                     discount: allowItemDiscount ? row.discount : null,
                 })),
                 cashReceived: cashInput.value,
@@ -953,9 +1097,11 @@
                 }
 
                 loadSnapshot(saved);
+                queuePricing();
             };
             const loadSnapshot = (snapshot) => {
                 cart.clear();
+                cancelPricing();
 
                 (snapshot.items || []).forEach((row) => {
                     const variantId = String(row.id || '');
@@ -988,6 +1134,7 @@
                     renderAddresses([]);
                 }
                 renderPaymentMethod(false);
+                queuePricing();
 
                 if (cart.size > 0) {
                     if (Number(snapshot.timerStartedAt) > 0) {
@@ -1193,6 +1340,11 @@
                             <div class="text-end pos-line-price-stack">
                                 <div class="fw-bold">${compactMoneyText(lineTotal(row))}</div>
                                 <div class="text-muted fs-sm">${row.quantity} x ${compactMoneyText(lineTotal(row) / Math.max(1, Number(row.quantity)))}</div>
+                                ${pricingPayload?.tax_display_enabled ? `
+                                    <div class="text-muted fs-sm">
+                                        Tax ${compactMoneyText(lineTaxAmount(row))}
+                                    </div>
+                                ` : ''}
                                 ${lineDiscountAmount(row) > 0 ? `
                                     <div class="text-muted fs-sm">
                                         MRP ${compactMoneyText(lineSubtotal(row))}
@@ -1228,6 +1380,10 @@
                 subtotalEl.textContent = moneyText(subtotal);
                 itemDiscountEl.textContent = moneyText(itemDiscount);
                 orderDiscountTotalEl.textContent = moneyText(currentOrderDiscountAmount);
+                if (taxRowEl && taxTotalEl) {
+                    taxRowEl.classList.toggle('d-none', !pricingPayload?.tax_display_enabled);
+                    taxTotalEl.textContent = moneyText(summaryNumber('tax_total', Array.from(cart.values()).reduce((sum, row) => sum + lineTaxAmount(row), 0)));
+                }
                 if (roundingRowEl && roundingAdjustmentEl) {
                     roundingRowEl.classList.toggle('d-none', currentRoundingAdjustment === 0);
                     roundingAdjustmentEl.textContent = `${currentRoundingAdjustment < 0 ? '-' : ''}${moneyText(Math.abs(currentRoundingAdjustment))}`;
@@ -1239,10 +1395,18 @@
                     orderDiscountBadge.textContent = discountBadge(orderDiscount);
                     orderDiscountBadge.classList.toggle('d-none', currentOrderDiscountAmount <= 0);
                 }
+                if (pricingStatusEl) {
+                    pricingStatusEl.classList.toggle('d-none', !pricingPending && !pricingFailed);
+                    pricingStatusEl.classList.toggle('text-danger', pricingFailed);
+                    pricingStatusEl.classList.toggle('text-muted', !pricingFailed);
+                    pricingStatusEl.innerHTML = pricingFailed
+                        ? 'Pricing failed. <button type="button" class="btn btn-link btn-sm p-0 align-baseline js-pos-pricing-retry">Retry</button>'
+                        : '<span class="spinner-border spinner-border-sm me-1"></span>Calculating...';
+                }
                 renderTimer();
                 changeEl.textContent = moneyText(isCash ? Math.max(0, paid - total) : 0);
                 const deliveryMissing = selectedFulfilment() === 'delivery' && (!selectedCustomer || !shippingAddressSelect?.value);
-                completeButton.disabled = cart.size === 0 || (isCash && paid < total) || deliveryMissing;
+                completeButton.disabled = cart.size === 0 || pricingPending || pricingFailed || !pricingPayload || (isCash && paid < total) || deliveryMissing;
                 refreshTooltips();
             };
             const renderPaymentMethod = (persist = true) => {
@@ -1256,6 +1420,7 @@
                 }
 
                 render();
+                queuePricing();
                 if (persist) {
                     saveCart();
                 }
@@ -1327,6 +1492,7 @@
                 row.discount = Number(value) > 0 ? { type: discount.type, value: Number(value) } : null;
                 window.bootstrap?.Modal.getOrCreateInstance(lineDiscountModalEl).hide();
                 render();
+                queuePricing();
                 saveCart();
             };
             const removeLineDiscount = () => {
@@ -1337,6 +1503,7 @@
 
                 window.bootstrap?.Modal.getOrCreateInstance(lineDiscountModalEl).hide();
                 render();
+                queuePricing();
                 saveCart();
             };
             const updateOrderDiscountPreview = () => {
@@ -1398,11 +1565,13 @@
                 } : null;
                 window.bootstrap?.Modal.getOrCreateInstance(orderDiscountModalEl).hide();
                 renderPaymentMethod();
+                queuePricing();
             };
             const removeOrderDiscount = () => {
                 orderDiscount = null;
                 window.bootstrap?.Modal.getOrCreateInstance(orderDiscountModalEl).hide();
                 renderPaymentMethod();
+                queuePricing();
             };
             const updateSearchSuggestion = () => {
                 if (!searchInput || !searchGhostEl) {
@@ -1726,7 +1895,6 @@
 
                 searchInput?.focus();
             };
-            const heldTotal = (snapshot) => (snapshot.items || []).reduce((sum, row) => sum + (Number(row.price) * Number(row.quantity)), 0);
             const heldItemCount = (snapshot) => (snapshot.items || []).reduce((sum, row) => sum + Number(row.quantity), 0);
             const heldNumber = (snapshot, index) => `HOLD-${String(index + 1).padStart(3, '0')}`;
             const renderHeldCarts = () => {
@@ -1738,7 +1906,7 @@
                     <div class="border rounded p-3 d-flex flex-column flex-sm-row gap-3 justify-content-between align-items-sm-center">
                         <div class="min-w-0">
                             <div class="fw-semibold text-truncate">${escapeHtml(snapshot.label || 'Walk-in customer')}</div>
-                            <div class="text-muted fs-sm">${heldNumber(snapshot, index)} · ${heldItemCount(snapshot)} item(s) · ${moneyText(heldTotal(snapshot))}</div>
+                            <div class="text-muted fs-sm">${heldNumber(snapshot, index)} · ${heldItemCount(snapshot)} item(s) · Totals refresh on resume</div>
                             <div class="text-muted fs-sm">Order time ${formatElapsed(Number(snapshot.elapsedSeconds || 0))}</div>
                         </div>
                         <div class="d-flex gap-2 flex-shrink-0">
@@ -1757,6 +1925,7 @@
             };
             const clearActiveCart = () => {
                 cart.clear();
+                cancelPricing();
                 cashInput.value = '';
                 selectedCustomer = null;
                 orderDiscount = null;
@@ -1806,6 +1975,7 @@
                     saveCart();
                     renderHeldCarts();
                     render();
+                    queuePricing();
 
                     if (window.bootstrap?.Modal && heldModalEl) {
                         window.bootstrap.Modal.getOrCreateInstance(heldModalEl).hide();
@@ -1927,6 +2097,7 @@
                 }
 
                 render();
+                queuePricing();
                 saveCart();
                 playAddSound();
                 return { added: true, product };
@@ -1946,6 +2117,7 @@
                 }
 
                 render();
+                queuePricing();
                 saveCart();
             };
 
@@ -2014,6 +2186,11 @@
                     return;
                 }
 
+                if (event.target.closest('.js-pos-pricing-retry')) {
+                    requestPricing();
+                    return;
+                }
+
                 if (!cartRow) {
                     return;
                 }
@@ -2023,7 +2200,9 @@
                     openLineDiscountModal(variantId);
                 } else if (event.target.closest('.js-pos-remove')) {
                     cart.delete(variantId);
+                    pricingPayload = null;
                     render();
+                    queuePricing();
                     saveCart();
                 } else if (event.target.closest('.js-pos-decrease')) {
                     updateQuantity(variantId, -1);
@@ -2340,6 +2519,22 @@
             render();
 
             async function completeSale() {
+                if (pricingPending) {
+                    showMessage('Pricing in progress', 'Please wait for the cart totals to finish calculating.');
+                    return;
+                }
+
+                if (pricingTimer !== null) {
+                    window.clearTimeout(pricingTimer);
+                    pricingTimer = null;
+                    await requestPricing();
+                }
+
+                if (pricingFailed || !pricingPayload) {
+                    showMessage('Pricing required', 'Refresh pricing before completing this sale.');
+                    return;
+                }
+
                 const total = cartTotal();
                 const method = selectedPaymentMethod();
                 const cash = method === 'cash' ? Number.parseFloat(cashInput.value || '0') : (method === 'credit' ? 0 : total);

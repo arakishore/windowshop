@@ -7,6 +7,7 @@ use App\Models\OrderTotal;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\Product\ProductVariantManagementService;
+use Database\Seeders\MasterData\LocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -735,6 +736,162 @@ class MerchantPosTest extends TestCase
             'code' => OrderTotal::CODE_ROUNDING,
             'amount' => '0.75',
         ]);
+    }
+
+    public function test_pos_pricing_endpoint_returns_zero_tax_payload_when_tax_is_disabled(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'No Tax Shirt', 'Default', 'NO-TAX', 'BAR-NO-TAX');
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 1000,
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('pricing.tax_display_enabled', false)
+            ->assertJsonPath('pricing.summary.subtotal', '999.00')
+            ->assertJsonPath('pricing.summary.tax_total', '0.00')
+            ->assertJsonPath('pricing.summary.grand_total', '999.00')
+            ->assertJsonPath('pricing.items.0.tax_resolution_source', 'tax_disabled');
+    }
+
+    public function test_pos_pricing_endpoint_displays_inclusive_tax_without_adding_it_again(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Inclusive Tax Shirt', 'Default', 'INC-TAX', 'BAR-INC-TAX');
+        $this->enablePosTax($shopId, $fixture['product_category_id'], true);
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 1000,
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('pricing.tax_display_enabled', true)
+            ->assertJsonPath('pricing.items.0.price_mode', 'inclusive')
+            ->assertJsonPath('pricing.items.0.line_subtotal', '999.00')
+            ->assertJsonPath('pricing.items.0.line_tax', '47.57')
+            ->assertJsonPath('pricing.items.0.line_total', '999.00')
+            ->assertJsonPath('pricing.summary.tax_total', '47.57')
+            ->assertJsonPath('pricing.summary.grand_total', '999.00');
+    }
+
+    public function test_pos_pricing_endpoint_displays_exclusive_tax_separately(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Exclusive Tax Shirt', 'Default', 'EXC-TAX', 'BAR-EXC-TAX');
+        $this->enablePosTax($shopId, $fixture['product_category_id'], false);
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 1100,
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('pricing.tax_display_enabled', true)
+            ->assertJsonPath('pricing.items.0.price_mode', 'exclusive')
+            ->assertJsonPath('pricing.items.0.line_subtotal', '999.00')
+            ->assertJsonPath('pricing.items.0.line_tax', '49.95')
+            ->assertJsonPath('pricing.items.0.line_total', '1048.95')
+            ->assertJsonPath('pricing.summary.tax_total', '49.95')
+            ->assertJsonPath('pricing.summary.grand_total', '1049.00');
+    }
+
+    public function test_pos_pricing_endpoint_updates_quantity_line_discount_and_order_discount_totals(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Discount Tax Shirt', 'Default', 'DISC-TAX', 'BAR-DISC-TAX');
+        $this->enablePosTax($shopId, $fixture['product_category_id'], false);
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 2000,
+                'order_discount' => ['type' => 'amount', 'value' => 100],
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 2, 'discount_type' => 'percent', 'discount_value' => 10],
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('pricing.items.0.line_subtotal', '1998.00')
+            ->assertJsonPath('pricing.items.0.line_discount', '199.80')
+            ->assertJsonPath('pricing.items.0.line_tax', '89.91')
+            ->assertJsonPath('pricing.summary.subtotal', '1998.00')
+            ->assertJsonPath('pricing.summary.discount_total', '299.80')
+            ->assertJsonPath('pricing.summary.tax_total', '89.91')
+            ->assertJsonPath('pricing.summary.rounding_adjustment', '-0.11')
+            ->assertJsonPath('pricing.summary.grand_total', '1788.00');
+    }
+
+    public function test_pos_pricing_ignores_fake_browser_totals_and_checkout_matches_payload(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Server Priced Shirt', 'Default', 'SERVER-TAX', 'BAR-SERVER-TAX');
+        $this->enablePosTax($shopId, $fixture['product_category_id'], false);
+        $payload = [
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+            'amount_paid' => 2000,
+            'subtotal' => 1,
+            'tax_total' => 999,
+            'grand_total' => 1,
+            'items' => [
+                [
+                    'product_variant_id' => $fixture['variant_id'],
+                    'quantity' => 1,
+                    'line_tax' => 999,
+                    'line_total' => 1,
+                ],
+            ],
+        ];
+
+        $pricing = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), $payload);
+
+        $pricing
+            ->assertOk()
+            ->assertJsonPath('pricing.summary.subtotal', '999.00')
+            ->assertJsonPath('pricing.summary.tax_total', '49.95')
+            ->assertJsonPath('pricing.summary.grand_total', '1049.00');
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                ...$payload,
+                'fulfilment_type' => 'counter',
+            ]);
+
+        $checkout
+            ->assertOk()
+            ->assertJsonPath('order.grand_total', $pricing->json('pricing.summary.grand_total'));
     }
 
     public function test_pos_discount_settings_are_enforced_at_checkout(): void
@@ -1840,6 +1997,82 @@ class MerchantPosTest extends TestCase
         );
     }
 
+    private function enablePosTax(int $shopId, int $productCategoryId, bool $pricesIncludeTax): void
+    {
+        $this->seed(LocationSeeder::class);
+
+        $shop = DB::table('shops')->where('id', $shopId)->first();
+        $country = DB::table('loc_countries')->where('iso2', 'IN')->first();
+        $state = DB::table('loc_states')->where('country_id', $country->id)->first();
+
+        DB::table('merchant_addresses')->insert([
+            'uuid' => (string) Str::uuid(),
+            'merchant_id' => $shop->merchant_id,
+            'address_type' => 'business',
+            'address_line_1' => 'Tax Market Road',
+            'country_id' => $country->id,
+            'state_id' => $state->id,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('shops')->where('id', $shopId)->update([
+            'country_id' => $country->id,
+            'state_id' => $state->id,
+            'updated_at' => now(),
+        ]);
+
+        $taxClassId = (int) DB::table('tax_classes')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'country_id' => $country->id,
+            'code' => 'GST_5_POS',
+            'name' => 'GST 5% POS',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $taxRateId = (int) DB::table('tax_rates')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'tax_class_id' => $taxClassId,
+            'name' => 'GST 5% POS',
+            'total_rate' => '5.0000',
+            'effective_from' => '2026-01-01',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ([['CGST', 'central', 1], ['SGST', 'state', 2]] as [$code, $jurisdiction, $priority]) {
+            DB::table('tax_rate_components')->insert([
+                'tax_rate_id' => $taxRateId,
+                'code' => $code,
+                'name' => $code,
+                'rate' => '2.5000',
+                'jurisdiction_type' => $jurisdiction,
+                'priority' => $priority,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        DB::table('product_categories')->where('id', $productCategoryId)->update([
+            'default_tax_class_id' => $taxClassId,
+            'updated_at' => now(),
+        ]);
+        DB::table('merchant_tax_settings')->updateOrInsert(
+            ['merchant_id' => $shop->merchant_id],
+            [
+                'uuid' => (string) Str::uuid(),
+                'tax_enabled' => true,
+                'default_tax_class_id' => $taxClassId,
+                'prices_include_tax' => $pricesIncludeTax,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
+    }
+
     private function createCustomerAddress(int $customerId, string $lineOne): int
     {
         return (int) DB::table('merchant_customer_addresses')->insertGetId([
@@ -1861,7 +2094,7 @@ class MerchantPosTest extends TestCase
     }
 
     /**
-     * @return array{product_id: int, variant_id: int, root_category_id: int, attribute_group_id: int}
+     * @return array{product_id: int, variant_id: int, root_category_id: int, product_category_id: int, attribute_group_id: int}
      */
     private function createPosProduct(int $shopId, string $name, string $variantName, string $sku, string $barcode): array
     {
@@ -1902,6 +2135,7 @@ class MerchantPosTest extends TestCase
             'product_id' => $productId,
             'variant_id' => $variantId,
             'root_category_id' => (int) $shop->root_product_category_id,
+            'product_category_id' => $categoryId,
             'attribute_group_id' => $attributeGroupId,
         ];
     }

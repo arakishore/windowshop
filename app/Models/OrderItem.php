@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OrderItem extends Model
 {
@@ -26,6 +27,16 @@ class OrderItem extends Model
         'line_discount',
         'line_tax',
         'line_total',
+        'tax_enabled',
+        'tax_resolution_source',
+        'tax_class_id',
+        'tax_class_code',
+        'tax_class_name',
+        'tax_rate_id',
+        'tax_rate_name',
+        'tax_rate',
+        'price_mode',
+        'taxable_amount',
         'metadata',
     ];
 
@@ -41,6 +52,11 @@ class OrderItem extends Model
             'line_discount' => 'decimal:2',
             'line_tax' => 'decimal:2',
             'line_total' => 'decimal:2',
+            'tax_enabled' => 'boolean',
+            'tax_class_id' => 'integer',
+            'tax_rate_id' => 'integer',
+            'tax_rate' => 'decimal:4',
+            'taxable_amount' => 'decimal:2',
             'metadata' => 'array',
         ];
     }
@@ -58,5 +74,12 @@ class OrderItem extends Model
     public function variant(): BelongsTo
     {
         return $this->belongsTo(ProductVariant::class, 'product_variant_id')->withTrashed();
+    }
+
+    public function taxComponents(): HasMany
+    {
+        return $this->hasMany(OrderItemTaxComponent::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 }
