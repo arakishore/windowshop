@@ -74,11 +74,11 @@
                     </tr>
                     <tr>
                         <th>Created At</th>
-                        <td>{{ $category->created_at?->format('d M Y, h:i A') ?? '-' }}</td>
+                        <td>{{ app_datetime($category->created_at, '-') }}</td>
                     </tr>
                     <tr>
                         <th>Updated At</th>
-                        <td>{{ $category->updated_at?->format('d M Y, h:i A') ?? '-' }}</td>
+                        <td>{{ app_datetime($category->updated_at, '-') }}</td>
                     </tr>
                 </tbody>
             </table>

@@ -90,7 +90,7 @@
                             <dt class="col-sm-4">Email</dt>
                             <dd class="col-sm-8">{{ $customer->email ?: '-' }}</dd>
                             <dt class="col-sm-4">DOB</dt>
-                            <dd class="col-sm-8">{{ $customer->date_of_birth?->format('d M Y') ?? '-' }}</dd>
+                            <dd class="col-sm-8">{{ app_date($customer->date_of_birth, '-') }}</dd>
                             <dt class="col-sm-4">Gender</dt>
                             <dd class="col-sm-8">{{ $customer->gender ? str_replace('_', ' ', ucfirst($customer->gender)) : '-' }}</dd>
                             @if($customer->is_business_customer)
@@ -196,7 +196,7 @@
                                     @foreach($orders as $order)
                                         <tr>
                                             <td class="fw-semibold">{{ $order->order_number }}</td>
-                                            <td>{{ $order->created_at?->format('d M Y h:i A') }}</td>
+                                            <td>{{ app_datetime($order->created_at) }}</td>
                                             <td>{{ ucfirst(str_replace('_', ' ', $order->order_status)) }}</td>
                                             <td>{{ ucfirst($order->payment_method) }}</td>
                                             <td class="text-end">INR {{ number_format((float) $order->grand_total, 2) }}</td>

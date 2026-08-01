@@ -172,13 +172,13 @@
                                                 Saved schedule<br>
                                             @endif
                                             @if($product->featured_from)
-                                                From {{ $product->featured_from->format('d M Y H:i') }}
+                                                From {{ app_datetime($product->featured_from) }}
                                             @endif
                                             @if($product->featured_from && $product->featured_until)
                                                 <br>
                                             @endif
                                             @if($product->featured_until)
-                                                Until {{ $product->featured_until->format('d M Y H:i') }}
+                                                Until {{ app_datetime($product->featured_until) }}
                                             @endif
                                         </div>
                                     @endif
@@ -188,7 +188,7 @@
                                         {{ $statuses[$product->status]['label'] ?? ucfirst($product->status) }}
                                     </span>
                                 </td>
-                                <td>{{ $product->created_at?->format('d M Y') }}</td>
+                                <td>{{ app_datetime($product->created_at) }}</td>
                                 <td class="text-center">
                                     <div class="list-icons justify-content-center">
                                         <a href="{{ route('merchant.products.edit', $product) }}" class="list-icons-item text-primary" data-bs-popup="tooltip" title="{{ $product->status === 'archived' ? 'View' : 'Edit' }}">

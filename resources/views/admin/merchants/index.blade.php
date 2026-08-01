@@ -126,7 +126,7 @@
                                         {{ ucfirst($merchant->status) }}
                                     </span>
                                 </td>
-                                <td>{{ $merchant->created_at?->format('d M Y') }}</td>
+                                <td>{{ app_datetime($merchant->created_at) }}</td>
                                 <td class="text-center">
                                     <div class="list-icons justify-content-center">
                                         <a href="{{ route('admin.merchants.show', $merchant) }}" class="list-icons-item text-info" data-bs-popup="tooltip" title="View">

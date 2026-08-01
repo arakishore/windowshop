@@ -462,7 +462,7 @@ class PosController extends Controller
             ->map(fn (Order $order): array => [
                 'id' => $order->getKey(),
                 'number' => $order->order_number,
-                'created_at' => $order->created_at?->format('M d · h:i A'),
+                'created_at' => app_datetime($order->created_at),
                 'grand_total' => $order->grand_total,
                 'receipt_url' => route('merchant.pos.receipt', $order->getKey()),
                 'print_url' => route('merchant.pos.receipt', ['order' => $order->getKey(), 'print' => 1]),

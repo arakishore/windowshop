@@ -90,7 +90,7 @@
                                 <td>
                                     <div class="fw-semibold">{{ $requestRow->suggested_name }}</div>
                                     <span class="badge bg-light text-body border">{{ $types[$requestRow->request_type] ?? ucfirst($requestRow->request_type) }}</span>
-                                    <div class="text-muted small">{{ $requestRow->created_at?->format('d M Y h:i A') }}</div>
+                                    <div class="text-muted small">{{ app_datetime($requestRow->created_at) }}</div>
                                 </td>
                                 <td>
                                     <div class="fw-semibold">{{ $requestRow->merchant?->business_name ?? '-' }}</div>

@@ -234,7 +234,7 @@
             @endif
             <div class="receipt-row">
                 <span>Date :</span>
-                <span>{{ $order->created_at?->format('d-M-Y h:i A') }}</span>
+                <span>{{ app_datetime($order->created_at) }}</span>
             </div>
             @if($showCashier)
                 <div>Cashier: {{ $order->createdBy?->name ?? auth()->user()?->name ?? 'Staff' }}</div>

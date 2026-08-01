@@ -70,15 +70,15 @@
                         </tr>
                         <tr>
                             <td class="text-muted">Last Login</td>
-                            <td>{{ $merchant->user?->last_login_at?->format('d M Y h:i A') ?? '-' }}</td>
+                            <td>{{ app_datetime($merchant->user?->last_login_at, '-') }}</td>
                         </tr>
                         <tr>
                             <td class="text-muted">Created On</td>
-                            <td>{{ $merchant->created_at?->format('d M Y') ?? '-' }}</td>
+                            <td>{{ app_datetime($merchant->created_at, '-') }}</td>
                         </tr>
                         <tr>
                             <td class="text-muted">Last Updated</td>
-                            <td>{{ $merchant->updated_at?->format('d M Y h:i A') ?? '-' }}</td>
+                            <td>{{ app_datetime($merchant->updated_at, '-') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -107,7 +107,7 @@
                         </tr>
                         <tr>
                             <td class="text-muted">Verified At</td>
-                            <td>{{ $merchant->verified_at?->format('d M Y h:i A') ?? '-' }}</td>
+                            <td>{{ app_datetime($merchant->verified_at, '-') }}</td>
                         </tr>
                         <tr>
                             <td class="text-muted">Verified By</td>

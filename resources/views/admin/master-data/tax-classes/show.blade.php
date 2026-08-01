@@ -39,7 +39,7 @@
                 </div>
                 <div class="col-md-3">
                     <div class="text-muted fs-sm">Created</div>
-                    <div>{{ $taxClass->created_at?->format('d M Y') }}</div>
+                    <div>{{ app_datetime($taxClass->created_at) }}</div>
                 </div>
                 @if($taxClass->description)
                     <div class="col-12">
@@ -82,8 +82,8 @@
                             <tr>
                                 <td class="fw-semibold">{{ $rate->name }}</td>
                                 <td>{{ $rate->total_rate }}%</td>
-                                <td>{{ $rate->effective_from?->format('Y-m-d') }}</td>
-                                <td>{{ $rate->effective_to?->format('Y-m-d') ?? '-' }}</td>
+                                <td>{{ app_date($rate->effective_from) }}</td>
+                                <td>{{ app_date($rate->effective_to, '-') }}</td>
                                 <td>{{ $rate->priority }}</td>
                                 <td>
                                     @if($rate->trashed())

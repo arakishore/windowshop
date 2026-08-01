@@ -89,9 +89,9 @@
                                             <td class="fw-semibold">{{ $rate->name }}</td>
                                             <td>{{ number_format((float) $rate->total_rate, 4) }}%</td>
                                             <td>
-                                                {{ $rate->effective_from?->format('d M Y') ?? '-' }}
+                                                {{ app_date($rate->effective_from, '-') }}
                                                 -
-                                                {{ $rate->effective_to?->format('d M Y') ?? 'Open' }}
+                                                {{ app_date($rate->effective_to, 'Open') }}
                                             </td>
                                             <td>
                                                 @if ($rate->components->isEmpty())

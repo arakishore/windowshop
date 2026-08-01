@@ -154,7 +154,7 @@
                                         {{ ucfirst($category->status) }}
                                     </span>
                                 </td>
-                                <td>{{ $category->created_at?->format('d M Y') }}</td>
+                                <td>{{ app_datetime($category->created_at) }}</td>
                                 <td class="text-center">
                                     <div class="list-icons justify-content-center">
                                         <a href="{{ route('admin.master.product-categories.show', $category) }}" class="list-icons-item text-info" data-bs-popup="tooltip" title="View">

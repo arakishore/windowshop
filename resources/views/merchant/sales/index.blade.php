@@ -142,7 +142,7 @@
                     @forelse($orders as $order)
                         <tr>
                             <td><a href="{{ route('merchant.sales.show', $order) }}" class="fw-semibold text-body">{{ $order->order_number }}</a></td>
-                            <td>{{ $order->created_at?->format('d-m-Y h:i A') }}</td>
+                            <td>{{ app_datetime($order->created_at) }}</td>
                             <td>{{ $activeShop->name }}</td>
                             <td>{{ $order->customer_name ?: 'Walk-in' }}</td>
                             <td>{{ $order->createdBy?->name ?? 'Staff' }}</td>

@@ -102,7 +102,7 @@
                                 {{ collect([$customer->mobile_country_code, $customer->mobile])->filter()->implode(' ') }}
                             </td>
                             <td>{{ $customer->orders_count }}</td>
-                            <td>{{ $customer->created_at?->format('d M Y') }}</td>
+                            <td>{{ app_datetime($customer->created_at) }}</td>
                             <td class="text-center">
                                 <div class="list-icons justify-content-center">
                                     <a href="{{ route('merchant.customers.show', $customer) }}" class="list-icons-item text-info" data-bs-popup="tooltip" title="View">

@@ -197,13 +197,13 @@
                                                 Saved schedule<br>
                                             @endif
                                             @if($product->featured_from)
-                                                From {{ $product->featured_from->format('d M Y H:i') }}
+                                                From {{ app_datetime($product->featured_from) }}
                                             @endif
                                             @if($product->featured_from && $product->featured_until)
                                                 <br>
                                             @endif
                                             @if($product->featured_until)
-                                                Until {{ $product->featured_until->format('d M Y H:i') }}
+                                                Until {{ app_datetime($product->featured_until) }}
                                             @endif
                                         </div>
                                     @endif
@@ -220,10 +220,10 @@
                                 </td>
                                 <td>
                                     @if($isTrash)
-                                        <div>{{ $product->deleted_at?->format('d M Y H:i') }}</div>
+                                        <div>{{ app_datetime($product->deleted_at) }}</div>
                                         <div class="fs-sm text-muted">By {{ $product->deletedBy?->name ?? 'System' }}</div>
                                     @else
-                                        {{ $product->created_at?->format('d M Y') }}
+                                        {{ app_datetime($product->created_at) }}
                                     @endif
                                 </td>
                                 <td class="text-center">

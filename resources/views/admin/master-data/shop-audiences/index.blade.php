@@ -90,7 +90,7 @@
                                         {{ ucfirst($audience->status) }}
                                     </span>
                                 </td>
-                                <td>{{ $audience->created_at?->format('d M Y') }}</td>
+                                <td>{{ app_datetime($audience->created_at) }}</td>
                                 <td class="text-center">
                                     <div class="list-icons justify-content-center">
                                         <a href="{{ route('admin.master.shop-audiences.edit', $audience) }}" class="list-icons-item text-primary" data-bs-popup="tooltip" title="Edit">

@@ -66,7 +66,7 @@
                 @endif
                 <span class="badge {{ $fulfilmentClass }}">{{ $fulfilmentLabel }}</span>
             </div>
-            <div class="text-muted">{{ $activeShop->name }} · {{ $order->created_at?->format('d-m-Y h:i A') }} · {{ $order->createdBy?->name ?? 'Staff' }}</div>
+            <div class="text-muted">{{ $activeShop->name }} · {{ app_datetime($order->created_at) }} · {{ $order->createdBy?->name ?? 'Staff' }}</div>
         </div>
         <div class="d-flex gap-2">
             @if($canRefund)
@@ -168,7 +168,7 @@
                             <tr>
                                 <td>{{ Str::headline($order->payment_method) }}</td>
                                 <td>{{ $paymentReference !== '' ? $paymentReference : '-' }}</td>
-                                <td>{{ $order->created_at?->format('d-m-Y h:i A') }}</td>
+                                <td>{{ app_datetime($order->created_at) }}</td>
                                 <td class="text-end">{{ $money($order->amount_paid) }}</td>
                                 <td class="text-end">{{ $money($order->change_amount) }}</td>
                                 <td class="text-end fw-semibold">{{ $money($order->grand_total) }}</td>
@@ -269,7 +269,7 @@
                             <div class="list-group-item d-flex justify-content-between gap-3">
                                 <div>
                                     <div class="fw-semibold">{{ $refund->refund_number }}</div>
-                                    <div class="text-muted small">{{ $refund->created_at?->format('d-m-Y') }} · {{ $refund->reason_name }}</div>
+                                    <div class="text-muted small">{{ app_datetime($refund->created_at) }} · {{ $refund->reason_name }}</div>
                                 </div>
                                 <div class="fw-semibold text-nowrap">-{{ $money($refund->refund_total) }}</div>
                             </div>

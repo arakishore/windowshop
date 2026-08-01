@@ -72,7 +72,7 @@
             </div>
             <div class="exchange-receipt-row">
                 <span>Date:</span>
-                <span>{{ $exchange->created_at?->format('d-M-Y h:i A') }}</span>
+                <span>{{ app_datetime($exchange->created_at) }}</span>
             </div>
             <div>Cashier: {{ $exchange->createdBy?->name ?? auth()->user()?->name ?? 'Staff' }}</div>
 

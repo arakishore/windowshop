@@ -126,14 +126,14 @@ class ProductMerchandisingTest extends TestCase
             ->get(route('merchant.products.index', ['featured' => 'scheduled']))
             ->assertOk()
             ->assertSee('Featured Scheduled')
-            ->assertSee('From 01 Sep 2026 10:00')
+            ->assertSee('From 01-09-2026 10:00 AM')
             ->assertDontSee('Featured Current');
 
         $this->actingAs($fixture['admin'])
             ->get(route('admin.products.index', ['featured' => 'scheduled']))
             ->assertOk()
             ->assertSee('Featured Scheduled')
-            ->assertSee('From 01 Sep 2026 10:00')
+            ->assertSee('From 01-09-2026 10:00 AM')
             ->assertDontSee('Featured Current');
 
         $this->actingAs($fixture['admin'])
@@ -153,7 +153,7 @@ class ProductMerchandisingTest extends TestCase
             ->assertOk()
             ->assertSee('Disabled Saved Schedule')
             ->assertSee('Saved schedule')
-            ->assertSee('From 20 Sep 2026 10:00');
+            ->assertSee('From 20-09-2026 10:00 AM');
 
         $this->actingAs($fixture['merchantUser'])
             ->withSession(['active_shop_id' => $fixture['shop']->getKey()])

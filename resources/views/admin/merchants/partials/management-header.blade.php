@@ -66,7 +66,7 @@
                             <i class="ph-calendar text-muted mt-1"></i>
                             <div>
                                 <div class="text-muted small">Joined On</div>
-                                <div class="fw-semibold">{{ $merchant->created_at?->format('d M Y') ?? '-' }}</div>
+                                <div class="fw-semibold">{{ app_datetime($merchant->created_at, '-') }}</div>
                             </div>
                         </div>
                     </div>
@@ -75,7 +75,7 @@
                             <i class="ph-clock text-muted mt-1"></i>
                             <div>
                                 <div class="text-muted small">Last Login</div>
-                                <div class="fw-semibold">{{ $merchant->user?->last_login_at?->format('d M Y h:i A') ?? '-' }}</div>
+                                <div class="fw-semibold">{{ app_datetime($merchant->user?->last_login_at, '-') }}</div>
                             </div>
                         </div>
                     </div>
@@ -84,7 +84,7 @@
                             <i class="ph-arrows-clockwise text-muted mt-1"></i>
                             <div>
                                 <div class="text-muted small">Updated On</div>
-                                <div class="fw-semibold">{{ $merchant->updated_at?->format('d M Y h:i A') ?? '-' }}</div>
+                                <div class="fw-semibold">{{ app_datetime($merchant->updated_at, '-') }}</div>
                             </div>
                         </div>
                     </div>

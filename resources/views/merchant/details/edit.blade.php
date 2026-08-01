@@ -159,11 +159,11 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Created Date</label>
-                                <div class="fw-semibold">{{ $merchant->created_at?->format('d M Y, h:i A') }}</div>
+                                <div class="fw-semibold">{{ app_datetime($merchant->created_at) }}</div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Approved Date</label>
-                                <div class="fw-semibold">{{ $merchant->verified_at?->format('d M Y, h:i A') ?? 'Not approved' }}</div>
+                                <div class="fw-semibold">{{ app_datetime($merchant->verified_at, 'Not approved') }}</div>
                             </div>
                         </div>
                     </div>

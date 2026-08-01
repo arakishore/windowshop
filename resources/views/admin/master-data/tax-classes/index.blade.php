@@ -97,7 +97,7 @@
                                         <span class="badge {{ $statusClasses[$taxClass->status] ?? 'bg-secondary' }}">{{ ucfirst($taxClass->status) }}</span>
                                     @endif
                                 </td>
-                                <td>{{ $taxClass->created_at?->format('d M Y') }}</td>
+                                <td>{{ app_datetime($taxClass->created_at) }}</td>
                                 <td class="text-center">
                                     <div class="list-icons justify-content-center">
                                         @if($taxClass->trashed())

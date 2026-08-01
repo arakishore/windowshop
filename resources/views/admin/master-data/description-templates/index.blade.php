@@ -45,7 +45,7 @@
                                 </span>
                             </td>
                             <td>{{ $template->sort_order }}</td>
-                            <td>{{ $template->updated_at?->format('d M Y') }}</td>
+                            <td>{{ app_datetime($template->updated_at) }}</td>
                             <td class="text-center">
                                 <div class="list-icons justify-content-center">
                                     <a href="{{ route('admin.master.description-templates.preview', $template) }}" class="list-icons-item text-info" data-bs-popup="tooltip" title="Preview">

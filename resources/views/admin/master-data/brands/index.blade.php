@@ -116,7 +116,7 @@
                                         {{ ucfirst($brand->status) }}
                                     </span>
                                 </td>
-                                <td>{{ $brand->created_at?->format('d M Y') }}</td>
+                                <td>{{ app_datetime($brand->created_at) }}</td>
                                 <td class="text-center">
                                     <div class="list-icons justify-content-center">
                                         <a href="{{ route('admin.master.brands.edit', $brand) }}" class="list-icons-item text-primary" data-bs-popup="tooltip" title="Edit">

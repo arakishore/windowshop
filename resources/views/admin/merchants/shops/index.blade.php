@@ -79,7 +79,7 @@
                                         {{ $shopStatuses[$shop->status]['label'] ?? ucfirst($shop->status) }}
                                     </span>
                                 </td>
-                                <td>{{ $shop->created_at?->format('d M Y') ?? '-' }}</td>
+                                <td>{{ app_datetime($shop->created_at, '-') }}</td>
                                 <td class="text-center">
                                     <div class="list-icons justify-content-center">
                                         <a href="{{ route('admin.merchants.shops.show', [$merchant, $shop]) }}" class="list-icons-item text-info" data-bs-popup="tooltip" title="View">

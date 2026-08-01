@@ -206,10 +206,10 @@
                         <dd class="col-sm-8">{{ $shop->admin_note ?? '-' }}</dd>
 
                         <dt class="col-sm-4">Created</dt>
-                        <dd class="col-sm-8">{{ $shop->created_at?->format('d M Y h:i A') ?? '-' }}</dd>
+                        <dd class="col-sm-8">{{ app_datetime($shop->created_at, '-') }}</dd>
 
                         <dt class="col-sm-4">Updated</dt>
-                        <dd class="col-sm-8">{{ $shop->updated_at?->format('d M Y h:i A') ?? '-' }}</dd>
+                        <dd class="col-sm-8">{{ app_datetime($shop->updated_at, '-') }}</dd>
                     </dl>
                 </div>
             </div>

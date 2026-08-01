@@ -263,7 +263,7 @@
                                             </span>
                                         </td>
                                         <td>{{ $requestRow->admin_note ?: '-' }}</td>
-                                        <td>{{ $requestRow->created_at?->format('d M Y') }}</td>
+                                        <td>{{ app_datetime($requestRow->created_at) }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
