@@ -57,6 +57,7 @@
                             <th>Category</th>
                             <th>Parent</th>
                             <th>Path</th>
+                            <th>Default Tax Class</th>
                             <th>Can Select in Product</th>
                         </tr>
                     </thead>
@@ -80,6 +81,13 @@
                                 </td>
                                 <td>{{ $category->parent?->name ?? '-' }}</td>
                                 <td class="text-muted">{{ $path }}</td>
+                                <td>
+                                    @if($category->defaultTaxClass)
+                                        <span class="badge bg-info bg-opacity-10 text-info">{{ $category->defaultTaxClass->displayLabel() }}</span>
+                                    @else
+                                        <span class="badge bg-light text-body border">No default</span>
+                                    @endif
+                                </td>
                                 <td>
                                     @if($category->is_selectable_leaf)
                                         <span class="badge bg-success bg-opacity-10 text-success">Yes</span>
@@ -172,6 +180,13 @@
                 <form method="POST" action="{{ route('merchant.catalogue-masters.requests.store') }}">
                     @csrf
                     <div class="card-body">
+                        <div class="alert alert-info d-flex align-items-start gap-2 py-2">
+                            <i class="ph-info mt-1"></i>
+                            <div>
+                                <div class="fw-semibold">Need a category or attribute that is not listed?</div>
+                                <div class="small mb-0">Send a request to admin with the suggested name and an example product. Once approved, it will become available for product setup in this shop type.</div>
+                            </div>
+                        </div>
                         <div class="mb-3">
                             <label for="request_type" class="form-label">Request Type <span class="text-danger">*</span></label>
                             <select id="request_type" name="request_type" class="form-select" required>

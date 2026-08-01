@@ -26,17 +26,12 @@ class ReturnReasonController extends Controller
         $merchant = $this->shopContextService->activeMerchantForUser($request->user());
         abort_unless($merchant !== null, 403);
 
-        $search = trim((string) $request->query('search', ''));
         $reasons = ReturnReason::query()
             ->where('merchant_id', $merchant->getKey())
             ->where('code', '!=', 'exchange')
-            ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
-                ->where('code', 'like', "%{$search}%")
-                ->orWhere('name', 'like', "%{$search}%")))
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->paginate(15)
-            ->withQueryString();
+            ->get();
 
         $selected = $request->query('reason')
             ? ReturnReason::query()->where('merchant_id', $merchant->getKey())->where('code', '!=', 'exchange')->where('uuid', $request->query('reason'))->first()
@@ -46,7 +41,6 @@ class ReturnReasonController extends Controller
             'merchant' => $merchant,
             'reasons' => $reasons,
             'selectedReason' => $selected,
-            'search' => $search,
         ]);
     }
 

@@ -56,6 +56,7 @@ class ProductController extends Controller
             'search' => trim((string) $request->query('search', '')),
             'shop_id' => $request->query('shop_id'),
             'status' => $request->query('status'),
+            'featured' => $request->query('featured'),
         ];
 
         $isTrash = $filters['status'] === 'trash';
@@ -74,6 +75,7 @@ class ProductController extends Controller
             })
             ->when(is_numeric($filters['shop_id']), fn ($query) => $query->where('shop_id', (int) $filters['shop_id']))
             ->when(! $isTrash && in_array($filters['status'], array_keys($this->statuses()), true), fn ($query) => $query->where('status', $filters['status']))
+            ->when($filters['featured'], fn ($query, $featured) => $this->applyFeaturedFilter($query, (string) $featured))
             ->orderByDesc('created_at')
             ->paginate((int) config('admin.pagination.per_page', 15))
             ->withQueryString();
@@ -99,9 +101,10 @@ class ProductController extends Controller
     public function store(StoreProductQuickCreateRequest $request): RedirectResponse
     {
         $data = $request->validated();
+        $merchandising = $request->merchandisingConfiguration();
         $actorId = Auth::id();
 
-        $product = DB::transaction(function () use ($data, $actorId): Product {
+        $product = DB::transaction(function () use ($data, $merchandising, $actorId): Product {
             $shop = Shop::query()->findOrFail((int) $data['shop_id']);
 
             $product = Product::create([
@@ -114,6 +117,7 @@ class ProductController extends Controller
                 'tax_class_id' => null,
                 'product_name' => $data['product_name'],
                 'slug' => 'pending-'.Str::uuid()->toString(),
+                ...$merchandising,
                 'status' => 'draft',
                 'created_by' => $actorId,
                 'updated_by' => $actorId,
@@ -196,6 +200,7 @@ class ProductController extends Controller
             'product_name' => $data['product_name'],
             'slug' => $this->slugForProduct($product, $data['product_name']),
             'short_description' => $this->nullable($data['short_description'] ?? null),
+            ...$request->merchandisingConfiguration(),
             'status' => $data['status'],
             'updated_by' => Auth::id(),
         ])->save();
@@ -253,7 +258,7 @@ class ProductController extends Controller
     public function bulkAction(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'action' => ['required', Rule::in(['mark_active', 'mark_inactive', 'archive', 'restore_archive', 'delete', 'restore_trash', 'force_delete'])],
+            'action' => ['required', Rule::in(['mark_active', 'mark_inactive', 'mark_featured', 'remove_featured', 'archive', 'restore_archive', 'delete', 'restore_trash', 'force_delete'])],
             'product_ids' => ['required', 'array', 'min:1'],
             'product_ids.*' => ['integer'],
         ]);
@@ -261,6 +266,8 @@ class ProductController extends Controller
         $count = match ($data['action']) {
             'mark_active' => $this->bulkStatus($data['product_ids'], 'active'),
             'mark_inactive' => $this->bulkStatus($data['product_ids'], 'inactive'),
+            'mark_featured' => $this->bulkFeatured($data['product_ids'], true),
+            'remove_featured' => $this->bulkFeatured($data['product_ids'], false),
             'archive' => $this->bulkArchive($data['product_ids']),
             'restore_archive' => $this->bulkRestoreArchive($data['product_ids']),
             'delete' => $this->bulkSoftDelete($data['product_ids']),
@@ -458,6 +465,20 @@ class ProductController extends Controller
     /**
      * @param array<int, int|string> $productIds
      */
+    private function bulkFeatured(array $productIds, bool $isFeatured): int
+    {
+        return Product::query()
+            ->whereIn('id', $productIds)
+            ->update([
+                'is_featured' => $isFeatured,
+                'updated_by' => Auth::id(),
+                'updated_at' => now(),
+            ]);
+    }
+
+    /**
+     * @param array<int, int|string> $productIds
+     */
     private function bulkStatus(array $productIds, string $status): int
     {
         return DB::transaction(function () use ($productIds, $status): int {
@@ -585,8 +606,8 @@ class ProductController extends Controller
                     $query->orWhere('id', $product->shop_id);
                 }
             })
-            ->orderBy('sort_order')
             ->orderBy('name')
+            ->orderBy('id')
             ->get();
     }
 
@@ -599,6 +620,7 @@ class ProductController extends Controller
                     ->orWhereHas('products');
             })
             ->orderBy('name')
+            ->orderBy('id')
             ->get();
     }
 
@@ -702,6 +724,17 @@ class ProductController extends Controller
         }
 
         return $statuses;
+    }
+
+    private function applyFeaturedFilter($query, string $featured): void
+    {
+        match ($featured) {
+            'current' => $query->currentlyFeatured(),
+            'scheduled' => $query->scheduledFeatured(),
+            'expired' => $query->expiredFeatured(),
+            'not_featured' => $query->where('is_featured', false),
+            default => null,
+        };
     }
 
     private function slugForProduct(Product $product, string $name): string

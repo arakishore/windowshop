@@ -28,59 +28,53 @@
         <div class="col-xl-9">
             <div class="card">
                 <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                    <h5 class="mb-0">Reasons ({{ $reasons->total() }})</h5>
-                    <form method="GET" action="{{ route('merchant.return-reasons.index') }}" style="width: min(100%, 320px);">
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="ph-magnifying-glass"></i></span>
-                            <input name="search" value="{{ $search }}" type="search" class="form-control" placeholder="Search...">
-                        </div>
-                    </form>
+                    <h5 class="mb-0">Reasons ({{ $reasons->count() }})</h5>
                 </div>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Name</th>
-                                <th class="text-end">Order</th>
-                                <th>Status</th>
-                                <th class="text-center">Restock</th>
-                                <th class="text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($reasons as $reason)
-                                <tr class="{{ $selectedReason?->is($reason) ? 'table-active' : '' }}">
-                                    <td>
-                                        <a href="{{ route('merchant.return-reasons.index', ['reason' => $reason->getRouteKey()]) }}" class="text-body fw-semibold">{{ $reason->name }}</a>
-                                        @if($reason->restock_by_default)
-                                            <span class="badge bg-light text-body ms-2">Restocks by default</span>
-                                        @else
-                                            <span class="badge bg-secondary bg-opacity-10 text-secondary ms-2">Does NOT restock by default</span>
-                                        @endif
-                                    </td>
-                                    <td class="text-end">{{ $reason->sort_order }}</td>
-                                    <td>
-                                        <span class="badge {{ $reason->status === 'active' ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-secondary' }}">{{ Str::headline($reason->status) }}</span>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge {{ $reason->restock_by_default ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-secondary' }}">
-                                            {{ $reason->restock_by_default ? 'Yes' : 'No' }}
-                                        </span>
-                                    </td>
-                                    <td class="text-center">
-                                        <a href="{{ route('merchant.return-reasons.index', ['reason' => $reason->getRouteKey()]) }}" class="list-icons-item" data-bs-popup="tooltip" title="Edit reason"><i class="ph-dots-three-vertical"></i></a>
-                                    </td>
+                @if($reasons->isEmpty())
+                    <x-empty-state icon="ph-arrow-u-down-left" title="No return reasons found" message="Create a reason to make it available during refunds." />
+                @else
+                    <div class="table-responsive datatable-wrapper border-top">
+                        <table id="return-reasons-table" class="table datatable-basic table-bordered table-striped table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Name</th>
+                                    <th class="text-end">Sort Order</th>
+                                    <th>Status</th>
+                                    <th class="text-center">Restock</th>
+                                    <th class="text-center">Actions</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-                <div class="card-body d-lg-flex align-items-lg-center justify-content-lg-between">
-                    <div class="text-muted mb-3 mb-lg-0">
-                        Showing {{ $reasons->firstItem() }} to {{ $reasons->lastItem() }} of {{ $reasons->total() }}
+                            </thead>
+                            <tbody>
+                                @foreach($reasons as $reason)
+                                    <tr class="{{ $selectedReason?->is($reason) ? 'table-active' : '' }}">
+                                        <td>
+                                            <a href="{{ route('merchant.return-reasons.index', ['reason' => $reason->getRouteKey()]) }}" class="text-body fw-semibold">{{ $reason->name }}</a>
+                                            @if($reason->restock_by_default)
+                                                <span class="badge bg-light text-body ms-2">Restocks by default</span>
+                                            @else
+                                                <span class="badge bg-secondary bg-opacity-10 text-secondary ms-2">Does NOT restock by default</span>
+                                            @endif
+                                        </td>
+                                        <td class="text-end">{{ $reason->sort_order }}</td>
+                                        <td>
+                                            <span class="badge {{ $reason->status === 'active' ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-secondary' }}">{{ Str::headline($reason->status) }}</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge {{ $reason->restock_by_default ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-secondary' }}">
+                                                {{ $reason->restock_by_default ? 'Yes' : 'No' }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <a href="{{ route('merchant.return-reasons.index', ['reason' => $reason->getRouteKey()]) }}" class="list-icons-item text-primary" data-bs-popup="tooltip" title="Edit reason">
+                                                <i class="ph-pencil-simple"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
-                    {{ $reasons->onEachSide(1)->links('pagination::admin-datatable') }}
-                </div>
+                @endif
             </div>
         </div>
 
@@ -119,7 +113,7 @@
                     </div>
                     <div class="card-footer d-flex justify-content-between gap-2">
                         @if($editing && ! request()->boolean('new'))
-                            <button type="submit" form="delete-reason-form" class="btn btn-outline-danger">
+                            <button type="button" class="btn btn-outline-danger js-delete-return-reason">
                                 <i class="ph-trash me-2"></i>
                                 Delete reason
                             </button>
@@ -127,7 +121,6 @@
                             <span></span>
                         @endif
                         <div class="d-flex gap-2">
-                            <a href="{{ route('merchant.return-reasons.index') }}" class="btn btn-light">Discard</a>
                             <button type="submit" class="btn btn-primary">Save</button>
                         </div>
                     </div>
@@ -143,3 +136,77 @@
         </div>
     </div>
 @endsection
+
+@push('vendor_scripts')
+    <script src="{{ asset('assets/admin/js/vendor/tables/datatables/datatables.min.js') }}"></script>
+    <script src="{{ asset('assets/admin/js/vendor/tables/datatables/extensions/responsive.min.js') }}"></script>
+@endpush
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.jQuery && jQuery.fn.DataTable) {
+                jQuery.extend(jQuery.fn.dataTable.defaults, {
+                    autoWidth: false,
+                    dom: '<"datatable-header"fl><"datatable-scroll"t><"datatable-footer"ip>',
+                    language: {
+                        search: '<span class="me-3">Filter:</span> <div class="form-control-feedback form-control-feedback-end flex-fill">_INPUT_<div class="form-control-feedback-icon"><i class="ph-magnifying-glass opacity-50"></i></div></div>',
+                        searchPlaceholder: 'Type to filter...',
+                        lengthMenu: '<span class="me-3">Show:</span> _MENU_',
+                        paginate: {
+                            first: 'First',
+                            last: 'Last',
+                            next: document.dir == 'rtl' ? '&larr;' : '&rarr;',
+                            previous: document.dir == 'rtl' ? '&rarr;' : '&larr;',
+                        },
+                    },
+                });
+
+                jQuery('#return-reasons-table').DataTable({
+                    responsive: true,
+                    pageLength: 25,
+                    order: [[1, 'asc'], [0, 'asc']],
+                    columnDefs: [
+                        { orderable: false, targets: -1 },
+                        { responsivePriority: 1, targets: 0 },
+                        { responsivePriority: 2, targets: -1 },
+                    ],
+                });
+            }
+
+            document.addEventListener('click', function (event) {
+                const button = event.target.closest('.js-delete-return-reason');
+
+                if (!button) {
+                    return;
+                }
+
+                const form = document.getElementById('delete-reason-form');
+
+                if (!form) {
+                    return;
+                }
+
+                bootbox.confirm({
+                    title: 'Delete Return Reason',
+                    message: 'Are you sure you want to delete this return reason? Existing refund history will keep its saved reason details.',
+                    buttons: {
+                        cancel: {
+                            label: 'Cancel',
+                            className: 'btn-link',
+                        },
+                        confirm: {
+                            label: 'Yes, Delete',
+                            className: 'btn-danger',
+                        },
+                    },
+                    callback: function (confirmed) {
+                        if (confirmed) {
+                            form.submit();
+                        }
+                    },
+                });
+            });
+        });
+    </script>
+@endpush

@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use RuntimeException;
@@ -39,7 +40,7 @@ class ProductCategoryController extends Controller
 
         $categories = ProductCategory::query()
             ->with(['parent', 'defaultTaxClass.rates.components'])
-            ->withCount(['products', 'descriptionTemplates'])
+            ->withCount(['children', 'products', 'descriptionTemplates'])
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
                 $search = $filters['search'];
 
@@ -67,6 +68,7 @@ class ProductCategoryController extends Controller
             'categoryPaths' => $categoryPaths,
             'filters' => $filters,
             'parentCategories' => $parentCategories,
+            'taxClasses' => $this->categoryDefaultTaxService->activeTaxClasses(),
         ]);
     }
 
@@ -213,6 +215,61 @@ class ProductCategoryController extends Controller
         return redirect()
             ->route('admin.master.product-categories.index')
             ->with('success', 'Product category deleted successfully.');
+    }
+
+    public function bulkTaxClass(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'category_ids' => ['required', 'array', 'min:1'],
+            'category_ids.*' => ['integer', Rule::exists('product_categories', 'id')->whereNull('deleted_at')],
+            'bulk_tax_action' => ['required', Rule::in(['assign', 'clear'])],
+            'tax_class_id' => [
+                Rule::requiredIf($request->input('bulk_tax_action') === 'assign'),
+                'nullable',
+                'integer',
+                Rule::exists('tax_classes', 'id')->where(fn ($query) => $query
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
+        ]);
+
+        $categories = ProductCategory::query()
+            ->whereIn('id', $data['category_ids'])
+            ->withCount('children')
+            ->get();
+
+        $eligible = $categories
+            ->filter(fn (ProductCategory $category): bool => $this->categoryDefaultTaxService->canStoreDefaultTaxClass($category->parent_id, $category))
+            ->values();
+
+        if ($eligible->isEmpty()) {
+            return redirect()
+                ->route('admin.master.product-categories.index')
+                ->with('error', 'Select at least one leaf category. Tax classes can only be assigned to selectable leaf categories.');
+        }
+
+        $taxClassId = $data['bulk_tax_action'] === 'assign' ? (int) $data['tax_class_id'] : null;
+
+        ProductCategory::query()
+            ->whereKey($eligible->pluck('id')->all())
+            ->update([
+                'default_tax_class_id' => $taxClassId,
+                'updated_by' => Auth::id(),
+                'updated_at' => now(),
+            ]);
+
+        $skipped = $categories->count() - $eligible->count();
+        $message = $data['bulk_tax_action'] === 'assign'
+            ? "Default tax class assigned to {$eligible->count()} leaf category/categories."
+            : "Default tax class cleared from {$eligible->count()} leaf category/categories.";
+
+        if ($skipped > 0) {
+            $message .= " {$skipped} grouping category/categories were skipped.";
+        }
+
+        return redirect()
+            ->route('admin.master.product-categories.index')
+            ->with('success', $message);
     }
 
     private function storeImage(Request $request, ProductCategory $category): string

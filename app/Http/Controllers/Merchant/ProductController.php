@@ -57,6 +57,7 @@ class ProductController extends Controller
         $filters = [
             'search' => trim((string) $request->query('search', '')),
             'status' => $request->query('status'),
+            'featured' => $request->query('featured'),
         ];
 
         $products = Product::query()
@@ -73,6 +74,7 @@ class ProductController extends Controller
                 });
             })
             ->when(in_array($filters['status'], array_keys($this->statuses()), true), fn ($query) => $query->where('status', $filters['status']))
+            ->when($filters['featured'], fn ($query, $featured) => $this->applyFeaturedFilter($query, (string) $featured))
             ->orderByDesc('created_at')
             ->paginate((int) config('admin.pagination.per_page', 15))
             ->withQueryString();
@@ -99,10 +101,11 @@ class ProductController extends Controller
     {
         $shop = $this->activeShop($request);
         $data = $request->validated();
+        $merchandising = $request->merchandisingConfiguration();
 
         abort_unless((int) $data['shop_id'] === (int) $shop->getKey(), 404);
 
-        $product = DB::transaction(function () use ($data, $shop): Product {
+        $product = DB::transaction(function () use ($data, $merchandising, $shop): Product {
             $product = Product::create([
                 'merchant_id' => $shop->merchant_id,
                 'shop_id' => $shop->getKey(),
@@ -113,6 +116,7 @@ class ProductController extends Controller
                 'tax_class_id' => null,
                 'product_name' => $data['product_name'],
                 'slug' => 'pending-'.Str::uuid()->toString(),
+                ...$merchandising,
                 'status' => $data['status'],
                 'created_by' => Auth::id(),
                 'updated_by' => Auth::id(),
@@ -192,6 +196,7 @@ class ProductController extends Controller
             'product_name' => $data['product_name'],
             'slug' => $this->slugForProduct($product, $data['product_name']),
             'short_description' => $this->nullable($data['short_description'] ?? null),
+            ...$request->merchandisingConfiguration(),
             'status' => $data['status'],
             'updated_by' => Auth::id(),
         ])->save();
@@ -255,7 +260,7 @@ class ProductController extends Controller
     {
         $shop = $this->activeShop($request);
         $data = $request->validate([
-            'action' => ['required', Rule::in(['mark_active', 'mark_inactive', 'archive', 'restore_archive', 'delete'])],
+            'action' => ['required', Rule::in(['mark_active', 'mark_inactive', 'mark_featured', 'remove_featured', 'archive', 'restore_archive', 'delete'])],
             'product_ids' => ['required', 'array', 'min:1'],
             'product_ids.*' => ['integer'],
         ]);
@@ -263,6 +268,8 @@ class ProductController extends Controller
         $count = match ($data['action']) {
             'mark_active' => $this->bulkStatus($shop, $data['product_ids'], 'active'),
             'mark_inactive' => $this->bulkStatus($shop, $data['product_ids'], 'inactive'),
+            'mark_featured' => $this->bulkFeatured($shop, $data['product_ids'], true),
+            'remove_featured' => $this->bulkFeatured($shop, $data['product_ids'], false),
             'archive' => $this->bulkArchive($shop, $data['product_ids']),
             'restore_archive' => $this->bulkRestoreArchive($shop, $data['product_ids']),
             'delete' => $this->bulkSoftDelete($shop, $data['product_ids']),
@@ -426,6 +433,22 @@ class ProductController extends Controller
             ->update([
                 'status' => 'archived',
                 'deleted_by' => null,
+                'updated_by' => Auth::id(),
+                'updated_at' => now(),
+            ]);
+    }
+
+    /**
+     * @param array<int, int|string> $productIds
+     */
+    private function bulkFeatured(Shop $shop, array $productIds, bool $isFeatured): int
+    {
+        return Product::query()
+            ->where('shop_id', $shop->getKey())
+            ->where('merchant_id', $shop->merchant_id)
+            ->whereIn('id', $productIds)
+            ->update([
+                'is_featured' => $isFeatured,
                 'updated_by' => Auth::id(),
                 'updated_at' => now(),
             ]);
@@ -635,6 +658,17 @@ class ProductController extends Controller
             'inactive' => ['label' => 'Inactive', 'badge_class' => 'bg-warning'],
             'archived' => ['label' => 'Archived', 'badge_class' => 'bg-secondary'],
         ];
+    }
+
+    private function applyFeaturedFilter($query, string $featured): void
+    {
+        match ($featured) {
+            'current' => $query->currentlyFeatured(),
+            'scheduled' => $query->scheduledFeatured(),
+            'expired' => $query->expiredFeatured(),
+            'not_featured' => $query->where('is_featured', false),
+            default => null,
+        };
     }
 
     private function slugForProduct(Product $product, string $name): string

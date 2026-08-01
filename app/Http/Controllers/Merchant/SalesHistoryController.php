@@ -42,33 +42,41 @@ class SalesHistoryController extends Controller
 
         $query = Order::query()
             ->with(['customer', 'createdBy'])
-            ->where('shop_id', $shop->getKey())
+            ->where('orders.shop_id', $shop->getKey())
             // Exchange replacement orders carry operational paid status so receipts/stock work,
             // but actual newly collected/refunded money lives on order_exchanges settlement fields.
             // Sales and collection reports must therefore stay limited to original POS sales.
-            ->where('created_source', Order::SOURCE_POS)
-            ->where('order_status', Order::STATUS_COMPLETED)
-            ->when($filters['payment_method'] !== '', fn ($query) => $query->where('payment_method', $filters['payment_method']))
-            ->when($filters['customer'] !== '', fn ($query) => $query->where('customer_id', $filters['customer']))
-            ->when($filters['from'] !== '', fn ($query) => $query->whereDate('created_at', '>=', $filters['from']))
-            ->when($filters['to'] !== '', fn ($query) => $query->whereDate('created_at', '<=', $filters['to']))
-            ->when($filters['status'] === 'refunded', fn ($query) => $query->where('payment_status', Order::PAYMENT_REFUNDED))
-            ->when($filters['status'] === 'partially_refunded', fn ($query) => $query->where('payment_status', Order::PAYMENT_PARTIALLY_REFUNDED))
-            ->when($filters['status'] === 'completed', fn ($query) => $query->whereNotIn('payment_status', [Order::PAYMENT_REFUNDED, Order::PAYMENT_PARTIALLY_REFUNDED]))
+            ->where('orders.created_source', Order::SOURCE_POS)
+            ->where('orders.order_status', Order::STATUS_COMPLETED)
+            ->when($filters['payment_method'] !== '', fn ($query) => $query->where('orders.payment_method', $filters['payment_method']))
+            ->when($filters['customer'] !== '', fn ($query) => $query->where('orders.customer_id', $filters['customer']))
+            ->when($filters['from'] !== '', fn ($query) => $query->whereDate('orders.created_at', '>=', $filters['from']))
+            ->when($filters['to'] !== '', fn ($query) => $query->whereDate('orders.created_at', '<=', $filters['to']))
+            ->when($filters['status'] === 'refunded', fn ($query) => $query->where('orders.payment_status', Order::PAYMENT_REFUNDED))
+            ->when($filters['status'] === 'partially_refunded', fn ($query) => $query->where('orders.payment_status', Order::PAYMENT_PARTIALLY_REFUNDED))
+            ->when($filters['status'] === 'completed', fn ($query) => $query->whereNotIn('orders.payment_status', [Order::PAYMENT_REFUNDED, Order::PAYMENT_PARTIALLY_REFUNDED]))
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
                 $search = $filters['search'];
                 $query->where(function ($query) use ($search): void {
-                    $query->where('order_number', 'like', "%{$search}%")
-                        ->orWhere('customer_name', 'like', "%{$search}%")
-                        ->orWhere('customer_mobile', 'like', "%{$search}%")
+                    $query->where('orders.order_number', 'like', "%{$search}%")
+                        ->orWhere('orders.customer_name', 'like', "%{$search}%")
+                        ->orWhere('orders.customer_mobile', 'like', "%{$search}%")
                         ->orWhereHas('createdBy', fn ($query) => $query->where('name', 'like', "%{$search}%"));
                 });
             });
 
-        $summary = (clone $query)->selectRaw('COUNT(*) as transactions, COALESCE(SUM(grand_total), 0) as total_sales')->first();
+        $summary = (clone $query)->selectRaw('
+            COUNT(*) as transactions,
+            COALESCE(SUM(subtotal), 0) as subtotal,
+            COALESCE(SUM(discount_total), 0) as discount_total,
+            COALESCE(SUM(tax_total), 0) as tax_total,
+            COALESCE(SUM(grand_total), 0) as total_sales
+        ')->first();
         $itemsSold = (clone $query)
             ->join('order_items', 'orders.id', '=', 'order_items.order_id')
             ->sum('order_items.quantity');
+        $taxSummary = $this->taxSummary(clone $query);
+        $componentSummary = $this->componentSummary(clone $query);
 
         $orders = $query
             ->latest()
@@ -80,6 +88,9 @@ class SalesHistoryController extends Controller
             'orders' => $orders,
             'filters' => $filters,
             'summary' => [
+                'subtotal' => (float) ($summary->subtotal ?? 0),
+                'discount_total' => (float) ($summary->discount_total ?? 0),
+                'tax_total' => (float) ($summary->tax_total ?? 0),
                 'total_sales' => (float) ($summary->total_sales ?? 0),
                 'transactions' => (int) ($summary->transactions ?? 0),
                 'items_sold' => (int) $itemsSold,
@@ -87,6 +98,8 @@ class SalesHistoryController extends Controller
                     ? (float) $summary->total_sales / (int) $summary->transactions
                     : 0,
             ],
+            'taxSummary' => $taxSummary,
+            'componentSummary' => $componentSummary,
             'customers' => Order::query()
                 ->where('shop_id', $shop->getKey())
                 ->where('created_source', Order::SOURCE_POS)
@@ -100,13 +113,60 @@ class SalesHistoryController extends Controller
         ]);
     }
 
+    private function taxSummary($query)
+    {
+        return $query
+            ->join('order_items', 'orders.id', '=', 'order_items.order_id')
+            ->where(function ($query): void {
+                $query->where('order_items.line_tax', '>', 0)
+                    ->orWhereNotNull('order_items.tax_class_name')
+                    ->orWhereNotNull('order_items.tax_rate');
+            })
+            ->selectRaw("
+                COALESCE(order_items.tax_class_name, 'No tax class') as tax_class_name,
+                order_items.tax_rate,
+                order_items.price_mode,
+                COALESCE(SUM(order_items.taxable_amount), 0) as taxable_amount,
+                COALESCE(SUM(order_items.line_tax), 0) as tax_amount,
+                COALESCE(SUM(order_items.line_total), 0) as line_total
+            ")
+            ->groupBy('order_items.tax_class_name', 'order_items.tax_rate', 'order_items.price_mode')
+            ->orderBy('order_items.tax_class_name')
+            ->orderBy('order_items.tax_rate')
+            ->get();
+    }
+
+    private function componentSummary($query)
+    {
+        return $query
+            ->join('order_items', 'orders.id', '=', 'order_items.order_id')
+            ->join('order_item_tax_components', 'order_items.id', '=', 'order_item_tax_components.order_item_id')
+            ->selectRaw('
+                order_item_tax_components.component_code,
+                order_item_tax_components.component_name,
+                order_item_tax_components.jurisdiction_type,
+                MIN(order_item_tax_components.rate) as min_rate,
+                MAX(order_item_tax_components.rate) as max_rate,
+                COALESCE(SUM(order_item_tax_components.amount), 0) as amount
+            ')
+            ->groupBy(
+                'order_item_tax_components.component_code',
+                'order_item_tax_components.component_name',
+                'order_item_tax_components.jurisdiction_type',
+                'order_item_tax_components.sort_order',
+            )
+            ->orderBy('order_item_tax_components.sort_order')
+            ->orderBy('order_item_tax_components.component_code')
+            ->get();
+    }
+
     public function show(Request $request, Order $order): View
     {
         $shop = $this->authorizeOrder($request, $order);
 
         return view('merchant.sales.show', [
             'activeShop' => $shop,
-            'order' => $order->load(['items', 'createdBy', 'refunds.items', 'exchanges.replacementOrder', 'customer']),
+            'order' => $order->load(['items.taxComponents', 'createdBy', 'refunds.items', 'exchanges.replacementOrder', 'customer']),
             'refundableQuantities' => $this->refundService->refundableQuantities($order->loadMissing('items')),
             'exchangeableQuantities' => $this->exchangeService->exchangeableQuantities($order->loadMissing('items')),
             'posCurrency' => $this->adminSettings->currencyConfig(),

@@ -66,10 +66,44 @@
         @if($categories->isEmpty())
             <x-empty-state icon="ph-tag" title="No product categories found" message="Create a category or adjust the current filters." />
         @else
+            <div class="card-body border-bottom">
+                <form id="product-category-bulk-tax-form" method="POST" action="{{ route('admin.master.product-categories.bulk-tax-class') }}" class="row g-3 align-items-end">
+                    @csrf
+                    <div class="col-md-3">
+                        <label for="bulk_tax_action" class="form-label">Bulk Action</label>
+                        <select id="bulk_tax_action" name="bulk_tax_action" class="form-select">
+                            <option value="assign">Assign Tax Class</option>
+                            <option value="clear">Clear Tax Class</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label for="tax_class_id" class="form-label">Tax Class</label>
+                        <select id="tax_class_id" name="tax_class_id" class="form-select">
+                            <option value="">Select tax class</option>
+                            @foreach($taxClasses as $taxClass)
+                                <option value="{{ $taxClass->id }}">{{ $taxClass->displayLabel() }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="ph-check-circle me-2"></i>
+                            Apply
+                        </button>
+                    </div>
+                    <div class="col-md-2 text-muted fs-sm">
+                        Leaf categories only. Existing orders and product overrides are unchanged.
+                    </div>
+                </form>
+            </div>
+
             <div class="table-responsive datatable-wrapper">
                 <table class="table table-bordered table-hover align-middle datatable-highlight mb-0">
                     <thead class="table-light">
                         <tr>
+                            <th class="text-center" style="width: 48px;">
+                                <input type="checkbox" class="form-check-input js-product-category-check-all" aria-label="Select all leaf categories">
+                            </th>
                             <th>Name</th>
                             <th>Parent Category</th>
                             <th>Category Path</th>
@@ -85,8 +119,21 @@
                             @php
                                 $path = $categoryPaths[$category->id] ?? $category->name;
                                 $depth = substr_count($path, ' > ');
+                                $canBulkUpdateTax = $category->parent_id !== null && (int) $category->children_count === 0;
                             @endphp
                             <tr>
+                                <td class="text-center">
+                                    <input
+                                        type="checkbox"
+                                        name="category_ids[]"
+                                        value="{{ $category->id }}"
+                                        form="product-category-bulk-tax-form"
+                                        class="form-check-input js-product-category-check"
+                                        aria-label="Select {{ $category->name }}"
+                                        @disabled(! $canBulkUpdateTax)
+                                        @if(! $canBulkUpdateTax) data-bs-popup="tooltip" title="Only leaf categories can receive a default tax class" @endif
+                                    >
+                                </td>
                                 <td>
                                     <div class="fw-semibold" style="padding-left: {{ $depth * 20 }}px;">
                                         @if($depth > 0)
@@ -178,6 +225,28 @@
 @push('scripts')
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            const bulkAction = document.getElementById('bulk_tax_action');
+            const taxClass = document.getElementById('tax_class_id');
+            const checkAll = document.querySelector('.js-product-category-check-all');
+
+            function syncTaxClassField() {
+                if (!bulkAction || !taxClass) {
+                    return;
+                }
+
+                taxClass.disabled = bulkAction.value === 'clear';
+                taxClass.required = bulkAction.value === 'assign';
+            }
+
+            bulkAction?.addEventListener('change', syncTaxClassField);
+            syncTaxClassField();
+
+            checkAll?.addEventListener('change', function () {
+                document.querySelectorAll('.js-product-category-check:not(:disabled)').forEach(function (checkbox) {
+                    checkbox.checked = checkAll.checked;
+                });
+            });
+
             document.addEventListener('click', function (event) {
                 const button = event.target.closest('.js-delete-product-category');
 

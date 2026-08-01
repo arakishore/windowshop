@@ -42,6 +42,10 @@ class StoreProductQuickCreateRequest extends FormRequest
                 Rule::exists('brands', 'id')->where(fn ($query) => $query->where('status', 'active')->whereNull('deleted_at')),
             ],
             'product_name' => ['required', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'is_featured' => ['nullable', 'boolean'],
+            'featured_from' => ['nullable', 'date'],
+            'featured_until' => ['nullable', 'date', 'after_or_equal:featured_from'],
             'status' => ['required', Rule::in(['draft', 'active', 'inactive', 'archived'])],
             'tax_mode' => ['sometimes', Rule::in(['inherit'])],
             'tax_class_id' => ['prohibited'],
@@ -80,5 +84,18 @@ class StoreProductQuickCreateRequest extends FormRequest
                 $validator->errors()->add('brand_id', 'The selected brand is not applicable to the selected shop type.');
             }
         });
+    }
+
+    /**
+     * @return array{sort_order: int, is_featured: bool, featured_from: mixed, featured_until: mixed}
+     */
+    public function merchandisingConfiguration(): array
+    {
+        return [
+            'sort_order' => $this->integer('sort_order'),
+            'is_featured' => $this->boolean('is_featured'),
+            'featured_from' => $this->input('featured_from') ?: null,
+            'featured_until' => $this->input('featured_until') ?: null,
+        ];
     }
 }

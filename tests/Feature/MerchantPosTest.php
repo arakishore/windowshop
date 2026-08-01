@@ -1179,6 +1179,158 @@ class MerchantPosTest extends TestCase
             ->assertDontSee('<div class="receipt-qr">QR</div>', false);
     }
 
+    public function test_pos_receipt_hides_tax_for_tax_disabled_order(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Receipt No Tax Shirt', 'Default', 'REC-NO-TAX', 'REC-NO-TAX-BAR');
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertOk();
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get($checkout->json('order.receipt_url'))
+            ->assertOk()
+            ->assertDontSee('Taxable')
+            ->assertDontSee('Tax</span>', false)
+            ->assertDontSee('tax pricing');
+
+        $order = Order::query()->findOrFail($checkout->json('order.id'));
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.show', $order))
+            ->assertOk()
+            ->assertDontSee('Taxable')
+            ->assertDontSee('Tax</th>', false)
+            ->assertDontSee('tax pricing');
+    }
+
+    public function test_pos_receipt_displays_saved_inclusive_tax_snapshot(): void
+    {
+        $sale = $this->createTaxedPosOrder(true);
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->get($sale['receipt_url'])
+            ->assertOk()
+            ->assertSee('Taxable')
+            ->assertSee('951.43')
+            ->assertSee('GST 5% POS 5% Included')
+            ->assertSee('47.57')
+            ->assertSee('CGST 2.5%')
+            ->assertSee('SGST 2.5%')
+            ->assertSee('Inclusive tax pricing')
+            ->assertSee('999.00');
+    }
+
+    public function test_pos_receipt_displays_saved_exclusive_tax_snapshot_after_merchant_tax_is_disabled(): void
+    {
+        $sale = $this->createTaxedPosOrder(false);
+
+        DB::table('merchant_tax_settings')
+            ->where('merchant_id', $this->merchantIdForShop($sale['shop_id']))
+            ->update(['tax_enabled' => false, 'updated_at' => now()]);
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->get($sale['receipt_url'])
+            ->assertOk()
+            ->assertSee('GST 5% POS 5%')
+            ->assertSee('49.95')
+            ->assertSee('CGST 2.5%')
+            ->assertSee('SGST 2.5%')
+            ->assertSee('Exclusive tax pricing')
+            ->assertSee('1,049.00');
+    }
+
+    public function test_pos_receipt_shows_saved_tax_amount_when_component_rows_are_missing(): void
+    {
+        $sale = $this->createTaxedPosOrder(false);
+        DB::table('order_item_tax_components')->where('order_item_id', $sale['order']->items->first()->getKey())->delete();
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->get($sale['receipt_url'])
+            ->assertOk()
+            ->assertSee('GST 5% POS 5%')
+            ->assertSee('49.95')
+            ->assertDontSee('CGST 2.5%')
+            ->assertDontSee('SGST 2.5%');
+    }
+
+    public function test_sales_order_detail_displays_saved_tax_snapshot_and_saved_totals(): void
+    {
+        $sale = $this->createTaxedPosOrder(false);
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->get(route('merchant.sales.show', $sale['order']))
+            ->assertOk()
+            ->assertSee('Taxable')
+            ->assertSee('999.00')
+            ->assertSee('49.95')
+            ->assertSee('GST 5% POS 5%')
+            ->assertSee('CGST 2.5%')
+            ->assertSee('SGST 2.5%')
+            ->assertSee('Exclusive tax pricing')
+            ->assertSee('1,049.00');
+    }
+
+    public function test_receipt_and_order_detail_ignore_later_tax_master_changes(): void
+    {
+        $sale = $this->createTaxedPosOrder(false);
+        $orderItem = $sale['order']->items->first();
+
+        DB::table('tax_classes')->where('id', $orderItem->tax_class_id)->update([
+            'name' => 'GST 20% POS',
+            'status' => 'deleted',
+            'deleted_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('tax_rates')->where('id', $orderItem->tax_rate_id)->update([
+            'name' => 'GST 20% POS',
+            'total_rate' => '20.0000',
+            'status' => 'deleted',
+            'deleted_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->get($sale['receipt_url'])
+            ->assertOk()
+            ->assertSee('GST 5% POS 5%')
+            ->assertDontSee('GST 20% POS')
+            ->assertDontSee('20%');
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->get(route('merchant.sales.show', $sale['order']))
+            ->assertOk()
+            ->assertSee('GST 5% POS 5%')
+            ->assertDontSee('GST 20% POS')
+            ->assertDontSee('20%');
+    }
+
     public function test_pos_can_search_customer_and_add_shipping_address(): void
     {
         [$userId, $shopId] = $this->merchantShopFixture();
@@ -1500,9 +1652,360 @@ class MerchantPosTest extends TestCase
 
     public function test_exchange_returned_value_includes_prorated_tax_without_double_counting(): void
     {
+        $sale = $this->createExchangeSale(false, 1, 1200);
+        $order = $sale['order'];
+        $originalItem = $order->items->first();
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1, 'restock' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $sale['replacement']['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '1048.95',
+            'replacement_total' => '1260.00',
+            'difference_amount' => '211.05',
+            'amount_collected' => '211.05',
+        ]);
+        $this->assertDatabaseHas('order_exchange_return_items', [
+            'order_item_id' => $originalItem->getKey(),
+            'unit_return_value' => '1048.95',
+            'line_tax' => '49.95',
+            'line_total' => '1048.95',
+        ]);
+    }
+
+    public function test_exchange_settlement_uses_inclusive_saved_line_total_without_adding_tax_again(): void
+    {
+        $sale = $this->createExchangeSale(true, 1, 0);
+        $order = $sale['order'];
+        $originalItem = $order->items->first();
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $sale['replacement']['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '999.00',
+            'replacement_total' => '0.00',
+            'difference_amount' => '-999.00',
+            'amount_refunded' => '999.00',
+        ]);
+        $this->assertDatabaseHas('order_exchange_return_items', [
+            'order_item_id' => $originalItem->getKey(),
+            'unit_return_value' => '999.00',
+            'line_tax' => '47.57',
+            'line_total' => '999.00',
+        ]);
+    }
+
+    public function test_exchange_settlement_uses_tax_disabled_saved_line_total(): void
+    {
+        $sale = $this->createExchangeSale(null, 1, 0);
+        $order = $sale['order'];
+        $originalItem = $order->items->first();
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $sale['replacement']['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '999.00',
+            'replacement_total' => '0.00',
+            'difference_amount' => '-999.00',
+            'amount_refunded' => '999.00',
+        ]);
+        $this->assertDatabaseHas('order_exchange_return_items', [
+            'order_item_id' => $originalItem->getKey(),
+            'unit_return_value' => '999.00',
+            'line_tax' => '0.00',
+            'line_total' => '999.00',
+        ]);
+    }
+
+    public function test_exchange_partial_quantity_prorates_saved_line_total_and_tax_snapshot(): void
+    {
+        $sale = $this->createExchangeSale(false, 2, 0);
+        $order = $sale['order'];
+        $originalItem = $order->items->first();
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $sale['replacement']['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '1048.95',
+            'replacement_total' => '0.00',
+            'difference_amount' => '-1048.95',
+            'amount_refunded' => '1048.95',
+        ]);
+        $this->assertDatabaseHas('order_exchange_return_items', [
+            'order_item_id' => $originalItem->getKey(),
+            'quantity' => 1,
+            'unit_return_value' => '1048.95',
+            'line_tax' => '49.95',
+            'line_total' => '1048.95',
+        ]);
+    }
+
+    public function test_exchange_full_quantity_uses_full_saved_line_total_for_settlement(): void
+    {
+        $sale = $this->createExchangeSale(false, 2, 0);
+        $order = $sale['order'];
+        $originalItem = $order->items->first();
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 2],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $sale['replacement']['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '2097.90',
+            'replacement_total' => '0.00',
+            'difference_amount' => '-2097.90',
+            'amount_refunded' => '2097.90',
+        ]);
+        $this->assertDatabaseHas('order_exchange_return_items', [
+            'order_item_id' => $originalItem->getKey(),
+            'quantity' => 2,
+            'unit_return_value' => '1048.95',
+            'line_tax' => '99.90',
+            'line_total' => '2097.90',
+        ]);
+    }
+
+    public function test_exchange_partial_quantity_prorates_from_saved_line_total_before_rounding(): void
+    {
+        $sale = $this->createExchangeSale(null, 3, 0);
+        $order = $sale['order'];
+        $originalItem = $order->items->first();
+
+        DB::table('order_items')->where('id', $originalItem->getKey())->update([
+            'line_total' => '100.00',
+            'line_tax' => '0.00',
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 2],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $sale['replacement']['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '66.67',
+            'difference_amount' => '-66.67',
+            'amount_refunded' => '66.67',
+        ]);
+        $this->assertDatabaseHas('order_exchange_return_items', [
+            'order_item_id' => $originalItem->getKey(),
+            'quantity' => 2,
+            'unit_return_value' => '33.34',
+            'line_total' => '66.67',
+        ]);
+    }
+
+    public function test_exchange_multiple_partial_returns_do_not_exceed_saved_line_total(): void
+    {
+        $sale = $this->createExchangeSale(null, 3, 0);
+        $order = $sale['order'];
+        $originalItem = $order->items->first();
+
+        DB::table('order_items')->where('id', $originalItem->getKey())->update([
+            'line_total' => '10.00',
+            'line_tax' => '0.00',
+            'updated_at' => now(),
+        ]);
+
+        for ($i = 0; $i < 3; $i++) {
+            $this
+                ->actingAs(User::query()->findOrFail($sale['user_id']))
+                ->withSession(['active_shop_id' => $sale['shop_id']])
+                ->post(route('merchant.sales.exchange.process', $order), [
+                    'settlement_method' => 'cash',
+                    'returned_items' => [
+                        $originalItem->getKey() => ['quantity' => 1],
+                    ],
+                    'replacement_items' => [
+                        ['product_variant_id' => $sale['replacement']['variant_id'], 'quantity' => 1],
+                    ],
+                ])
+                ->assertRedirect();
+        }
+
+        $returnedTotals = DB::table('order_exchanges')
+            ->where('original_order_id', $order->getKey())
+            ->orderBy('id')
+            ->pluck('returned_total')
+            ->map(fn ($value): string => number_format((float) $value, 2, '.', ''))
+            ->all();
+
+        $this->assertSame(['3.33', '3.33', '3.34'], $returnedTotals);
+        $this->assertSame('10.00', number_format((float) DB::table('order_exchange_return_items')
+            ->where('order_item_id', $originalItem->getKey())
+            ->sum('line_total'), 2, '.', ''));
+    }
+
+    public function test_exchange_replacement_order_is_operationally_paid_for_exclusive_tax_total(): void
+    {
+        $sale = $this->createExchangeSale(false, 1, 100);
+        $order = $sale['order'];
+        $originalItem = $order->items->first();
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $sale['replacement']['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $replacementOrderId = (int) DB::table('order_exchanges')
+            ->where('original_order_id', $order->getKey())
+            ->value('replacement_order_id');
+
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '1048.95',
+            'replacement_total' => '105.00',
+            'difference_amount' => '-943.95',
+            'amount_refunded' => '943.95',
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $replacementOrderId,
+            'grand_total' => '105.00',
+            'amount_paid' => '105.00',
+            'change_amount' => '0.00',
+            'payment_status' => Order::PAYMENT_PAID,
+        ]);
+    }
+
+    public function test_exchange_settlement_ignores_later_tax_master_changes_for_original_return(): void
+    {
+        $sale = $this->createExchangeSale(false, 1, 0);
+        $order = $sale['order'];
+        $originalItem = $order->items->first();
+
+        DB::table('tax_classes')->where('id', $originalItem->tax_class_id)->update([
+            'name' => 'GST 20% POS',
+            'status' => 'deleted',
+            'deleted_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('tax_rates')->where('id', $originalItem->tax_rate_id)->update([
+            'name' => 'GST 20% POS',
+            'total_rate' => '20.0000',
+            'status' => 'deleted',
+            'deleted_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('products')->where('id', $sale['replacement']['product_id'])->update([
+            'tax_mode' => 'exempt',
+            'tax_class_id' => null,
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $originalItem->getKey() => ['quantity' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $sale['replacement']['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $order->getKey(),
+            'returned_total' => '1048.95',
+            'replacement_total' => '0.00',
+            'difference_amount' => '-1048.95',
+            'amount_refunded' => '1048.95',
+        ]);
+        $this->assertDatabaseHas('order_exchange_return_items', [
+            'order_item_id' => $originalItem->getKey(),
+            'line_tax' => '49.95',
+            'line_total' => '1048.95',
+        ]);
+    }
+
+    public function test_exchange_legacy_tax_snapshot_does_not_get_added_to_saved_line_total(): void
+    {
         [$userId, $shopId] = $this->merchantShopFixture();
-        $original = $this->createPosProduct($shopId, 'Taxed Exchange Shirt', 'Blue / M', 'EX-TAX-OLD', 'EX-TAX-OLD-BAR');
-        $replacement = $this->createPosProduct($shopId, 'Taxed Replacement Shirt', 'Black / L', 'EX-TAX-NEW', 'EX-TAX-NEW-BAR');
+        $original = $this->createPosProduct($shopId, 'Legacy Taxed Exchange Shirt', 'Blue / M', 'EX-TAX-OLD', 'EX-TAX-OLD-BAR');
+        $replacement = $this->createPosProduct($shopId, 'Legacy Taxed Replacement Shirt', 'Black / L', 'EX-TAX-NEW', 'EX-TAX-NEW-BAR');
         DB::table('product_variants')->where('id', $replacement['variant_id'])->update(['selling_price' => 1200]);
 
         $checkout = $this
@@ -1540,10 +2043,10 @@ class MerchantPosTest extends TestCase
 
         $this->assertDatabaseHas('order_exchanges', [
             'original_order_id' => $order->getKey(),
-            'returned_total' => '990.00',
+            'returned_total' => '900.00',
             'replacement_total' => '1200.00',
-            'difference_amount' => '210.00',
-            'amount_collected' => '210.00',
+            'difference_amount' => '300.00',
+            'amount_collected' => '300.00',
         ]);
         $this->assertDatabaseHas('order_exchange_return_items', [
             'order_item_id' => $originalItem->getKey(),
@@ -1611,6 +2114,352 @@ class MerchantPosTest extends TestCase
             ->assertSee('INR 1,800')
             ->assertDontSee('INR 3,000')
             ->assertDontSee($replacementOrderNumber);
+    }
+
+    public function test_sales_history_report_uses_saved_exclusive_tax_snapshots_after_tax_master_changes(): void
+    {
+        $sale = $this->createTaxedPosOrder(false);
+        $orderItem = $sale['order']->items->first();
+
+        DB::table('tax_classes')->where('id', $orderItem->tax_class_id)->update([
+            'name' => 'GST 20% Report',
+            'status' => 'deleted',
+            'deleted_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('tax_rates')->where('id', $orderItem->tax_rate_id)->update([
+            'name' => 'GST 20% Report',
+            'total_rate' => '20.0000',
+            'status' => 'deleted',
+            'deleted_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('tax_rate_components')->whereIn('code', ['CGST', 'SGST'])->update([
+            'name' => 'Changed Component',
+            'rate' => '10.0000',
+            'updated_at' => now(),
+        ]);
+        DB::table('product_variants')->where('id', $sale['fixture']['variant_id'])->update([
+            'selling_price' => '777.00',
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->get(route('merchant.sales.index'))
+            ->assertOk()
+            ->assertSee('Subtotal')
+            ->assertSee('999.00')
+            ->assertSee('Tax collected')
+            ->assertSee('49.95')
+            ->assertSee('Tax Summary')
+            ->assertSee('GST 5% POS')
+            ->assertSee('5%')
+            ->assertSee('Exclusive')
+            ->assertSee('Component Summary')
+            ->assertSee('CGST')
+            ->assertSee('SGST')
+            ->assertDontSee('GST 20% Report')
+            ->assertDontSee('Changed Component')
+            ->assertDontSee('777.00');
+    }
+
+    public function test_sales_history_report_uses_saved_inclusive_tax_snapshots(): void
+    {
+        $sale = $this->createTaxedPosOrder(true);
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->get(route('merchant.sales.index'))
+            ->assertOk()
+            ->assertSee('Tax collected')
+            ->assertSee('47.57')
+            ->assertSee('GST 5% POS')
+            ->assertSee('Inclusive')
+            ->assertSee('951.43')
+            ->assertSee('999.00')
+            ->assertSee('CGST')
+            ->assertSee('SGST');
+    }
+
+    public function test_merchant_dashboard_shows_saved_tax_and_discount_totals_for_today(): void
+    {
+        $sale = $this->createTaxedPosOrder(false);
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->get(route('merchant.dashboard'))
+            ->assertOk()
+            ->assertSee('Revenue Today')
+            ->assertSee('INR 1,049.00')
+            ->assertSee("Today's Tax")
+            ->assertSee('INR 49.95')
+            ->assertSee("Today's Discount")
+            ->assertSee('INR 0.00');
+    }
+
+    public function test_sales_history_report_handles_tax_disabled_saved_orders(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Report No Tax Shirt', 'Default', 'REP-NO-TAX', 'REP-NO-TAX-BAR');
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertOk();
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.index'))
+            ->assertOk()
+            ->assertSee('Tax collected')
+            ->assertSee('0.00')
+            ->assertDontSee('Tax Summary')
+            ->assertDontSee('Component Summary')
+            ->assertDontSee('No tax snapshots found.')
+            ->assertDontSee('No component snapshots found.');
+    }
+
+    public function test_sales_history_report_tax_summaries_respect_date_filters(): void
+    {
+        $sale = $this->createTaxedPosOrder(false);
+        $oldOrder = $sale['order'];
+
+        DB::table('orders')->where('id', $oldOrder->getKey())->update([
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1100,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'items' => [
+                    ['product_variant_id' => $sale['fixture']['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertOk();
+        $newOrder = Order::query()->findOrFail($checkout->json('order.id'));
+
+        $this
+            ->actingAs(User::query()->findOrFail($sale['user_id']))
+            ->withSession(['active_shop_id' => $sale['shop_id']])
+            ->get(route('merchant.sales.index', ['from' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('Sales History (1)')
+            ->assertSee($newOrder->order_number)
+            ->assertDontSee($oldOrder->order_number)
+            ->assertSee('Tax collected')
+            ->assertSee('49.95')
+            ->assertDontSee('99.90');
+    }
+
+    public function test_tax_engine_golden_reporting_audit_uses_immutable_snapshots(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $user = User::query()->findOrFail($userId);
+        $merchantId = $this->merchantIdForShop($shopId);
+
+        $inclusive5 = $this->createPosProduct($shopId, 'Golden GST 5 Inclusive', 'Default', 'GOLD-5-INC', 'GOLD-5-INC-BAR');
+        $exclusive5 = $this->createPosProduct($shopId, 'Golden GST 5 Exclusive', 'Default', 'GOLD-5-EXC', 'GOLD-5-EXC-BAR');
+        $noTax = $this->createPosProduct($shopId, 'Golden No Tax', 'Default', 'GOLD-NO-TAX', 'GOLD-NO-TAX-BAR');
+        $exempt = $this->createPosProduct($shopId, 'Golden Product Exempt', 'Default', 'GOLD-EXEMPT', 'GOLD-EXEMPT-BAR');
+        $override18 = $this->createPosProduct($shopId, 'Golden GST 18 Override', 'Default', 'GOLD-18-OVR', 'GOLD-18-OVR-BAR');
+        $refund5 = $this->createPosProduct($shopId, 'Golden GST 5 Refund', 'Default', 'GOLD-5-REF', 'GOLD-5-REF-BAR');
+        $exchange5 = $this->createPosProduct($shopId, 'Golden GST 5 Exchange', 'Default', 'GOLD-5-EXCH', 'GOLD-5-EXCH-BAR');
+        $replacement = $this->createPosProduct($shopId, 'Golden Exchange Replacement', 'Default', 'GOLD-REPL', 'GOLD-REPL-BAR');
+
+        $gst5ClassId = $this->enablePosTax($shopId, $inclusive5['product_category_id'], true);
+        $orderInclusive5 = $this->checkoutGoldenOrder($user, $shopId, $inclusive5['variant_id'], 1000);
+
+        $this->setMerchantTaxMode($merchantId, $gst5ClassId, false);
+        $orderExclusive5 = $this->checkoutGoldenOrder($user, $shopId, $exclusive5['variant_id'], 1100);
+
+        DB::table('merchant_tax_settings')->where('merchant_id', $merchantId)->update([
+            'tax_enabled' => false,
+            'updated_at' => now(),
+        ]);
+        $orderNoTax = $this->checkoutGoldenOrder($user, $shopId, $noTax['variant_id'], 1000);
+
+        $this->setMerchantTaxMode($merchantId, $gst5ClassId, false);
+        DB::table('products')->where('id', $exempt['product_id'])->update([
+            'tax_mode' => 'exempt',
+            'tax_class_id' => null,
+            'updated_at' => now(),
+        ]);
+        $orderExempt = $this->checkoutGoldenOrder($user, $shopId, $exempt['variant_id'], 1000);
+
+        $gst18ClassId = $this->enablePosTax($shopId, $override18['product_category_id'], false, '18.0000', 'GST 18% POS', 'GST_18_POS', '9.0000');
+        DB::table('product_categories')->where('id', $override18['product_category_id'])->update([
+            'default_tax_class_id' => $gst5ClassId,
+            'updated_at' => now(),
+        ]);
+        DB::table('products')->where('id', $override18['product_id'])->update([
+            'tax_mode' => 'override',
+            'tax_class_id' => $gst18ClassId,
+            'updated_at' => now(),
+        ]);
+        $orderOverride18 = $this->checkoutGoldenOrder($user, $shopId, $override18['variant_id'], 1200);
+
+        $this->setMerchantTaxMode($merchantId, $gst5ClassId, false);
+        DB::table('product_categories')->where('id', $refund5['product_category_id'])->update([
+            'default_tax_class_id' => $gst5ClassId,
+            'updated_at' => now(),
+        ]);
+        $orderRefund5 = $this->checkoutGoldenOrder($user, $shopId, $refund5['variant_id'], 1100);
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.refund.process', $orderRefund5), [
+                'return_reason_id' => $this->returnReasonId($merchantId),
+                'refund_method' => 'cash',
+                'items' => [
+                    $orderRefund5->items->first()->getKey() => ['quantity' => 1, 'restock' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        DB::table('product_variants')->where('id', $replacement['variant_id'])->update([
+            'selling_price' => 500,
+            'updated_at' => now(),
+        ]);
+        $orderExchange5 = $this->checkoutGoldenOrder($user, $shopId, $exchange5['variant_id'], 1100);
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.exchange.process', $orderExchange5), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $orderExchange5->items->first()->getKey() => ['quantity' => 1, 'restock' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $replacement['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertRedirect();
+
+        $replacementOrderNumber = (string) DB::table('orders')
+            ->where('created_source', Order::SOURCE_EXCHANGE_REPLACEMENT)
+            ->value('order_number');
+
+        DB::table('tax_classes')->whereIn('id', [$gst5ClassId, $gst18ClassId])->update([
+            'name' => 'Changed GST',
+            'status' => 'deleted',
+            'deleted_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('tax_rates')->whereIn('tax_class_id', [$gst5ClassId, $gst18ClassId])->update([
+            'name' => 'Changed GST Rate',
+            'total_rate' => '28.0000',
+            'status' => 'deleted',
+            'deleted_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('tax_rate_components')->update([
+            'name' => 'Changed Component',
+            'rate' => '14.0000',
+            'updated_at' => now(),
+        ]);
+        DB::table('product_variants')->whereIn('id', [
+            $inclusive5['variant_id'],
+            $exclusive5['variant_id'],
+            $noTax['variant_id'],
+            $exempt['variant_id'],
+            $override18['variant_id'],
+            $refund5['variant_id'],
+            $exchange5['variant_id'],
+        ])->update([
+            'selling_price' => '777.00',
+            'updated_at' => now(),
+        ]);
+
+        $salesTotals = DB::table('orders')
+            ->where('shop_id', $shopId)
+            ->where('created_source', Order::SOURCE_POS)
+            ->selectRaw('COUNT(*) as transactions, SUM(grand_total) as grand_total, SUM(tax_total) as tax_total, SUM(discount_total) as discount_total')
+            ->first();
+
+        $this->assertSame(7, (int) $salesTotals->transactions);
+        $this->assertSame('7323.00', number_format((float) $salesTotals->grand_total, 2, '.', ''));
+        $this->assertSame('377.24', number_format((float) $salesTotals->tax_total, 2, '.', ''));
+        $this->assertSame('0.00', number_format((float) $salesTotals->discount_total, 2, '.', ''));
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.index'))
+            ->assertOk()
+            ->assertSee('Sales History (7)')
+            ->assertSee('7,323.00')
+            ->assertSee('377.24')
+            ->assertSee('GST 5% POS')
+            ->assertSee('GST 18% POS')
+            ->assertSee('Inclusive')
+            ->assertSee('Exclusive')
+            ->assertSee('951.43')
+            ->assertSee('2,997.00')
+            ->assertSee('179.82')
+            ->assertSee('CGST')
+            ->assertSee('SGST')
+            ->assertDontSee('Changed GST')
+            ->assertDontSee('Changed Component')
+            ->assertDontSee('777.00')
+            ->assertDontSee($replacementOrderNumber);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.dashboard'))
+            ->assertOk()
+            ->assertSee('Revenue Today')
+            ->assertSee('INR 7,323.00')
+            ->assertSee("Today's Tax")
+            ->assertSee('INR 377.24')
+            ->assertSee("Today's Discount")
+            ->assertSee('INR 0.00')
+            ->assertDontSee($replacementOrderNumber);
+
+        $this->assertTrue($orderInclusive5->fresh()->payment_status === Order::PAYMENT_PAID);
+        $this->assertTrue($orderExclusive5->fresh()->payment_status === Order::PAYMENT_PAID);
+        $this->assertTrue($orderNoTax->fresh()->payment_status === Order::PAYMENT_PAID);
+        $this->assertTrue($orderExempt->fresh()->payment_status === Order::PAYMENT_PAID);
+        $this->assertTrue($orderOverride18->fresh()->payment_status === Order::PAYMENT_PAID);
+        $this->assertTrue(in_array($orderRefund5->fresh()->payment_status, [Order::PAYMENT_REFUNDED, Order::PAYMENT_PARTIALLY_REFUNDED], true));
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $orderExempt->getKey(),
+            'tax_resolution_source' => 'product_exempt',
+            'line_tax' => '0.00',
+            'line_total' => '999.00',
+        ]);
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $orderOverride18->getKey(),
+            'tax_resolution_source' => 'product_override',
+            'tax_class_name' => 'GST 18% POS',
+            'line_tax' => '179.82',
+            'line_total' => '1178.82',
+        ]);
+        $this->assertDatabaseHas('order_exchanges', [
+            'original_order_id' => $orderExchange5->getKey(),
+            'returned_total' => '1048.95',
+            'replacement_total' => '525.00',
+        ]);
     }
 
     public function test_hidden_exchange_return_reason_cannot_appear_in_refund_or_exchange_selectors(): void
@@ -1997,7 +2846,15 @@ class MerchantPosTest extends TestCase
         );
     }
 
-    private function enablePosTax(int $shopId, int $productCategoryId, bool $pricesIncludeTax): void
+    private function enablePosTax(
+        int $shopId,
+        int $productCategoryId,
+        bool $pricesIncludeTax,
+        string $totalRate = '5.0000',
+        string $className = 'GST 5% POS',
+        string $classCode = 'GST_5_POS',
+        string $componentRate = '2.5000',
+    ): int
     {
         $this->seed(LocationSeeder::class);
 
@@ -2005,17 +2862,18 @@ class MerchantPosTest extends TestCase
         $country = DB::table('loc_countries')->where('iso2', 'IN')->first();
         $state = DB::table('loc_states')->where('country_id', $country->id)->first();
 
-        DB::table('merchant_addresses')->insert([
-            'uuid' => (string) Str::uuid(),
-            'merchant_id' => $shop->merchant_id,
-            'address_type' => 'business',
-            'address_line_1' => 'Tax Market Road',
-            'country_id' => $country->id,
-            'state_id' => $state->id,
-            'status' => 'active',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::table('merchant_addresses')->updateOrInsert(
+            ['merchant_id' => $shop->merchant_id, 'address_type' => 'business'],
+            [
+                'uuid' => (string) Str::uuid(),
+                'address_line_1' => 'Tax Market Road',
+                'country_id' => $country->id,
+                'state_id' => $state->id,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
 
         DB::table('shops')->where('id', $shopId)->update([
             'country_id' => $country->id,
@@ -2026,8 +2884,8 @@ class MerchantPosTest extends TestCase
         $taxClassId = (int) DB::table('tax_classes')->insertGetId([
             'uuid' => (string) Str::uuid(),
             'country_id' => $country->id,
-            'code' => 'GST_5_POS',
-            'name' => 'GST 5% POS',
+            'code' => $classCode,
+            'name' => $className,
             'status' => 'active',
             'created_at' => now(),
             'updated_at' => now(),
@@ -2035,8 +2893,8 @@ class MerchantPosTest extends TestCase
         $taxRateId = (int) DB::table('tax_rates')->insertGetId([
             'uuid' => (string) Str::uuid(),
             'tax_class_id' => $taxClassId,
-            'name' => 'GST 5% POS',
-            'total_rate' => '5.0000',
+            'name' => $className,
+            'total_rate' => $totalRate,
             'effective_from' => '2026-01-01',
             'status' => 'active',
             'created_at' => now(),
@@ -2048,7 +2906,7 @@ class MerchantPosTest extends TestCase
                 'tax_rate_id' => $taxRateId,
                 'code' => $code,
                 'name' => $code,
-                'rate' => '2.5000',
+                'rate' => $componentRate,
                 'jurisdiction_type' => $jurisdiction,
                 'priority' => $priority,
                 'created_at' => now(),
@@ -2071,6 +2929,127 @@ class MerchantPosTest extends TestCase
                 'updated_at' => now(),
             ],
         );
+
+        return $taxClassId;
+    }
+
+    private function setMerchantTaxMode(int $merchantId, int $taxClassId, bool $pricesIncludeTax): void
+    {
+        DB::table('merchant_tax_settings')->where('merchant_id', $merchantId)->update([
+            'tax_enabled' => true,
+            'default_tax_class_id' => $taxClassId,
+            'prices_include_tax' => $pricesIncludeTax,
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function checkoutGoldenOrder(User $user, int $shopId, int $variantId, int $amountPaid): Order
+    {
+        $checkout = $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => $amountPaid,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'items' => [
+                    ['product_variant_id' => $variantId, 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertOk();
+
+        return Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+    }
+
+    private function returnReasonId(int $merchantId): int
+    {
+        return (int) DB::table('merchant_return_reasons')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'merchant_id' => $merchantId,
+            'code' => 'golden-return-'.Str::random(6),
+            'name' => 'Golden Return',
+            'sort_order' => 10,
+            'restock_by_default' => true,
+            'requires_manager_override' => false,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * @return array{user_id: int, shop_id: int, fixture: array<string, int>, order: Order, receipt_url: string}
+     */
+    private function createTaxedPosOrder(bool $pricesIncludeTax): array
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, $pricesIncludeTax ? 'Receipt Inclusive Tax Shirt' : 'Receipt Exclusive Tax Shirt', 'Default', $pricesIncludeTax ? 'REC-INC-TAX' : 'REC-EXC-TAX', $pricesIncludeTax ? 'REC-INC-TAX-BAR' : 'REC-EXC-TAX-BAR');
+        $this->enablePosTax($shopId, $fixture['product_category_id'], $pricesIncludeTax);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => $pricesIncludeTax ? 1000 : 1100,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertOk();
+
+        return [
+            'user_id' => $userId,
+            'shop_id' => $shopId,
+            'fixture' => $fixture,
+            'order' => Order::query()->with('items.taxComponents')->findOrFail($checkout->json('order.id')),
+            'receipt_url' => (string) $checkout->json('order.receipt_url'),
+        ];
+    }
+
+    /**
+     * @return array{user_id: int, shop_id: int, original: array<string, int>, replacement: array<string, int>, order: Order}
+     */
+    private function createExchangeSale(?bool $pricesIncludeTax, int $originalQuantity, int $replacementPrice): array
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $mode = $pricesIncludeTax === null ? 'NO-TAX' : ($pricesIncludeTax ? 'INC-TAX' : 'EXC-TAX');
+        $original = $this->createPosProduct($shopId, 'Exchange '.$mode.' Original Shirt', 'Default', 'EX-'.$mode.'-OLD', 'EX-'.$mode.'-OLD-BAR');
+        $replacement = $this->createPosProduct($shopId, 'Exchange '.$mode.' Replacement Shirt', 'Default', 'EX-'.$mode.'-NEW', 'EX-'.$mode.'-NEW-BAR');
+
+        DB::table('product_variants')->where('id', $replacement['variant_id'])->update([
+            'selling_price' => $replacementPrice,
+            'updated_at' => now(),
+        ]);
+
+        if ($pricesIncludeTax !== null) {
+            $this->enablePosTax($shopId, $original['product_category_id'], $pricesIncludeTax);
+        }
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 5000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'items' => [
+                    ['product_variant_id' => $original['variant_id'], 'quantity' => $originalQuantity],
+                ],
+            ]);
+
+        $checkout->assertOk();
+
+        return [
+            'user_id' => $userId,
+            'shop_id' => $shopId,
+            'original' => $original,
+            'replacement' => $replacement,
+            'order' => Order::query()->with('items')->findOrFail($checkout->json('order.id')),
+        ];
     }
 
     private function createCustomerAddress(int $customerId, string $lineOne): int

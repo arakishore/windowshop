@@ -18,9 +18,11 @@ class MerchantDashboardService
             'stats' => [
                 'total_shops' => $this->activeShopCount($merchant),
                 'products' => $this->countForShop('products', $activeShopId),
-                'pending_orders' => $this->countForShop('orders', $activeShopId, ['status' => 'pending']),
+                'pending_orders' => $this->countForShop('orders', $activeShopId, ['order_status' => Order::STATUS_PENDING]),
                 'todays_orders' => $this->todaysOrders($activeShopId),
                 'revenue_today' => $this->revenueToday($activeShopId),
+                'tax_today' => $this->orderMoneyToday($activeShopId, 'tax_total'),
+                'discount_today' => $this->orderMoneyToday($activeShopId, 'discount_total'),
                 'out_of_stock' => $this->outOfStockProducts($activeShopId),
                 'active_offers' => $this->countForShop('offers', $activeShopId, ['status' => 'active']),
                 'customers' => $this->countForShop('customers', $activeShopId),
@@ -84,26 +86,30 @@ class MerchantDashboardService
         return $query->count();
     }
 
-    private function revenueToday(?int $activeShopId): int
+    private function revenueToday(?int $activeShopId): float
     {
-        if ($activeShopId === null || ! Schema::hasTable('orders') || ! Schema::hasColumn('orders', 'shop_id')) {
+        return $this->orderMoneyToday($activeShopId, 'grand_total');
+    }
+
+    private function orderMoneyToday(?int $activeShopId, string $column): float
+    {
+        if (
+            $activeShopId === null
+            || ! Schema::hasTable('orders')
+            || ! Schema::hasColumn('orders', 'shop_id')
+            || ! Schema::hasColumn('orders', $column)
+        ) {
             return 0;
         }
 
-        foreach (['total_amount', 'grand_total', 'amount'] as $column) {
-            if (Schema::hasColumn('orders', $column)) {
-                $query = DB::table('orders')->where('shop_id', $activeShopId);
-                $this->originalPosSalesOnly($query);
+        $query = DB::table('orders')->where('shop_id', $activeShopId);
+        $this->originalPosSalesOnly($query);
 
-                if (Schema::hasColumn('orders', 'created_at')) {
-                    $query->whereDate('created_at', today());
-                }
-
-                return (int) $query->sum($column);
-            }
+        if (Schema::hasColumn('orders', 'created_at')) {
+            $query->whereDate('created_at', today());
         }
 
-        return 0;
+        return (float) $query->sum($column);
     }
 
     private function outOfStockProducts(?int $activeShopId): int

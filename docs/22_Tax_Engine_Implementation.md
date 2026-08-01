@@ -1,5 +1,7 @@
 # Tax Engine Implementation
 
+Production status: Ready and frozen through Step 8D.
+
 ## Purpose
 
 Build a generic tax engine for WindowShop that supports India GST by default while remaining usable for other tax systems such as UK VAT, USA sales tax, and merchants with tax disabled.
@@ -693,18 +695,41 @@ Step 7D boundaries:
 
 ### Step 7E: Receipt And Order Display
 
-Status: Planned
+Status: Implemented
 
-Display saved tax snapshots from orders and order items. Do not look up current tax master data for historical tax display.
+Receipt and order-detail display now reads saved tax snapshots from orders, order items, and order-item tax components. These screens treat receipts and order details as historical documents.
 
-POS behavior:
+Historical display rule:
 
-- Tax fields are hidden when merchant tax is disabled.
-- Inclusive price mode should show customer-facing price without adding tax again.
-- Exclusive price mode should add tax to the visible subtotal.
-- Totals shown in POS must match the values saved to order tables.
+- Never display current tax class names, current tax rates, current component rates, category defaults, merchant defaults, or product tax modes from master tables.
+- Always display the saved `order_items.tax_class_name`, `order_items.tax_rate`, `order_items.price_mode`, `order_items.taxable_amount`, `order_items.line_tax`, `order_items.line_total`, and saved `order_item_tax_components` values.
+- If an order was created with GST 18% and the tax master later changes to GST 20%, receipt reprints and order details must still show the saved GST 18% snapshot.
+- If tax class or tax rate records are later renamed, disabled, or soft-deleted, receipt reprints and order details must still render from the saved order snapshot.
 
-## Step 8: Receipts, Refunds, Exchanges, Reports, And Tests
+Implemented surfaces:
+
+- POS printed receipt.
+- Printable receipt page.
+- Sales history order detail page.
+
+Display behavior:
+
+- Tax fields are hidden for tax-disabled orders with no saved historical tax.
+- Historical taxed orders still show saved tax snapshot values even if merchant tax is disabled later.
+- Inclusive price mode shows the customer-facing saved line total and labels saved tax as included. It does not add tax again in the receipt or detail display.
+- Exclusive price mode shows saved taxable amount, saved tax amount, saved component rows when present, and saved line total.
+- Component rows are displayed only when saved `order_item_tax_components` rows exist.
+- If component rows are missing, the display falls back to the saved line tax amount and does not fabricate CGST, SGST, IGST, or other components.
+- Totals shown in receipt and order detail use saved order totals, including shipping and cash rounding behavior already persisted on the order.
+
+Step 7E boundaries:
+
+- No tax calculation service changes.
+- No `OrderCreationService` changes.
+- No POS live-pricing endpoint or JavaScript changes.
+- No refund, exchange-return, report calculation, or schema changes.
+
+## Step 8: Refunds, Exchanges, Reports, And Tests
 
 Status: Split into smaller planned phases
 
@@ -731,16 +756,27 @@ Step 8A boundaries:
 
 ### Step 8B: Exchange Snapshot Integration
 
-Status: Planned
+Status: Implemented
 
-Update exchange return calculation to consume saved order-item tax snapshots.
+Exchange return calculation now consumes saved order-item tax snapshots and saved customer-payable line totals.
+
+Implemented behavior:
+
+- Exchange returned settlement now treats saved `order_items.line_total` as the authoritative customer-paid amount.
+- Returned `settlement_line_total` is the prorated saved `line_total` only.
+- Returned `line_tax` is still stored on exchange return items as the historical tax split, but it is not added again to returned settlement value.
+- Partial exchange returns prorate directly from the saved original line amount before rounding.
+- The last remaining exchange for an order line uses the remaining saved line value, so multiple partial exchanges cannot exceed or lose cents against the original saved line total.
+- Returned tax snapshot values use the same proportional/remaining-value approach.
+- Exchange replacement orders are marked operationally paid using the saved replacement `grand_total` after `OrderCreationService` prices them, so exclusive-tax replacement orders are not accidentally left partially paid by a selling-price-only estimate.
+- Exclusive tax, inclusive tax, tax-disabled, partial quantity, full quantity, settlement amount, replacement-order paid status, and later tax-master-change regression tests cover this behavior.
 
 Exchange rules:
 
 - Exchange returns must use original saved order-item tax values.
 - Exchange returns must not recalculate returned tax using current tax master data.
 - Replacement orders continue to use current `OrderCreationService` pricing, because they are new orders created at exchange time.
-- Existing exchange settlement logic must be reviewed carefully because saved `line_total` now represents the final customer-payable line amount.
+- Replacement orders are operational records. Actual exchange collection, refund, or credit adjustment remains stored on `order_exchanges.amount_collected`, `order_exchanges.amount_refunded`, and `order_exchanges.credit_adjustment_amount`.
 
 Step 8B boundaries:
 
@@ -750,16 +786,36 @@ Step 8B boundaries:
 
 ### Step 8C: Reports And Sales History
 
-Status: Planned
+Status: Implemented
 
-Update historical display and reporting surfaces to read saved tax snapshots.
+Historical display and reporting surfaces now read saved tax snapshots.
 
 Reporting/display requirements:
 
+- Every report must read from the same source as the financial ledger: `orders`, `order_items`, and `order_item_tax_components`.
 - Sales history and order detail views should display saved order and order-item tax values.
 - Reports should use saved `order_items.line_tax`, saved order totals, and component snapshot rows for historical accuracy.
+- Reports must never derive historical financial totals by joining back to `products`, `product_variants`, tax classes, tax rates, merchant tax settings, category defaults, product tax modes, or any other current master-data tables.
 - Tax master changes after order creation must not change historical report output.
 - Avoid showing tax sections for tax-disabled merchants unless the historical order contains saved tax values.
+
+Implemented reporting surfaces:
+
+- Sales history list summary reads saved `orders.subtotal`, `orders.discount_total`, `orders.tax_total`, and `orders.grand_total`.
+- Sales history tax summary groups saved `order_items.tax_class_name`, `order_items.tax_rate`, and `order_items.price_mode`, and sums saved `order_items.taxable_amount`, `order_items.line_tax`, and `order_items.line_total`.
+- Sales history tax summary presents separate taxable sales and tax collected values, with saved inclusive/exclusive `price_mode` shown as a reporting badge.
+- Sales history component summary groups saved `order_item_tax_components` rows by saved component identity and sums saved component `amount`.
+- Sales history hides empty tax/component report sections when the filtered order set has no historical tax snapshots.
+- Merchant dashboard revenue, today's tax, today's discount, and latest-order totals read saved `orders` values only.
+- Exchange replacement orders remain excluded from sales and collection widgets because they are operational records; exchange settlement reporting continues to live on `order_exchanges`.
+- Existing sales history filters continue to apply to sales, tax, and component summaries.
+
+Future reporting enhancements:
+
+- Sales history/report filters may later add saved tax class, saved price mode, and saved tax-enabled filters.
+- Refund reporting should be handled as a separate reporting step with gross sales, refunds, net sales, tax collected, tax refunded, and net tax.
+- Future exports must export the same saved snapshot values used by on-screen reports and must not recalculate historical tax.
+- Monthly GST returns, HSN/SAC summaries, accountant reports, and CSV/Excel/PDF exports belong in a future reporting module, not the core tax engine.
 
 Step 8C boundaries:
 
@@ -769,11 +825,11 @@ Step 8C boundaries:
 
 ### Step 8D: Tax Regression Tests
 
-Status: Planned
+Status: Implemented
 
-Add a focused regression suite around the full tax lifecycle.
+The final tax-engine audit and freeze pass is complete. The implemented regression suite covers the full tax lifecycle from tax resolution through saved order snapshots, receipts, refunds, exchanges, dashboard widgets, sales history reports, and immutable historical reprints.
 
-Regression coverage should include:
+Golden regression coverage:
 
 - Tax-disabled merchant.
 - India GST seed data exists.
@@ -790,11 +846,45 @@ Regression coverage should include:
 - Exchange uses original tax snapshot.
 - Reports use saved order snapshots.
 - Tax master changes do not mutate historical orders.
+- Product price changes do not mutate historical reports.
+- Merchant tax disable after sale does not mutate historical receipts, order details, refunds, exchanges, dashboard totals, or reports.
+- Exchange replacement orders are excluded from sales and collection reporting.
+
+Final audit findings:
+
+- `order_items.line_subtotal` remains the pre-discount line amount.
+- `order_items.line_discount` remains the line-level discount.
+- `order_items.taxable_amount` remains the saved tax base.
+- `order_items.line_tax` remains the saved historical tax amount.
+- `order_items.line_total` remains the final customer-payable line amount.
+- `orders.subtotal`, `orders.discount_total`, `orders.tax_total`, and `orders.grand_total` are saved ledger values used by receipts, dashboard widgets, and reports.
+- No double-tax addition remains in exchange settlement; exchange return settlement uses saved `line_total`, while `line_tax` is retained as historical tax split information.
+- Historical surfaces read saved snapshots and do not call `PricingEngine`, `TaxResolver`, `TaxCalculator`, current tax classes, current tax rates, merchant tax settings, category defaults, or product tax modes for historical financial values.
+
+Snapshot philosophy:
+
+- Tax masters, product prices, product tax modes, category defaults, and merchant tax settings are inputs for future orders only.
+- Once an order is created, historical screens and reports must read `orders`, `order_items`, and `order_item_tax_components`.
+- Snapshot master IDs are retained for traceability, but display and reporting must use saved names, codes, rates, amounts, and component rows.
+
+Performance considerations:
+
+- Sales history totals use SQL aggregation over saved `orders` columns.
+- Sales history tax summaries aggregate saved `order_items` rows and component summaries aggregate saved `order_item_tax_components` rows.
+- Receipt and order-detail pages eager-load item component snapshots and do not join tax master tables for historical display.
+- Dashboard revenue, tax, and discount widgets aggregate saved `orders` values and exclude exchange replacement orders from sales/collection reporting.
+
+Final freeze rule:
+
+- The core tax engine is feature-complete through receipts, refunds, exchanges, dashboard, and sales history reporting.
+- Future work must build on the saved snapshot contract instead of redesigning tax calculation, order creation, or historical reporting semantics.
 
 Step 8D boundaries:
 
-- Prefer focused tests over broad rewrites.
-- Do not introduce new product behavior in regression-only tests.
+- No new business features were introduced.
+- No database schema changes were introduced.
+- No tax calculation, pricing, order creation, receipt, refund, exchange, category tax, product tax, or merchant tax setting architecture was redesigned.
+- Future reporting features must export or summarize the same saved snapshot values.
 
 ## Step 9: IGST / Interstate Support
 
@@ -828,3 +918,4 @@ Step 9 boundaries:
 - Receipt and order display read historical tax snapshots.
 - Refunds, exchanges, and reports read historical tax snapshots.
 - Automated tests cover disabled tax, inherited tax, overrides, inclusive/exclusive pricing, snapshots, refunds, exchanges, and reports.
+- Step 8D golden regression and full-suite verification pass; the Tax Engine is frozen for future modules to build on top of the saved snapshot contract.

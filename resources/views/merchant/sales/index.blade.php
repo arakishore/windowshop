@@ -19,32 +19,45 @@
             $symbol = (string) ($posCurrency['symbol'] ?? '₹');
             return ($posCurrency['symbol_position'] ?? 'before') === 'before' ? $symbol.$amount : $amount.' '.$symbol;
         };
+        $rate = static fn (float|int|string|null $value): string => $value === null ? '-' : rtrim(rtrim(number_format((float) $value, 4, '.', ''), '0'), '.').'%';
         $hasFilters = collect($filters)->filter(fn ($value) => $value !== '')->isNotEmpty();
     @endphp
 
     <div class="row g-3 mb-3">
-        <div class="col-sm-6 col-xl-3">
+        <div class="col-sm-6 col-xl-2">
             <div class="card card-body">
                 <div class="text-muted text-uppercase fs-sm">Total sales</div>
                 <h3 class="mb-0">{{ $money($summary['total_sales']) }}</h3>
             </div>
         </div>
-        <div class="col-sm-6 col-xl-3">
+        <div class="col-sm-6 col-xl-2">
             <div class="card card-body">
                 <div class="text-muted text-uppercase fs-sm">Transactions</div>
                 <h3 class="mb-0">{{ $summary['transactions'] }}</h3>
             </div>
         </div>
-        <div class="col-sm-6 col-xl-3">
+        <div class="col-sm-6 col-xl-2">
             <div class="card card-body">
                 <div class="text-muted text-uppercase fs-sm">Items sold</div>
                 <h3 class="mb-0">{{ $summary['items_sold'] }}</h3>
             </div>
         </div>
-        <div class="col-sm-6 col-xl-3">
+        <div class="col-sm-6 col-xl-2">
             <div class="card card-body">
-                <div class="text-muted text-uppercase fs-sm">Average sale</div>
-                <h3 class="mb-0">{{ $money($summary['average_sale']) }}</h3>
+                <div class="text-muted text-uppercase fs-sm">Subtotal</div>
+                <h3 class="mb-0">{{ $money($summary['subtotal']) }}</h3>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+            <div class="card card-body">
+                <div class="text-muted text-uppercase fs-sm">Discount</div>
+                <h3 class="mb-0">{{ $money($summary['discount_total']) }}</h3>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+            <div class="card card-body">
+                <div class="text-muted text-uppercase fs-sm">Tax collected</div>
+                <h3 class="mb-0">{{ $money($summary['tax_total']) }}</h3>
             </div>
         </div>
     </div>
@@ -190,4 +203,85 @@
             {{ $orders->onEachSide(1)->links('pagination::admin-datatable') }}
         </div>
     </div>
+
+    @if((float) $summary['tax_total'] > 0 || $taxSummary->isNotEmpty() || $componentSummary->isNotEmpty())
+        <div class="row g-3 mt-1">
+            @if($taxSummary->isNotEmpty())
+                <div class="col-xl-7">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Tax Summary</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tax class</th>
+                                <th>Rate</th>
+                                <th>Mode</th>
+                                <th class="text-end">Taxable sales</th>
+                                <th class="text-end">Tax collected</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($taxSummary as $row)
+                                <tr>
+                                    <td>{{ $row->tax_class_name }}</td>
+                                    <td>{{ $rate($row->tax_rate) }}</td>
+                                    <td>
+                                        @if($row->price_mode)
+                                            <span class="badge bg-primary bg-opacity-10 text-primary">{{ Str::headline((string) $row->price_mode) }}</span>
+                                        @else
+                                            <span class="badge bg-light text-muted">None</span>
+                                        @endif
+                                    </td>
+                                    <td class="text-end">{{ $money($row->taxable_amount) }}</td>
+                                    <td class="text-end">{{ $money($row->tax_amount) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+            @endif
+            @if($componentSummary->isNotEmpty())
+                <div class="col-xl-5">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Component Summary</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Component</th>
+                                <th>Rate</th>
+                                <th>Jurisdiction</th>
+                                <th class="text-end">Tax</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($componentSummary as $component)
+                                <tr>
+                                    <td>{{ $component->component_name ?: $component->component_code }}</td>
+                                    <td>
+                                        @if((string) $component->min_rate === (string) $component->max_rate)
+                                            {{ $rate($component->min_rate) }}
+                                        @else
+                                            {{ $rate($component->min_rate) }} - {{ $rate($component->max_rate) }}
+                                        @endif
+                                    </td>
+                                    <td>{{ Str::headline((string) ($component->jurisdiction_type ?: '-')) }}</td>
+                                    <td class="text-end">{{ $money($component->amount) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+            @endif
+        </div>
+    @endif
 @endsection

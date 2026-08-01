@@ -101,7 +101,7 @@ class CatalogueMasterController extends Controller
     private function categoriesForShop(Shop $shop): Collection
     {
         $categories = ProductCategory::query()
-            ->with(['parent.parent', 'children'])
+            ->with(['parent.parent', 'children', 'defaultTaxClass.rates.components'])
             ->where('status', 'active')
             ->where(function ($query) use ($shop): void {
                 $query->whereKey($shop->root_product_category_id)

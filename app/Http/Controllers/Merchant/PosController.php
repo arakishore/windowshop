@@ -416,7 +416,7 @@ class PosController extends Controller
     {
         $shop = $this->activeShop($request)->load(['city', 'merchant']);
         $orderModel = Order::query()
-            ->with(['createdBy', 'items'])
+            ->with(['createdBy', 'items.taxComponents'])
             ->where('shop_id', $shop->getKey())
             ->whereKey($order)
             ->firstOrFail();

@@ -27,7 +27,9 @@
         $cards = [
             ['label' => "Today's Orders", 'value' => number_format($stats['todays_orders']), 'icon' => 'ph-shopping-bag-open', 'color' => 'text-info'],
             ['label' => 'Pending Orders', 'value' => number_format($stats['pending_orders']), 'icon' => 'ph-clock-countdown', 'color' => 'text-warning'],
-            ['label' => 'Revenue Today', 'value' => 'INR '.number_format($stats['revenue_today']), 'icon' => 'ph-currency-inr', 'color' => 'text-teal'],
+            ['label' => 'Revenue Today', 'value' => 'INR '.number_format((float) $stats['revenue_today'], 2), 'icon' => 'ph-currency-inr', 'color' => 'text-teal'],
+            ['label' => "Today's Tax", 'value' => 'INR '.number_format((float) $stats['tax_today'], 2), 'icon' => 'ph-receipt', 'color' => 'text-primary'],
+            ['label' => "Today's Discount", 'value' => 'INR '.number_format((float) $stats['discount_today'], 2), 'icon' => 'ph-percent', 'color' => 'text-indigo'],
             ['label' => 'Products', 'value' => number_format($stats['products']), 'icon' => 'ph-package', 'color' => 'text-success'],
             ['label' => 'Out of Stock', 'value' => number_format($stats['out_of_stock']), 'icon' => 'ph-warning-circle', 'color' => 'text-danger'],
             ['label' => 'Offers', 'value' => number_format($stats['active_offers']), 'icon' => 'ph-tag', 'color' => 'text-pink'],
@@ -81,9 +83,9 @@
                                     <td><a href="#">#{{ $order->order_number ?? $order->id }}</a></td>
                                     <td>{{ $order->customer_name ?? 'Customer' }}</td>
                                     <td>{{ $activeShopLabel }}</td>
-                                    <td>INR {{ number_format((float) ($order->total_amount ?? $order->grand_total ?? $order->amount ?? 0)) }}</td>
+                                    <td>INR {{ number_format((float) ($order->grand_total ?? 0)) }}</td>
                                     <td>{{ $formatElapsed((int) ($order->elapsed_seconds ?? 0)) }}</td>
-                                    <td><span class="badge bg-info bg-opacity-10 text-info">{{ Str::headline($order->status ?? 'new') }}</span></td>
+                                    <td><span class="badge bg-info bg-opacity-10 text-info">{{ Str::headline($order->order_status ?? 'new') }}</span></td>
                                     <td class="text-end text-muted">{{ isset($order->created_at) ? \Illuminate\Support\Carbon::parse($order->created_at)->diffForHumans() : '-' }}</td>
                                 </tr>
                             @empty

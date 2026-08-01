@@ -42,6 +42,14 @@ return new class extends Migration
             $table->longText('description')->nullable();
             $table->string('meta_title')->nullable();
             $table->text('meta_description')->nullable();
+            $table->unsignedInteger('sort_order')
+                ->default(0)
+                ->index();
+            $table->boolean('is_featured')
+                ->default(false)
+                ->index();
+            $table->dateTime('featured_from')->nullable();
+            $table->dateTime('featured_until')->nullable();
             $table->string('status', 30)
                 ->default('draft')
                 ->comment('draft,active,inactive,archived')
@@ -59,6 +67,7 @@ return new class extends Migration
             $table->index(['shop_id', 'brand_id'], 'products_shop_brand_idx');
             $table->index(['shop_id', 'slug'], 'products_shop_slug_idx');
             $table->index(['status', 'published_at'], 'products_status_publish_idx');
+            $table->index(['status', 'is_featured', 'featured_from', 'featured_until'], 'products_featured_lookup_idx');
         });
     }
 

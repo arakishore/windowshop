@@ -9,6 +9,8 @@ use App\Models\ProductAttributeGroupValue;
 use App\Models\ProductCategory;
 use App\Models\ProductCategoryAttributeGroup;
 use App\Models\Shop;
+use App\Models\TaxClass;
+use App\Models\TaxRateComponent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -174,6 +176,8 @@ class MerchantProductManagementTest extends TestCase
     public function test_merchant_can_view_read_only_categories_and_attributes_for_active_shop_type(): void
     {
         [$user, $shop, $category] = $this->merchantFixture();
+        $taxClass = $this->createTaxClassWithRate('GST5', 'GST 5%', '5.0000', '2.5000');
+        $category->forceFill(['default_tax_class_id' => $taxClass->getKey()])->save();
         $shopOtherCategory = ProductCategory::query()->create([
             'parent_id' => $shop->root_product_category_id,
             'name' => 'Other',
@@ -236,6 +240,9 @@ class MerchantProductManagementTest extends TestCase
             ->assertSee('Categories &amp; Attributes', false)
             ->assertSee($category->name)
             ->assertSee($shopOtherCategory->name)
+            ->assertSee('Default Tax Class')
+            ->assertSee('GST5 / GST 5% - 5.0000% (CGST 2.5000% + SGST 2.5000%)')
+            ->assertSee('No default')
             ->assertSee('Can Select in Product')
             ->assertSee('Size')
             ->assertSee('Large')
@@ -516,5 +523,49 @@ class MerchantProductManagementTest extends TestCase
         ]);
 
         return $user;
+    }
+
+    private function createTaxClassWithRate(string $code, string $name, string $totalRate, string $componentRate): TaxClass
+    {
+        $countryId = DB::table('loc_countries')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Tax Country '.Str::random(6),
+            'iso3' => strtoupper(Str::random(3)),
+            'iso2' => strtoupper(Str::random(2)),
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $taxClass = TaxClass::query()->create([
+            'country_id' => $countryId,
+            'code' => $code,
+            'name' => $name,
+            'status' => TaxClass::STATUS_ACTIVE,
+        ]);
+
+        $taxRate = $taxClass->rates()->create([
+            'name' => $name,
+            'total_rate' => $totalRate,
+            'effective_from' => '2026-01-01',
+            'status' => 'active',
+        ]);
+
+        $taxRate->components()->create([
+            'code' => 'CGST',
+            'name' => 'CGST',
+            'rate' => $componentRate,
+            'jurisdiction_type' => TaxRateComponent::JURISDICTION_CENTRAL,
+            'priority' => 1,
+        ]);
+        $taxRate->components()->create([
+            'code' => 'SGST',
+            'name' => 'SGST',
+            'rate' => $componentRate,
+            'jurisdiction_type' => TaxRateComponent::JURISDICTION_STATE,
+            'priority' => 2,
+        ]);
+
+        return $taxClass;
     }
 }

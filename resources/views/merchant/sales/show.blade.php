@@ -18,6 +18,31 @@
         $canRefund = collect($refundableQuantities)->sum() > 0;
         $canExchange = collect($exchangeableQuantities ?? [])->sum() > 0;
         $itemDiscount = max(0, (float) $order->discount_total - (float) $order->order_discount_amount);
+        $hasHistoricalTax = (float) $order->tax_total > 0
+            || $order->items->contains(fn ($item): bool => (bool) $item->tax_enabled || (float) $item->line_tax > 0 || $item->taxComponents->isNotEmpty());
+        $rate = static function (float|int|string|null $value): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            return rtrim(rtrim(number_format((float) $value, 4, '.', ''), '0'), '.').'%';
+        };
+        $taxSnapshotLabel = static function ($item) use ($rate): string {
+            if (! (bool) $item->tax_enabled && (float) $item->line_tax <= 0 && $item->tax_class_name === null && $item->tax_rate === null) {
+                return '-';
+            }
+
+            $name = trim((string) ($item->tax_class_name ?: 'Tax'));
+            $taxRate = $rate($item->tax_rate);
+
+            return $taxRate ? $name.' '.$taxRate : $name;
+        };
+        $componentLabel = static function ($component) use ($rate): string {
+            $name = trim((string) ($component->component_name ?: $component->component_code ?: 'Tax component'));
+            $taxRate = $rate($component->rate);
+
+            return $taxRate ? $name.' '.$taxRate : $name;
+        };
         $paymentReference = collect([
             $order->payment_reference ? 'Reference: '.$order->payment_reference : null,
             $order->upi_txn ? 'UPI: '.$order->upi_txn : null,
@@ -74,7 +99,14 @@
                                 <th>Product</th>
                                 <th class="text-end">Qty</th>
                                 <th class="text-end">Unit price</th>
-                                <th class="text-end">Tax</th>
+                                <th class="text-end">Discount</th>
+                                @if($hasHistoricalTax)
+                                    <th class="text-end">Taxable</th>
+                                @endif
+                                @if($hasHistoricalTax)
+                                    <th class="text-end">Tax</th>
+                                    <th>Tax snapshot</th>
+                                @endif
                                 <th class="text-end">Line total</th>
                             </tr>
                         </thead>
@@ -87,7 +119,29 @@
                                     </td>
                                     <td class="text-end">{{ $item->quantity }} pc</td>
                                     <td class="text-end">{{ $money($item->unit_price) }}</td>
-                                    <td class="text-end">{{ $money($item->line_tax) }}</td>
+                                    <td class="text-end">{{ $money($item->line_discount) }}</td>
+                                    @if($hasHistoricalTax)
+                                        <td class="text-end">{{ $item->taxable_amount !== null ? $money($item->taxable_amount) : '-' }}</td>
+                                    @endif
+                                    @if($hasHistoricalTax)
+                                        <td class="text-end">{{ $money($item->line_tax) }}</td>
+                                        <td>
+                                            <div>{{ $taxSnapshotLabel($item) }}</div>
+                                            @if($item->price_mode)
+                                                <div class="text-muted small">{{ Str::headline($item->price_mode) }} tax pricing</div>
+                                            @endif
+                                            @if($item->taxComponents->isNotEmpty())
+                                                <div class="mt-1 small">
+                                                    @foreach($item->taxComponents as $component)
+                                                        <div class="d-flex justify-content-between gap-2">
+                                                            <span>{{ $componentLabel($component) }}</span>
+                                                            <span>{{ $money($component->amount) }}</span>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        </td>
+                                    @endif
                                     <td class="text-end fw-semibold">{{ $money($item->line_total) }}</td>
                                 </tr>
                             @endforeach
@@ -179,10 +233,12 @@
                         <span class="text-muted">Shipping</span>
                         <span class="fw-semibold">{{ $money($order->shipping_total) }}</span>
                     </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Tax</span>
-                        <span class="fw-semibold">{{ $money($order->tax_total) }}</span>
-                    </div>
+                    @if($hasHistoricalTax)
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Tax</span>
+                            <span class="fw-semibold">{{ $money($order->tax_total) }}</span>
+                        </div>
+                    @endif
                     @if((float) $order->rounding_adjustment !== 0.0)
                         <div class="d-flex justify-content-between mb-2">
                             <span class="text-muted">Round off</span>

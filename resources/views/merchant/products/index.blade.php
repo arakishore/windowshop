@@ -13,7 +13,25 @@
 
 @section('content')
     @php
-        $hasFilters = $filters['search'] !== '' || $filters['status'];
+        $hasFilters = $filters['search'] !== '' || $filters['status'] || $filters['featured'];
+        $featuredFilters = [
+            'current' => 'Featured Now',
+            'scheduled' => 'Scheduled',
+            'expired' => 'Expired',
+            'not_featured' => 'Not Featured',
+        ];
+        $featuredClasses = [
+            'current' => 'bg-success bg-opacity-10 text-success',
+            'scheduled' => 'bg-info bg-opacity-10 text-info',
+            'expired' => 'bg-warning bg-opacity-10 text-warning',
+            'disabled' => 'bg-light text-body border',
+        ];
+        $featuredLabels = [
+            'current' => 'Featured Now',
+            'scheduled' => 'Scheduled',
+            'expired' => 'Expired',
+            'disabled' => 'Not Featured',
+        ];
     @endphp
 
     <div class="card">
@@ -30,7 +48,7 @@
         <div class="collapse {{ $hasFilters ? 'show' : '' }}" id="product-filter-collapse">
             <div class="card-body border-bottom">
                 <form method="GET" action="{{ route('merchant.products.index') }}" class="row g-3 align-items-end">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="search" class="form-label">Search</label>
                         <input id="search" name="search" type="search" value="{{ $filters['search'] }}" class="form-control" placeholder="Product name, slug, or brand">
                     </div>
@@ -40,6 +58,15 @@
                             <option value="">All</option>
                             @foreach($statuses as $value => $status)
                                 <option value="{{ $value }}" @selected($filters['status'] === $value)>{{ $status['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="featured" class="form-label">Featured</label>
+                        <select id="featured" name="featured" class="form-select">
+                            <option value="">All</option>
+                            @foreach($featuredFilters as $value => $label)
+                                <option value="{{ $value }}" @selected($filters['featured'] === $value)>{{ $label }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -69,6 +96,8 @@
                             @else
                                 <option value="mark_active">Mark Active</option>
                                 <option value="mark_inactive">Mark Inactive</option>
+                                <option value="mark_featured">Mark Featured</option>
+                                <option value="remove_featured">Remove Featured</option>
                                 <option value="archive">Archive</option>
                             @endif
                             <option value="delete">Delete to Trash</option>
@@ -92,6 +121,7 @@
                             <th>Product Category</th>
                             <th>Brand</th>
                             <th>Tax</th>
+                            <th>Featured</th>
                             <th>Status</th>
                             <th>Created Date</th>
                             <th class="text-center">Actions</th>
@@ -129,6 +159,28 @@
                                         Tax Exempt
                                     @else
                                         Default
+                                    @endif
+                                </td>
+                                <td>
+                                    @php($featuredStatus = $product->featuredStatus())
+                                    <span class="badge {{ $featuredClasses[$featuredStatus] ?? $featuredClasses['disabled'] }}">
+                                        {{ $featuredLabels[$featuredStatus] ?? 'Not Featured' }}
+                                    </span>
+                                    @if($product->featured_from || $product->featured_until)
+                                        <div class="text-muted small mt-1">
+                                            @if(! $product->is_featured)
+                                                Saved schedule<br>
+                                            @endif
+                                            @if($product->featured_from)
+                                                From {{ $product->featured_from->format('d M Y H:i') }}
+                                            @endif
+                                            @if($product->featured_from && $product->featured_until)
+                                                <br>
+                                            @endif
+                                            @if($product->featured_until)
+                                                Until {{ $product->featured_until->format('d M Y H:i') }}
+                                            @endif
+                                        </div>
                                     @endif
                                 </td>
                                 <td>
@@ -236,6 +288,18 @@
                     title: 'Mark Products Inactive',
                     message: 'Mark selected products as Inactive?<br><br>They will not be shown to customers.',
                     label: 'Yes, Mark Inactive',
+                    className: 'btn-warning',
+                },
+                mark_featured: {
+                    title: 'Mark Products Featured',
+                    message: 'Mark selected products as Featured?<br><br>Existing featured dates will be preserved.',
+                    label: 'Yes, Mark Featured',
+                    className: 'btn-success',
+                },
+                remove_featured: {
+                    title: 'Remove Featured Products',
+                    message: 'Remove selected products from Featured?<br><br>Existing featured dates will be preserved for future reuse.',
+                    label: 'Yes, Remove Featured',
                     className: 'btn-warning',
                 },
                 archive: {

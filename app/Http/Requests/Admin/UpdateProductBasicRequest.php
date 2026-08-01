@@ -70,6 +70,10 @@ class UpdateProductBasicRequest extends FormRequest
             ],
             'product_name' => ['required', 'string', 'max:255'],
             'short_description' => ['nullable', 'string', 'max:255'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'is_featured' => ['nullable', 'boolean'],
+            'featured_from' => ['nullable', 'date'],
+            'featured_until' => ['nullable', 'date', 'after_or_equal:featured_from'],
             'status' => ['required', Rule::in(['draft', 'active', 'inactive', 'archived'])],
             'tax_mode' => ['required', Rule::in(['inherit', 'override', 'exempt'])],
             'tax_class_id' => ['nullable', 'integer'],
@@ -139,6 +143,19 @@ class UpdateProductBasicRequest extends FormRequest
         return [
             'tax_mode' => $mode,
             'tax_class_id' => $mode === 'override' ? $this->integer('tax_class_id') : null,
+        ];
+    }
+
+    /**
+     * @return array{sort_order: int, is_featured: bool, featured_from: mixed, featured_until: mixed}
+     */
+    public function merchandisingConfiguration(): array
+    {
+        return [
+            'sort_order' => $this->integer('sort_order'),
+            'is_featured' => $this->boolean('is_featured'),
+            'featured_from' => $this->input('featured_from') ?: null,
+            'featured_until' => $this->input('featured_until') ?: null,
         ];
     }
 }

@@ -70,6 +70,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->name('master.product-categories.attribute-groups.edit');
         Route::put('master/product-categories/{productCategory}/attribute-groups', [ProductCategoryAttributeGroupController::class, 'update'])
             ->name('master.product-categories.attribute-groups.update');
+        Route::post('master/product-categories/bulk-tax-class', [ProductCategoryController::class, 'bulkTaxClass'])
+            ->name('master.product-categories.bulk-tax-class');
         Route::resource('master/product-categories', ProductCategoryController::class)
             ->parameters(['product-categories' => 'productCategory'])
             ->names('master.product-categories');

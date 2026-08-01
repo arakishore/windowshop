@@ -480,6 +480,96 @@ class AdminProductCategoryHierarchyTest extends TestCase
         $this->assertNull($category->fresh()->default_tax_class_id);
     }
 
+    public function test_admin_can_bulk_assign_and_clear_default_tax_class_for_leaf_categories(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%');
+        $root = $this->createCategory('Fashion', 'fashion');
+        $shirts = $this->createCategory('Shirts', 'shirts', $root);
+        $dresses = $this->createCategory('Dresses', 'dresses', $root);
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.product-categories.bulk-tax-class'), [
+                'bulk_tax_action' => 'assign',
+                'tax_class_id' => $taxClass->getKey(),
+                'category_ids' => [$shirts->getKey(), $dresses->getKey()],
+            ])
+            ->assertRedirect(route('admin.master.product-categories.index'))
+            ->assertSessionHas('success', 'Default tax class assigned to 2 leaf category/categories.');
+
+        $this->assertSame($taxClass->getKey(), $shirts->fresh()->default_tax_class_id);
+        $this->assertSame($taxClass->getKey(), $dresses->fresh()->default_tax_class_id);
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.product-categories.bulk-tax-class'), [
+                'bulk_tax_action' => 'clear',
+                'category_ids' => [$shirts->getKey(), $dresses->getKey()],
+            ])
+            ->assertRedirect(route('admin.master.product-categories.index'))
+            ->assertSessionHas('success', 'Default tax class cleared from 2 leaf category/categories.');
+
+        $this->assertNull($shirts->fresh()->default_tax_class_id);
+        $this->assertNull($dresses->fresh()->default_tax_class_id);
+    }
+
+    public function test_bulk_tax_class_skips_grouping_categories(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%');
+        $root = $this->createCategory('Fashion', 'fashion');
+        $shirts = $this->createCategory('Shirts', 'shirts', $root);
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.product-categories.bulk-tax-class'), [
+                'bulk_tax_action' => 'assign',
+                'tax_class_id' => $taxClass->getKey(),
+                'category_ids' => [$root->getKey(), $shirts->getKey()],
+            ])
+            ->assertRedirect(route('admin.master.product-categories.index'))
+            ->assertSessionHas('success', 'Default tax class assigned to 1 leaf category/categories. 1 grouping category/categories were skipped.');
+
+        $this->assertNull($root->fresh()->default_tax_class_id);
+        $this->assertSame($taxClass->getKey(), $shirts->fresh()->default_tax_class_id);
+    }
+
+    public function test_bulk_tax_class_requires_leaf_category_selection(): void
+    {
+        $admin = $this->createAdminUser();
+        $taxClass = $this->createTaxClass('GST18', 'GST 18%');
+        $root = $this->createCategory('Fashion', 'fashion');
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.product-categories.bulk-tax-class'), [
+                'bulk_tax_action' => 'assign',
+                'tax_class_id' => $taxClass->getKey(),
+                'category_ids' => [$root->getKey()],
+            ])
+            ->assertRedirect(route('admin.master.product-categories.index'))
+            ->assertSessionHas('error', 'Select at least one leaf category. Tax classes can only be assigned to selectable leaf categories.');
+
+        $this->assertNull($root->fresh()->default_tax_class_id);
+    }
+
+    public function test_bulk_tax_class_rejects_inactive_tax_class(): void
+    {
+        $admin = $this->createAdminUser();
+        $inactiveTaxClass = $this->createTaxClass('GST18', 'GST 18%', TaxClass::STATUS_INACTIVE);
+        $root = $this->createCategory('Fashion', 'fashion');
+        $shirts = $this->createCategory('Shirts', 'shirts', $root);
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.index'))
+            ->post(route('admin.master.product-categories.bulk-tax-class'), [
+                'bulk_tax_action' => 'assign',
+                'tax_class_id' => $inactiveTaxClass->getKey(),
+                'category_ids' => [$shirts->getKey()],
+            ])
+            ->assertRedirect(route('admin.master.product-categories.index'))
+            ->assertSessionHasErrors('tax_class_id');
+
+        $this->assertNull($shirts->fresh()->default_tax_class_id);
+    }
+
     private function createAdminUser(): User
     {
         $user = User::query()->create([

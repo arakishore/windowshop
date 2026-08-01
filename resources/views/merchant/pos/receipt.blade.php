@@ -124,6 +124,8 @@
         $showHsnSummary = $receiptSettings['showHsnSummary'] ?? false;
         $footerText = trim((string) ($receiptSettings['footerText'] ?? 'Thank you for shopping with us.'));
         $returnPolicy = trim((string) ($receiptSettings['returnPolicy'] ?? ''));
+        $hasHistoricalTax = (float) $order->tax_total > 0
+            || $order->items->contains(fn ($item): bool => (bool) $item->tax_enabled || (float) $item->line_tax > 0 || $item->taxComponents->isNotEmpty());
         $posCurrency = $posCurrency ?? [
             'symbol' => '₹',
             'decimal_places' => 2,
@@ -142,6 +144,25 @@
 
             return ($posCurrency['symbol_position'] ?? 'before') === 'before' ? $symbol.$amount : $amount.' '.$symbol;
         };
+        $formatTaxRate = static function (float|int|string|null $value): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            return rtrim(rtrim(number_format((float) $value, 4, '.', ''), '0'), '.').'%';
+        };
+        $lineTaxName = static function ($item) use ($formatTaxRate): string {
+            $name = trim((string) ($item->tax_class_name ?: 'Tax'));
+            $rate = $formatTaxRate($item->tax_rate);
+
+            return $rate ? $name.' '.$rate : $name;
+        };
+        $componentTaxName = static function ($component) use ($formatTaxRate): string {
+            $name = trim((string) ($component->component_name ?: $component->component_code ?: 'Tax component'));
+            $rate = $formatTaxRate($component->rate);
+
+            return $rate ? $name.' '.$rate : $name;
+        };
         $itemHsnCode = static fn ($item): ?string => data_get($item->metadata, 'hsn_code') ?: data_get($item->metadata, 'hsn');
         $hsnSummary = $order->items
             ->map(function ($item) use ($itemHsnCode): ?array {
@@ -153,7 +174,7 @@
 
                 return [
                     'hsn' => $hsnCode,
-                    'taxable' => (float) $item->line_total,
+                    'taxable' => (float) ($item->taxable_amount ?? $item->line_total),
                     'tax' => (float) $item->line_tax,
                 ];
             })
@@ -244,6 +265,31 @@
                         <span>Line Discount</span>
                         <span>-{{ $formatReceiptMoney($item->line_discount) }}</span>
                     </div>
+                @endif
+                @if($showTaxBreakdown && $hasHistoricalTax && ((bool) $item->tax_enabled || (float) $item->line_tax > 0 || $item->taxComponents->isNotEmpty()))
+                    @if($item->taxable_amount !== null)
+                        <div class="receipt-row">
+                            <span>Taxable</span>
+                            <span>{{ $formatReceiptMoney($item->taxable_amount) }}</span>
+                        </div>
+                    @endif
+                    @if((float) $item->line_tax > 0)
+                        <div class="receipt-row">
+                            <span>{{ $lineTaxName($item) }}{{ $item->price_mode === 'inclusive' ? ' Included' : '' }}</span>
+                            <span>{{ $formatReceiptMoney($item->line_tax) }}</span>
+                        </div>
+                    @endif
+                    @foreach($item->taxComponents as $component)
+                        <div class="receipt-row">
+                            <span>{{ $componentTaxName($component) }}</span>
+                            <span>{{ $formatReceiptMoney($component->amount) }}</span>
+                        </div>
+                    @endforeach
+                    @if($item->price_mode)
+                        <div>{{ Str::headline($item->price_mode) }} tax pricing</div>
+                    @endif
+                @endif
+                @if((float) $item->line_discount > 0 || ($showTaxBreakdown && $hasHistoricalTax))
                     <div class="receipt-row">
                         <span>Line Total</span>
                         <span>{{ $formatReceiptMoney($item->line_total) }}</span>
@@ -265,7 +311,7 @@
                 <span>Order Discount</span>
                 <span>{{ $formatReceiptMoney($orderDiscountTotal) }}</span>
             </div>
-            @if($showTaxBreakdown)
+            @if($showTaxBreakdown && $hasHistoricalTax)
                 <div class="receipt-row">
                     <span>Tax</span>
                     <span>{{ $formatReceiptMoney($order->tax_total) }}</span>

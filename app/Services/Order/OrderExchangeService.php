@@ -69,7 +69,12 @@ class OrderExchangeService
                 ->firstOrFail();
 
             $exchangeable = $this->exchangeableQuantities($order);
-            $returnedRows = $this->selectedReturnRows($order, $data['returned_items'] ?? [], $exchangeable);
+            $returnedRows = $this->selectedReturnRows(
+                $order,
+                $data['returned_items'] ?? [],
+                $exchangeable,
+                $this->exchangedLineValueTotals($order),
+            );
             $replacementRows = $this->selectedReplacementRows($data['replacement_items'] ?? []);
 
             if ($returnedRows === []) {
@@ -102,6 +107,7 @@ class OrderExchangeService
                 'remarks' => 'Replacement for exchange against '.$order->order_number,
                 'items' => $replacementRows,
             ], $actor);
+            $this->markReplacementOrderOperationallyPaid($replacementOrder);
 
             $replacementTotal = $this->money($replacementOrder->grand_total);
             $difference = $this->money((float) $replacementTotal - (float) $returnedTotal);
@@ -143,7 +149,7 @@ class OrderExchangeService
                         'original_unit_price' => $row['item']->unit_price,
                         'original_line_discount' => $row['item']->line_discount,
                         'settlement_line_total' => $row['settlement_line_total'],
-                        'tax_included_in_returned_total' => (float) $row['line_tax'] > 0,
+                        'line_tax_snapshot_present' => (float) $row['line_tax'] > 0,
                     ],
                 ]);
 
@@ -179,9 +185,10 @@ class OrderExchangeService
     /**
      * @param array<int|string, array{quantity?: int|string|null, restock?: mixed, do_not_restock?: mixed}> $submitted
      * @param array<int, int> $exchangeable
+     * @param array<int, array{line_total: string, line_tax: string}> $exchangedValues
      * @return array<int, array{item: OrderItem, quantity: int, unit_return_value: string, line_tax: string, line_total: string, settlement_line_total: string, restocked: bool}>
      */
-    private function selectedReturnRows(Order $order, array $submitted, array $exchangeable): array
+    private function selectedReturnRows(Order $order, array $submitted, array $exchangeable, array $exchangedValues): array
     {
         $rows = [];
 
@@ -199,7 +206,16 @@ class OrderExchangeService
                 ]);
             }
 
-            $values = $this->returnedLineValues($item, $quantity);
+            $values = $this->returnedLineValues(
+                $item,
+                $quantity,
+                $quantity >= ($exchangeable[$itemId] ?? 0)
+                    ? $this->remainingMoney($item->line_total, $exchangedValues[$itemId]['line_total'] ?? '0.00')
+                    : null,
+                $quantity >= ($exchangeable[$itemId] ?? 0)
+                    ? $this->remainingMoney($item->line_tax, $exchangedValues[$itemId]['line_tax'] ?? '0.00')
+                    : null,
+            );
 
             $rows[] = [
                 'item' => $item,
@@ -216,27 +232,36 @@ class OrderExchangeService
     }
 
     /**
-     * `order_items.line_total` is tax-exclusive in the current order model;
-     * `order_items.line_tax` is stored separately and is zero in today's POS flow.
-     * Keep the tax split explicit so GST can be included in exchange settlement
-     * without either omitting tax or adding it twice.
+     * Step 7C makes `order_items.line_total` the final customer-payable line amount.
+     * Exchange settlement prorates that saved amount directly. `line_tax` remains a
+     * historical tax split for exchange reporting/display and is not added again.
      *
      * @return array{unit_return_value: string, line_tax: string, line_total: string, settlement_line_total: string}
      */
-    public function returnedLineValues(OrderItem $item, int $quantity): array
+    public function returnedLineValues(OrderItem $item, int $quantity, ?string $maxLineTotal = null, ?string $maxLineTax = null): array
     {
         $quantity = max(0, $quantity);
         $orderedQuantity = max(1, (int) $item->quantity);
-        $ratio = $quantity / $orderedQuantity;
-        $unitReturnValue = $this->money((float) $item->line_total / $orderedQuantity);
-        $lineTotal = $this->money((float) $unitReturnValue * $quantity);
-        $lineTax = $this->money((float) $item->line_tax * $ratio);
+        $lineTotal = $this->prorateMoney($item->line_total, $quantity, $orderedQuantity);
+        $lineTax = $this->prorateMoney($item->line_tax, $quantity, $orderedQuantity);
+
+        if ($maxLineTotal !== null) {
+            $lineTotal = $maxLineTotal;
+        }
+
+        if ($maxLineTax !== null) {
+            $lineTax = $maxLineTax;
+        }
+
+        $unitReturnValue = $quantity > 0
+            ? $this->centsToMoney((int) round($this->moneyToCents($lineTotal) / $quantity, 0, PHP_ROUND_HALF_UP))
+            : '0.00';
 
         return [
             'unit_return_value' => $unitReturnValue,
             'line_tax' => $lineTax,
             'line_total' => $lineTotal,
-            'settlement_line_total' => $this->money((float) $lineTotal + (float) $lineTax),
+            'settlement_line_total' => $lineTotal,
         ];
     }
 
@@ -304,6 +329,58 @@ class OrderExchangeService
         }
 
         return $this->money($total);
+    }
+
+    private function markReplacementOrderOperationallyPaid(Order $replacementOrder): void
+    {
+        $replacementOrder->forceFill([
+            'amount_paid' => $replacementOrder->grand_total,
+            'change_amount' => '0.00',
+            'payment_status' => Order::PAYMENT_PAID,
+        ])->save();
+    }
+
+    /**
+     * @return array<int, array{line_total: string, line_tax: string}>
+     */
+    private function exchangedLineValueTotals(Order $order): array
+    {
+        return DB::table('order_exchange_return_items')
+            ->join('order_exchanges', 'order_exchanges.id', '=', 'order_exchange_return_items.order_exchange_id')
+            ->where('order_exchanges.original_order_id', $order->getKey())
+            ->where('order_exchanges.status', OrderExchange::STATUS_COMPLETED)
+            ->select(
+                'order_exchange_return_items.order_item_id',
+                DB::raw('SUM(order_exchange_return_items.line_total) as line_total'),
+                DB::raw('SUM(order_exchange_return_items.line_tax) as line_tax'),
+            )
+            ->groupBy('order_exchange_return_items.order_item_id')
+            ->get()
+            ->mapWithKeys(fn ($row): array => [
+                (int) $row->order_item_id => [
+                    'line_total' => $this->money($row->line_total ?? 0),
+                    'line_tax' => $this->money($row->line_tax ?? 0),
+                ],
+            ])
+            ->all();
+    }
+
+    private function remainingMoney(float|string|int $original, float|string|int $alreadyReturned): string
+    {
+        return $this->centsToMoney(max(0, $this->moneyToCents($original) - $this->moneyToCents($alreadyReturned)));
+    }
+
+    private function prorateMoney(float|string|int $amount, int $quantity, int $orderedQuantity): string
+    {
+        if ($quantity <= 0 || $orderedQuantity <= 0) {
+            return '0.00';
+        }
+
+        return $this->centsToMoney((int) round(
+            ($this->moneyToCents($amount) * $quantity) / $orderedQuantity,
+            0,
+            PHP_ROUND_HALF_UP,
+        ));
     }
 
     /**
@@ -389,6 +466,28 @@ class OrderExchangeService
     private function money(float|string|int $value): string
     {
         return number_format(round((float) $value, 2), 2, '.', '');
+    }
+
+    private function moneyToCents(float|string|int $value): int
+    {
+        $value = is_float($value) ? number_format($value, 2, '.', '') : (string) $value;
+        $value = trim($value);
+        $negative = str_starts_with($value, '-');
+        $value = ltrim($value, '+-');
+        [$whole, $decimal] = array_pad(explode('.', $value, 2), 2, '0');
+        $whole = preg_replace('/\D/', '', $whole) ?: '0';
+        $decimal = substr(str_pad(preg_replace('/\D/', '', $decimal) ?: '0', 2, '0'), 0, 2);
+        $cents = ((int) $whole * 100) + (int) $decimal;
+
+        return $negative ? -$cents : $cents;
+    }
+
+    private function centsToMoney(int $cents): string
+    {
+        $negative = $cents < 0;
+        $cents = abs($cents);
+
+        return ($negative ? '-' : '').intdiv($cents, 100).'.'.str_pad((string) ($cents % 100), 2, '0', STR_PAD_LEFT);
     }
 
     private function nullableString(mixed $value): ?string

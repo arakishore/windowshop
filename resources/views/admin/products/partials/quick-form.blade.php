@@ -20,6 +20,22 @@
         default => 'Will be resolved during checkout',
     };
     $merchantTaxEnabled = (bool) ($merchantTaxEnabled ?? false);
+    $featuredFromValue = old('featured_from', $product?->featured_from?->format('Y-m-d\TH:i'));
+    $featuredUntilValue = old('featured_until', $product?->featured_until?->format('Y-m-d\TH:i'));
+    $selectedIsFeatured = (bool) old('is_featured', $product?->is_featured ?? false);
+    $featuredStatus = $product ? $product->featuredStatus() : ($selectedIsFeatured ? 'current' : 'disabled');
+    $featuredStatusClasses = [
+        'current' => 'bg-success bg-opacity-10 text-success',
+        'scheduled' => 'bg-info bg-opacity-10 text-info',
+        'expired' => 'bg-warning bg-opacity-10 text-warning',
+        'disabled' => 'bg-light text-body border',
+    ];
+    $featuredStatusLabels = [
+        'current' => 'Featured Now',
+        'scheduled' => 'Scheduled',
+        'expired' => 'Expired',
+        'disabled' => 'Disabled',
+    ];
 @endphp
 
 @if ($errors->any())
@@ -106,6 +122,44 @@
                 @endforeach
             </select>
             @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
+        </div>
+
+        <div class="col-12">
+            <div class="border-top pt-3 mt-2">
+                <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-lg-between gap-2 mb-3">
+                    <div>
+                        <div class="fw-semibold">Featured Product</div>
+                        <div class="text-muted small">Featured products can be used later in the website, mobile app, marketplace, or POS quick-pick. Existing product sort order controls their display order.</div>
+                    </div>
+                    <span class="badge {{ $featuredStatusClasses[$featuredStatus] ?? $featuredStatusClasses['disabled'] }}">
+                        {{ $featuredStatusLabels[$featuredStatus] ?? 'Disabled' }}
+                    </span>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="sort_order" class="form-label">Sort Order</label>
+                        <input id="sort_order" name="sort_order" type="number" min="0" max="999999" value="{{ old('sort_order', $product?->sort_order ?? 0) }}" class="form-control @error('sort_order') is-invalid @enderror">
+                        @error('sort_order')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <label class="form-check mb-2">
+                            <input name="is_featured" value="1" type="checkbox" class="form-check-input" @checked($selectedIsFeatured)>
+                            <span class="form-check-label">Feature this product</span>
+                        </label>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="featured_from" class="form-label">Featured From</label>
+                        <input id="featured_from" name="featured_from" type="datetime-local" value="{{ $featuredFromValue }}" class="form-control @error('featured_from') is-invalid @enderror">
+                        @error('featured_from')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label for="featured_until" class="form-label">Featured Until</label>
+                        <input id="featured_until" name="featured_until" type="datetime-local" value="{{ $featuredUntilValue }}" class="form-control @error('featured_until') is-invalid @enderror">
+                        @error('featured_until')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                </div>
+            </div>
         </div>
 
         @if($includeShortDescription)
