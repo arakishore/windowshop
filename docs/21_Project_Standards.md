@@ -298,7 +298,18 @@ Dedicated `system_languages`, `system_currencies`, and `system_timezones` master
 
 Business modules must consume localization defaults through the settings boundary instead of hardcoding numeric database IDs.
 
-## 15. Merchant Foundation Standards
+## 15. Date And Time Display
+
+- Store application timestamps in UTC.
+- Display timestamps through `App\Services\DateTime\DateDisplayService` using the global admin settings for `timezone`, `date_format`, and `time_format`.
+- Blade and server-rendered UI should use `app_date()`, `app_time()`, or `app_datetime()` instead of calling `format()` directly for human-facing dates.
+- Timestamp values such as `created_at`, `updated_at`, `last_login_at`, order dates, receipt dates, and report dates are converted from UTC to the configured timezone before display.
+- Date-only business fields must not shift across timezones. Use `app_date()` for values such as `effective_from`, `effective_to`, DOB, expiry dates, and other calendar-only fields.
+- Do not replace machine formats used for HTML inputs, API contracts, query filters, logs, migrations, seeders, or JavaScript ISO payloads.
+- The date display service must cache regional settings for the request/container lifecycle so list pages do not query settings once per row.
+- Merchant-specific timezone/date overrides are not part of Version 1; global admin settings control display everywhere.
+
+## 16. Merchant Foundation Standards
 
 - Merchant Module Phase 1 is the database foundation only: `merchant_profiles`, `merchant_addresses`, `merchant_documents`, `merchant_bank_accounts`, and `merchant_verifications`.
 - Merchant identity uses `users` plus `auth_roles`; do not create separate admin, merchant, or customer user tables.
@@ -307,7 +318,16 @@ Business modules must consume localization defaults through the settings boundar
 - Merchant bank `account_number` values must be encrypted in the model or service layer, masked in all output, and excluded from audit-log `old_values` and `new_values`.
 - One default merchant address or bank account is enforced in application logic, not through a simple boolean unique constraint.
 
-## 16. Future Architecture Decisions
+## 17. Product Availability Standards
+
+- Product availability statuses are merchant-specific, not global master data.
+- Inventory quantity and customer availability are separate concerns: inventory determines quantity, availability determines customer-facing label, badge type, and zero-stock purchase permission.
+- Use `purchase_allowed` as the single source of truth for whether customer channels may buy an item with stock quantity `0`.
+- Website, mobile app, and customer commerce APIs must use `ProductAvailabilityResolver` output, especially `availability.label`, `availability.badge_type`, and `can_purchase`.
+- POS stock rules are separate and must not automatically allow zero-stock sales because a customer-channel availability status permits purchase.
+- Availability status IDs must be validated against the product merchant. Merchants must never assign another merchant's status to a product or variant.
+
+## 18. Future Architecture Decisions
 
 - Record significant decisions in `docs/decisions/` before or alongside implementation.
 - Every ADR includes: Problem, Decision, Alternatives Considered, Reason, and Consequences.

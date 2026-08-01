@@ -233,7 +233,7 @@ class ProductVariantManagementService
     public function variantsForDisplay(Product $product, array $filters = []): Collection
     {
         $query = $product->variants()
-            ->with(['attributes.group', 'attributes.value'])
+            ->with(['attributes.group', 'attributes.value', 'availabilityStatus'])
             ->getQuery();
 
         $search = trim((string) ($filters['search'] ?? ''));
@@ -365,6 +365,7 @@ class ProductVariantManagementService
             'cost_price' => $this->nullableDecimalValue($changes['cost_price'] ?? null),
             'stock_quantity' => (int) ($changes['stock_quantity'] ?? 0),
             'low_stock_threshold' => (int) ($changes['low_stock_threshold'] ?? 0),
+            'availability_status_id' => $this->nullableInteger($changes['availability_status_id'] ?? null),
             'status' => $changes['status'] ?? 'active',
         ];
     }
@@ -389,6 +390,10 @@ class ProductVariantManagementService
             if (array_key_exists($field, $changes) && trim((string) $changes[$field]) !== '') {
                 $normalized[$field] = (int) $changes[$field];
             }
+        }
+
+        if (array_key_exists('availability_status_id', $changes)) {
+            $normalized['availability_status_id'] = $this->nullableInteger($changes['availability_status_id']);
         }
 
         if (array_key_exists('status', $changes) && in_array($changes['status'], ['active', 'inactive'], true)) {
@@ -429,6 +434,17 @@ class ProductVariantManagementService
         $value = trim((string) ($value ?? ''));
 
         return $value === '' ? null : $value;
+    }
+
+    private function nullableInteger(mixed $value): ?int
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+
+        $integer = (int) $value;
+
+        return $integer > 0 ? $integer : null;
     }
 
     private function decimalValue(mixed $value): string

@@ -9,6 +9,8 @@
     $selectedShop = $selectedShopId ? $shops->firstWhere('id', (int) $selectedShopId) : null;
     $productRoutePrefix = $productRoutePrefix ?? 'admin';
     $taxClasses = $taxClasses ?? collect();
+    $availabilityStatuses = $availabilityStatuses ?? collect();
+    $selectedAvailabilityStatusId = old('availability_status_id', $product?->availability_status_id);
     $selectedTaxMode = old('tax_mode', $product?->tax_mode ?? 'inherit');
     $selectedTaxClassId = old('tax_class_id', $product?->tax_class_id);
     $selectedCategory = $selectedCategoryId ? $productCategories->firstWhere('id', (int) $selectedCategoryId) : null;
@@ -54,7 +56,7 @@
         <div class="col-md-6">
             <label for="shop_id" class="form-label">Shop <span class="text-danger">*</span></label>
             @if($product && $selectedShop)
-                <input type="hidden" id="shop_id" name="shop_id" value="{{ $selectedShop->getKey() }}" data-root-category-id="{{ $selectedShop->root_product_category_id }}">
+                <input type="hidden" id="shop_id" name="shop_id" value="{{ $selectedShop->getKey() }}" data-root-category-id="{{ $selectedShop->root_product_category_id }}" data-merchant-id="{{ $selectedShop->merchant_id }}">
                 <div class="form-control bg-light">
                     {{ $selectedShop->name }}
                     @if($selectedShop->merchant)
@@ -66,7 +68,7 @@
                 <select id="shop_id" name="shop_id" class="form-select @error('shop_id') is-invalid @enderror" required>
                     <option value="">Select Shop</option>
                     @foreach($shops as $shop)
-                        <option value="{{ $shop->id }}" data-root-category-id="{{ $shop->root_product_category_id }}" @selected((string) $selectedShopId === (string) $shop->id)>
+                        <option value="{{ $shop->id }}" data-root-category-id="{{ $shop->root_product_category_id }}" data-merchant-id="{{ $shop->merchant_id }}" @selected((string) $selectedShopId === (string) $shop->id)>
                             {{ $shop->name }}
                             @if($shop->merchant)
                                 - {{ $shop->merchant->business_name }}
@@ -122,6 +124,42 @@
                 @endforeach
             </select>
             @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
+        </div>
+
+        <div class="col-12">
+            <div class="border-top pt-3 mt-2">
+                <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-lg-between gap-2 mb-3">
+                    <div>
+                        <div class="fw-semibold">Customer Availability</div>
+                        <div class="text-muted small">Controls the message shown to customers and whether they may purchase when stock reaches zero.</div>
+                    </div>
+                    @if($product?->availabilityStatus)
+                        <span class="badge {{ $product->availabilityStatus->safeBadgeClass() }}">
+                            {{ $product->availabilityStatus->name }}
+                        </span>
+                    @endif
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <label for="availability_status_id" class="form-label">Availability Status</label>
+                        <select id="availability_status_id" name="availability_status_id" class="form-select @error('availability_status_id') is-invalid @enderror">
+                            <option value="">Default: In Stock</option>
+                            @foreach($availabilityStatuses as $availabilityStatus)
+                                <option
+                                    value="{{ $availabilityStatus->id }}"
+                                    data-merchant-id="{{ $availabilityStatus->merchant_id }}"
+                                    data-current-selected="{{ (string) $selectedAvailabilityStatusId === (string) $availabilityStatus->id ? '1' : '0' }}"
+                                    @selected((string) $selectedAvailabilityStatusId === (string) $availabilityStatus->id)
+                                >
+                                    {{ $availabilityStatus->name }} - {{ $availabilityStatus->purchase_allowed ? 'Purchase allowed' : 'Purchase blocked' }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('availability_status_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="col-12">
@@ -242,6 +280,7 @@
             const shopSelect = document.getElementById('shop_id');
             const categorySelect = document.getElementById('product_category_id');
             const brandSelect = document.getElementById('brand_id');
+            const availabilitySelect = document.getElementById('availability_status_id');
             const taxClassWrap = document.querySelector('.js-tax-class-wrap');
             const taxClassSelect = document.getElementById('tax_class_id');
             const taxCategoryDefault = document.querySelector('.js-tax-category-default');
@@ -257,6 +296,8 @@
                 const rootCategoryId = selectedShop ? selectedShop.dataset.rootCategoryId : '';
                 let selectedCategoryVisible = false;
                 let selectedBrandVisible = false;
+                let selectedAvailabilityVisible = false;
+                const merchantId = selectedShop ? selectedShop.dataset.merchantId : '';
 
                 Array.from(categorySelect.options).forEach(function (option) {
                     if (!option.value) {
@@ -302,6 +343,31 @@
 
                 if (!selectedBrandVisible) {
                     brandSelect.value = '';
+                }
+
+                if (!availabilitySelect) {
+                    return;
+                }
+
+                Array.from(availabilitySelect.options).forEach(function (option) {
+                    if (!option.value) {
+                        option.hidden = false;
+                        option.disabled = false;
+                        return;
+                    }
+
+                    const isCurrentSelected = option.dataset.currentSelected === '1';
+                    const belongsToMerchant = merchantId && option.dataset.merchantId === merchantId;
+                    option.hidden = !belongsToMerchant && !isCurrentSelected;
+                    option.disabled = !belongsToMerchant && !isCurrentSelected;
+
+                    if (option.selected && (belongsToMerchant || isCurrentSelected)) {
+                        selectedAvailabilityVisible = true;
+                    }
+                });
+
+                if (!selectedAvailabilityVisible) {
+                    availabilitySelect.value = '';
                 }
             };
 

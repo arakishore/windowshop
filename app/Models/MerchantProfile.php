@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Traits\HasUuid;
 use App\Services\Merchant\MerchantSettingsInitializer;
+use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -51,6 +52,7 @@ class MerchantProfile extends Model
     {
         static::created(function (MerchantProfile $merchant): void {
             app(MerchantSettingsInitializer::class)->initialize((int) $merchant->getKey());
+            app(MerchantAvailabilityStatusSeeder::class)->seedDefaultsForMerchant($merchant);
         });
     }
 
@@ -102,6 +104,11 @@ class MerchantProfile extends Model
     public function returnReasons(): HasMany
     {
         return $this->hasMany(ReturnReason::class, 'merchant_id');
+    }
+
+    public function availabilityStatuses(): HasMany
+    {
+        return $this->hasMany(ProductAvailabilityStatus::class, 'merchant_id');
     }
 
     public function catalogueMasterRequests(): HasMany

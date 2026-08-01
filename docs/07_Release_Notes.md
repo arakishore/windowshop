@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Date And Time Display
+
+- Added global date/time display standardisation with `DateDisplayService` and `app_date()`, `app_time()`, `app_datetime()` helpers.
+- Human-facing timestamps now use admin timezone/date/time settings while date-only fields remain timezone-safe.
+
+### Product Availability
+
+- Added merchant-specific product availability statuses with default `IN_STOCK`, `OUT_OF_STOCK`, `PREORDER`, `BACKORDER`, `COMING_SOON`, and `DISCONTINUED` records.
+- Added product and variant availability assignment, effective availability resolution, customer-channel zero-stock purchase guard, merchant management UI, and product list badges.
+- POS stock behaviour remains unchanged.
+
 ### Category Architecture
 
 - Consolidated category management into `product_categories`.

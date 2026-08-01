@@ -1,0 +1,67 @@
+<?php
+
+namespace App\Services\ProductAvailability;
+
+use App\Models\Product;
+use App\Models\ProductAvailabilityStatus;
+use App\Models\ProductVariant;
+
+class ProductAvailabilityResolver
+{
+    /**
+     * @return array{
+     *     availability_status_id: int|null,
+     *     availability_code: string|null,
+     *     availability_label: string,
+     *     purchase_allowed: bool,
+     *     badge_type: string,
+     *     stock_quantity: int,
+     *     is_in_stock: bool,
+     *     can_purchase: bool,
+     *     availability: array{code: string|null, label: string, description: string|null, badge_type: string, purchase_allowed: bool}
+     * }
+     */
+    public function resolve(Product|ProductVariant $item): array
+    {
+        $variant = $item instanceof ProductVariant ? $item->loadMissing(['product.availabilityStatus', 'availabilityStatus']) : null;
+        $product = $item instanceof Product ? $item->loadMissing('availabilityStatus') : $variant->product;
+        $stockQuantity = $variant instanceof ProductVariant ? (int) $variant->stock_quantity : (int) ($product->variants()->sum('stock_quantity'));
+        $status = $this->effectiveStatus($product, $variant);
+        $isInStock = $stockQuantity > 0;
+        $purchaseAllowed = (bool) $status?->purchase_allowed;
+        $canPurchase = $isInStock || $purchaseAllowed;
+        $label = $status?->name ?: ($isInStock ? 'In Stock' : 'Out of Stock');
+        $badgeType = in_array($status?->badge_type, ProductAvailabilityStatus::badgeTypes(), true)
+            ? (string) $status->badge_type
+            : ProductAvailabilityStatus::BADGE_SECONDARY;
+
+        return [
+            'availability_status_id' => $status?->getKey(),
+            'availability_code' => $status?->code,
+            'availability_label' => $label,
+            'purchase_allowed' => $purchaseAllowed,
+            'badge_type' => $badgeType,
+            'stock_quantity' => $stockQuantity,
+            'is_in_stock' => $isInStock,
+            'can_purchase' => $canPurchase,
+            'availability' => [
+                'code' => $status?->code,
+                'label' => $label,
+                'description' => $status?->customer_description,
+                'badge_type' => $badgeType,
+                'purchase_allowed' => $purchaseAllowed,
+            ],
+        ];
+    }
+
+    private function effectiveStatus(Product $product, ?ProductVariant $variant = null): ?ProductAvailabilityStatus
+    {
+        $status = $variant?->availabilityStatus ?: $product->availabilityStatus;
+
+        if ($status instanceof ProductAvailabilityStatus && $status->status === ProductAvailabilityStatus::STATUS_ACTIVE && $status->deleted_at === null) {
+            return $status;
+        }
+
+        return null;
+    }
+}

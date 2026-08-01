@@ -77,6 +77,13 @@ This document tracks the modules and user-facing features currently implemented 
 - `CurrencyCatalog`
 - Admin settings UI with tabs and live preview
 - Global currency formatting is consumed by POS and receipts
+- Merchant-specific Product Availability Statuses:
+  - Default statuses per merchant: In Stock, Out of Stock, Pre-Order, Backorder, Coming Soon, Discontinued
+  - Product-level customer availability status
+  - Variant-level override with product inheritance
+  - Zero-stock customer purchase behaviour through `purchase_allowed`
+  - Storefront/mobile resolver payload with `availability` and `can_purchase`
+  - POS stock behaviour remains separate
 
 ## Merchant Area
 

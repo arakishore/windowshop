@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Models\Brand;
+use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
 use App\Models\Shop;
 use App\Models\TaxClass;
@@ -68,6 +69,7 @@ class UpdateProductBasicRequest extends FormRequest
                         ->orWhere('id', $this->route('product')?->brand_id);
                 })->whereNull('deleted_at')),
             ],
+            'availability_status_id' => ['nullable', 'integer'],
             'product_name' => ['required', 'string', 'max:255'],
             'short_description' => ['nullable', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
@@ -110,6 +112,16 @@ class UpdateProductBasicRequest extends FormRequest
                 ->whereHas('rootProductCategories', fn ($query) => $query->whereKey($shop->root_product_category_id))
                 ->exists()) {
                 $validator->errors()->add('brand_id', 'The selected brand is not applicable to the selected shop type.');
+            }
+
+            $availabilityStatusId = $this->integer('availability_status_id');
+
+            if ($availabilityStatusId > 0 && ! ProductAvailabilityStatus::query()
+                ->whereKey($availabilityStatusId)
+                ->where('merchant_id', $shop->merchant_id)
+                ->active()
+                ->exists()) {
+                $validator->errors()->add('availability_status_id', 'Choose an active availability status for this merchant.');
             }
 
             if (! $this->taxConfigurationSubmitted || $this->input('tax_mode') !== 'override') {

@@ -16,6 +16,7 @@ class ProductVariant extends Model
         'uuid',
         'product_id',
         'shop_id',
+        'availability_status_id',
         'sku',
         'barcode',
         'name',
@@ -58,6 +59,11 @@ class ProductVariant extends Model
     public function shop(): BelongsTo
     {
         return $this->belongsTo(Shop::class);
+    }
+
+    public function availabilityStatus(): BelongsTo
+    {
+        return $this->belongsTo(ProductAvailabilityStatus::class, 'availability_status_id')->withTrashed();
     }
 
     public function attributes(): HasMany

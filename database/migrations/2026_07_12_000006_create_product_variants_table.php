@@ -24,6 +24,10 @@ return new class extends Migration
             $table->foreignId('shop_id')
                 ->constrained('shops')
                 ->restrictOnDelete();
+            $table->foreignId('availability_status_id')
+                ->nullable()
+                ->constrained('product_availability_statuses')
+                ->nullOnDelete();
             $table->string('sku')->nullable();
             $table->string('barcode', 100)->nullable()->index();
             $table->string('name')->nullable();
@@ -49,6 +53,7 @@ return new class extends Migration
 
             $table->index(['product_id', 'status'], 'product_variants_product_status_idx');
             $table->index(['product_id', 'is_default'], 'product_variants_product_default_idx');
+            $table->index(['product_id', 'availability_status_id'], 'product_variants_availability_status_idx');
             $table->unique(['shop_id', 'sku'], 'product_variants_shop_sku_unique');
         });
     }

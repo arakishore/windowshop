@@ -22,6 +22,7 @@ class Product extends Model
         'root_product_category_id',
         'product_category_id',
         'brand_id',
+        'availability_status_id',
         'tax_mode',
         'tax_class_id',
         'primary_image_id',
@@ -178,6 +179,11 @@ class Product extends Model
     public function taxClass(): BelongsTo
     {
         return $this->belongsTo(TaxClass::class);
+    }
+
+    public function availabilityStatus(): BelongsTo
+    {
+        return $this->belongsTo(ProductAvailabilityStatus::class, 'availability_status_id')->withTrashed();
     }
 
     public function primaryImage(): BelongsTo

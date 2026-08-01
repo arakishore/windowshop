@@ -5,6 +5,7 @@
     $hasSelectedVariantAttributes = ($variantPreview['selected_variant_value_count'] ?? 0) > 0;
     $hasGeneratedVariants = $product->variants->contains(fn ($variant) => $variant->attributes->isNotEmpty());
     $variantStatuses = ['active' => 'Active', 'inactive' => 'Inactive'];
+    $availabilityStatuses = $availabilityStatuses ?? collect();
     $productRoutePrefix = $productRoutePrefix ?? 'admin';
 @endphp
 
@@ -174,6 +175,16 @@
                         @endforeach
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="bulk_availability_status_id">Customer Availability</label>
+                    <select id="bulk_availability_status_id" name="changes[availability_status_id]" class="form-select">
+                        <option value="">No change</option>
+                        <option value="0">Use Product Default</option>
+                        @foreach($availabilityStatuses as $availabilityStatus)
+                            <option value="{{ $availabilityStatus->id }}">{{ $availabilityStatus->name }} - {{ $availabilityStatus->purchase_allowed ? 'Purchase allowed' : 'Purchase blocked' }}</option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-3">
@@ -211,6 +222,7 @@
                         </th>
                         <th class="text-end">Stock</th>
                         <th class="text-end">Low Stock</th>
+                        <th>Customer Availability</th>
                         <th>Default</th>
                         <th>Status</th>
                     </tr>
@@ -244,6 +256,19 @@
                                 <input name="variants[{{ $variant->id }}][low_stock_threshold]" type="number" min="0" step="1" value="{{ old("variants.{$variant->id}.low_stock_threshold", $variant->low_stock_threshold) }}" class="form-control form-control-sm text-end">
                             </td>
                             <td>
+                                <select name="variants[{{ $variant->id }}][availability_status_id]" class="form-select form-select-sm">
+                                    <option value="">Use Product Default</option>
+                                    @foreach($availabilityStatuses as $availabilityStatus)
+                                        <option value="{{ $availabilityStatus->id }}" @selected((string) old("variants.{$variant->id}.availability_status_id", $variant->availability_status_id) === (string) $availabilityStatus->id)>
+                                            {{ $availabilityStatus->name }} - {{ $availabilityStatus->purchase_allowed ? 'Purchase allowed' : 'Purchase blocked' }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @if($variant->availabilityStatus)
+                                    <span class="badge {{ $variant->availabilityStatus->safeBadgeClass() }} mt-1">{{ $variant->availabilityStatus->name }}</span>
+                                @endif
+                            </td>
+                            <td>
                                 <input
                                     type="radio"
                                     name="default_variant_id"
@@ -264,7 +289,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="11" class="text-center text-muted py-4">No variants match the current filters.</td>
+                            <td colspan="12" class="text-center text-muted py-4">No variants match the current filters.</td>
                         </tr>
                     @endforelse
                 </tbody>

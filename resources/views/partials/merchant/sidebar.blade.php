@@ -77,12 +77,12 @@
                     </ul>
                 </li>
 
-                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.products.*') || request()->routeIs('merchant.barcodes.*') || request()->routeIs('merchant.catalogue-masters.*') ? 'nav-item-expanded nav-item-open' : '' }}">
-                    <a href="#" class="nav-link {{ request()->routeIs('merchant.products.*') || request()->routeIs('merchant.barcodes.*') || request()->routeIs('merchant.catalogue-masters.*') ? 'active' : '' }}">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.products.*') || request()->routeIs('merchant.barcodes.*') || request()->routeIs('merchant.catalogue-masters.*') || request()->routeIs('merchant.availability-statuses.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.products.*') || request()->routeIs('merchant.barcodes.*') || request()->routeIs('merchant.catalogue-masters.*') || request()->routeIs('merchant.availability-statuses.*') ? 'active' : '' }}">
                         <i class="ph-package"></i>
                         <span>Catalog</span>
                     </a>
-                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.products.*') || request()->routeIs('merchant.barcodes.*') || request()->routeIs('merchant.catalogue-masters.*') ? 'show' : '' }}">
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.products.*') || request()->routeIs('merchant.barcodes.*') || request()->routeIs('merchant.catalogue-masters.*') || request()->routeIs('merchant.availability-statuses.*') ? 'show' : '' }}">
                         <li class="nav-item">
                             <a href="{{ route('merchant.products.index') }}" class="nav-link {{ request()->routeIs('merchant.products.*') ? 'active' : '' }}">Products</a>
                         </li>
@@ -91,6 +91,9 @@
                         </li>
                         <li class="nav-item">
                             <a href="{{ route('merchant.catalogue-masters.index') }}" class="nav-link {{ request()->routeIs('merchant.catalogue-masters.*') ? 'active' : '' }}">Categories & Attributes</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.availability-statuses.index') }}" class="nav-link {{ request()->routeIs('merchant.availability-statuses.*') ? 'active' : '' }}">Availability Statuses</a>
                         </li>
                     </ul>
                 </li>

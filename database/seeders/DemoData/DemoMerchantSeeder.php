@@ -6,6 +6,8 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use App\Models\MerchantProfile;
+use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use RuntimeException;
 
 class DemoMerchantSeeder extends Seeder
@@ -96,6 +98,9 @@ class DemoMerchantSeeder extends Seeder
                 $merchantId = DB::table('merchant_profiles')
                     ->where('user_id', $userId)
                     ->value('id');
+
+                app(MerchantAvailabilityStatusSeeder::class)
+                    ->seedDefaultsForMerchant(MerchantProfile::query()->findOrFail($merchantId));
 
                 DB::table('merchant_addresses')->updateOrInsert(
                     [

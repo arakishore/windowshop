@@ -14,6 +14,7 @@ use App\Http\Requests\Admin\UpdateProductImagesRequest;
 use App\Http\Requests\Admin\UpdateProductVariantsRequest;
 use App\Models\Brand;
 use App\Models\Product;
+use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
 use App\Models\ProductImage;
 use App\Models\Shop;
@@ -27,6 +28,7 @@ use App\Services\Product\ProductDuplicationService;
 use App\Services\Product\ProductImageService;
 use App\Services\Product\ProductVariantGenerationService;
 use App\Services\Product\ProductVariantManagementService;
+use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -48,6 +50,7 @@ class ProductController extends Controller
         private readonly ProductVariantManagementService $variantManagementService,
         private readonly ProductImageService $productImageService,
         private readonly ProductDuplicationService $productDuplicationService,
+        private readonly MerchantAvailabilityStatusSeeder $availabilityStatusSeeder,
     ) {
     }
 
@@ -61,7 +64,7 @@ class ProductController extends Controller
         ];
 
         $products = Product::query()
-            ->with(['shop', 'category', 'brand', 'primaryImage'])
+            ->with(['shop', 'category', 'brand', 'primaryImage', 'availabilityStatus'])
             ->with(['taxClass', 'category.defaultTaxClass'])
             ->where('shop_id', $shop->getKey())
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
@@ -112,6 +115,7 @@ class ProductController extends Controller
                 'root_product_category_id' => $shop->root_product_category_id,
                 'product_category_id' => $data['product_category_id'],
                 'brand_id' => $data['brand_id'] ?? null,
+                'availability_status_id' => $this->availabilityStatusId((int) $shop->merchant_id, $data['availability_status_id'] ?? null),
                 'tax_mode' => 'inherit',
                 'tax_class_id' => null,
                 'product_name' => $data['product_name'],
@@ -154,6 +158,7 @@ class ProductController extends Controller
                 'category.parent',
                 'category.defaultTaxClass.rates.components',
                 'brand',
+                'availabilityStatus',
                 'taxClass.rates.components',
                 'attributes',
                 'variants.attributes.group',
@@ -192,6 +197,7 @@ class ProductController extends Controller
             'root_product_category_id' => $shop->root_product_category_id,
             'product_category_id' => $data['product_category_id'],
             'brand_id' => $data['brand_id'] ?? null,
+            'availability_status_id' => $this->availabilityStatusId((int) $shop->merchant_id, $data['availability_status_id'] ?? null),
             ...$request->taxConfiguration(),
             'product_name' => $data['product_name'],
             'slug' => $this->slugForProduct($product, $data['product_name']),
@@ -559,6 +565,7 @@ class ProductController extends Controller
             'productCategories' => $this->productCategories($shop, $product),
             'brands' => $this->brands($shop, $product),
             'taxClasses' => $this->taxClasses(),
+            'availabilityStatuses' => $this->availabilityStatuses($shop->merchant_id, $product),
             'merchantTaxEnabled' => $this->merchantTaxEnabled($shop, $product),
             'statuses' => $this->statuses(),
             'productRoutePrefix' => 'merchant',
@@ -635,6 +642,35 @@ class ProductController extends Controller
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
+    }
+
+    private function availabilityStatuses(int $merchantId, ?Product $product = null): Collection
+    {
+        return ProductAvailabilityStatus::query()
+            ->where('merchant_id', $merchantId)
+            ->where(function ($query) use ($product): void {
+                $query->active();
+
+                if ($product?->availability_status_id) {
+                    $query->orWhere('id', $product->availability_status_id);
+                }
+            })
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function availabilityStatusId(int $merchantId, mixed $statusId): ?int
+    {
+        $statusId = (int) ($statusId ?: 0);
+
+        if ($statusId > 0) {
+            return $statusId;
+        }
+
+        return $this->availabilityStatusSeeder
+            ->defaultForMerchant($merchantId)
+            ?->getKey();
     }
 
     private function merchantTaxEnabled(Shop $shop, ?Product $product = null): bool

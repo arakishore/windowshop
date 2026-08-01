@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\ProductAvailabilityStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class BulkUpdateProductVariantsRequest extends FormRequest
 {
@@ -27,8 +29,29 @@ class BulkUpdateProductVariantsRequest extends FormRequest
             'changes.cost_price' => ['nullable', 'numeric', 'min:0'],
             'changes.stock_quantity' => ['nullable', 'integer', 'min:0'],
             'changes.low_stock_threshold' => ['nullable', 'integer', 'min:0'],
+            'changes.availability_status_id' => ['nullable', 'integer'],
             'changes.status' => ['nullable', Rule::in(['active', 'inactive'])],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $product = $this->route('product');
+            $statusId = (int) ($this->input('changes.availability_status_id') ?? 0);
+
+            if (! $product || $statusId <= 0) {
+                return;
+            }
+
+            if (! ProductAvailabilityStatus::query()
+                ->whereKey($statusId)
+                ->where('merchant_id', $product->merchant_id)
+                ->active()
+                ->exists()) {
+                $validator->errors()->add('changes.availability_status_id', 'Choose an active availability status for this merchant.');
+            }
+        });
     }
 
     /**

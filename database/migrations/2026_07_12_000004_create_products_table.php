@@ -34,6 +34,10 @@ return new class extends Migration
                 ->nullable()
                 ->constrained('brands')
                 ->nullOnDelete();
+            $table->foreignId('availability_status_id')
+                ->nullable()
+                ->constrained('product_availability_statuses')
+                ->nullOnDelete();
             $table->foreignId('primary_image_id')
                 ->nullable();
             $table->string('product_name');
@@ -65,6 +69,7 @@ return new class extends Migration
             $table->index(['shop_id', 'root_product_category_id'], 'products_shop_root_category_idx');
             $table->index(['shop_id', 'product_category_id'], 'products_shop_product_category_idx');
             $table->index(['shop_id', 'brand_id'], 'products_shop_brand_idx');
+            $table->index(['merchant_id', 'availability_status_id'], 'products_availability_status_idx');
             $table->index(['shop_id', 'slug'], 'products_shop_slug_idx');
             $table->index(['status', 'published_at'], 'products_status_publish_idx');
             $table->index(['status', 'is_featured', 'featured_from', 'featured_until'], 'products_featured_lookup_idx');

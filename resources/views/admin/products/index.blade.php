@@ -139,6 +139,7 @@
                             <th>Product Category</th>
                             <th>Brand</th>
                             <th>Tax</th>
+                            <th>Availability</th>
                             <th>Featured</th>
                             <th>Status</th>
                             <th>{{ $isTrash ? 'Deleted Details' : 'Created Date' }}</th>
@@ -184,6 +185,14 @@
                                         Tax Exempt
                                     @else
                                         Default
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($product->availabilityStatus)
+                                        <span class="badge {{ $product->availabilityStatus->safeBadgeClass() }}">{{ $product->availabilityStatus->name }}</span>
+                                        <div class="text-muted small mt-1">{{ $product->availabilityStatus->purchase_allowed ? 'Purchase allowed' : 'Purchase blocked at zero stock' }}</div>
+                                    @else
+                                        <span class="badge bg-light text-body border">Default</span>
                                     @endif
                                 </td>
                                 <td>

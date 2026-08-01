@@ -5,6 +5,7 @@ namespace App\Http\Requests\Admin;
 use App\Models\Brand;
 use App\Models\ProductCategory;
 use App\Models\Shop;
+use App\Models\ProductAvailabilityStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -41,6 +42,7 @@ class StoreProductQuickCreateRequest extends FormRequest
                 'integer',
                 Rule::exists('brands', 'id')->where(fn ($query) => $query->where('status', 'active')->whereNull('deleted_at')),
             ],
+            'availability_status_id' => ['nullable', 'integer'],
             'product_name' => ['required', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
             'is_featured' => ['nullable', 'boolean'],
@@ -82,6 +84,16 @@ class StoreProductQuickCreateRequest extends FormRequest
                 ->whereHas('rootProductCategories', fn ($query) => $query->whereKey($shop->root_product_category_id))
                 ->exists()) {
                 $validator->errors()->add('brand_id', 'The selected brand is not applicable to the selected shop type.');
+            }
+
+            $availabilityStatusId = $this->integer('availability_status_id');
+
+            if ($availabilityStatusId > 0 && ! ProductAvailabilityStatus::query()
+                ->whereKey($availabilityStatusId)
+                ->where('merchant_id', $shop->merchant_id)
+                ->active()
+                ->exists()) {
+                $validator->errors()->add('availability_status_id', 'Choose an active availability status for this merchant.');
             }
         });
     }

@@ -4,6 +4,7 @@ use App\Http\Controllers\Merchant\Auth\MerchantAuthController;
 use App\Http\Controllers\Merchant\Auth\MerchantPasswordController;
 use App\Http\Controllers\Merchant\Auth\MerchantProfileController;
 use App\Http\Controllers\Merchant\BarcodeLabelController;
+use App\Http\Controllers\Merchant\AvailabilityStatusController;
 use App\Http\Controllers\Merchant\CatalogueMasterController;
 use App\Http\Controllers\Merchant\CustomerController;
 use App\Http\Controllers\Merchant\CustomerAddressController;
@@ -72,6 +73,10 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::post('/sales/{order}/exchange', [SalesHistoryController::class, 'processExchange'])->name('sales.exchange.process');
         Route::get('/sales/exchanges/{exchange}/receipt', [SalesHistoryController::class, 'exchangeReceipt'])->name('sales.exchange.receipt');
         Route::resource('return-reasons', ReturnReasonController::class)->only(['index', 'store', 'update', 'destroy']);
+        Route::post('availability-statuses/{availabilityStatus}/restore', [AvailabilityStatusController::class, 'restore'])
+            ->name('availability-statuses.restore');
+        Route::resource('availability-statuses', AvailabilityStatusController::class)
+            ->only(['index', 'store', 'update', 'destroy']);
         Route::get('/barcodes/labels', [BarcodeLabelController::class, 'index'])->name('barcodes.labels.index');
         Route::post('/barcodes/generate-missing', [BarcodeLabelController::class, 'generateMissing'])->name('barcodes.generate-missing');
         Route::post('/barcodes/labels/print', [BarcodeLabelController::class, 'print'])->name('barcodes.labels.print');

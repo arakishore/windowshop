@@ -38,6 +38,7 @@ class ProductDuplicationService
                 'root_product_category_id' => $shop->root_product_category_id,
                 'product_category_id' => $source->product_category_id,
                 'brand_id' => $source->brand_id,
+                'availability_status_id' => (int) $source->merchant_id === (int) $shop->merchant_id ? $source->availability_status_id : null,
                 'tax_mode' => $source->tax_mode ?? 'inherit',
                 'tax_class_id' => $source->tax_mode === 'override' ? $source->tax_class_id : null,
                 'product_name' => "{$source->product_name} - Copy",
@@ -91,6 +92,7 @@ class ProductDuplicationService
             $newVariant = ProductVariant::query()->create([
                 'product_id' => $duplicate->getKey(),
                 'shop_id' => $duplicate->shop_id,
+                'availability_status_id' => (int) $source->merchant_id === (int) $duplicate->merchant_id ? $variant->availability_status_id : null,
                 'sku' => null,
                 'barcode' => null,
                 'name' => $variant->name,

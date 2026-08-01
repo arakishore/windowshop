@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\ProductAvailabilityStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateProductVariantsRequest extends FormRequest
 {
@@ -27,8 +29,36 @@ class UpdateProductVariantsRequest extends FormRequest
             'variants.*.cost_price' => ['nullable', 'numeric', 'min:0'],
             'variants.*.stock_quantity' => ['required', 'integer', 'min:0'],
             'variants.*.low_stock_threshold' => ['required', 'integer', 'min:0'],
+            'variants.*.availability_status_id' => ['nullable', 'integer'],
             'variants.*.status' => ['required', Rule::in(['active', 'inactive'])],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $product = $this->route('product');
+
+            if (! $product) {
+                return;
+            }
+
+            foreach ($this->input('variants', []) as $key => $row) {
+                $statusId = (int) ($row['availability_status_id'] ?? 0);
+
+                if ($statusId <= 0) {
+                    continue;
+                }
+
+                if (! ProductAvailabilityStatus::query()
+                    ->whereKey($statusId)
+                    ->where('merchant_id', $product->merchant_id)
+                    ->active()
+                    ->exists()) {
+                    $validator->errors()->add("variants.{$key}.availability_status_id", 'Choose an active availability status for this merchant.');
+                }
+            }
+        });
     }
 
     /**
