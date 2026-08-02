@@ -92,6 +92,11 @@
 									</a>
 								</li>
 								<li class="nav-item">
+									<a href="{{ route('admin.master.order-statuses.index') }}" class="nav-link {{ request()->routeIs('admin.master.order-statuses.*') ? 'active' : '' }}">
+										Order Statuses
+									</a>
+								</li>
+								<li class="nav-item">
 									<a href="{{ route('admin.master.product-categories.index') }}" class="nav-link {{ request()->routeIs('admin.master.product-categories.*') ? 'active' : '' }}">
 										Product Categories
 									</a>

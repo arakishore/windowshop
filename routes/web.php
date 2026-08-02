@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupValueController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryAttributeGroupController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryController;
 use App\Http\Controllers\Admin\MasterData\ProductDescriptionTemplateController;
+use App\Http\Controllers\Admin\MasterData\OrderStatusController;
 use App\Http\Controllers\Admin\MasterData\ShopAudienceController;
 use App\Http\Controllers\Admin\MasterData\TaxClassController;
 use App\Http\Controllers\Admin\MasterData\TaxRateComponentController;
@@ -62,6 +63,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->names('master.tax-rates.components');
         Route::resource('master/tax-classes', TaxClassController::class)
             ->names('master.tax-classes');
+        Route::post('master/order-statuses/{orderStatus}/restore', [OrderStatusController::class, 'restore'])
+            ->withTrashed()
+            ->name('master.order-statuses.restore');
+        Route::resource('master/order-statuses', OrderStatusController::class)
+            ->except(['show'])
+            ->names('master.order-statuses');
         Route::get('master/catalogue-requests', [CatalogueMasterRequestController::class, 'index'])
             ->name('master.catalogue-requests.index');
         Route::put('master/catalogue-requests/{catalogueMasterRequest}', [CatalogueMasterRequestController::class, 'update'])
