@@ -13,6 +13,42 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-08-02 11:00 +05:30 - Order Status Master Description Columns
+
+### User Prompt
+
+User attached "WindowShop - Order Status History Enhancement (V1)" but clarified the current scope should be only table/master changes in `order_statuses`, and asked to append `Prompt_Outcome_Log.md`.
+
+Requested order-status master changes:
+
+- add `admin_description`
+- add `customer_description`
+- keep/use `internal_notes`
+- seed all three fields for every system status
+- do not implement order history workflow behavior in this step
+
+### Final Outcome
+
+Updated only the Order Status Master side:
+
+- changed the `order_statuses` migration from generic `description` to `admin_description`
+- added `customer_description`
+- retained `internal_notes`
+- updated `OrderStatus` fillable/defaults
+- populated admin/customer/internal text for all 24 system statuses
+- updated admin CRUD validation, search, list tooltips, and edit form fields
+- system statuses now require both admin and customer descriptions on edit
+- custom statuses may leave descriptions blank
+- updated focused order-status tests
+
+No `orders`, `order_status_histories`, status-change workflow, notification logic, or snapshot behavior was added.
+
+### Verification
+
+- Focused tests: `php artisan test tests\Feature\AdminOrderStatusMasterTest.php`
+- Result: `9 passed (100 assertions)`
+- Blade cache: `php artisan view:clear` and `php artisan view:cache` passed
+
 ## 2026-08-01 23:34 +05:30 - Order Status Name Tooltip Layout
 
 ### User Prompt

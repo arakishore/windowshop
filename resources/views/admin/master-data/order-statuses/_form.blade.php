@@ -94,10 +94,17 @@
             </div>
 
             <div class="col-12">
-                <label for="description" class="form-label">Description @if($isSystem)<span class="text-danger">*</span>@endif</label>
-                <textarea id="description" name="description" rows="3" class="form-control @error('description') is-invalid @enderror" maxlength="500" @if($isSystem) required @endif>{{ old('description', $orderStatus?->description) }}</textarea>
+                <label for="admin_description" class="form-label">Admin Description @if($isSystem)<span class="text-danger">*</span>@endif</label>
+                <textarea id="admin_description" name="admin_description" rows="3" class="form-control @error('admin_description') is-invalid @enderror" maxlength="500" @if($isSystem) required @endif>{{ old('admin_description', $orderStatus?->admin_description) }}</textarea>
                 <div class="form-text">{{ $isSystem ? 'Required for system-seeded statuses.' : 'Optional for custom statuses, but recommended.' }}</div>
-                @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                @error('admin_description')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+
+            <div class="col-12">
+                <label for="customer_description" class="form-label">Customer Description @if($isSystem)<span class="text-danger">*</span>@endif</label>
+                <textarea id="customer_description" name="customer_description" rows="3" class="form-control @error('customer_description') is-invalid @enderror" maxlength="500" @if($isSystem) required @endif>{{ old('customer_description', $orderStatus?->customer_description) }}</textarea>
+                <div class="form-text">Default customer-facing message for future order-status change comments and notifications.</div>
+                @error('customer_description')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
             <div class="col-12">

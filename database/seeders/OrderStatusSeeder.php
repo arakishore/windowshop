@@ -18,7 +18,6 @@ class OrderStatusSeeder extends Seeder
                     [
                         'uuid' => (string) Str::uuid(),
                         ...$definition,
-                        'internal_notes' => $definition['internal_notes'] ?? null,
                         'is_system' => true,
                         'customer_visible' => true,
                         'merchant_visible' => true,

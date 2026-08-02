@@ -33,7 +33,8 @@ class OrderStatusController extends Controller
                     $query->where('code', 'like', "%{$search}%")
                         ->orWhere('name', 'like', "%{$search}%")
                         ->orWhere('customer_label', 'like', "%{$search}%")
-                        ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhere('admin_description', 'like', "%{$search}%")
+                        ->orWhere('customer_description', 'like', "%{$search}%")
                         ->orWhere('internal_notes', 'like', "%{$search}%");
                 });
             })
@@ -73,7 +74,8 @@ class OrderStatusController extends Controller
             'code' => $this->uniqueCode($data['name']),
             'name' => trim($data['name']),
             'customer_label' => $this->nullable($data['customer_label'] ?? null),
-            'description' => $this->nullable($data['description'] ?? null),
+            'admin_description' => $this->nullable($data['admin_description'] ?? null),
+            'customer_description' => $this->nullable($data['customer_description'] ?? null),
             'internal_notes' => $this->nullable($data['internal_notes'] ?? null),
             'category' => $data['category'],
             'badge_type' => $data['badge_type'],
@@ -109,7 +111,8 @@ class OrderStatusController extends Controller
         $updates = [
             'name' => trim($data['name']),
             'customer_label' => $this->nullable($data['customer_label'] ?? null),
-            'description' => $this->nullable($data['description'] ?? null),
+            'admin_description' => $this->nullable($data['admin_description'] ?? null),
+            'customer_description' => $this->nullable($data['customer_description'] ?? null),
             'internal_notes' => $this->nullable($data['internal_notes'] ?? null),
             'badge_type' => $data['badge_type'],
             'sort_order' => (int) $data['sort_order'],

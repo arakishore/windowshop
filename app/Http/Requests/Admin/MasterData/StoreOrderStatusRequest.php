@@ -16,16 +16,19 @@ class StoreOrderStatusRequest extends FormRequest
     public function rules(): array
     {
         $orderStatus = $this->route('orderStatus') ?? $this->route('order_status');
-        $descriptionRules = ['nullable', 'string', 'max:500'];
+        $adminDescriptionRules = ['nullable', 'string', 'max:500'];
+        $customerDescriptionRules = ['nullable', 'string', 'max:500'];
 
         if ($orderStatus instanceof OrderStatus && $orderStatus->is_system) {
-            $descriptionRules[0] = 'required';
+            $adminDescriptionRules[0] = 'required';
+            $customerDescriptionRules[0] = 'required';
         }
 
         return [
             'name' => ['required', 'string', 'max:150'],
             'customer_label' => ['nullable', 'string', 'max:150'],
-            'description' => $descriptionRules,
+            'admin_description' => $adminDescriptionRules,
+            'customer_description' => $customerDescriptionRules,
             'internal_notes' => ['nullable', 'string', 'max:2000'],
             'category' => ['required', Rule::in(OrderStatus::categories())],
             'badge_type' => ['required', Rule::in(OrderStatus::badgeTypes())],

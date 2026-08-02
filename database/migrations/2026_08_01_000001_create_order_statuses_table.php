@@ -18,7 +18,8 @@ return new class extends Migration
             $table->string('code', 100)->unique();
             $table->string('name', 150);
             $table->string('customer_label', 150)->nullable();
-            $table->string('description', 500)->nullable();
+            $table->string('admin_description', 500)->nullable();
+            $table->string('customer_description', 500)->nullable();
             $table->text('internal_notes')->nullable();
             $table->string('category', 50)->index();
             $table->string('badge_type', 30)->default('secondary');

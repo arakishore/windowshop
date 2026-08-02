@@ -41,7 +41,9 @@ class AdminOrderStatusMasterTest extends TestCase
             'code' => OrderStatus::CODE_PENDING,
             'name' => 'Pending',
             'customer_label' => 'Order Pending',
-            'description' => 'Order has been created but has not yet been confirmed by the merchant.',
+            'admin_description' => 'Order has been created and is awaiting merchant confirmation.',
+            'customer_description' => 'We have received your order and will confirm it shortly.',
+            'internal_notes' => 'Initial system status. Assigned automatically when an order is created. Allowed next statuses: Confirmed, Cancelled.',
             'category' => OrderStatus::CATEGORY_OPEN,
             'badge_type' => OrderStatus::BADGE_SECONDARY,
             'sort_order' => 10,
@@ -56,7 +58,8 @@ class AdminOrderStatusMasterTest extends TestCase
         $pending->forceFill([
             'name' => 'Awaiting Review',
             'customer_label' => 'We received your order',
-            'description' => 'Custom description stays.',
+            'admin_description' => 'Custom admin description stays.',
+            'customer_description' => 'Custom customer description stays.',
             'internal_notes' => 'Custom admin note stays.',
             'badge_type' => OrderStatus::BADGE_INFO,
             'sort_order' => 99,
@@ -70,13 +73,15 @@ class AdminOrderStatusMasterTest extends TestCase
         $pending->refresh();
         $this->assertSame('Awaiting Review', $pending->name);
         $this->assertSame('We received your order', $pending->customer_label);
-        $this->assertSame('Custom description stays.', $pending->description);
+        $this->assertSame('Custom admin description stays.', $pending->admin_description);
+        $this->assertSame('Custom customer description stays.', $pending->customer_description);
         $this->assertSame('Custom admin note stays.', $pending->internal_notes);
         $this->assertSame(OrderStatus::BADGE_INFO, $pending->badge_type);
         $this->assertSame(99, $pending->sort_order);
         $this->assertFalse($pending->customer_visible);
         $this->assertFalse($pending->merchant_visible);
-        $this->assertSame('Used by POS, reports and revenue calculations. Do not delete or rename the code.', OrderStatus::query()->where('code', OrderStatus::CODE_COMPLETED)->value('internal_notes'));
+        $this->assertSame('Thank you for shopping with us.', OrderStatus::query()->where('code', OrderStatus::CODE_COMPLETED)->value('customer_description'));
+        $this->assertSame('Final fulfilment status. Used by POS, reports and revenue calculations. Do not delete or rename the code.', OrderStatus::query()->where('code', OrderStatus::CODE_COMPLETED)->value('internal_notes'));
     }
 
     public function test_admin_can_create_custom_status_with_generated_unique_immutable_code_and_visibility_fields(): void
@@ -87,7 +92,8 @@ class AdminOrderStatusMasterTest extends TestCase
             ->post(route('admin.master.order-statuses.store'), [
                 'name' => 'Quality Check',
                 'customer_label' => 'Quality Check',
-                'description' => 'Internal review before dispatch.',
+                'admin_description' => 'Internal review before dispatch.',
+                'customer_description' => 'Your order is being checked.',
                 'internal_notes' => 'Admin-only implementation note.',
                 'category' => OrderStatus::CATEGORY_PROCESSING,
                 'badge_type' => OrderStatus::BADGE_WARNING,
@@ -104,6 +110,8 @@ class AdminOrderStatusMasterTest extends TestCase
         $this->assertTrue($status->is_terminal);
         $this->assertTrue($status->customer_visible);
         $this->assertTrue($status->merchant_visible);
+        $this->assertSame('Internal review before dispatch.', $status->admin_description);
+        $this->assertSame('Your order is being checked.', $status->customer_description);
         $this->assertSame('Admin-only implementation note.', $status->internal_notes);
         $this->assertSame($admin->getKey(), $status->created_by);
         $this->assertSame($admin->getKey(), $status->updated_by);
@@ -125,7 +133,8 @@ class AdminOrderStatusMasterTest extends TestCase
                 'code' => 'changed_code',
                 'name' => 'Quality Recheck',
                 'customer_label' => 'Checking Order',
-                'description' => 'Changed description.',
+                'admin_description' => 'Changed admin description.',
+                'customer_description' => 'Changed customer message.',
                 'internal_notes' => 'Changed note.',
                 'category' => OrderStatus::CATEGORY_OPEN,
                 'badge_type' => OrderStatus::BADGE_INFO,
@@ -140,7 +149,8 @@ class AdminOrderStatusMasterTest extends TestCase
         $status->refresh();
         $this->assertSame('quality_check', $status->code);
         $this->assertSame('Quality Recheck', $status->name);
-        $this->assertSame('Changed description.', $status->description);
+        $this->assertSame('Changed admin description.', $status->admin_description);
+        $this->assertSame('Changed customer message.', $status->customer_description);
         $this->assertSame('Changed note.', $status->internal_notes);
         $this->assertSame(OrderStatus::CATEGORY_OPEN, $status->category);
         $this->assertFalse($status->is_terminal);
@@ -160,7 +170,8 @@ class AdminOrderStatusMasterTest extends TestCase
                 'code' => 'done',
                 'name' => 'Done',
                 'customer_label' => 'Done',
-                'description' => 'Presentation-only change.',
+                'admin_description' => 'Presentation-only change.',
+                'customer_description' => 'Done customer message.',
                 'internal_notes' => 'System implementation note.',
                 'category' => OrderStatus::CATEGORY_FAILED,
                 'badge_type' => OrderStatus::BADGE_PRIMARY,
@@ -180,7 +191,8 @@ class AdminOrderStatusMasterTest extends TestCase
         $this->assertTrue($completed->is_terminal);
         $this->assertSame(OrderStatus::STATUS_ACTIVE, $completed->status);
         $this->assertSame('Done', $completed->name);
-        $this->assertSame('Presentation-only change.', $completed->description);
+        $this->assertSame('Presentation-only change.', $completed->admin_description);
+        $this->assertSame('Done customer message.', $completed->customer_description);
         $this->assertSame('System implementation note.', $completed->internal_notes);
         $this->assertSame(OrderStatus::BADGE_PRIMARY, $completed->badge_type);
         $this->assertSame(5, $completed->sort_order);
@@ -193,7 +205,7 @@ class AdminOrderStatusMasterTest extends TestCase
         $this->assertFalse($completed->fresh()->trashed());
     }
 
-    public function test_system_status_description_is_required_but_custom_description_is_optional(): void
+    public function test_system_status_descriptions_are_required_but_custom_descriptions_are_optional(): void
     {
         $admin = $this->createUserWithRole('super_admin');
         $this->seed(OrderStatusSeeder::class);
@@ -204,7 +216,8 @@ class AdminOrderStatusMasterTest extends TestCase
             ->put(route('admin.master.order-statuses.update', $completed), [
                 'name' => 'Completed',
                 'customer_label' => 'Order Completed',
-                'description' => '',
+                'admin_description' => '',
+                'customer_description' => '',
                 'category' => OrderStatus::CATEGORY_FULFILLED,
                 'badge_type' => OrderStatus::BADGE_SUCCESS,
                 'sort_order' => 90,
@@ -213,7 +226,7 @@ class AdminOrderStatusMasterTest extends TestCase
                 'status' => OrderStatus::STATUS_ACTIVE,
             ])
             ->assertRedirect(route('admin.master.order-statuses.edit', $completed))
-            ->assertSessionHasErrors('description');
+            ->assertSessionHasErrors(['admin_description', 'customer_description']);
 
         $this->actingAs($admin)
             ->post(route('admin.master.order-statuses.store'), [
@@ -227,7 +240,8 @@ class AdminOrderStatusMasterTest extends TestCase
 
         $this->assertDatabaseHas('order_statuses', [
             'code' => 'custom_optional_description',
-            'description' => null,
+            'admin_description' => null,
+            'customer_description' => null,
             'is_system' => false,
         ]);
     }
@@ -358,7 +372,8 @@ class AdminOrderStatusMasterTest extends TestCase
             'code' => $code ?? Str::snake(Str::lower($name)),
             'name' => $name,
             'customer_label' => $name,
-            'description' => null,
+            'admin_description' => null,
+            'customer_description' => null,
             'internal_notes' => null,
             'category' => $category,
             'badge_type' => OrderStatus::BADGE_WARNING,

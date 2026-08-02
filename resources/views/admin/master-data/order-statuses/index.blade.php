@@ -33,7 +33,7 @@
                 <form method="GET" action="{{ route('admin.master.order-statuses.index') }}" class="row g-3 align-items-end">
                     <div class="col-md-3">
                         <label for="search" class="form-label">Search</label>
-                        <input id="search" name="search" type="search" value="{{ $filters['search'] }}" class="form-control" placeholder="Code, name, label, description or note">
+                        <input id="search" name="search" type="search" value="{{ $filters['search'] }}" class="form-control" placeholder="Code, name, description or note">
                     </div>
                     <div class="col-md-2">
                         <label for="category" class="form-label">Category</label>
@@ -98,11 +98,17 @@
                                 <td>
                                     <div class="fw-semibold">
                                         {{ $orderStatus->name }}
-                                        @if($orderStatus->description)
-                                            <i class="ph-info ms-1 text-muted" data-bs-popup="tooltip" title="{{ $orderStatus->description }}"></i>
+                                        @if($orderStatus->admin_description)
+                                            <i class="ph-info ms-1 text-muted" data-bs-popup="tooltip" title="{{ $orderStatus->admin_description }}"></i>
                                         @endif
                                     </div>
                                     <span class="badge bg-light text-muted border mt-1">Code: {{ $orderStatus->code }}</span>
+                                    @if($orderStatus->customer_description)
+                                        <div class="text-muted small">
+                                            Customer message
+                                            <i class="ph-chat-circle-text ms-1" data-bs-popup="tooltip" title="{{ $orderStatus->customer_description }}"></i>
+                                        </div>
+                                    @endif
                                     @if($orderStatus->internal_notes)
                                         <div class="text-muted small">
                                             Internal note

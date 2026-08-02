@@ -61,7 +61,8 @@ class OrderStatus extends Model
         'code',
         'name',
         'customer_label',
-        'description',
+        'admin_description',
+        'customer_description',
         'internal_notes',
         'category',
         'badge_type',
@@ -182,7 +183,7 @@ class OrderStatus extends Model
     }
 
     /**
-     * @return array<string, array{name: string, customer_label: string, description: string, category: string, badge_type: string, sort_order: int, is_terminal: bool, internal_notes?: string}>
+     * @return array<string, array{name: string, customer_label: string, admin_description: string, customer_description: string, internal_notes: string, category: string, badge_type: string, sort_order: int, is_terminal: bool}>
      */
     public static function systemDefaults(): array
     {
@@ -194,7 +195,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_SECONDARY,
                 'sort_order' => 10,
                 'is_terminal' => false,
-                'description' => 'Order has been created but has not yet been confirmed by the merchant.',
+                'admin_description' => 'Order has been created and is awaiting merchant confirmation.',
+                'customer_description' => 'We have received your order and will confirm it shortly.',
+                'internal_notes' => 'Initial system status. Assigned automatically when an order is created. Allowed next statuses: Confirmed, Cancelled.',
             ],
             self::CODE_CONFIRMED => [
                 'name' => 'Confirmed',
@@ -203,7 +206,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_PRIMARY,
                 'sort_order' => 20,
                 'is_terminal' => false,
-                'description' => 'Merchant has accepted the order and it is ready for processing.',
+                'admin_description' => 'Merchant has accepted the order and it is ready for fulfilment.',
+                'customer_description' => 'Your order has been confirmed and is being prepared.',
+                'internal_notes' => 'Stock reservation may occur here if enabled. Allowed next statuses: Processing, Cancelled.',
             ],
             self::CODE_PROCESSING => [
                 'name' => 'Processing',
@@ -212,7 +217,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_INFO,
                 'sort_order' => 30,
                 'is_terminal' => false,
-                'description' => 'Order is currently being prepared or processed.',
+                'admin_description' => 'Order is currently being prepared.',
+                'customer_description' => 'Your order is currently being prepared.',
+                'internal_notes' => 'Stock should already be deducted. Allowed next statuses: Packed, Cancelled.',
             ],
             self::CODE_PACKED => [
                 'name' => 'Packed',
@@ -221,7 +228,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_INFO,
                 'sort_order' => 40,
                 'is_terminal' => false,
-                'description' => 'Order has been packed and is waiting for pickup or dispatch.',
+                'admin_description' => 'Order has been packed and is ready for dispatch or pickup.',
+                'customer_description' => 'Your order has been packed and is ready for dispatch.',
+                'internal_notes' => 'Waiting for shipping or pickup.',
             ],
             self::CODE_READY_FOR_PICKUP => [
                 'name' => 'Ready for Pickup',
@@ -230,7 +239,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_WARNING,
                 'sort_order' => 50,
                 'is_terminal' => false,
-                'description' => 'Order is ready for customer pickup or courier collection.',
+                'admin_description' => 'Order is packed and ready for customer collection.',
+                'customer_description' => 'Your order is ready for pickup.',
+                'internal_notes' => 'Customer should be notified.',
             ],
             self::CODE_SHIPPED => [
                 'name' => 'Shipped',
@@ -239,7 +250,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_PRIMARY,
                 'sort_order' => 60,
                 'is_terminal' => false,
-                'description' => 'Order has been dispatched from the merchant.',
+                'admin_description' => 'Order has been handed over to the courier.',
+                'customer_description' => 'Your order has been shipped.',
+                'internal_notes' => 'Tracking information may be attached. Next status: Delivered.',
             ],
             self::CODE_OUT_FOR_DELIVERY => [
                 'name' => 'Out for Delivery',
@@ -248,7 +261,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_WARNING,
                 'sort_order' => 70,
                 'is_terminal' => false,
-                'description' => 'Courier is delivering the order to the customer.',
+                'admin_description' => 'Courier has started the final delivery.',
+                'customer_description' => 'Your order is out for delivery.',
+                'internal_notes' => 'Delivery should complete today.',
             ],
             self::CODE_DELIVERED => [
                 'name' => 'Delivered',
@@ -257,7 +272,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_SUCCESS,
                 'sort_order' => 80,
                 'is_terminal' => false,
-                'description' => 'Customer has received the order successfully.',
+                'admin_description' => 'Order has been successfully delivered.',
+                'customer_description' => 'Your order has been delivered successfully.',
+                'internal_notes' => 'Customer may request return within the allowed return period.',
             ],
             self::CODE_COMPLETED => [
                 'name' => 'Completed',
@@ -266,8 +283,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_SUCCESS,
                 'sort_order' => 90,
                 'is_terminal' => true,
-                'description' => 'Order lifecycle has been completed and no further fulfilment is pending.',
-                'internal_notes' => 'Used by POS, reports and revenue calculations. Do not delete or rename the code.',
+                'admin_description' => 'Order lifecycle has been completed successfully.',
+                'customer_description' => 'Thank you for shopping with us.',
+                'internal_notes' => 'Final fulfilment status. Used by POS, reports and revenue calculations. Do not delete or rename the code.',
             ],
             self::CODE_CANCELLED => [
                 'name' => 'Cancelled',
@@ -276,7 +294,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_DANGER,
                 'sort_order' => 100,
                 'is_terminal' => true,
-                'description' => 'Entire order has been cancelled.',
+                'admin_description' => 'Order has been cancelled.',
+                'customer_description' => 'Your order has been cancelled.',
+                'internal_notes' => 'Terminal status. Restore stock if already deducted. Trigger refund workflow if payment was collected.',
             ],
             self::CODE_PARTIALLY_CANCELLED => [
                 'name' => 'Partially Cancelled',
@@ -285,7 +305,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_WARNING,
                 'sort_order' => 110,
                 'is_terminal' => false,
-                'description' => 'One or more order items have been cancelled while others remain active.',
+                'admin_description' => 'One or more order items have been cancelled while others remain active.',
+                'customer_description' => 'Part of your order has been cancelled.',
+                'internal_notes' => 'Partial cancellation status. Remaining items may continue fulfilment.',
             ],
             self::CODE_RETURN_REQUESTED => [
                 'name' => 'Return Requested',
@@ -294,7 +316,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_WARNING,
                 'sort_order' => 120,
                 'is_terminal' => false,
-                'description' => 'Customer has requested a return for one or more order items.',
+                'admin_description' => 'Customer has requested a return.',
+                'customer_description' => 'Your return request has been received.',
+                'internal_notes' => 'Awaiting merchant review.',
             ],
             self::CODE_RETURN_APPROVED => [
                 'name' => 'Return Approved',
@@ -303,7 +327,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_PRIMARY,
                 'sort_order' => 130,
                 'is_terminal' => false,
-                'description' => 'Return request has been approved by the merchant.',
+                'admin_description' => 'Return request has been approved.',
+                'customer_description' => 'Your return request has been approved.',
+                'internal_notes' => 'Waiting for returned items.',
             ],
             self::CODE_RETURN_REJECTED => [
                 'name' => 'Return Rejected',
@@ -312,7 +338,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_DANGER,
                 'sort_order' => 140,
                 'is_terminal' => true,
-                'description' => 'Return request has been rejected.',
+                'admin_description' => 'Return request has been rejected.',
+                'customer_description' => 'Unfortunately, your return request was not approved.',
+                'internal_notes' => 'Return workflow ends.',
             ],
             self::CODE_RETURN_IN_TRANSIT => [
                 'name' => 'Return In Transit',
@@ -321,7 +349,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_INFO,
                 'sort_order' => 150,
                 'is_terminal' => false,
-                'description' => 'Returned items are currently on their way back to the merchant.',
+                'admin_description' => 'Returned items are on the way to the merchant.',
+                'customer_description' => 'Your returned items are on the way to us.',
+                'internal_notes' => 'Awaiting receipt.',
             ],
             self::CODE_RETURN_RECEIVED => [
                 'name' => 'Return Received',
@@ -330,7 +360,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_INFO,
                 'sort_order' => 160,
                 'is_terminal' => false,
-                'description' => 'Merchant has received the returned items and verification is pending.',
+                'admin_description' => 'Merchant has received the returned items.',
+                'customer_description' => 'We have received your returned items.',
+                'internal_notes' => 'Refund or exchange can proceed.',
             ],
             self::CODE_PARTIALLY_RETURNED => [
                 'name' => 'Partially Returned',
@@ -339,7 +371,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_WARNING,
                 'sort_order' => 170,
                 'is_terminal' => false,
-                'description' => 'Some items have been returned while others remain completed.',
+                'admin_description' => 'Some items have been returned while others remain completed.',
+                'customer_description' => 'Part of your order has been returned.',
+                'internal_notes' => 'Partial return status. Remaining items may stay completed.',
             ],
             self::CODE_RETURNED => [
                 'name' => 'Returned',
@@ -348,7 +382,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_DANGER,
                 'sort_order' => 180,
                 'is_terminal' => true,
-                'description' => 'Entire order has been returned successfully.',
+                'admin_description' => 'Return process completed.',
+                'customer_description' => 'Your return has been completed.',
+                'internal_notes' => 'Terminal return status.',
             ],
             self::CODE_EXCHANGE_REQUESTED => [
                 'name' => 'Exchange Requested',
@@ -357,7 +393,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_WARNING,
                 'sort_order' => 190,
                 'is_terminal' => false,
-                'description' => 'Customer has requested an exchange.',
+                'admin_description' => 'Customer requested an exchange.',
+                'customer_description' => 'Your exchange request has been received.',
+                'internal_notes' => 'Awaiting merchant approval.',
             ],
             self::CODE_EXCHANGE_APPROVED => [
                 'name' => 'Exchange Approved',
@@ -366,7 +404,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_PRIMARY,
                 'sort_order' => 200,
                 'is_terminal' => false,
-                'description' => 'Exchange request has been approved.',
+                'admin_description' => 'Exchange request approved.',
+                'customer_description' => 'Your exchange request has been approved.',
+                'internal_notes' => 'Replacement order can be created.',
             ],
             self::CODE_EXCHANGE_REJECTED => [
                 'name' => 'Exchange Rejected',
@@ -375,7 +415,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_DANGER,
                 'sort_order' => 210,
                 'is_terminal' => true,
-                'description' => 'Exchange request has been rejected.',
+                'admin_description' => 'Exchange request rejected.',
+                'customer_description' => 'Unfortunately, your exchange request was not approved.',
+                'internal_notes' => 'Exchange workflow ends.',
             ],
             self::CODE_PARTIALLY_EXCHANGED => [
                 'name' => 'Partially Exchanged',
@@ -384,7 +426,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_WARNING,
                 'sort_order' => 220,
                 'is_terminal' => false,
-                'description' => 'Some order items have been exchanged while others remain unchanged.',
+                'admin_description' => 'Some order items have been exchanged while others remain unchanged.',
+                'customer_description' => 'Part of your order has been exchanged.',
+                'internal_notes' => 'Partial exchange status. Remaining items may stay unchanged.',
             ],
             self::CODE_EXCHANGED => [
                 'name' => 'Exchanged',
@@ -393,7 +437,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_SUCCESS,
                 'sort_order' => 230,
                 'is_terminal' => true,
-                'description' => 'Exchange process has been completed successfully.',
+                'admin_description' => 'Exchange completed successfully.',
+                'customer_description' => 'Your exchange has been completed successfully.',
+                'internal_notes' => 'Terminal exchange status.',
             ],
             self::CODE_FAILED => [
                 'name' => 'Failed',
@@ -402,7 +448,9 @@ class OrderStatus extends Model
                 'badge_type' => self::BADGE_DANGER,
                 'sort_order' => 240,
                 'is_terminal' => true,
-                'description' => 'Order could not be completed because of a system, payment or processing failure.',
+                'admin_description' => 'Order could not be completed because of a system or payment failure.',
+                'customer_description' => 'We were unable to complete your order.',
+                'internal_notes' => 'Review failure reason before retrying.',
             ],
         ];
     }
