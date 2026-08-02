@@ -6,6 +6,7 @@ use App\Http\Controllers\Merchant\Auth\MerchantProfileController;
 use App\Http\Controllers\Merchant\BarcodeLabelController;
 use App\Http\Controllers\Merchant\AvailabilityStatusController;
 use App\Http\Controllers\Merchant\CatalogueMasterController;
+use App\Http\Controllers\Merchant\CancellationReasonController;
 use App\Http\Controllers\Merchant\CustomerController;
 use App\Http\Controllers\Merchant\CustomerAddressController;
 use App\Http\Controllers\Merchant\MerchantDetailsController;
@@ -73,6 +74,12 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::post('/sales/{order}/exchange', [SalesHistoryController::class, 'processExchange'])->name('sales.exchange.process');
         Route::get('/sales/exchanges/{exchange}/receipt', [SalesHistoryController::class, 'exchangeReceipt'])->name('sales.exchange.receipt');
         Route::resource('return-reasons', ReturnReasonController::class)->only(['index', 'store', 'update', 'destroy']);
+        Route::get('cancellation-reasons/trash', [CancellationReasonController::class, 'trash'])
+            ->name('cancellation-reasons.trash');
+        Route::post('cancellation-reasons/{cancellationReason}/restore', [CancellationReasonController::class, 'restore'])
+            ->name('cancellation-reasons.restore');
+        Route::resource('cancellation-reasons', CancellationReasonController::class)
+            ->except(['show']);
         Route::post('availability-statuses/{availabilityStatus}/restore', [AvailabilityStatusController::class, 'restore'])
             ->name('availability-statuses.restore');
         Route::resource('availability-statuses', AvailabilityStatusController::class)

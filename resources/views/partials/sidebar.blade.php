@@ -97,6 +97,11 @@
 									</a>
 								</li>
 								<li class="nav-item">
+									<a href="{{ route('admin.master.payment-statuses.index') }}" class="nav-link {{ request()->routeIs('admin.master.payment-statuses.*') ? 'active' : '' }}">
+										Payment Statuses
+									</a>
+								</li>
+								<li class="nav-item">
 									<a href="{{ route('admin.master.product-categories.index') }}" class="nav-link {{ request()->routeIs('admin.master.product-categories.*') ? 'active' : '' }}">
 										Product Categories
 									</a>

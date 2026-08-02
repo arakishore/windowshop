@@ -106,6 +106,11 @@ class MerchantProfile extends Model
         return $this->hasMany(ReturnReason::class, 'merchant_id');
     }
 
+    public function cancellationReasons(): HasMany
+    {
+        return $this->hasMany(MerchantCancellationReason::class, 'merchant_id');
+    }
+
     public function availabilityStatuses(): HasMany
     {
         return $this->hasMany(ProductAvailabilityStatus::class, 'merchant_id');

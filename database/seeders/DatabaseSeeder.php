@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(SystemFoundationSeeder::class);
         $this->call(OrderStatusSeeder::class);
+        $this->call(PaymentStatusSeeder::class);
         $this->call(TaxSeeder::class);
         $this->call(SuperAdminSeeder::class);
         $this->call(AdminSettingsSeeder::class);
@@ -26,5 +27,6 @@ class DatabaseSeeder extends Seeder
         $this->call(DemoSeeder::class);
         $this->call(MerchantSettingsSeeder::class);
         $this->call(ProductAvailabilityStatusSeeder::class);
+        $this->call(MerchantCancellationReasonSeeder::class);
     }
 }

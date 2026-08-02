@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
+use App\Http\Controllers\Admin\MasterData\PaymentStatusController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupValueController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryAttributeGroupController;
@@ -69,6 +70,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('master/order-statuses', OrderStatusController::class)
             ->except(['show'])
             ->names('master.order-statuses');
+        Route::post('master/payment-statuses/{paymentStatus}/restore', [PaymentStatusController::class, 'restore'])
+            ->withTrashed()
+            ->name('master.payment-statuses.restore');
+        Route::resource('master/payment-statuses', PaymentStatusController::class)
+            ->except(['show'])
+            ->names('master.payment-statuses');
         Route::get('master/catalogue-requests', [CatalogueMasterRequestController::class, 'index'])
             ->name('master.catalogue-requests.index');
         Route::put('master/catalogue-requests/{catalogueMasterRequest}', [CatalogueMasterRequestController::class, 'update'])
