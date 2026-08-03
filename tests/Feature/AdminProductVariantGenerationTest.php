@@ -310,6 +310,103 @@ class AdminProductVariantGenerationTest extends TestCase
         ]);
     }
 
+    public function test_blank_generated_variant_sku_is_rebuilt_when_variant_row_is_saved(): void
+    {
+        [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->selectValues($product, [
+            [$color, ['Red']],
+            [$size, ['M']],
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
+        $variant = $product->variants()->where('name', 'Red / M')->firstOrFail();
+        $variant->forceFill(['sku' => 'DEMO'])->save();
+
+        $this->actingAs($admin)
+            ->put(route('admin.products.variants.update', $product), [
+                'default_variant_id' => $variant->getKey(),
+                'variants' => [
+                    $variant->getKey() => [
+                        ...$this->variantPayload($variant->fresh()),
+                        'sku' => '',
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertSessionHas('success', '1 variant rows updated successfully.');
+
+        $this->assertSame(
+            Str::upper($product->slug).'-RED-M',
+            $variant->fresh()->sku,
+        );
+    }
+
+    public function test_regenerating_existing_variants_backfills_missing_skus(): void
+    {
+        [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->selectValues($product, [
+            [$color, ['Red']],
+            [$size, ['M']],
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
+        $variant = $product->variants()->where('name', 'Red / M')->firstOrFail();
+        $variant->forceFill(['sku' => null])->save();
+
+        $this->actingAs($admin)
+            ->get(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertOk()
+            ->assertSee('1 generated variant SKU(s) can be filled.')
+            ->assertSee('Generate Missing SKUs');
+
+        $this->actingAs($admin)
+            ->post(route('admin.products.variants.generate', $product))
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertSessionHas('success', '1 missing SKU(s) filled successfully.');
+
+        $this->assertSame(
+            Str::upper($product->slug).'-RED-M',
+            $variant->fresh()->sku,
+        );
+    }
+
+    public function test_stale_generated_variants_can_be_removed_after_attribute_selection_changes(): void
+    {
+        [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->selectValues($product, [
+            [$color, ['Red', 'Blue']],
+            [$size, ['M']],
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
+        $this->assertSame(2, $product->variants()->count());
+
+        $blue = $color->values->firstWhere('name', 'Blue');
+        $product->attributes()
+            ->where('product_attribute_group_id', $color->getKey())
+            ->where('product_attribute_group_value_id', $blue->getKey())
+            ->delete();
+
+        $this->actingAs($admin)
+            ->get(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertOk()
+            ->assertSee('1 existing variant(s) no longer match the selected attributes.')
+            ->assertSee('Remove Stale Variants')
+            ->assertSee(route('admin.products.variants.stale-destroy', $product), false);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.products.variants.stale-destroy', $product))
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertSessionHas('success', '1 stale variant(s) removed successfully.');
+
+        $this->assertSame(['Red / M'], $product->fresh()->variants()->pluck('name')->all());
+        $this->assertSoftDeleted('product_variants', [
+            'product_id' => $product->getKey(),
+            'name' => 'Blue / M',
+            'deleted_by' => $admin->getKey(),
+        ]);
+    }
+
     public function test_existing_default_variant_remains_default(): void
     {
         [$admin, $product, $color, $size] = $this->productWithVariantSetup();

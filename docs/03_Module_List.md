@@ -249,6 +249,7 @@ This document tracks the modules and user-facing features currently implemented 
 - Clear cart
 - Hold cart in browser storage
 - Resume held cart
+- Held carts are browser `localStorage` only; see `docs/POS_Held_Orders.md`
 - Recent sales modal
 - Product tile size setting applied to POS grid
 - Optional add-to-cart sound setting

@@ -48,6 +48,7 @@ class AdminProductAttributesTabTest extends TestCase
             ->assertSee('Linen')
             ->assertSee('type="checkbox"', false)
             ->assertSee('type="radio"', false)
+            ->assertSee('None')
             ->assertSee('Variant Attributes')
             ->assertSee('Other Attributes')
             ->assertSee('Variant')
@@ -138,6 +139,43 @@ class AdminProductAttributesTabTest extends TestCase
         $this->assertDatabaseHas('product_attributes', [
             'product_id' => $product->getKey(),
             'product_attribute_group_value_id' => $linen->getKey(),
+        ]);
+    }
+
+    public function test_optional_single_selection_attribute_can_be_cleared(): void
+    {
+        [$admin, $product, $color, $material] = $this->productWithAttributeMappings();
+        $red = $color->values->firstWhere('name', 'Red');
+        $cotton = $material->values->firstWhere('name', 'Cotton');
+
+        $product->attributes()->create([
+            'product_attribute_group_id' => $color->getKey(),
+            'product_attribute_group_value_id' => $red->getKey(),
+        ]);
+        $product->attributes()->create([
+            'product_attribute_group_id' => $material->getKey(),
+            'product_attribute_group_value_id' => $cotton->getKey(),
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.products.attributes.update', $product), [
+                'attributes' => [
+                    $color->id => [$red->id],
+                    $material->id => '',
+                ],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'attributes']))
+            ->assertSessionHas('success', 'Product attributes updated successfully.');
+
+        $this->assertDatabaseHas('product_attributes', [
+            'product_id' => $product->getKey(),
+            'product_attribute_group_id' => $color->getKey(),
+            'product_attribute_group_value_id' => $red->getKey(),
+        ]);
+        $this->assertDatabaseMissing('product_attributes', [
+            'product_id' => $product->getKey(),
+            'product_attribute_group_id' => $material->getKey(),
+            'product_attribute_group_value_id' => $cotton->getKey(),
         ]);
     }
 

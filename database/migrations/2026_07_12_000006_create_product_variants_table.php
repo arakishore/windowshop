@@ -34,8 +34,15 @@ return new class extends Migration
             $table->decimal('mrp', 12, 2);
             $table->decimal('selling_price', 12, 2);
             $table->decimal('cost_price', 12, 2)->nullable();
-            $table->unsignedInteger('stock_quantity')->default(0);
-            $table->unsignedInteger('low_stock_threshold')->default(0);
+            $table->decimal('stock_quantity', 12, 3)->default(0);
+            $table->decimal('low_stock_threshold', 12, 3)->default(0);
+            $table->boolean('allow_decimal_quantity')->default(false);
+            $table->decimal('quantity_increment', 12, 3)->default(1);
+            $table->decimal('minimum_order_quantity', 12, 3)->default(1);
+            $table->decimal('maximum_order_quantity', 12, 3)->nullable();
+            $table->decimal('purchase_quantity_multiple', 12, 3)->default(1);
+            $table->boolean('allow_backorder')->default(false);
+            $table->boolean('is_sellable')->default(true);
             $table->boolean('is_default')
                 ->default(false)
                 ->comment('Default variant selected when the product page first loads')

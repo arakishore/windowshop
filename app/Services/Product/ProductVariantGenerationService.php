@@ -136,13 +136,53 @@ class ProductVariantGenerationService
                 $created++;
             }
 
+            $skuUpdated = $this->backfillMissingSkus($product, $preview['combinations'], $preview['variant_groups'], $actor);
+
             $this->variantManagementService->ensureDefaultVariant($product, $actor);
 
             return [
                 'created_count' => $created,
+                'sku_updated_count' => $skuUpdated,
                 'skipped_existing_count' => (int) $preview['existing_count'],
                 'total_current_variants' => $product->variants()->count(),
             ];
+        });
+    }
+
+    public function removeStaleVariants(Product $product, User $actor): int
+    {
+        $preview = $this->preview($product);
+
+        if ($preview['errors'] !== []) {
+            throw ValidationException::withMessages(['variants' => $preview['errors']]);
+        }
+
+        if ($preview['total'] === 0) {
+            throw ValidationException::withMessages(['variants' => 'Select at least one valid variant combination before removing stale variants.']);
+        }
+
+        return DB::transaction(function () use ($product, $actor, $preview): int {
+            $variantIds = $this->staleVariantIds($product, $preview['variant_groups'], collect($preview['combinations'])->pluck('key')->all());
+
+            if ($variantIds === []) {
+                return 0;
+            }
+
+            $variants = ProductVariant::query()
+                ->whereIn('id', $variantIds)
+                ->get();
+
+            foreach ($variants as $variant) {
+                $variant->forceFill([
+                    'deleted_by' => $actor->getKey(),
+                    'updated_by' => $actor->getKey(),
+                ])->save();
+                $variant->delete();
+            }
+
+            $this->variantManagementService->ensureDefaultVariant($product, $actor);
+
+            return $variants->count();
         });
     }
 
@@ -303,6 +343,22 @@ class ProductVariantGenerationService
     }
 
     /**
+     * @param Collection<int, ProductCategoryAttributeGroup> $variantGroups
+     * @param array<int, string> $currentKeys
+     * @return array<int, int>
+     */
+    private function staleVariantIds(Product $product, Collection $variantGroups, array $currentKeys): array
+    {
+        $existingKeys = $this->existingCombinationKeys($product, $variantGroups);
+
+        return collect($existingKeys)
+            ->reject(fn (int $variantId, string $key): bool => in_array($key, $currentKeys, true))
+            ->values()
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /**
      * @param array<int, array<string, mixed>> $values
      */
     private function combinationKey(array $values): string
@@ -362,6 +418,39 @@ class ProductVariantGenerationService
         }
 
         return $sku;
+    }
+
+    /**
+     * @param array<int, array{key: string, name: string, values: array<int, array{group_id: int, group_name: string, value_id: int, value_name: string}>}> $combinations
+     * @param Collection<int, ProductCategoryAttributeGroup> $variantGroups
+     */
+    private function backfillMissingSkus(Product $product, array $combinations, Collection $variantGroups, User $actor): int
+    {
+        $existingKeys = $this->existingCombinationKeys($product->fresh(), $variantGroups);
+        $updated = 0;
+
+        foreach ($combinations as $combination) {
+            $variantId = $existingKeys[$combination['key']] ?? null;
+
+            if ($variantId === null) {
+                continue;
+            }
+
+            $variant = ProductVariant::query()->whereKey($variantId)->first();
+
+            if (! $variant instanceof ProductVariant || trim((string) $variant->sku) !== '') {
+                continue;
+            }
+
+            $variant->forceFill([
+                'sku' => $this->uniqueSku($product, $combination, $variant),
+                'updated_by' => $actor->getKey(),
+            ])->save();
+
+            $updated++;
+        }
+
+        return $updated;
     }
 
     private function combinationLimit(): int

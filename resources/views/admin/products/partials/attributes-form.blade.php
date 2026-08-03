@@ -55,6 +55,24 @@
                                         <div class="text-muted">No values are available.</div>
                                     @else
                                         <div class="d-flex flex-wrap gap-3">
+                                            @if($group->selection_type === 'single' && ! $mapping->is_required)
+                                                @php
+                                                    $noneInputId = "attribute_{$groupId}_none";
+                                                @endphp
+
+                                                <div class="form-check">
+                                                    <input
+                                                        id="{{ $noneInputId }}"
+                                                        class="form-check-input"
+                                                        type="radio"
+                                                        name="attributes[{{ $groupId }}]"
+                                                        value=""
+                                                        @checked($selectedValues === [])
+                                                    >
+                                                    <label class="form-check-label" for="{{ $noneInputId }}">None</label>
+                                                </div>
+                                            @endif
+
                                             @foreach($group->values as $value)
                                                 @php
                                                     $inputId = "attribute_{$groupId}_{$value->id}";

@@ -84,6 +84,15 @@ class ProductVariantManagementService
 
             foreach ($ownedVariants as $variant) {
                 $changes = $this->normalizeRowChanges($variants[$variant->getKey()] ?? []);
+
+                if (($changes['sku'] ?? null) === null) {
+                    $generatedSku = $this->skuForGeneratedVariant($product, $variant);
+
+                    if ($generatedSku !== null) {
+                        $changes['sku'] = $generatedSku;
+                    }
+                }
+
                 $this->assertPricingIsValid($variant, $changes);
 
                 $variant->forceFill([
@@ -324,6 +333,7 @@ class ProductVariantManagementService
     private function variantsForProduct(Product $product, Collection $ids): EloquentCollection
     {
         return $product->variants()
+            ->with(['attributes.value'])
             ->whereIn('id', $ids)
             ->get();
     }
@@ -434,6 +444,41 @@ class ProductVariantManagementService
         $value = trim((string) ($value ?? ''));
 
         return $value === '' ? null : $value;
+    }
+
+    private function skuForGeneratedVariant(Product $product, ProductVariant $variant): ?string
+    {
+        $variant->loadMissing('attributes.value');
+
+        $values = $variant->attributes
+            ->filter(fn ($attribute): bool => $attribute->value !== null)
+            ->sortBy([
+                fn ($left, $right): int => ((int) $left->product_attribute_group_id) <=> ((int) $right->product_attribute_group_id),
+                fn ($left, $right): int => ((int) $left->product_attribute_group_value_id) <=> ((int) $right->product_attribute_group_value_id),
+            ])
+            ->pluck('value.name')
+            ->filter()
+            ->implode('-');
+
+        if ($values === '') {
+            return null;
+        }
+
+        $productBase = Str::upper(Str::slug($product->slug ?: $product->product_name, '-'));
+        $suffix = Str::upper(Str::slug($values, '-'));
+        $skuBase = Str::limit(trim("{$productBase}-{$suffix}", '-'), 80, '');
+        $sku = $skuBase !== '' ? $skuBase : 'VARIANT-'.$product->getKey();
+        $counter = 2;
+
+        while (ProductVariant::query()
+            ->where('shop_id', $product->shop_id)
+            ->where('sku', $sku)
+            ->whereKeyNot($variant->getKey())
+            ->exists()) {
+            $sku = Str::limit($skuBase, 72, '').'-'.$counter++;
+        }
+
+        return $sku;
     }
 
     private function nullableInteger(mixed $value): ?int

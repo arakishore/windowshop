@@ -139,6 +139,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->name('products.images.destroy');
         Route::post('products/{product}/variants/generate', [ProductController::class, 'generateVariants'])
             ->name('products.variants.generate');
+        Route::delete('products/{product}/variants/stale', [ProductController::class, 'removeStaleVariants'])
+            ->name('products.variants.stale-destroy');
         Route::put('products/{product}/variants', [ProductController::class, 'updateVariants'])
             ->name('products.variants.update');
         Route::put('products/{product}/variants/bulk', [ProductController::class, 'bulkUpdateVariants'])

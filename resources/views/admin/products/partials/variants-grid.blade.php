@@ -4,6 +4,9 @@
         $examples = array_slice($variantPreview['combinations'] ?? [], 0, 4);
     $hasSelectedVariantAttributes = ($variantPreview['selected_variant_value_count'] ?? 0) > 0;
     $hasGeneratedVariants = $product->variants->contains(fn ($variant) => $variant->attributes->isNotEmpty());
+    $missingGeneratedSkuCount = $product->variants
+        ->filter(fn ($variant) => $variant->attributes->isNotEmpty() && trim((string) $variant->sku) === '')
+        ->count();
     $variantStatuses = ['active' => 'Active', 'inactive' => 'Inactive'];
     $availabilityStatuses = $availabilityStatuses ?? collect();
     $productRoutePrefix = $productRoutePrefix ?? 'admin';
@@ -75,9 +78,38 @@
                 @endif
             </div>
         </div>
+    @elseif($missingGeneratedSkuCount > 0)
+        <div class="border rounded bg-white p-3 mb-3">
+            <div class="d-flex flex-column flex-lg-row justify-content-lg-between gap-3">
+                <div>
+                    <h6 class="fw-semibold mb-1">{{ $missingGeneratedSkuCount }} generated variant SKU(s) can be filled.</h6>
+                    <div class="text-muted">Blank SKUs on generated variants will be rebuilt from the product and variant attributes. Existing custom SKUs are kept unchanged.</div>
+                </div>
+
+                <form method="POST" action="{{ route($productRoutePrefix.'.products.variants.generate', $product) }}" class="align-self-lg-start">
+                    @csrf
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ph-barcode me-2"></i>
+                        Generate Missing SKUs
+                    </button>
+                </form>
+            </div>
+        </div>
     @elseif($hasGeneratedVariants && ($variantPreview['stale_existing_count'] ?? 0) > 0)
-        <div class="alert alert-warning">
-            Some existing variants no longer match the currently selected attributes. They are kept unchanged for now.
+        <div class="alert alert-warning d-flex flex-column flex-lg-row justify-content-lg-between gap-3 align-items-lg-center">
+            <div>
+                <div class="fw-semibold">{{ $variantPreview['stale_existing_count'] }} existing variant(s) no longer match the selected attributes.</div>
+                <div>Remove stale variants if those options should no longer be sold. They will be soft-deleted and historical orders remain intact.</div>
+            </div>
+
+            <form method="POST" action="{{ route($productRoutePrefix.'.products.variants.stale-destroy', $product) }}" onsubmit="return confirm('Remove stale variants that no longer match selected attributes? Historical orders will remain intact.');">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="btn btn-warning">
+                    <i class="ph-trash me-2"></i>
+                    Remove Stale Variants
+                </button>
+            </form>
         </div>
     @endif
 

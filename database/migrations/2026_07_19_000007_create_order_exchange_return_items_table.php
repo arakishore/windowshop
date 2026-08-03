@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('order_exchange_id')->constrained('order_exchanges')->cascadeOnDelete();
             $table->foreignId('order_item_id')->constrained('order_items')->cascadeOnDelete();
             $table->foreignId('product_variant_id')->nullable()->constrained('product_variants')->nullOnDelete();
-            $table->unsignedInteger('quantity');
+            $table->decimal('quantity', 12, 3);
             $table->decimal('unit_return_value', 14, 2)->default(0);
             $table->decimal('line_tax', 14, 2)->default(0);
             $table->decimal('line_total', 14, 2)->default(0);

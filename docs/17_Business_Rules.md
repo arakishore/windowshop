@@ -58,6 +58,18 @@ This is the canonical register for approved WindowShop business behavior. Each r
 - Cancellation eligibility depends on current fulfillment and payment state.
 - Every material transition is auditable and idempotent.
 
+## POS Held Orders
+
+**Current policy: Approved for POS V1 browser-held carts**
+
+- Held orders are paused POS carts, not database orders.
+- POS V1 stores held orders in browser `localStorage` under shop-scoped keys.
+- Held orders are not stored in cookies, Laravel sessions, or database tables.
+- Held orders do not reserve stock and are not included in reports, sales history, customer history, or recent sales.
+- Completed POS checkout is the point where a real order is created in the database.
+- Cross-device sync, auditability, expiry enforcement, and stock reservation require a future DB-backed held-order module.
+- Implementation notes are documented in `docs/POS_Held_Orders.md`.
+
 ## Returns and Exchanges
 
 **Current policy: Approved for POS V1 separation**

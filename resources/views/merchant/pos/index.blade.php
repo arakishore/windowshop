@@ -1361,7 +1361,7 @@
                                             <i class="ph-tag"></i>
                                         </button>
                                     ` : ''}
-                                    <button type="button" class="pos-line-action js-pos-remove" data-bs-popup="tooltip" title="Remove item from cart" aria-label="Remove item from cart">
+                                    <button type="button" class="pos-line-action js-pos-remove"   title="Remove item from cart" aria-label="Remove item from cart">
                                         <i class="ph-trash"></i>
                                     </button>
                                 </div>

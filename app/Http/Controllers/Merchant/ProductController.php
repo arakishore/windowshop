@@ -288,10 +288,23 @@ class ProductController extends Controller
     {
         $this->authorizeProduct($request, $product);
         $result = $this->variantGenerationService->generate($product, Auth::user());
+        $message = $this->variantGenerationMessage($result);
 
         return redirect()
             ->route('merchant.products.edit', ['product' => $product, 'tab' => 'variants'])
-            ->with('success', "{$result['created_count']} product variants generated successfully.");
+            ->with($message['level'], $message['text']);
+    }
+
+    public function removeStaleVariants(Request $request, Product $product): RedirectResponse
+    {
+        $this->authorizeProduct($request, $product);
+        $removed = $this->variantGenerationService->removeStaleVariants($product, Auth::user());
+
+        return redirect()
+            ->route('merchant.products.edit', ['product' => $product, 'tab' => 'variants'])
+            ->with($removed > 0 ? 'success' : 'info', $removed > 0
+                ? "{$removed} stale variant(s) removed successfully."
+                : 'No stale variants were found.');
     }
 
     public function generateBarcodes(Request $request, Product $product): RedirectResponse
@@ -314,6 +327,42 @@ class ProductController extends Controller
         return redirect()
             ->route('merchant.products.edit', ['product' => $product, 'tab' => 'variants'])
             ->with('success', "{$updated} variant rows updated successfully.");
+    }
+
+    /**
+     * @param array{created_count: int, sku_updated_count?: int} $result
+     * @return array{level: string, text: string}
+     */
+    private function variantGenerationMessage(array $result): array
+    {
+        $created = (int) $result['created_count'];
+        $skuUpdated = (int) ($result['sku_updated_count'] ?? 0);
+
+        if ($created > 0 && $skuUpdated > 0) {
+            return [
+                'level' => 'success',
+                'text' => "{$created} product variants generated and {$skuUpdated} missing SKU(s) filled successfully.",
+            ];
+        }
+
+        if ($created > 0) {
+            return [
+                'level' => 'success',
+                'text' => "{$created} product variants generated successfully.",
+            ];
+        }
+
+        if ($skuUpdated > 0) {
+            return [
+                'level' => 'success',
+                'text' => "{$skuUpdated} missing SKU(s) filled successfully.",
+            ];
+        }
+
+        return [
+            'level' => 'info',
+            'text' => 'All variant combinations already exist.',
+        ];
     }
 
     public function bulkUpdateVariants(BulkUpdateProductVariantsRequest $request, Product $product): RedirectResponse

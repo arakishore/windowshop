@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('variant_name')->nullable();
             $table->string('sku')->nullable();
             $table->string('barcode', 100)->nullable();
-            $table->unsignedInteger('quantity');
+            $table->decimal('quantity', 12, 3);
             $table->decimal('unit_mrp', 14, 2)->default(0);
             $table->decimal('unit_price', 14, 2)->default(0);
             $table->decimal('unit_discount', 14, 2)->default(0);

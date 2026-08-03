@@ -118,6 +118,8 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
             ->name('products.images.destroy');
         Route::post('products/{product}/variants/generate', [ProductController::class, 'generateVariants'])
             ->name('products.variants.generate');
+        Route::delete('products/{product}/variants/stale', [ProductController::class, 'removeStaleVariants'])
+            ->name('products.variants.stale-destroy');
         Route::post('products/{product}/barcodes/generate', [ProductController::class, 'generateBarcodes'])
             ->name('products.barcodes.generate');
         Route::put('products/{product}/variants', [ProductController::class, 'updateVariants'])

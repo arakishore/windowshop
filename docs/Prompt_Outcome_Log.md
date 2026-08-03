@@ -1271,3 +1271,191 @@ Implemented the independent merchant Cancellation Reasons CRUD only:
 - `php artisan test tests\Feature\MerchantCancellationReasonCrudTest.php` passed: 7 tests, 53 assertions
 - `php artisan view:cache` passed
 - `php artisan test` passed: 411 tests, 3407 assertions
+
+## 2026-08-03 10:32 +05:30 - Product Quantity Foundation Step 1B
+
+### Exact User Prompt
+
+```text
+Convert these columns
+Table	Column	New Type
+product_variants	stock_quantity	DECIMAL(12,3)
+product_variants	low_stock_threshold	DECIMAL(12,3)
+order_items	quantity	DECIMAL(12,3)
+order_refund_items	quantity	DECIMAL(12,3)
+order_exchange_return_items	quantity	DECIMAL(12,3)
+
+Approved.
+
+Product Variant Selling Rules
+
+Approve these:
+
+allow_decimal_quantity
+quantity_increment
+minimum_order_quantity
+maximum_order_quantity
+quantity_multiple
+allow_backorder
+Two improvements
+1. Rename quantity_multiple
+
+I don't like this name.
+
+Magento, Shopify, ERP systems usually call this:
+
+purchase_quantity_multiple
+
+or
+
+order_quantity_multiple
+
+because it clearly means:
+
+Customer must purchase in multiples of X.
+
+Example:
+
+Tiles
+
+Minimum = 10
+
+Multiple = 5
+
+Allowed
+
+10
+15
+20
+25
+
+I recommend:
+
+purchase_quantity_multiple
+
+Much clearer.
+
+2. Add maximum_order_quantity
+
+Instead of NULL forever, I recommend:
+
+NULL = Unlimited
+
+That's already your proposal, and I agree.
+
+One more thing we should add NOW
+
+This is the only thing I think we're still missing.
+
+is_sellable
+boolean
+default true
+
+Meaning:
+
+true
+
+Product can be purchased.
+
+false
+
+Cannot be purchased.
+
+Useful for:
+
+Seasonal products
+Supplier stopped
+Legal restriction
+Hidden but stock kept
+
+Different from:
+
+status
+
+because:
+
+status = active
+
+means
+
+Product exists.
+
+is_sellable = false
+
+means
+
+Do not allow purchase.
+
+Final Product Variant Future Columns
+allow_decimal_quantity
+
+quantity_increment
+
+minimum_order_quantity
+
+maximum_order_quantity
+
+purchase_quantity_multiple
+
+allow_backorder
+
+is_sellable
+One thing I do NOT recommend
+
+Don't add
+
+measurement_unit
+
+yet.
+
+Because until decimal selling exists, it will never be used.
+
+Final Verdict
+
+I would approve Step 1B with only these small adjustments:
+
+✅ Convert the 5 quantity columns to DECIMAL(12,3).
+✅ Add the future selling-rule columns.
+✅ Rename quantity_multiple → purchase_quantity_multiple.
+✅ Add is_sellable (default true).
+❌ Do not add measurement units yet.
+
+I think this gives WindowShop a future-proof product model without affecting any current POS or order functionality. This is one of those schema changes that's much easier to make now than after the webshop and additional modules are in place.
+```
+
+### Final Outcome
+
+Implemented Product Quantity Foundation Step 1B as database/model foundation only:
+
+- converted fresh-schema definitions for `product_variants.stock_quantity`, `product_variants.low_stock_threshold`, `order_items.quantity`, `order_refund_items.quantity`, and `order_exchange_return_items.quantity` to `decimal(12,3)`
+- added a forward migration to add the product variant selling-rule fields and convert existing MySQL dev databases without data loss
+- added `allow_decimal_quantity`, `quantity_increment`, `minimum_order_quantity`, `maximum_order_quantity`, `purchase_quantity_multiple`, `allow_backorder`, and `is_sellable` to `product_variants`
+- updated `ProductVariant` fillable fields and casts for the new future selling-rule fields
+- did not add `measurement_unit`
+- did not change POS, cart, checkout, orders, refunds, returns, exchanges, reports, inventory logic, validation, Blade templates, merchant UI, APIs, or demo behaviour
+- kept current stock quantity model casts as integer so existing whole-number behavior remains unchanged until decimal selling logic is implemented later
+
+### Verification
+
+- `php artisan test tests\Feature\ProductQuantityFoundationTest.php` passed: 2 tests, 18 assertions
+- `php artisan test tests\Feature\MerchantPosTest.php tests\Feature\OrderFoundationTest.php tests\Feature\ProductAvailabilityStatusTest.php tests\Feature\MerchantProductManagementTest.php` passed: 98 tests, 713 assertions
+- `php artisan test` passed: 413 tests, 3425 assertions
+
+## 2026-08-03 10:48 +05:30 - Product Quantity Foundation Migration Cleanup
+
+### Exact User Prompt
+
+```text
+        Schema::table('product_variants', function (Blueprint $table): void {
+if possible pls move it too its main migration
+```
+
+### Final Outcome
+
+Removed the separate forward migration `2026_08_03_000001_add_decimal_quantity_foundation_to_product_and_order_tables.php`.
+
+The approved decimal quantity columns and product variant future selling-rule columns now live directly in the original create migrations, matching the dev-stage `migrate:fresh --seed` workflow.
+
+### Verification
+
+- `php artisan test tests\Feature\ProductQuantityFoundationTest.php` passed: 2 tests, 18 assertions
