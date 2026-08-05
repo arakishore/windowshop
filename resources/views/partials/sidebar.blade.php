@@ -1,6 +1,7 @@
 {{-- Purpose: Provides the shared Limitless sidebar navigation for admin pages. --}}
 @php
-	$isMasterDataActive = request()->routeIs('admin.master.*');
+	$isMasterDataActive = request()->routeIs('admin.master.*') || request()->routeIs('admin.system-settings.*');
+	$isMarketingActive = request()->routeIs('admin.banners.*') || request()->routeIs('admin.banner-templates.*');
 @endphp
 <!-- Main sidebar -->
 		<div class="sidebar sidebar-dark sidebar-main sidebar-expand-lg">
@@ -70,6 +71,25 @@
 							</a>
 						</li>
 
+						<li class="nav-item nav-item-submenu {{ $isMarketingActive ? 'nav-item-expanded nav-item-open' : '' }}">
+							<a href="#" class="nav-link {{ $isMarketingActive ? 'active' : '' }}">
+								<i class="ph-megaphone"></i>
+								<span>Marketing</span>
+							</a>
+							<ul class="nav-group-sub collapse {{ $isMarketingActive ? 'show' : '' }}">
+								<li class="nav-item">
+									<a href="{{ route('admin.banner-templates.index') }}" class="nav-link {{ request()->routeIs('admin.banner-templates.*') ? 'active' : '' }}">
+										Banner Templates
+									</a>
+								</li>
+								<li class="nav-item">
+									<a href="{{ route('admin.banners.index') }}" class="nav-link {{ request()->routeIs('admin.banners.*') ? 'active' : '' }}">
+										Banners
+									</a>
+								</li>
+							</ul>
+						</li>
+
 						<li class="nav-item nav-item-submenu {{ $isMasterDataActive ? 'nav-item-expanded nav-item-open' : '' }}">
 							<a href="#" class="nav-link {{ $isMasterDataActive ? 'active' : '' }}">
 								<i class="ph-database"></i>
@@ -124,6 +144,11 @@
 								<li class="nav-item">
 									<a href="{{ route('admin.master.description-templates.index') }}" class="nav-link {{ request()->routeIs('admin.master.description-templates.*') ? 'active' : '' }}">
 										Description Templates
+									</a>
+								</li>
+								<li class="nav-item">
+									<a href="{{ route('admin.system-settings.index') }}" class="nav-link {{ request()->routeIs('admin.system-settings.*') ? 'active' : '' }}">
+										System Settings
 									</a>
 								</li>
 							</ul>

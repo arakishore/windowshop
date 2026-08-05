@@ -130,5 +130,6 @@ class SystemFoundationSeeder extends Seeder
             );
         }
 
+        $this->call(StorefrontBannerSettingSeeder::class);
     }
 }

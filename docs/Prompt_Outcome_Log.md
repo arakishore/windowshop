@@ -13,6 +13,537 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-08-05 12:57 +05:30 - Storefront Banner In Admin Settings
+
+### Exact User Prompt
+
+```text
+http://127.0.0.1:8082/unwanted/localhyper/windowshop/public/admin/system-settings
+*Note  dont do any change in it for now, keep it as it is 
+
+we have also 
+http://127.0.0.1:8082/unwanted/localhyper/windowshop/public/admin/settings
+can we have here also Storefront Banner?
+
+pls continue
+```
+
+### Final Outcome
+
+Added a `Storefront Banner` tab to `/admin/settings` without changing `/admin/system-settings`.
+
+- displays `Maximum Banners Per Shop`
+- reads from the existing `system_settings.key = storefront_banner.max_per_shop`
+- saves back to the same `system_settings` row
+- ensures the setting exists by running the focused Storefront Banner settings seeder
+- validates the value as an integer between 1 and 20
+- did not duplicate the setting into `admin_settings`
+
+### Verification
+
+- Formatting: `vendor\bin\pint app\Http\Controllers\Admin\AdminSettingsController.php tests\Feature\AdminSettingsFoundationTest.php` passed
+- Focused tests passed: `php artisan test tests\Feature\AdminSettingsFoundationTest.php tests\Feature\StorefrontBannerSettingSeederTest.php`
+- Result: 6 tests, 70 assertions
+
+## 2026-08-05 12:47 +05:30 - System Setting Identity Fields Read Only
+
+### Exact User Prompt
+
+```text
+System Setting Information
+Key
+Group *
+Label *
+Value Type *
+
+dont allwo to change this, show as label
+does it make sens?
+```
+
+### Final Outcome
+
+Updated the Admin System Setting edit form so seeded identity fields are read-only:
+
+- Key is displayed as text
+- Group is displayed as text with hidden `group_id`
+- Label is displayed as text with hidden `label`
+- Value Type is displayed as text with hidden `value_type`
+- admins can still update the actual value and other editable metadata
+
+### Verification
+
+- Formatting: `vendor\bin\pint tests\Feature\AdminSystemSettingManagementTest.php` passed
+- Focused test passed: `php artisan test tests\Feature\AdminSystemSettingManagementTest.php`
+- Result: 4 tests, 21 assertions
+
+## 2026-08-05 12:42 +05:30 - Admin System Settings UI
+
+### Exact User Prompt
+
+```text
+How i can see these data in admin?
+
+can we have UI in admin?
+```
+
+### Final Outcome
+
+Added a focused Admin UI for records stored in `system_setting_groups` and `system_settings`:
+
+- added `SystemSettingGroup` and `SystemSetting` models
+- added `Admin\SystemSettingController`
+- added routes:
+  - `admin.system-settings.index`
+  - `admin.system-settings.edit`
+  - `admin.system-settings.update`
+- added a Master Data > System Settings sidebar link
+- added DataTable-style system settings list with search and filters
+- added edit screen for setting value, label, group, type, public/encrypted flags, description, sort order, and status
+- added integer/boolean/json value validation
+- verified the `storefront_banner.max_per_shop` seeded setting is visible and editable
+
+### Verification
+
+- Formatting: `vendor\bin\pint app\Http\Controllers\Admin\SystemSettingController.php app\Models\SystemSetting.php app\Models\SystemSettingGroup.php tests\Feature\AdminSystemSettingManagementTest.php` passed
+- Focused tests passed: `php artisan test tests\Feature\AdminSystemSettingManagementTest.php tests\Feature\StorefrontBannerSettingSeederTest.php`
+- Result: 5 tests, 42 assertions
+- Route check passed: `php artisan route:list --name=admin.system-settings`
+
+## 2026-08-05 12:30 +05:30 - Storefront Banner System Setting Seeder
+
+### Exact User Prompt
+
+```text
+Implement the WindowShop Storefront Banner System Settings Seeder.
+
+Create Database\Seeders\MasterData\StorefrontBannerSettingSeeder.php.
+Create/update the Storefront Banner group and storefront_banner.max_per_shop setting using updateOrInsert().
+Register it in SystemFoundationSeeder after existing system setting seeders.
+Run the seeder and verify no duplicates.
+```
+
+### Final Outcome
+
+Implemented the focused Storefront Banner settings seeder:
+
+- added `database/seeders/MasterData/StorefrontBannerSettingSeeder.php`
+- seeds/updates `system_setting_groups.slug = storefront-banner`
+- seeds/updates `system_settings.key = storefront_banner.max_per_shop`
+- uses `DB::table()->updateOrInsert()` with UUID and `created_at` only on inserts
+- clears `deleted_at` and restores active metadata on updates
+- registered the seeder in `SystemFoundationSeeder`
+- did not add any other storefront/banner settings
+
+### Verification
+
+- Formatting: `vendor\bin\pint database\seeders\MasterData\StorefrontBannerSettingSeeder.php database\seeders\MasterData\SystemFoundationSeeder.php tests\Feature\StorefrontBannerSettingSeederTest.php` passed
+- Focused test passed: `php artisan test tests\Feature\StorefrontBannerSettingSeederTest.php`
+- Result: 2 tests, 29 assertions
+- Actual local seeder command ran twice: `php artisan db:seed --class=Database\Seeders\MasterData\StorefrontBannerSettingSeeder`
+- Actual local counts after second run: groups 1, settings 1, value 3, type integer
+
+## 2026-08-05 12:19 +05:30 - Expanded Contextual Banner Suggestions
+
+### Exact User Prompt
+
+```text
+Title Suggestions (30)
+Offers, Products, Seasons, General suggestions...
+
+Subtitle Suggestions (30)
+Button Text Suggestions (20)
+Festival Titles (15)
+Seasonal Titles (10)
+Service Titles (10)
+
+Bonus Idea:
+Instead of showing all 30 suggestions, make them contextual.
+
+if u can add improve more pls do
+```
+
+### Final Outcome
+
+Expanded and improved the shared banner `Quick Suggestions` panel:
+
+- added larger title, subtitle, and button text suggestion sets
+- added contextual filters for title suggestions: Popular, Offers, Products, Festival, Seasonal, Services, General
+- added contextual filters for subtitle suggestions: Popular, Fresh, Deals, Trust, Lifestyle, Service
+- added contextual filters for button text suggestions: Popular, Shopping, Browse, Deals, Details
+- default view now shows a concise Popular set instead of every suggestion
+- preserved click-to-fill, copy-to-clipboard, checkmark, and selected blue state behavior
+
+### Verification
+
+- Focused test passed: `php artisan test tests\Feature\BannerManagementFoundationTest.php`
+- Result: 8 tests, 23 assertions
+
+## 2026-08-05 12:10 +05:30 - Banner Quick Suggestions Selected State
+
+### Exact User Prompt
+
+```text
+http://127.0.0.1:8082/unwanted/localhyper/windowshop/public/admin/banners/create
+Copy Suggestions
+rename to Quick Suggestions
+and 
+The only small improvement I'd make is when a merchant clicks one.
+
+Current:
+
+[ Up to 50% OFF ]
+
+After clicking:
+
+[ ✓ Up to 50% OFF ]
+
+or change its appearance:
+
+Blue background
+White text
+
+so the user knows:
+
+"This suggestion has been applied."
+```
+
+### Final Outcome
+
+Updated the shared banner suggestion block:
+
+- renamed `Copy Suggestions` to `Quick Suggestions`
+- clicking a suggestion still fills the matching field and copies the value
+- the applied suggestion now shows a leading checkmark
+- the applied suggestion changes to a blue button with white text
+- only one suggestion per field group stays selected at a time
+
+### Verification
+
+- Focused test passed: `php artisan test tests\Feature\BannerManagementFoundationTest.php`
+- Result: 8 tests, 23 assertions
+
+## 2026-08-05 12:05 +05:30 - Banner Form Accordion Controls
+
+### Exact User Prompt
+
+```text
+http://127.0.0.1:8082/unwanted/localhyper/windowshop/public/admin/banners/create
+same here also Open all , collesp all
+```
+
+### Final Outcome
+
+Added `Open All` and `Collapse All` controls to the active banner create/edit card header.
+
+Because the banner form partial is shared, the same controls are available on both Admin and Merchant banner create/edit screens. The shared accordion was changed to `accordion-flush` and no longer uses single-open parent behavior, so multiple sections can stay expanded.
+
+### Verification
+
+- Focused test passed: `php artisan test tests\Feature\BannerManagementFoundationTest.php`
+- Result: 8 tests, 22 assertions
+
+## 2026-08-05 11:59 +05:30 - Banner Template Form Card Layout
+
+### Exact User Prompt
+
+```text
+http://127.0.0.1:8082/unwanted/localhyper/windowshop/public/admin/banner-templates/d02c5f82-8f4f-401c-a919-43d93ca6f421/edit
+
+are u not useing card
+```
+
+### Final Outcome
+
+Wrapped the Admin Banner Template create/edit accordion in a Limitless-style card:
+
+- added a `Banner Template Information` card header
+- moved `Open All` and `Collapse All` controls into the card header
+- changed the accordion to `accordion-flush` inside the card so the form feels contained and cleaner
+
+### Verification
+
+- Focused test passed: `php artisan test tests\Feature\AdminBannerTemplateManagementTest.php`
+- Result: 5 tests, 29 assertions
+
+## 2026-08-05 11:54 +05:30 - Banner Pack V1 Seeder
+
+### Exact User Prompt
+
+```text
+Implement the WindowShop Banner Pack V1 Seeder.
+
+Do not generate banner images yet.
+
+Only seed the banner_templates table with metadata and placeholder image paths.
+
+Create BannerTemplateSeeder, register it in DatabaseSeeder, use updateOrCreate(), never create duplicate records, use existing BannerTemplate model and enums.
+
+Seed 49 templates across General, Festival, Seasonal, Fashion, Electronics, Grocery, and Services. Run the seeder twice and verify still 49 records.
+```
+
+### Final Outcome
+
+Implemented the Banner Pack V1 metadata seeder:
+
+- added `database/seeders/BannerTemplateSeeder.php`
+- registered it in `DatabaseSeeder`
+- seeded 49 active template metadata records with lowercase machine-safe codes
+- used enum values for category, availability, and default position
+- used `availability = both`, `default_position = store_hero`, `status = active`, and `default_button_text = Shop Now`
+- used placeholder image paths only: `banner-templates/{code}/desktop.webp` and `banner-templates/{code}/mobile.webp`
+- added festival event codes and start/end offsets
+- used `updateOrCreate()` with soft-deleted record recovery to avoid duplicates
+- did not generate or store actual banner images
+
+### Verification
+
+- Formatting: `vendor\bin\pint database\seeders\BannerTemplateSeeder.php database\seeders\DatabaseSeeder.php tests\Feature\BannerTemplateSeederTest.php` passed
+- Focused tests passed: `php artisan test tests\Feature\BannerTemplateSeederTest.php tests\Feature\BannerTemplateFoundationTest.php tests\Feature\AdminBannerTemplateManagementTest.php`
+- Result: 14 tests, 51 assertions
+- Actual local seeder run: `php artisan db:seed --class=BannerTemplateSeeder` ran twice
+- Actual local counts after second run: total 49, distinct codes 49
+- Category counts: general 10, festival 12, seasonal 6, fashion 6, electronics 5, grocery 5, services 5
+
+## 2026-08-05 11:37 +05:30 - Banner Template Accordion Controls
+
+### Exact User Prompt
+
+```text
+http://127.0.0.1:8082/unwanted/localhyper/windowshop/public/admin/banner-templates/create
+I like the accordian , can we have feature open all , collesp all?
+```
+
+### Final Outcome
+
+Added `Open All` and `Collapse All` buttons above the Admin Banner Template create/edit accordion.
+
+The buttons use Bootstrap Collapse against the existing accordion panels, so admins can quickly expand every section or collapse the full form while keeping the current accordion UI.
+
+### Verification
+
+- Focused test passed: `php artisan test tests\Feature\AdminBannerTemplateManagementTest.php`
+- Result: 5 tests, 29 assertions
+
+## 2026-08-05 11:31 +05:30 - Consolidate Banner Template Source Migration
+
+### Exact User Prompt
+
+```text
+2026_08_05_000002_add_template_source_to_banners_table
+pls move it to main migration
+
+you can changethe order, will migrat fressh
+```
+
+### Final Outcome
+
+Consolidated the banner template source migration for fresh installs:
+
+- moved `source_type` and nullable `banner_template_id` into `2026_08_04_000001_create_banners_table.php`
+- moved the `banner_templates` table migration earlier as `2026_08_04_000000_create_banner_templates_table.php` so the `banners.banner_template_id` foreign key can be created safely
+- deleted `2026_08_05_000001_create_banner_templates_table.php`
+- deleted `2026_08_05_000002_add_template_source_to_banners_table.php`
+- preserved the `banner_template_id` `nullOnDelete` behavior
+
+### Verification
+
+- PHP lint passed for both banner migrations
+- Focused tests passed: `php artisan test tests\Feature\BannerTemplateFoundationTest.php tests\Feature\AdminBannerTemplateManagementTest.php tests\Feature\BannerManagementFoundationTest.php`
+- Result: 20 tests, 66 assertions
+
+## 2026-08-05 11:21 +05:30 - Admin Banner Template Management Step 2A
+
+### Exact User Prompt
+
+```text
+Implement Step 2 of the WindowShop Banner Library feature: Admin Banner Template Management.
+
+I would not build full CRUD (show, trash, restore, force delete) immediately.
+
+Recommended order
+Step 2A (Now)
+
+Implement only:
+
+Admin Banner Template List
+Create
+Edit
+Activate / Deactivate
+Image Upload
+Preview
+Filters
+Search
+
+Do NOT implement yet:
+
+Trash
+Restore
+Force Delete
+Show page
+
+use DataTable pls
+
+Final DataTable:
+| Preview | Name | Category | Position | Available For | Used By | Status | Updated | Actions |
+```
+
+### Final Outcome
+
+Implemented Admin Banner Template Management V1 / Step 2A only:
+
+- added `Admin\BannerTemplateController` with index, create, store, edit, update, and activate/deactivate toggle
+- added Form Requests and shared validation concern for template fields, images, enum values, lowercase machine-safe codes, offsets, status, and availability/position scope compatibility
+- added focused `BannerTemplateImageService` storing template uploads under `banner-templates/{uuid}`
+- added admin list, create, edit, and shared form Blade views
+- added DataTable-style list columns: Preview, Name, Category, Position, Available For, Used By, Status, Updated, Actions
+- added filters/search for name/code/title, category, availability, default position, and status
+- added desktop/mobile image upload previews, current-image edit previews, content live preview, and position-specific recommended dimensions
+- added Marketing > Banner Templates menu entry before Banners
+- intentionally skipped show, trash, restore, force-delete, seed templates, merchant library, activation workflow, five-slot management, and storefront rendering
+
+### Verification
+
+- Formatting: `vendor\bin\pint ...` passed and fixed import ordering only
+- Focused tests: `php artisan test tests\Feature\AdminBannerTemplateManagementTest.php tests\Feature\BannerTemplateFoundationTest.php` passed: 12 tests, 44 assertions
+- Full suite: `php artisan test` passed: 437 tests, 3518 assertions
+
+## 2026-08-05 10:35 +05:30 - Banner Template Database Foundation Step 1
+
+### Exact User Prompt
+
+```text
+Implement Step 1 of the WindowShop Banner Library feature: Banner Template database foundation.
+
+Before coding, inspect the existing Laravel project conventions for UUID generation, status constants, audit fields, soft deletes, Admin master tables, migration naming and foreign-key conventions, existing banners table and Banner model, and test structure.
+
+Only implement the database/model foundation:
+
+- create `banner_templates` table with UUID, code, category, name, descriptions/default text, desktop/mobile image paths, default position, availability, event code, signed start/end offsets, sort order, status, audit users, timestamps, soft deletes, and requested indexes
+- update existing `banners` table in a separate migration with `source_type` and nullable `banner_template_id`
+- create `App\Models\BannerTemplate`
+- update `App\Models\Banner` with template source fields, constants, relationship, and helper methods
+- create enums or central constants for template categories, availability, and banner source types
+- add focused tests for storage, UUID, soft deletes, scopes, banner/template relationship, source helpers, existing custom banner compatibility, and null-on-delete behavior
+
+Do not create banner images, seed the 49 templates, create festival dates, build CRUD screens, change banner limits, modify unrelated modules, implement template activation workflow, or add scheduling UI.
+
+Run focused tests and the complete test suite.
+```
+
+### Final Outcome
+
+Implemented the Banner Library Step 1 database/model foundation only:
+
+- added `banner_templates` table migration
+- added separate migration to add `source_type` and nullable `banner_template_id` to `banners`
+- added `BannerTemplate` model with UUIDs, soft deletes, casts, constants, audit relationships, `banners()` relationship, and requested scopes
+- updated `Banner` with source constants, source/template fields, enum cast, `bannerTemplate()` relationship, `template()` alias, `usesTemplate()`, and `usesCustomUpload()`
+- added enums for banner template categories, template availability, and banner source types
+- preserved custom-upload banner compatibility with default `source_type = custom_upload`
+- used `nullOnDelete` for template references so hard-removing a template keeps live banners valid
+- did not implement UI, template seed data, festival dates, image generation/uploads, activation workflow, storefront display changes, or banner limit changes
+
+### Verification
+
+- Focused tests: `php artisan test tests\Feature\BannerTemplateFoundationTest.php` passed: 7 tests, 15 assertions
+- Full suite: `php artisan test` passed: 432 tests, 3489 assertions
+
+## 2026-08-05 09:58 +05:30 - Banner Suggestions Fill Fields
+
+### Exact User Prompt
+
+```text
+**Copy Suggestions**
+I like it, is it possoble, when we click it cpy and paste value in fieilds?
+```
+
+### Final Outcome
+
+Updated the banner `Copy Suggestions` buttons so clicking an example now fills the matching form field directly:
+
+- title examples fill `Title`
+- subtitle examples fill `Subtitle`
+- button text examples fill `Button Text`
+
+The click still copies the value to the clipboard, updates the live banner preview, focuses the filled field, and briefly changes the clicked suggestion to `Added`.
+
+### Verification
+
+- Focused banner tests were run after the change.
+
+## 2026-08-05 09:56 +05:30 - Banner Form Copy Suggestions
+
+### Exact User Prompt
+
+```text
+can u add at bottom , so that  admin can copy it from threre in add/edit form?
+Title Examples (10)
+**Up to 50% OFF**
+**New Arrivals**
+**Limited Time Offer**
+**Shop the Latest Trends**
+**Summer Collection**
+**Festive Mega Sale**
+**Exclusive Online Deals**
+**Best Sellers**
+**Premium Collection**
+**Buy More, Save More**
+Subtitle Examples (10)
+**On Top Fashion Brands**
+**Discover styles you'll love**
+**Limited stock available. Shop today!**
+**Fresh arrivals added every week**
+**Exclusive offers for a limited time**
+**Quality products at unbeatable prices**
+**Handpicked collections just for you**
+**Upgrade your wardrobe today**
+**Save more on your favourite products**
+**Fast delivery and easy returns**
+
+Shop Now
+Buy Now
+Explore
+View Collection
+View Products
+View Offers
+Discover
+Learn More
+Order Now
+See More
+```
+
+### Final Outcome
+
+Added a `Copy Suggestions` section at the bottom of the shared banner add/edit form.
+
+The section includes the requested title, subtitle, and button text examples as small clickable buttons. Clicking any example copies that value to the clipboard and briefly changes the button text to `Copied`.
+
+Because the section is in the shared banner form partial, it appears on both admin and merchant banner create/edit screens.
+
+### Verification
+
+- Focused banner tests were run after the change.
+
+## 2026-08-05 09:11 +05:30 - Prompt Log Canonical File Correction
+
+### Exact User Prompt
+
+```text
+delete this banner-management-v1-log.md
+
+and always log Prompt_Outcome_Log.md
+```
+
+### Final Outcome
+
+Deleted the standalone `docs/banner-management-v1-log.md` file.
+
+Confirmed the logging convention: future prompt and outcome entries should be recorded in `docs/Prompt_Outcome_Log.md` rather than separate feature-specific log files.
+
+### Verification
+
+- Documentation cleanup only.
+
 ## 2026-08-02 11:25 +05:30 - Payment Status Master V1
 
 ### Exact User Prompt
@@ -1459,3 +1990,22 @@ The approved decimal quantity columns and product variant future selling-rule co
 ### Verification
 
 - `php artisan test tests\Feature\ProductQuantityFoundationTest.php` passed: 2 tests, 18 assertions
+
+# Banner Management V1 Prompt And Outcome
+
+## Prompt
+
+Use a simple reusable banner foundation for WindowShop, but do not create a `banner_positions` table for V1. Banner positions are few and rarely change, so define them in `App\Enums\BannerPosition` with scope, label, metadata, and maximum banner limits. Store the selected position directly on `banners.position`, without a foreign key. Merchants may only use merchant-scoped positions, admins may use admin-scoped marketplace positions or explicitly create merchant-store banners. Log the prompt and outcome.
+
+## Outcome
+
+Implemented the V1 enum-based approach:
+
+- Added `App\Enums\BannerPosition` for fixed banner locations, scope checks, labels, descriptions, max limits, and recommended image dimensions.
+- Added `App\Enums\BannerLinkType` for supported banner link types.
+- Added a generic `banners` table with `position`, owner fields, desktop/mobile images, link fields, schedule, sort order, status, audit fields, UUID, and soft deletes.
+- Added `App\Models\Banner` with relationships and query scopes for marketplace, merchant, shop, position, current visibility, and ordering.
+- Added admin and merchant banner CRUD foundations.
+- Added validation for owner scope, active/scheduled max limits, shop ownership, schedules, image uploads, link targets, and merchant active-shop ownership.
+- Added storefront helpers through `BannerService`, `BannerLinkResolver`, and a reusable `<x-storefront.banner-slider>` component.
+- Deferred configurable banner positions and a `banner_positions` table until administrators need to create custom positions.

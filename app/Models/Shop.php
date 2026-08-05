@@ -76,6 +76,11 @@ class Shop extends Model
         return $this->hasMany(Product::class);
     }
 
+    public function banners(): HasMany
+    {
+        return $this->hasMany(Banner::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by')->withTrashed();

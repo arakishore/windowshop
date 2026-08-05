@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
         $this->call(TaxSeeder::class);
         $this->call(SuperAdminSeeder::class);
         $this->call(AdminSettingsSeeder::class);
+        $this->call(BannerTemplateSeeder::class);
 
         // Uncomment to seed demo data in development only.
         $this->call(DemoSeeder::class);

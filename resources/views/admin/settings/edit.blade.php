@@ -114,6 +114,7 @@
         $thousandsSeparator = $field('currency', 'thousands_separator');
         $decimalSeparator = $field('currency', 'decimal_separator');
         $symbolPosition = $field('currency', 'symbol_position');
+        $storefrontBannerMaxPerShop = old('settings.storefront_banner.max_per_shop', $storefrontBannerMaxPerShop ?? 3);
         $monthOptions = [
             1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
             5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
@@ -146,6 +147,7 @@
                                 'general' => ['General', 'ph-gear'],
                                 'regional' => ['Regional', 'ph-globe-hemisphere-east'],
                                 'currency' => ['Currency', 'ph-currency-inr'],
+                                'storefront_banner' => ['Storefront Banner', 'ph-images-square'],
                                 'advanced' => ['Advanced', 'ph-sliders'],
                             ] as $tab => [$label, $icon])
                                 <button
@@ -332,6 +334,35 @@
                             </div>
                             <div class="card-body">
                                 <div class="fs-2 fw-bold js-admin-currency-preview">₹1,234,567.50</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="settings_storefront_banner" role="tabpanel">
+                    <div class="card admin-settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Storefront Banner</h5>
+                            <div class="text-muted fs-sm mt-1">Global banner limits used by merchant storefront banner management.</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="admin-settings-grid">
+                                <div>
+                                    <label for="setting_storefront_banner_max_per_shop" class="form-label fw-semibold">Maximum Banners Per Shop</label>
+                                    <input
+                                        id="setting_storefront_banner_max_per_shop"
+                                        name="settings[storefront_banner][max_per_shop]"
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        value="{{ $storefrontBannerMaxPerShop }}"
+                                        class="form-control @error('settings.storefront_banner.max_per_shop') is-invalid @enderror"
+                                    >
+                                    <div class="form-text">Maximum number of banner slots allowed for each merchant shop.</div>
+                                    @error('settings.storefront_banner.max_per_shop')
+                                        <div class="invalid-feedback d-block">{{ $message }}</div>
+                                    @enderror
+                                </div>
                             </div>
                         </div>
                     </div>

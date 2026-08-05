@@ -3,16 +3,17 @@
 use App\Http\Controllers\Merchant\Auth\MerchantAuthController;
 use App\Http\Controllers\Merchant\Auth\MerchantPasswordController;
 use App\Http\Controllers\Merchant\Auth\MerchantProfileController;
-use App\Http\Controllers\Merchant\BarcodeLabelController;
 use App\Http\Controllers\Merchant\AvailabilityStatusController;
-use App\Http\Controllers\Merchant\CatalogueMasterController;
+use App\Http\Controllers\Merchant\BannerController;
+use App\Http\Controllers\Merchant\BarcodeLabelController;
 use App\Http\Controllers\Merchant\CancellationReasonController;
-use App\Http\Controllers\Merchant\CustomerController;
+use App\Http\Controllers\Merchant\CatalogueMasterController;
 use App\Http\Controllers\Merchant\CustomerAddressController;
+use App\Http\Controllers\Merchant\CustomerController;
 use App\Http\Controllers\Merchant\MerchantDetailsController;
 use App\Http\Controllers\Merchant\MerchantSettingsController;
-use App\Http\Controllers\Merchant\MerchantShopController;
 use App\Http\Controllers\Merchant\MerchantShopContextController;
+use App\Http\Controllers\Merchant\MerchantShopController;
 use App\Http\Controllers\Merchant\MerchantTaxSettingController;
 use App\Http\Controllers\Merchant\PosController;
 use App\Http\Controllers\Merchant\ProductController;
@@ -98,6 +99,11 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::resource('customers.addresses', CustomerAddressController::class)
             ->except(['index', 'show']);
         Route::resource('customers', CustomerController::class);
+        Route::post('banners/{banner}/restore', [BannerController::class, 'restore'])
+            ->withTrashed()
+            ->name('banners.restore');
+        Route::resource('banners', BannerController::class)
+            ->except(['show']);
         Route::post('products/bulk-action', [ProductController::class, 'bulkAction'])
             ->name('products.bulk-action');
         Route::post('products/{product}/duplicate', [ProductController::class, 'duplicate'])

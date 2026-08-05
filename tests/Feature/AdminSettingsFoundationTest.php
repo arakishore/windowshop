@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AdminSetting;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\Admin\AdminSettingsInitializer;
 use App\Services\Admin\AdminSettingsService;
@@ -70,6 +71,8 @@ class AdminSettingsFoundationTest extends TestCase
             ->assertSee('Admin Settings')
             ->assertSee('Regional')
             ->assertSee('Currency')
+            ->assertSee('Storefront Banner')
+            ->assertSee('Maximum Banners Per Shop')
             ->assertSee('Asia/Kolkata')
             ->assertSee('Pacific/Midway')
             ->assertSee('INR - Indian Rupee')
@@ -96,6 +99,9 @@ class AdminSettingsFoundationTest extends TestCase
                         'decimal_separator' => '.',
                         'symbol_position' => 'before',
                     ],
+                    'storefront_banner' => [
+                        'max_per_shop' => '4',
+                    ],
                 ],
             ])
             ->assertRedirect()
@@ -108,6 +114,36 @@ class AdminSettingsFoundationTest extends TestCase
         $this->assertSame('$', $this->settings()->get('currency', 'symbol'));
         $this->assertSame(2, $this->settings()->get('currency', 'decimal_places'));
         $this->assertSame('before', $this->settings()->get('currency', 'symbol_position'));
+        $this->assertSame('4', SystemSetting::query()->where('key', 'storefront_banner.max_per_shop')->value('value'));
+    }
+
+    public function test_admin_settings_rejects_invalid_storefront_banner_limit(): void
+    {
+        $admin = $this->adminUser();
+
+        $this->actingAs($admin)
+            ->put(route('admin.settings.update'), [
+                'settings' => [
+                    'regional' => [
+                        'timezone' => 'Asia/Kolkata',
+                        'date_format' => 'd-m-Y',
+                        'time_format' => 'h:i A',
+                        'financial_year_start_month' => '4',
+                    ],
+                    'currency' => [
+                        'base_currency' => 'INR',
+                        'symbol' => '₹',
+                        'decimal_places' => '2',
+                        'thousands_separator' => ',',
+                        'decimal_separator' => '.',
+                        'symbol_position' => 'before',
+                    ],
+                    'storefront_banner' => [
+                        'max_per_shop' => '0',
+                    ],
+                ],
+            ])
+            ->assertSessionHasErrors('settings.storefront_banner.max_per_shop');
     }
 
     private function adminUser(): User

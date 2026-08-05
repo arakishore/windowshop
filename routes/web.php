@@ -1,19 +1,19 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
-use App\Http\Controllers\Admin\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\AdminSettingsController;
+use App\Http\Controllers\Admin\Auth\AdminAuthController;
+use App\Http\Controllers\Admin\BannerController;
+use App\Http\Controllers\Admin\BannerTemplateController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
+use App\Http\Controllers\Admin\MasterData\OrderStatusController;
 use App\Http\Controllers\Admin\MasterData\PaymentStatusController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupValueController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryAttributeGroupController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryController;
 use App\Http\Controllers\Admin\MasterData\ProductDescriptionTemplateController;
-use App\Http\Controllers\Admin\MasterData\OrderStatusController;
 use App\Http\Controllers\Admin\MasterData\ShopAudienceController;
 use App\Http\Controllers\Admin\MasterData\TaxClassController;
 use App\Http\Controllers\Admin\MasterData\TaxRateComponentController;
@@ -21,6 +21,8 @@ use App\Http\Controllers\Admin\MasterData\TaxRateController;
 use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantShopController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\SystemSettingController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return redirect()->route('admin.login');
@@ -113,6 +115,20 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('/merchants/{merchant}/shops', MerchantShopController::class)
             ->names('merchants.shops');
         Route::resource('merchants', MerchantController::class);
+        Route::post('banners/{banner}/restore', [BannerController::class, 'restore'])
+            ->withTrashed()
+            ->name('banners.restore');
+        Route::patch('banner-templates/{banner_template}/toggle-status', [BannerTemplateController::class, 'toggleStatus'])
+            ->name('banner-templates.toggle-status');
+        Route::resource('banner-templates', BannerTemplateController::class)
+            ->except(['show', 'destroy']);
+        Route::resource('banners', BannerController::class);
+        Route::get('system-settings', [SystemSettingController::class, 'index'])
+            ->name('system-settings.index');
+        Route::get('system-settings/{systemSetting}/edit', [SystemSettingController::class, 'edit'])
+            ->name('system-settings.edit');
+        Route::put('system-settings/{systemSetting}', [SystemSettingController::class, 'update'])
+            ->name('system-settings.update');
         Route::post('products/bulk-action', [ProductController::class, 'bulkAction'])
             ->name('products.bulk-action');
         Route::post('products/{product}/duplicate', [ProductController::class, 'duplicate'])
