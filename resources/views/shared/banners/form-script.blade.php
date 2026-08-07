@@ -25,11 +25,106 @@
             const accordion = document.getElementById('banner_form_sections');
             const openAll = document.querySelector('[data-banner-accordion="open"]');
             const collapseAll = document.querySelector('[data-banner-accordion="collapse"]');
+            const sourceControls = Array.from(document.querySelectorAll('.js-banner-source'));
+            const templatePanel = document.querySelector('.js-template-source-panel');
+            const customPanels = Array.from(document.querySelectorAll('.js-custom-upload-panel'));
+            const templateSelect = document.getElementById('banner_template_uuid');
 
             function ownerType() {
                 const checked = ownerControls.find((control) => control.checked);
 
                 return checked ? checked.value : 'merchant';
+            }
+
+            function sourceType() {
+                const checked = sourceControls.find((control) => control.checked);
+
+                return checked ? checked.value : 'custom_upload';
+            }
+
+            function selectedTemplateOption() {
+                return templateSelect?.selectedOptions?.[0] || null;
+            }
+
+            function syncSourceFields() {
+                const usingTemplate = sourceType() === 'template';
+
+                templatePanel?.classList.toggle('d-none', !usingTemplate);
+                templateSelect && (templateSelect.disabled = !usingTemplate);
+
+                customPanels.forEach((panel) => {
+                    panel.classList.toggle('d-none', usingTemplate);
+                    panel.querySelectorAll('input[type="file"], input[type="checkbox"]').forEach((control) => {
+                        control.disabled = usingTemplate;
+                    });
+                });
+
+                syncTemplatePreview();
+            }
+
+            function syncTemplatePreview(copyDefaults = false) {
+                const option = selectedTemplateOption();
+                const desktopPreview = document.getElementById('template_desktop_preview');
+                const mobilePreview = document.getElementById('template_mobile_preview');
+                const desktopEmpty = document.getElementById('template_desktop_empty');
+                const mobileEmpty = document.getElementById('template_mobile_empty');
+                const desktopSrc = option?.dataset.desktopSrc || '';
+                const mobileSrc = option?.dataset.mobileSrc || '';
+
+                if (desktopPreview && desktopEmpty) {
+                    desktopPreview.src = desktopSrc;
+                    desktopPreview.classList.toggle('d-none', !desktopSrc);
+                    desktopEmpty.classList.toggle('d-none', !!desktopSrc);
+                }
+
+                if (mobilePreview && mobileEmpty) {
+                    mobilePreview.src = mobileSrc || desktopSrc;
+                    mobilePreview.classList.toggle('d-none', !(mobileSrc || desktopSrc));
+                    mobileEmpty.classList.toggle('d-none', !!(mobileSrc || desktopSrc));
+                }
+
+                if (sourceType() !== 'template' || !option?.value) {
+                    return;
+                }
+
+                if (copyDefaults) {
+                    if (position && option.dataset.position) {
+                        position.value = option.dataset.position;
+                        renderPositionHelp();
+                    }
+
+                    [
+                        [title, option.dataset.title || ''],
+                        [subtitle, option.dataset.subtitle || ''],
+                        [buttonText, option.dataset.buttonText || ''],
+                        [document.getElementById('description'), option.dataset.description || ''],
+                        [document.getElementById('sort_order'), option.dataset.sortOrder || '0'],
+                    ].forEach(([field, value]) => {
+                        if (field) {
+                            field.value = value;
+                            field.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    });
+                }
+
+                const desktopImage = document.getElementById('desktop_image_preview');
+                const mobileImage = document.getElementById('mobile_image_preview');
+                const desktopPlaceholder = document.getElementById('desktop_image_placeholder');
+                const mobilePlaceholder = document.getElementById('mobile_image_placeholder');
+
+                if (desktopImage && desktopSrc) {
+                    desktopImage.src = desktopSrc;
+                    desktopImage.classList.remove('d-none');
+                    desktopPlaceholder?.classList.add('d-none');
+                }
+
+                if (mobileImage && (mobileSrc || desktopSrc)) {
+                    mobileImage.src = mobileSrc || desktopSrc;
+                    mobileImage.classList.remove('d-none');
+                    mobilePlaceholder?.classList.add('d-none');
+                }
+
+                syncLivePreview();
             }
 
             function syncOwnerFields() {
@@ -430,6 +525,10 @@
             }
 
             ownerControls.forEach((control) => control.addEventListener('change', syncOwnerFields));
+            sourceControls.forEach((control) => control.addEventListener('change', syncSourceFields));
+            templateSelect?.addEventListener('change', function () {
+                syncTemplatePreview(true);
+            });
             merchantSelect?.addEventListener('change', function () {
                 syncShopOptions();
                 syncLinkTargets();
@@ -457,6 +556,7 @@
             setupImagePreview('desktop_image', 'desktop_image_preview', 'desktop_image_placeholder', null, 'Desktop');
             setupImagePreview('mobile_image', 'mobile_image_preview', 'mobile_image_placeholder', 'remove_mobile_image', 'Mobile');
             syncOwnerFields();
+            syncSourceFields();
             renderPositionHelp();
             syncLinkTargets();
             syncLivePreview();

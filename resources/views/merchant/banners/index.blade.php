@@ -55,6 +55,7 @@
                         <tr>
                             <th>Preview</th>
                             <th>Title</th>
+                            <th>Source</th>
                             <th>Position</th>
                             <th>Schedule</th>
                             <th>Sort</th>
@@ -67,6 +68,14 @@
                             <tr>
                                 <td style="width: 96px;"><img src="{{ asset('storage/'.$banner->desktop_image_path) }}" alt="{{ $banner->title }}" class="rounded border" style="width: 72px; height: 42px; object-fit: cover;"></td>
                                 <td>{{ $banner->title }}</td>
+                                <td>
+                                    @if($banner->usesTemplate())
+                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">WindowShop Template</span>
+                                        <div class="text-muted fs-sm">{{ $banner->bannerTemplate?->name ?? 'Historical template' }}</div>
+                                    @else
+                                        <span class="badge bg-light text-body border">Custom Upload</span>
+                                    @endif
+                                </td>
                                 <td>{{ $banner->position?->label() }}</td>
                                 <td class="fs-sm">{{ $banner->starts_at ? app_datetime($banner->starts_at) : 'Immediate' }}<br>{{ $banner->ends_at ? app_datetime($banner->ends_at) : 'No end date' }}</td>
                                 <td>{{ $banner->sort_order }}</td>

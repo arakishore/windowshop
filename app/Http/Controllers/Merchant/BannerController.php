@@ -4,19 +4,26 @@ namespace App\Http\Controllers\Merchant;
 
 use App\Enums\BannerLinkType;
 use App\Enums\BannerPosition;
+use App\Enums\BannerSourceType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Merchant\StoreBannerRequest;
 use App\Http\Requests\Merchant\UpdateBannerRequest;
 use App\Models\Banner;
+use App\Models\BannerTemplate;
 use App\Models\Brand;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Shop;
 use App\Services\Banner\BannerImageService;
+use App\Services\Banner\BannerLimitService;
+use App\Services\Banner\BannerTemplateActivationService;
+use App\Services\Banner\BannerTemplateLibraryService;
 use App\Services\Merchant\MerchantShopContextService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class BannerController extends Controller
@@ -24,6 +31,9 @@ class BannerController extends Controller
     public function __construct(
         private readonly MerchantShopContextService $shopContextService,
         private readonly BannerImageService $images,
+        private readonly BannerTemplateLibraryService $library,
+        private readonly BannerTemplateActivationService $activation,
+        private readonly BannerLimitService $limits,
     ) {}
 
     public function index(Request $request): View
@@ -36,6 +46,7 @@ class BannerController extends Controller
         ];
 
         $banners = Banner::withTrashed()
+            ->with('bannerTemplate')
             ->where('merchant_id', $shop->merchant_id)
             ->where('shop_id', $shop->getKey())
             ->when($filters['search'] !== '', fn ($query) => $query->where('title', 'like', '%'.$filters['search'].'%'))
@@ -56,21 +67,59 @@ class BannerController extends Controller
 
     public function create(Request $request): View
     {
-        return view('merchant.banners.create', $this->formData(new Banner(['status' => Banner::STATUS_ACTIVE, 'link_type' => BannerLinkType::NONE]), $this->activeShop($request)));
+        $banner = new Banner(['status' => Banner::STATUS_ACTIVE, 'link_type' => BannerLinkType::NONE]);
+        $templateUuid = (string) $request->query('template', '');
+
+        if ($templateUuid !== '') {
+            $template = $this->library->findUsableForMerchant($templateUuid);
+            $banner = $this->bannerFromTemplateDefaults($template, Banner::STATUS_INACTIVE);
+        }
+
+        return view('merchant.banners.create', $this->formData($banner, $this->activeShop($request)));
     }
 
     public function store(StoreBannerRequest $request): RedirectResponse
     {
         $shop = $this->activeShop($request);
-        $banner = Banner::query()->create([
-            ...$request->bannerData(),
-            'merchant_id' => $shop->merchant_id,
-            'shop_id' => $shop->getKey(),
-            'desktop_image_path' => $this->images->store($request->file('desktop_image'), uniqid('', true), 'desktop'),
-            'mobile_image_path' => $request->hasFile('mobile_image') ? $this->images->store($request->file('mobile_image'), uniqid('', true), 'mobile') : null,
-            'created_by' => Auth::id(),
-            'updated_by' => Auth::id(),
-        ]);
+        $merchant = $this->shopContextService->activeMerchantForUser($request->user());
+        abort_unless($merchant !== null, 403);
+
+        if ($request->input('source_type') === BannerSourceType::TEMPLATE->value) {
+            $template = $this->library->findUsableForMerchant((string) $request->input('banner_template_uuid'));
+            $banner = $this->activation->createMerchantBannerFromTemplate($template, $merchant, $shop, $request->bannerData(), $request->user());
+
+            return redirect()->route('merchant.banners.edit', $banner)->with('success', 'Banner created from template successfully.');
+        }
+
+        $desktopPath = $this->images->store($request->file('desktop_image'), uniqid('', true), 'desktop');
+        $mobilePath = $request->hasFile('mobile_image') ? $this->images->store($request->file('mobile_image'), uniqid('', true), 'mobile') : null;
+
+        try {
+            $banner = DB::transaction(function () use ($request, $merchant, $shop, $desktopPath, $mobilePath): Banner {
+                if ($this->limits->usedSlots($merchant, $shop, true) >= $this->limits->limitPerShop()) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'desktop_image' => 'This shop has reached its maximum of '.$this->limits->limitPerShop().' banner slots. Edit or replace one of the existing banners.',
+                    ]);
+                }
+
+                return Banner::query()->create([
+                    ...Arr::except($request->bannerData(), ['banner_template_uuid']),
+                    'merchant_id' => $shop->merchant_id,
+                    'shop_id' => $shop->getKey(),
+                    'source_type' => BannerSourceType::CUSTOM_UPLOAD->value,
+                    'banner_template_id' => null,
+                    'desktop_image_path' => $desktopPath,
+                    'mobile_image_path' => $mobilePath,
+                    'created_by' => Auth::id(),
+                    'updated_by' => Auth::id(),
+                ]);
+            });
+        } catch (\Throwable $throwable) {
+            $this->images->delete($desktopPath);
+            $this->images->delete($mobilePath);
+
+            throw $throwable;
+        }
 
         return redirect()->route('merchant.banners.edit', $banner)->with('success', 'Banner created successfully.');
     }
@@ -91,12 +140,22 @@ class BannerController extends Controller
         abort_if($banner->trashed(), 404);
         $oldDesktop = $banner->desktop_image_path;
         $oldMobile = $banner->mobile_image_path;
+        $oldWasCustom = $banner->usesCustomUpload();
         $data = [
-            ...$request->bannerData(),
+            ...Arr::except($request->bannerData(), ['banner_template_uuid']),
             'merchant_id' => $shop->merchant_id,
             'shop_id' => $shop->getKey(),
             'updated_by' => Auth::id(),
         ];
+
+        if ($request->input('source_type') === BannerSourceType::CUSTOM_UPLOAD->value) {
+            if ($banner->usesTemplate() && ! $request->hasFile('desktop_image')) {
+                return back()->withErrors(['desktop_image' => 'Upload a desktop image when switching a template banner to custom upload.'])->withInput();
+            }
+
+            $data['source_type'] = BannerSourceType::CUSTOM_UPLOAD->value;
+            $data['banner_template_id'] = null;
+        }
 
         if ($request->hasFile('desktop_image')) {
             $data['desktop_image_path'] = $this->images->store($request->file('desktop_image'), $banner, 'desktop');
@@ -110,15 +169,32 @@ class BannerController extends Controller
 
         $banner->forceFill($data)->save();
 
-        if (($data['desktop_image_path'] ?? $oldDesktop) !== $oldDesktop) {
-            $this->images->delete($oldDesktop);
+        if (($data['desktop_image_path'] ?? $oldDesktop) !== $oldDesktop && $oldWasCustom) {
+            $this->images->deleteOwnedCustom($oldDesktop, $banner);
         }
 
-        if (array_key_exists('mobile_image_path', $data) && $data['mobile_image_path'] !== $oldMobile) {
-            $this->images->delete($oldMobile);
+        if (array_key_exists('mobile_image_path', $data) && $data['mobile_image_path'] !== $oldMobile && $oldWasCustom) {
+            $this->images->deleteOwnedCustom($oldMobile, $banner);
         }
 
         return redirect()->route('merchant.banners.edit', $banner)->with('success', 'Banner updated successfully.');
+    }
+
+    public function replaceTemplate(Request $request, Banner $banner): RedirectResponse
+    {
+        $shop = $this->activeShop($request);
+        $this->authorizeBanner($banner, $shop);
+        abort_if($banner->trashed(), 404);
+
+        $data = $request->validate([
+            'banner_template_uuid' => ['required', 'string', 'exists:banner_templates,uuid'],
+            'apply_template_defaults' => ['required', 'in:images_only,text,all'],
+        ]);
+
+        $template = $this->library->findUsableForMerchant($data['banner_template_uuid']);
+        $this->activation->replaceBannerTemplate($banner, $template, $data, $request->user());
+
+        return redirect()->route('merchant.banners.edit', $banner)->with('success', 'Banner template replaced successfully.');
     }
 
     public function destroy(Request $request, Banner $banner): RedirectResponse
@@ -180,8 +256,33 @@ class BannerController extends Controller
             ]])->all(),
             'linkTypes' => BannerLinkType::options(),
             'activeShop' => $shop,
+            'bannerTemplates' => $this->library->getForMerchant(),
+            'slotLimit' => $this->limits->limitPerShop(),
+            'usedSlots' => $this->limits->usedSlots($shop->merchant, $shop),
             'linkTargets' => $this->linkTargets($shop),
         ];
+    }
+
+    private function bannerFromTemplateDefaults(BannerTemplate $template, string $status): Banner
+    {
+        $schedule = $this->activation->recommendedSchedule($template);
+
+        return new Banner([
+            'source_type' => BannerSourceType::TEMPLATE,
+            'banner_template_id' => $template->getKey(),
+            'position' => $template->default_position,
+            'title' => $template->default_title,
+            'subtitle' => $template->default_subtitle,
+            'description' => $template->description,
+            'button_text' => $template->default_button_text,
+            'desktop_image_path' => $template->desktop_image_path,
+            'mobile_image_path' => $template->mobile_image_path,
+            'sort_order' => $template->sort_order,
+            'starts_at' => $schedule['starts_at'],
+            'ends_at' => $schedule['ends_at'],
+            'status' => $status,
+            'link_type' => BannerLinkType::NONE,
+        ]);
     }
 
     private function linkTargets(Shop $shop): array

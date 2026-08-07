@@ -4,8 +4,11 @@ namespace App\Http\Requests\Concerns;
 
 use App\Enums\BannerLinkType;
 use App\Enums\BannerPosition;
+use App\Enums\BannerSourceType;
 use App\Models\Banner;
+use App\Models\BannerTemplate;
 use App\Models\Shop;
+use App\Services\Banner\BannerTemplateLibraryService;
 use App\Services\Banner\BannerLinkResolver;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -17,12 +20,17 @@ trait ValidatesBannerRequest
      */
     protected function bannerRules(bool $creating): array
     {
+        $sourceType = (string) $this->input('source_type', BannerSourceType::CUSTOM_UPLOAD->value);
+        $usingTemplate = $sourceType === BannerSourceType::TEMPLATE->value;
+
         return [
+            'source_type' => ['nullable', Rule::enum(BannerSourceType::class)],
+            'banner_template_uuid' => [$usingTemplate ? 'required' : 'nullable', 'string', 'exists:banner_templates,uuid'],
             'position' => ['required', Rule::enum(BannerPosition::class)],
-            'title' => ['required', 'string', 'max:180'],
+            'title' => [$usingTemplate ? 'nullable' : 'required', 'string', 'max:180'],
             'subtitle' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'desktop_image' => [$creating ? 'required' : 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'desktop_image' => [$creating && ! $usingTemplate ? 'required' : 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'mobile_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'remove_mobile_image' => ['nullable', 'boolean'],
             'link_type' => ['nullable', Rule::enum(BannerLinkType::class)],
@@ -41,6 +49,7 @@ trait ValidatesBannerRequest
         $validator->after(function (Validator $validator) use ($scope, $merchantId, $shopId, $ignore): void {
             $position = BannerPosition::tryFrom((string) $this->input('position'));
             $linkType = BannerLinkType::tryFrom((string) $this->input('link_type', BannerLinkType::NONE->value)) ?: BannerLinkType::NONE;
+            $sourceType = BannerSourceType::tryFrom((string) $this->input('source_type', BannerSourceType::CUSTOM_UPLOAD->value)) ?: BannerSourceType::CUSTOM_UPLOAD;
 
             if ($position === null) {
                 return;
@@ -48,6 +57,22 @@ trait ValidatesBannerRequest
 
             if ($position->scope() !== $scope) {
                 $validator->errors()->add('position', 'This banner position is not available for the selected owner.');
+            }
+
+            if ($sourceType === BannerSourceType::TEMPLATE) {
+                $template = BannerTemplate::query()
+                    ->where('uuid', (string) $this->input('banner_template_uuid'))
+                    ->first();
+
+                if ($template === null || $template->trashed()) {
+                    $validator->errors()->add('banner_template_uuid', 'Choose an active WindowShop banner template.');
+                } else {
+                    try {
+                        app(BannerTemplateLibraryService::class)->assertUsableForOwner($template, $scope);
+                    } catch (\Throwable) {
+                        $validator->errors()->add('banner_template_uuid', 'This banner template is not available for the selected owner.');
+                    }
+                }
             }
 
             if ($merchantId !== null && $shopId !== null) {
@@ -95,6 +120,8 @@ trait ValidatesBannerRequest
         $linkType = $data['link_type'] ?? BannerLinkType::NONE->value;
 
         return [
+            'source_type' => $data['source_type'] ?? BannerSourceType::CUSTOM_UPLOAD->value,
+            'banner_template_uuid' => $data['banner_template_uuid'] ?? null,
             'position' => $data['position'],
             'title' => trim($data['title']),
             'subtitle' => $this->nullableString($data['subtitle'] ?? null),

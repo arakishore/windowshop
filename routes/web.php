@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\BannerController;
+use App\Http\Controllers\Admin\BannerLibraryController;
 use App\Http\Controllers\Admin\BannerTemplateController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
@@ -118,6 +119,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('banners/{banner}/restore', [BannerController::class, 'restore'])
             ->withTrashed()
             ->name('banners.restore');
+        Route::get('banner-library', [BannerLibraryController::class, 'index'])
+            ->name('banner-library.index');
+        Route::patch('banners/{banner}/replace-template', [BannerController::class, 'replaceTemplate'])
+            ->name('banners.replace-template');
         Route::patch('banner-templates/{banner_template}/toggle-status', [BannerTemplateController::class, 'toggleStatus'])
             ->name('banner-templates.toggle-status');
         Route::resource('banner-templates', BannerTemplateController::class)

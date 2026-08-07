@@ -2009,3 +2009,227 @@ Implemented the V1 enum-based approach:
 - Added validation for owner scope, active/scheduled max limits, shop ownership, schedules, image uploads, link targets, and merchant active-shop ownership.
 - Added storefront helpers through `BannerService`, `BannerLinkResolver`, and a reusable `<x-storefront.banner-slider>` component.
 - Deferred configurable banner positions and a `banner_positions` table until administrators need to create custom positions.
+
+# Banner Template Selection And Activation Prompt And Outcome
+
+## 2026-08-05 13:01 +05:30 - Next WindowShop Banner Phase
+
+### Exact User Prompt
+
+```text
+Implement the next WindowShop Banner phase:
+
+Banner Template selection and activation for both Admin and Merchant.
+
+Current foundation already exists:
+
+- `banner_templates` table
+- `banners` table
+- `banners.banner_template_id`
+- `banners.source_type`
+- BannerTemplate model
+- Banner model relationship
+- Admin Banner Template CRUD
+- Banner Template list and edit screens
+- Existing Admin Banner CRUD
+- Existing Merchant Banner CRUD, if already present
+- `system_setting_groups`
+- `system_settings`
+- New global settings must use `system_settings`
+- `admin_settings` is legacy and must not receive new settings
+
+Important frozen decisions:
+
+1. Banner templates are reusable WindowShop master designs.
+2. A live banner is a separate row in `banners`.
+3. Admin and Merchant can select a template and create a live banner from it.
+4. Template values are copied into the live banner.
+5. Editing a live banner must never modify the master template.
+6. Merchant banner slots are limited per shop.
+7. The limit is read from `storefront_banner.max_per_shop`.
+8. Default value is 3.
+9. All non-soft-deleted merchant banners count toward the limit, including active, inactive and scheduled banners.
+10. Merchant may later replace template images with a custom upload.
+11. Marketplace/Admin banners are not restricted by the merchant per-shop limit.
+12. Do not add new settings to `admin_settings`.
+
+Implementation scope:
+
+- Inspect existing Admin/Merchant Banner CRUD, requests, routes, views, sessions, enums, upload services, settings access patterns, menus, status constants, authorization, Quick Suggestions UI, and tests before coding.
+- Add focused `system_settings` access through a service such as `App\Services\System\SystemSettingService`.
+- Add a banner limit method/service that reads `storefront_banner.max_per_shop`, falls back to 3, clamps effective values to 1-10, and treats invalid values as 3.
+- Add `App\Services\Banner\BannerTemplateLibraryService` for Admin/Merchant template-library queries, availability filtering, category filtering, search, and stable ordering.
+- Add `App\Services\Banner\BannerTemplateActivationService` for Admin create-from-template, Merchant create-from-template, and replacing the template on an existing live banner.
+- Copy template values into `banners` without modifying `banner_templates`.
+- Use `source_type = template` for template-created banners and `source_type = custom_upload` for custom upload banners.
+- For Merchant-created banners, assign `merchant_id` and `shop_id` from the current merchant and active shop on the server.
+- For Admin-created marketplace banners, keep `merchant_id` and `shop_id` null.
+- For Admin-created merchant-store banners, validate that the selected shop belongs to the selected merchant.
+- Support recommended dates from fixed-date template events where reliable; do not invent variable festival dates.
+- Add an Admin Banner Library or integrate "Use Template" into the existing Admin Banner create flow.
+- Add a Merchant Banner Library under the existing Merchant marketing/storefront menu convention.
+- Enforce merchant banner slot limits using all non-soft-deleted banners for the merchant and shop, including active, inactive, scheduled, and expired banners.
+- Add replace-template behavior that reuses the existing banner row, defaults to replacing images only, can optionally reset fields, and never deletes shared template images.
+- Preserve existing custom upload workflow, safely delete only owned custom files after successful replacement, and never delete shared template files.
+- Update existing Banner create/edit forms with a Banner Source selector while preserving existing Quick Suggestions for live banners.
+- Validate owner/position/template availability compatibility using the existing BannerPosition enum/registry.
+- Reuse existing link target handling and searchable selectors where available.
+- Keep controllers small, place business rules in services/requests/policies, use transactions, avoid N+1 queries, and preserve existing Admin and Merchant Banner functionality.
+- Add focused tests for settings, Admin activation, Merchant library, Merchant activation, slot limits, replace-template behavior, and custom upload behavior.
+- Run focused tests and then the full suite.
+
+Important implementation rules:
+
+1. Do not add new settings to `admin_settings`.
+2. Use `system_settings` for the banner limit.
+3. Do not add a new settings table.
+4. Do not add a `banner_positions` table.
+5. Reuse existing enums and registries.
+6. Do not hardcode the banner limit.
+7. Do not modify BannerTemplate when creating/editing a live banner.
+8. Do not delete shared template images.
+9. Keep controllers small.
+10. Put business rules in services, requests or policies.
+11. Use transactions for create/replace/upload operations.
+12. Preserve existing Admin and Merchant Banner functionality.
+13. Avoid N+1 queries.
+14. Do not implement Promotion Engine in this task.
+15. Do not generate the final 49 image assets in this task.
+16. Do not redesign unrelated pages.
+17. Follow existing project route, Blade, Bootstrap and Limitless conventions.
+
+After implementation, report files created/modified, routes, menu changes, services, setting access, banner limit behaviour, Admin and Merchant flows, replace-template behavior, custom upload behavior, authorization rules, tests, focused/full suite results, assumptions, and deferred items.
+```
+
+### Final Outcome
+
+Implemented the next WindowShop Banner phase for Admin and Merchant template selection, activation, source handling, slot limits, and replacement.
+
+Files created:
+
+- `app/Http/Controllers/Admin/BannerLibraryController.php`
+- `app/Http/Controllers/Merchant/BannerLibraryController.php`
+- `app/Services/System/SystemSettingService.php`
+- `app/Services/Banner/BannerLimitService.php`
+- `app/Services/Banner/BannerTemplateLibraryService.php`
+- `app/Services/Banner/BannerTemplateActivationService.php`
+- `resources/views/admin/banner-library/index.blade.php`
+- `resources/views/merchant/banner-library/index.blade.php`
+- `tests/Feature/BannerLimitServiceTest.php`
+- `tests/Feature/BannerTemplateActivationFlowTest.php`
+
+Files modified:
+
+- `app/Http/Controllers/Admin/BannerController.php`
+- `app/Http/Controllers/Merchant/BannerController.php`
+- `app/Http/Requests/Concerns/ValidatesBannerRequest.php`
+- `app/Services/Banner/BannerImageService.php`
+- `resources/views/admin/banners/edit.blade.php`
+- `resources/views/admin/banners/index.blade.php`
+- `resources/views/merchant/banners/edit.blade.php`
+- `resources/views/merchant/banners/index.blade.php`
+- `resources/views/partials/sidebar.blade.php`
+- `resources/views/partials/merchant/sidebar.blade.php`
+- `resources/views/shared/banners/form-fields.blade.php`
+- `resources/views/shared/banners/form-script.blade.php`
+- `routes/web.php`
+- `routes/merchant.php`
+- `docs/Prompt_Outcome_Log.md`
+
+Routes added:
+
+- `admin.banner-library.index`
+- `admin.banners.replace-template`
+- `merchant.banner-library.index`
+- `merchant.banners.replace-template`
+
+Menu changes:
+
+- Admin Marketing now includes `Banner Templates`, `Banner Library`, and `Banners`.
+- Merchant Storefront now includes `Banner Library` and `My Banners`.
+
+Services added:
+
+- `SystemSettingService` reads active, non-soft-deleted `system_settings` values and casts string, integer, boolean, json, array, and text values.
+- `BannerLimitService` reads the merchant per-shop slot limit from `storefront_banner.max_per_shop`.
+- `BannerTemplateLibraryService` returns active, non-deleted Admin/Merchant-usable templates with availability, category, position, event/general, search, and ordering rules.
+- `BannerTemplateActivationService` creates live banners from templates, replaces templates on existing banners, copies template defaults, and computes fixed-date recommended schedules.
+
+System setting access implemented:
+
+- New banner settings read from `system_settings`.
+- No new setting was added to `admin_settings`.
+- No new settings table was added.
+
+Banner limit behaviour:
+
+- Merchant banner limit reads `storefront_banner.max_per_shop`.
+- Missing, inactive, invalid, below-range, and above-range values fall back safely to 3.
+- Effective values are accepted only from 1 through 10.
+- All non-soft-deleted merchant banners for the merchant and shop count as slots.
+- Soft-deleted banners do not count.
+- Merchant template activation and custom upload creation perform final slot validation inside a transaction.
+
+Admin template activation flow:
+
+- Admin can browse active Admin/Both templates in `admin.banner-library.index`.
+- Admin can open the existing Banner create form prefilled from a template.
+- Template-created marketplace banners copy template values into a new `banners` row.
+- Admin can also create merchant-store banners from merchant-compatible templates by selecting Merchant Store owner, merchant, and shop.
+- Shop ownership and owner/position compatibility continue to be validated server-side.
+
+Merchant Banner Library flow:
+
+- Merchant can browse active Merchant/Both templates in `merchant.banner-library.index`.
+- Merchant library supports search, category, position, and event/general filters.
+- The page shows `{used} of {limit} banner slots used`.
+- If the shop has reached the configured limit, no banner is created and existing slots are shown with edit actions.
+- Merchant-created banners use the current merchant and active shop from server-side context.
+
+Replace-template behaviour:
+
+- Admin and Merchant edit pages include `Replace Template`.
+- Replacing a template reuses the same banner row.
+- Default option replaces images only.
+- Optional modes reset text defaults or all template defaults including position.
+- `banner_template_id` updates and `source_type` becomes `template`.
+- Shared template images are never deleted.
+
+Custom upload behaviour:
+
+- Existing custom upload workflow remains available.
+- Banner forms now include `Banner Source` with `Use WindowShop Template` and `Upload Custom Banner`.
+- Switching from template to custom requires a new desktop image.
+- Custom uploads set `source_type = custom_upload` and clear `banner_template_id`.
+- Old files are deleted only when they are owned live-banner custom files.
+
+Authorization rules:
+
+- Merchant routes resolve merchant and active shop from session/user context.
+- Merchants cannot choose another merchant or shop.
+- Merchants cannot use inactive, soft-deleted, or Admin-only templates.
+- Merchants cannot replace another merchant/shop banner.
+- Admin owner type and shop ownership checks remain server-side.
+- Arbitrary banner positions are still rejected through `BannerPosition`.
+
+Tests added:
+
+- `BannerLimitServiceTest`
+- `BannerTemplateActivationFlowTest`
+
+Focused test results:
+
+- `php artisan test tests\Feature\BannerLimitServiceTest.php tests\Feature\BannerTemplateActivationFlowTest.php tests\Feature\BannerManagementFoundationTest.php tests\Feature\AdminBannerTemplateManagementTest.php tests\Feature\BannerTemplateFoundationTest.php tests\Feature\BannerTemplateSeederTest.php tests\Feature\StorefrontBannerSettingSeederTest.php`
+- Passed: 29 tests, 132 assertions
+
+Full test-suite results:
+
+- `php artisan test`
+- Passed: 451 tests, 3610 assertions
+
+Assumptions and deferred items:
+
+- Promotion Engine remains deferred and disabled through the existing link type options.
+- Variable-date festival auto-fill remains deferred because no maintained event-date source was found.
+- Final 49 banner image assets were not generated.
+- No `banner_positions` table was added.

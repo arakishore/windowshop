@@ -5,6 +5,7 @@ use App\Http\Controllers\Merchant\Auth\MerchantPasswordController;
 use App\Http\Controllers\Merchant\Auth\MerchantProfileController;
 use App\Http\Controllers\Merchant\AvailabilityStatusController;
 use App\Http\Controllers\Merchant\BannerController;
+use App\Http\Controllers\Merchant\BannerLibraryController;
 use App\Http\Controllers\Merchant\BarcodeLabelController;
 use App\Http\Controllers\Merchant\CancellationReasonController;
 use App\Http\Controllers\Merchant\CatalogueMasterController;
@@ -102,6 +103,10 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::post('banners/{banner}/restore', [BannerController::class, 'restore'])
             ->withTrashed()
             ->name('banners.restore');
+        Route::get('banner-library', [BannerLibraryController::class, 'index'])
+            ->name('banner-library.index');
+        Route::patch('banners/{banner}/replace-template', [BannerController::class, 'replaceTemplate'])
+            ->name('banners.replace-template');
         Route::resource('banners', BannerController::class)
             ->except(['show']);
         Route::post('products/bulk-action', [ProductController::class, 'bulkAction'])

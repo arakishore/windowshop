@@ -1,6 +1,11 @@
 @php
     $selectedLinkValue = old('link_value', $banner->link_value);
     $openInNewTab = old('open_in_new_tab', $banner->open_in_new_tab ?? false);
+    $sourceType = old('source_type', $banner->source_type instanceof \App\Enums\BannerSourceType ? $banner->source_type->value : ($banner->source_type ?: 'custom_upload'));
+    $selectedTemplateUuid = old('banner_template_uuid');
+    if (!$selectedTemplateUuid && $banner->banner_template_id && isset($bannerTemplates)) {
+        $selectedTemplateUuid = optional($bannerTemplates->firstWhere('id', $banner->banner_template_id))->uuid;
+    }
     $desktopSrc = $banner->desktop_image_path ? asset('storage/'.$banner->desktop_image_path) : '';
     $mobileSrc = $banner->mobile_image_path ? asset('storage/'.$banner->mobile_image_path) : '';
     $scheduleStatus = 'Active Now';
@@ -53,6 +58,57 @@
                     <div id="banner_details_section" class="accordion-collapse collapse show" aria-labelledby="banner_details_heading">
                         <div class="accordion-body">
                             <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label d-block">Banner Source</label>
+                                    <div class="d-flex flex-wrap gap-3">
+                                        <label class="form-check">
+                                            <input type="radio" name="source_type" value="template" class="form-check-input js-banner-source" @checked($sourceType === 'template')>
+                                            <span class="form-check-label">Use WindowShop Template</span>
+                                        </label>
+                                        <label class="form-check">
+                                            <input type="radio" name="source_type" value="custom_upload" class="form-check-input js-banner-source" @checked($sourceType !== 'template')>
+                                            <span class="form-check-label">Upload Custom Banner</span>
+                                        </label>
+                                    </div>
+                                    @error('source_type')<div class="text-danger small">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 js-template-source-panel">
+                                    <label class="form-label" for="banner_template_uuid">Template</label>
+                                    <select id="banner_template_uuid" name="banner_template_uuid" class="form-select @error('banner_template_uuid') is-invalid @enderror">
+                                        <option value="">Select template</option>
+                                        @foreach(($bannerTemplates ?? collect()) as $template)
+                                            <option
+                                                value="{{ $template->uuid }}"
+                                                data-position="{{ $template->default_position }}"
+                                                data-title="{{ $template->default_title }}"
+                                                data-subtitle="{{ $template->default_subtitle }}"
+                                                data-description="{{ $template->description }}"
+                                                data-button-text="{{ $template->default_button_text }}"
+                                                data-sort-order="{{ $template->sort_order }}"
+                                                data-desktop-src="{{ asset('storage/'.$template->desktop_image_path) }}"
+                                                data-mobile-src="{{ $template->mobile_image_path ? asset('storage/'.$template->mobile_image_path) : '' }}"
+                                                @selected($selectedTemplateUuid === $template->uuid)
+                                            >
+                                                {{ $template->name }} - {{ $template->positionLabel() }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('banner_template_uuid')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                    <div class="row g-2 mt-1">
+                                        <div class="col-sm-7">
+                                            <div class="rounded overflow-hidden bg-light border d-flex align-items-center justify-content-center" style="aspect-ratio: 16 / 6;">
+                                                <img id="template_desktop_preview" alt="Template desktop preview" class="img-fluid d-none" style="width: 100%; height: 100%; object-fit: cover;">
+                                                <span id="template_desktop_empty" class="text-muted small">Desktop template</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-sm-5">
+                                            <div class="rounded overflow-hidden bg-light border d-flex align-items-center justify-content-center mx-auto" style="width: min(100%, 120px); aspect-ratio: 4 / 5;">
+                                                <img id="template_mobile_preview" alt="Template mobile preview" class="img-fluid d-none" style="width: 100%; height: 100%; object-fit: cover;">
+                                                <span id="template_mobile_empty" class="text-muted small">Mobile</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="col-md-5">
                                     <label class="form-label" for="position">Position</label>
                                     <select id="position" name="position" class="form-select @error('position') is-invalid @enderror">
@@ -98,7 +154,7 @@
                     </div>
                 </div>
 
-                <div class="accordion-item">
+                <div class="accordion-item js-custom-upload-panel">
                     <h2 class="accordion-header" id="images_heading">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#images_section" aria-expanded="false" aria-controls="images_section">
                             Images
@@ -300,7 +356,7 @@
 <div class="col-12">
     <div class="card border bg-light mb-0">
         <div class="card-header py-2">
-            <h6 class="mb-0">Marketing Assistant</h6>
+            <h6 class="mb-0">Quick Suggestions</h6>
         </div>
         <div class="card-body">
             <div class="row g-3">

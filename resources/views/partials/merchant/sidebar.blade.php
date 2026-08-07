@@ -108,14 +108,17 @@
                     </a>
                 </li>
 
-                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.banners.*') ? 'nav-item-expanded nav-item-open' : '' }}">
-                    <a href="#" class="nav-link {{ request()->routeIs('merchant.banners.*') ? 'active' : '' }}">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.banners.*') || request()->routeIs('merchant.banner-library.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.banners.*') || request()->routeIs('merchant.banner-library.*') ? 'active' : '' }}">
                         <i class="ph-browser"></i>
                         <span>Storefront</span>
                     </a>
-                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.banners.*') ? 'show' : '' }}">
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.banners.*') || request()->routeIs('merchant.banner-library.*') ? 'show' : '' }}">
                         <li class="nav-item">
-                            <a href="{{ route('merchant.banners.index') }}" class="nav-link {{ request()->routeIs('merchant.banners.*') ? 'active' : '' }}">Banners</a>
+                            <a href="{{ route('merchant.banner-library.index') }}" class="nav-link {{ request()->routeIs('merchant.banner-library.*') ? 'active' : '' }}">Banner Library</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.banners.index') }}" class="nav-link {{ request()->routeIs('merchant.banners.*') ? 'active' : '' }}">My Banners</a>
                         </li>
                     </ul>
                 </li>
