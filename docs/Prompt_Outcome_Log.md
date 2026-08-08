@@ -2233,3 +2233,159 @@ Assumptions and deferred items:
 - Variable-date festival auto-fill remains deferred because no maintained event-date source was found.
 - Final 49 banner image assets were not generated.
 - No `banner_positions` table was added.
+
+--------------------------------------------------
+
+Date:
+2026-08-07
+
+Feature Name:
+Static Storefront Blade Conversion
+
+Objective:
+Convert the selected static Amerce storefront homepage template into a clean Laravel Blade storefront structure for WindowShop without connecting dynamic data.
+
+Scope:
+HTML slicing, shared storefront layout creation, reusable static components, dedicated storefront asset copy, and temporary storefront preview route.
+
+Prompt Summary:
+Convert `template/index.html` to Blade, preserve visual styling and plugin hooks, keep original template files unchanged, use one common storefront layout, and defer all database-driven storefront integrations.
+
+Files Created:
+- `resources/views/storefront/layouts/app.blade.php`
+- `resources/views/storefront/pages/home.blade.php`
+- `resources/views/storefront/partials/topbar.blade.php`
+- `resources/views/storefront/partials/header.blade.php`
+- `resources/views/storefront/partials/main-menu.blade.php`
+- `resources/views/storefront/partials/mobile-menu.blade.php`
+- `resources/views/storefront/partials/hero.blade.php`
+- `resources/views/storefront/partials/search.blade.php`
+- `resources/views/storefront/partials/footer.blade.php`
+- `resources/views/storefront/partials/scripts.blade.php`
+- `resources/views/storefront/components/category-card.blade.php`
+- `resources/views/storefront/components/product-card.blade.php`
+- `resources/views/storefront/components/banner.blade.php`
+- `public/assets/storefront/*`
+
+Files Modified:
+- `routes/web.php`
+- `docs/Prompt_Outcome_Log.md`
+- `docs/Architecture_Decisions.md`
+
+Database Changes:
+- None
+
+Routes Added:
+- `GET /storefront` named `storefront.home`
+
+Services Added:
+- None
+
+Controllers Added/Modified:
+- None
+
+Models Added/Modified:
+- None
+
+Requests Added/Modified:
+- None
+
+Views Added/Modified:
+- Storefront layout, homepage, partials, and static reusable components listed above.
+
+Tests Added:
+- None
+
+Verification Results:
+- `php artisan view:clear` passed.
+- `php artisan route:list --path=storefront` showed `GET|HEAD storefront`.
+- `php artisan view:cache` passed.
+- `php artisan test` passed: 451 tests, 3610 assertions.
+- `Invoke-WebRequest http://127.0.0.1:8082/unwanted/localhyper/windowshop/public/storefront` returned HTTP 200.
+- Rendered storefront HTML includes `assets/storefront/css/styles.css`, `assets/storefront/js/main.js`, and `tf-swiper` markup.
+- Storefront Blade scan found no leftover raw `src="assets/`, `href="assets/`, `.html`, or `template/` references.
+
+Assumptions:
+- Root `/` remains reserved for the existing admin-login redirect, so storefront preview uses `/storefront`.
+- Amerce template assets are copied into `public/assets/storefront` and referenced via Laravel `asset()`.
+
+Deferred Items:
+- BannerService integration
+- Real products, categories, merchants, shops, cart, wishlist, checkout, login, search backend, promotions, and APIs
+- Grocery-specific storefronts
+- Category-specific home layouts
+- Browser-level screenshots, responsive visual comparison, and console validation were not completed because no in-app browser was available in this session.
+
+--------------------------------------------------
+
+Date:
+2026-08-07
+
+Feature Name:
+Storefront Navigation V1
+
+Objective:
+Implement dynamic WindowShop storefront navigation using the existing `product_categories` hierarchy while preserving the Amerce template menu classes and behaviour.
+
+Scope:
+Marketplace category mega menu, merchant shop category-scoped menu, placeholder navigation routes, service-layer category tree loading, Blade loop conversion, and focused tests.
+
+Prompt Summary:
+Replace the static storefront menu with dynamic navigation generated from active, non-deleted product categories; use one common storefront layout; do not add product listing, search backend, cart, wishlist, login, checkout, or promotion behaviour.
+
+Files Created:
+- `app/Services/Storefront/NavigationService.php`
+- `app/Http/Controllers/Storefront/StorefrontController.php`
+- `resources/views/storefront/pages/placeholder.blade.php`
+- `tests/Feature/StorefrontNavigationTest.php`
+
+Files Modified:
+- `routes/web.php`
+- `resources/views/storefront/partials/main-menu.blade.php`
+- `docs/Prompt_Outcome_Log.md`
+- `docs/Architecture_Decisions.md`
+
+Database Changes:
+- None
+
+Routes Added:
+- `GET /category/{slug}` named `storefront.category.show`
+- `GET /store/{slug}` named `storefront.store.show`
+- `GET /store/{slug}/category/{categorySlug}` named `storefront.store.category.show`
+
+Services Added:
+- `App\Services\Storefront\NavigationService`
+
+Controllers Added/Modified:
+- Added `App\Http\Controllers\Storefront\StorefrontController`
+
+Models Added/Modified:
+- None
+
+Requests Added/Modified:
+- None
+
+Views Added/Modified:
+- Dynamic storefront main menu
+- Storefront placeholder page
+
+Tests Added:
+- `StorefrontNavigationTest`
+
+Verification Results:
+- `php artisan test --filter=StorefrontNavigationTest` passed: 5 tests, 43 assertions.
+- `php artisan view:cache` passed.
+- `php artisan test` passed: 456 tests, 3653 assertions.
+- `Invoke-WebRequest http://127.0.0.1:8082/unwanted/localhyper/windowshop/public/storefront` returned HTTP 200 and rendered the storefront menu shell.
+
+Assumptions:
+- Active storefront products are products with `status = active` and no soft delete.
+- Merchant navigation is limited to the active shop's root category tree and categories that have active products in that shop.
+
+Deferred Items:
+- Product listing pages
+- Category filters
+- Search backend
+- Cart, wishlist, customer login, checkout
+- Promotion Engine and offer logic
+- Root category icon support

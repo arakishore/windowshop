@@ -119,11 +119,9 @@ class DemoProductSeeder extends Seeder
             'Footwear' => $this->footwearProductsForShop($shopName),
             'Mobile & Electronics' => $this->electronicsProductsForShop($shopName),
             'Grocery & Daily Needs' => $this->groceryProductsForShop($shopName),
-            'Cafe & Restaurant' => $this->cafeProductsForShop($shopName),
             'Home & Furniture' => $this->homeProductsForShop($shopName),
             'Sports & Fitness' => $this->sportsProductsForShop($shopName),
             'Books & Stationery' => $this->booksProductsForShop($shopName),
-            'Other' => $this->generalProductsForShop($shopName),
             default => $this->apparelProductsForShop($shopName),
         };
     }
@@ -300,27 +298,6 @@ class DemoProductSeeder extends Seeder
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function cafeProductsForShop(string $shopName): array
-    {
-        $templates = [
-            ['name' => 'Cappuccino', 'category' => 'Beverages', 'brand' => 'Other'],
-            ['name' => 'Cold Coffee', 'category' => 'Beverages', 'brand' => 'Other'],
-            ['name' => 'Veg Sandwich', 'category' => 'Fast Food', 'brand' => 'Other'],
-            ['name' => 'Cheese Burger', 'category' => 'Fast Food', 'brand' => 'Other'],
-            ['name' => 'Paneer Meal Bowl', 'category' => 'Meals', 'brand' => 'Other'],
-            ['name' => 'Chocolate Muffin', 'category' => 'Bakery', 'brand' => 'Other'],
-            ['name' => 'Brownie Slice', 'category' => 'Desserts', 'brand' => 'Other'],
-        ];
-
-        $prefixes = ['Regular', 'Large', 'Classic', 'House Special', 'Fresh'];
-        $modifiers = ['Hot', 'Iced', 'Cheesy', 'Spicy', 'Sweet'];
-
-        return $this->buildDemoProducts($templates, $prefixes, $modifiers, $shopName, 28);
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
     private function homeProductsForShop(string $shopName): array
     {
         $templates = [
@@ -377,25 +354,6 @@ class DemoProductSeeder extends Seeder
         $modifiers = ['Pack', 'Set', 'Edition', 'Large', 'Compact'];
 
         return $this->buildDemoProducts($templates, $prefixes, $modifiers, $shopName, 24);
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function generalProductsForShop(string $shopName): array
-    {
-        $templates = [
-            ['name' => 'Gift Wrapper Roll', 'category' => 'Other', 'brand' => 'Other'],
-            ['name' => 'Utility Storage Box', 'category' => 'Other', 'brand' => 'Other'],
-            ['name' => 'Household Tool Kit', 'category' => 'Other', 'brand' => 'Other'],
-            ['name' => 'Festival Decoration Pack', 'category' => 'Other', 'brand' => 'Other'],
-            ['name' => 'Travel Pouch Set', 'category' => 'Other', 'brand' => 'Other'],
-        ];
-
-        $prefixes = ['Local', 'Useful', 'Everyday', 'Budget', 'Premium'];
-        $modifiers = ['Small', 'Medium', 'Large', 'Assorted', 'Classic'];
-
-        return $this->buildDemoProducts($templates, $prefixes, $modifiers, $shopName, 20);
     }
 
     /**

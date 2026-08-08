@@ -840,14 +840,6 @@ class ProductAttributeSeeder extends Seeder
                 ['code' => 'form'],
                 ['code' => 'country_of_origin'],
             ],
-            'Cafe & Restaurant' => [
-                ['code' => 'food_type'],
-                ['code' => 'diet_type'],
-                ['code' => 'spice_level'],
-                ['code' => 'portion_size'],
-                ['code' => 'flavor'],
-                ['code' => 'pack_size'],
-            ],
             'Home & Furniture' => [
                 ['code' => 'material'],
                 ['code' => 'color'],
@@ -877,16 +869,6 @@ class ProductAttributeSeeder extends Seeder
                 ['code' => 'class_standard'],
                 ['code' => 'pack_size'],
                 ['code' => 'color'],
-                ['code' => 'country_of_origin'],
-            ],
-            'Other' => [
-                ['code' => 'color'],
-                ['code' => 'size'],
-                ['code' => 'material'],
-                ['code' => 'style'],
-                ['code' => 'pack_size'],
-                ['code' => 'dimensions'],
-                ['code' => 'warranty'],
                 ['code' => 'country_of_origin'],
             ],
         ];

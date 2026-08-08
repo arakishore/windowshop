@@ -145,11 +145,9 @@ class DemoShopSeeder extends Seeder
             'footwear' => 'Footwear',
             'mobile-electronics' => 'Mobile & Electronics',
             'grocery-daily-needs' => 'Grocery & Daily Needs',
-            'cafe-restaurant' => 'Cafe & Restaurant',
             'home-furniture' => 'Home & Furniture',
             'sports-fitness' => 'Sports & Fitness',
             'books-stationery' => 'Books & Stationery',
-            'other' => 'Other',
         ];
 
         $name = $categoryNames[$categoryCode] ?? Str::headline(str_replace('-', ' ', $categoryCode));
@@ -157,7 +155,6 @@ class DemoShopSeeder extends Seeder
         $id = DB::table('product_categories')
             ->whereNull('parent_id')
             ->where('name', $name)
-            ->where('status', 'active')
             ->whereNull('deleted_at')
             ->value('id');
 
@@ -339,27 +336,6 @@ class DemoShopSeeder extends Seeder
                 'admin_note' => 'Grocery category demo shop.',
             ],
             [
-                'merchant_email' => 'rohan@cafearoma.test',
-                'category_slug' => 'cafe-restaurant',
-                'audience_slugs' => ['men', 'women', 'kids', 'unisex'],
-                'name' => 'Cafe Aroma Nashik',
-                'slug' => 'cafe-aroma-nashik',
-                'short_description' => 'Coffee, snacks, bakery and quick meals.',
-                'description' => 'A cafe demo shop for restaurant-style menus and food product testing.',
-                'email' => 'shop@cafearoma.test',
-                'mobile' => '9876567890',
-                'whatsapp_number' => '9876567890',
-                'website_url' => null,
-                'address_line_1' => 'Shop 2, Gangapur Road',
-                'address_line_2' => 'Near Jehan Circle',
-                'landmark' => 'Coffee Lane',
-                'pincode' => '422013',
-                'latitude' => '20.0121000',
-                'longitude' => '73.7354000',
-                'status' => 'active',
-                'admin_note' => 'Cafe and restaurant demo shop.',
-            ],
-            [
                 'merchant_email' => 'meera@homecraft.test',
                 'category_slug' => 'home-furniture',
                 'audience_slugs' => ['men', 'women', 'unisex'],
@@ -421,27 +397,6 @@ class DemoShopSeeder extends Seeder
                 'longitude' => '73.7801000',
                 'status' => 'active',
                 'admin_note' => 'Books and stationery category demo shop.',
-            ],
-            [
-                'merchant_email' => 'anil@localfinds.test',
-                'category_slug' => 'other',
-                'audience_slugs' => ['men', 'women', 'unisex'],
-                'name' => 'Local Finds General Store',
-                'slug' => 'local-finds-general-store',
-                'short_description' => 'General local products that do not fit a standard category.',
-                'description' => 'A generic demo shop for testing the Other shop type and fallback catalogue flows.',
-                'email' => 'shop@localfinds.test',
-                'mobile' => '9876509876',
-                'whatsapp_number' => '9876509876',
-                'website_url' => null,
-                'address_line_1' => 'Shop 1, Main Road',
-                'address_line_2' => 'Old Nashik',
-                'landmark' => 'Near Clock Tower',
-                'pincode' => '422001',
-                'latitude' => '19.9990000',
-                'longitude' => '73.7871000',
-                'status' => 'active',
-                'admin_note' => 'Other category demo shop.',
             ],
         ];
     }

@@ -23,11 +23,17 @@ use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantShopController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\SystemSettingController;
+use App\Http\Controllers\Storefront\StorefrontController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return redirect()->route('admin.login');
 });
+
+Route::get('/storefront', [StorefrontController::class, 'home'])->name('storefront.home');
+Route::get('/category/{slug}', [StorefrontController::class, 'category'])->name('storefront.category.show');
+Route::get('/store/{slug}', [StorefrontController::class, 'store'])->name('storefront.store.show');
+Route::get('/store/{slug}/category/{categorySlug}', [StorefrontController::class, 'storeCategory'])->name('storefront.store.category.show');
 
 Route::prefix('admin')->name('admin.')->group(function () {
 
@@ -37,11 +43,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     Route::middleware('auth')->group(function () {
-        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/logout', [AdminAuthController::class, 'logout'])->name('logout');
     });
 
     Route::middleware(['auth', 'admin.role'])->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::resource('master/shop-audiences', ShopAudienceController::class)
             ->except(['show'])
             ->names('master.shop-audiences');

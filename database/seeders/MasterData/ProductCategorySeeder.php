@@ -5,6 +5,8 @@ namespace Database\Seeders\MasterData;
 use App\Models\ProductCategory;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ProductCategorySeeder extends Seeder
@@ -15,7 +17,7 @@ class ProductCategorySeeder extends Seeder
     public function run(): void
     {
         DB::transaction(function (): void {
-            $apparel = $this->createCategory('Apparel', null, 1);
+            $apparel = $this->createCategory('Apparel', null, 1, 'active', 'apparel');
 
             $men = $this->createCategory('Men', $apparel, 1);
             $this->createChildren($men, [
@@ -60,14 +62,14 @@ class ProductCategorySeeder extends Seeder
             $this->createCategory('Baby Clothing', $apparel, 5);
             $this->createCategory('Unisex', $apparel, 6);
 
-            $footwear = $this->createCategory('Footwear', null, 2);
+            $footwear = $this->createCategory('Footwear', null, 2, 'active', 'footwear');
             $this->createChildren($footwear, [
                 'Men',
                 'Women',
                 'Kids',
             ]);
 
-            $electronics = $this->createCategory('Mobile & Electronics', null, 3);
+            $electronics = $this->createCategory('Mobile & Electronics', null, 3, 'active', 'mobile-electronics');
             $this->createChildren($electronics, [
                 'Mobile Phones',
                 'Laptops',
@@ -76,21 +78,21 @@ class ProductCategorySeeder extends Seeder
                 'Smart Watches',
             ]);
 
-            $beauty = $this->createCategory('Beauty & Cosmetics', null, 4);
+            $beauty = $this->createCategory('Beauty & Cosmetics', null, 4, 'active', 'beauty-cosmetics');
             $this->createChildren($beauty, [
                 'Makeup',
                 'Skin Care',
                 'Hair Care',
             ]);
 
-            $jewellery = $this->createCategory('Jewellery & Accessories', null, 5);
+            $jewellery = $this->createCategory('Jewellery & Accessories', null, 5, 'active', 'jewellery-accessories');
             $this->createChildren($jewellery, [
                 'Fashion Jewellery',
                 'Bags',
                 'Accessories',
             ]);
 
-            $grocery = $this->createCategory('Grocery & Daily Needs', null, 6);
+            $grocery = $this->createCategory('Grocery & Daily Needs', null, 6, 'inactive', 'grocery-daily-needs');
             $this->createChildren($grocery, [
                 'Staples',
                 'Snacks',
@@ -99,16 +101,7 @@ class ProductCategorySeeder extends Seeder
                 'Household',
             ]);
 
-            $cafe = $this->createCategory('Cafe & Restaurant', null, 7);
-            $this->createChildren($cafe, [
-                'Beverages',
-                'Fast Food',
-                'Meals',
-                'Bakery',
-                'Desserts',
-            ]);
-
-            $home = $this->createCategory('Home & Furniture', null, 8);
+            $home = $this->createCategory('Home & Furniture', null, 8, 'active', 'home-furniture');
             $this->createChildren($home, [
                 'Furniture',
                 'Home Decor',
@@ -117,7 +110,7 @@ class ProductCategorySeeder extends Seeder
                 'Bedding',
             ]);
 
-            $sports = $this->createCategory('Sports & Fitness', null, 9);
+            $sports = $this->createCategory('Sports & Fitness', null, 9, 'active', 'sports-fitness');
             $this->createChildren($sports, [
                 'Fitness Equipment',
                 'Sportswear',
@@ -125,7 +118,7 @@ class ProductCategorySeeder extends Seeder
                 'Accessories',
             ]);
 
-            $books = $this->createCategory('Books & Stationery', null, 10);
+            $books = $this->createCategory('Books & Stationery', null, 10, 'active', 'books-stationery');
             $this->createChildren($books, [
                 'Books',
                 'Notebooks',
@@ -133,7 +126,6 @@ class ProductCategorySeeder extends Seeder
                 'Art Supplies',
                 'Office Supplies',
             ]);
-            $this->createCategory('Other', null, 11);
 
             $this->ensureOtherChildForParentCategories();
         });
@@ -146,7 +138,13 @@ class ProductCategorySeeder extends Seeder
         }
     }
 
-    private function createCategory(string $name, ?ProductCategory $parent, int $sortOrder): ProductCategory
+    private function createCategory(
+        string $name,
+        ?ProductCategory $parent,
+        int $sortOrder,
+        string $status = 'active',
+        ?string $imageAsset = null,
+    ): ProductCategory
     {
         $category = ProductCategory::query()
             ->whereNull('deleted_at')
@@ -160,7 +158,7 @@ class ProductCategorySeeder extends Seeder
                 'parent_id' => $parent?->getKey(),
                 'name' => $name,
                 'slug' => 'pending-'.Str::uuid()->toString(),
-                'status' => 'active',
+                'status' => $status,
             ]);
         }
 
@@ -168,14 +166,42 @@ class ProductCategorySeeder extends Seeder
             'parent_id' => $parent?->getKey(),
             'name' => $name,
             'sort_order' => $sortOrder,
-            'status' => 'active',
+            'status' => $status,
         ])->save();
 
         $category->updateQuietly([
             'slug' => (Str::slug($category->name) ?: 'category').'-'.$category->getKey(),
         ]);
 
+        if ($imageAsset !== null) {
+            $imagePath = $this->seedImage($category, $imageAsset);
+
+            if ($imagePath !== null) {
+                $category->forceFill(['image_path' => $imagePath])->save();
+            }
+        }
+
         return $category->refresh();
+    }
+
+    private function seedImage(ProductCategory $category, string $asset): ?string
+    {
+        $sourceDirectory = database_path("seeders/assets/product-categories/{$asset}");
+
+        if (! File::isDirectory($sourceDirectory)) {
+            return null;
+        }
+
+        $targetDirectory = "product-categories/{$category->getKey()}/image";
+
+        foreach (File::files($sourceDirectory) as $file) {
+            Storage::disk('public')->put(
+                "{$targetDirectory}/{$file->getFilename()}",
+                File::get($file->getPathname()),
+            );
+        }
+
+        return "{$targetDirectory}/web.webp";
     }
 
     private function ensureOtherChildForParentCategories(): void

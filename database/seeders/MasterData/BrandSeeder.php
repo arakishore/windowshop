@@ -117,7 +117,6 @@ class BrandSeeder extends Seeder
     {
         $rootCategories = ProductCategory::query()
             ->whereNull('parent_id')
-            ->where('status', 'active')
             ->whereNull('deleted_at')
             ->pluck('id', 'name');
 

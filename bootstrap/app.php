@@ -7,6 +7,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -26,6 +27,32 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return route('admin.login');
+        });
+
+        // Redirect already-authenticated users away from login pages by role.
+        $middleware->redirectUsersTo(function (Request $request): string {
+            $user = $request->user();
+
+            if ($user === null) {
+                return route('admin.login');
+            }
+
+            $roles = DB::table('auth_user_roles')
+                ->join('auth_roles', 'auth_roles.id', '=', 'auth_user_roles.role_id')
+                ->where('auth_user_roles.user_id', $user->getKey())
+                ->where('auth_roles.status', 'active')
+                ->whereNull('auth_roles.deleted_at')
+                ->pluck('auth_roles.slug');
+
+            if ($roles->contains(fn (string $slug): bool => in_array($slug, ['super_admin', 'admin'], true))) {
+                return route('admin.dashboard');
+            }
+
+            if ($roles->contains('merchant')) {
+                return route('merchant.profile.edit');
+            }
+
+            return route('admin.logout');
         });
 
         $middleware->alias([
