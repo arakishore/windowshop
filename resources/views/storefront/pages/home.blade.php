@@ -217,144 +217,77 @@
             </div>
         </div>
     </div>
-    <!-- /Banner Countdown -->
-    <section id="top-picks" class="flat-spacing">
-        <div class="container">
-            <div class="sect-heading type-2 text-center wow fadeInUp">
-                <h3 class="s-title">
-                    Today's Top Picks
-                </h3>
-                <p class="s-desc text-body-1 cl-text-2">
-                    Fresh styles just in! Elevate your look.
-                </p>
-            </div>
-            <div dir="ltr" class="swiper tf-swiper wrap-sw-over" data-preview="4" data-tablet="3" data-mobile-sm="2"
-                data-mobile="1" data-space-lg="30" data-space-md="20" data-space="15">
-                <div class="swiper-wrapper">
-                    @foreach ($demoProducts as $product)
-                        @include('storefront.components.product-card', ['product' => $product])
-                    @endforeach
-                </div>
-                <div class="sw-dot-default tf-sw-pagination"></div>
-            </div>
-        </div>
-    </section>
-<!-- Collection -->
-        <div class="flat-spacing">
-            <div class="container">
-                <div class="tf-grid-layout md-col-2 xl-col-3 xl-gap-20">
-                    <div class="banner-image-text type-abs style-4">
-                        <a href="shop-default.html" class="bn-image img-style">
-                            <img loading="lazy" width="450" height="608" src="{{ asset('assets/storefront/images/section/banner-12.jpg') }}"
-                                alt="Image">
-                        </a>
-                        <div class="bn-content wow fadeInUp">
-                            <a href="shop-default.html" class="title h3 fw-medium text-white link">
-                                Save 25% <br class="d-none d-sm-block">
-                                Today
-                            </a>
-                            <p class="desc cl-text-3 mb-28">
-                                T-Shirts, Hoodies & More
-                            </p>
-                            <a href="shop-default.html" class="btn-action tf-btn btn-white small ">
-                                View More
-                            </a>
-                        </div>
-                    </div>
-                    <div class="tf-grid-layout gap-20">
-                        <div class="box-image_v03 hover-img4">
-                            <a href="shop-default.html" class="box-image_img img-style4">
-                                <img loading="lazy" width="450" height="294" src="{{ asset('assets/storefront/images/category/cate-12.jpg') }}"
-                                    alt="Image">
-                            </a>
-                            <div class="box-image_content">
-                                <a href="shop-default.html" class="title h6 fw-medium link">
-                                    Up To 35% Off
-                                    <i class="icon icon-ArrowUpRight"></i>
-                                </a>
-                            </div>
-                        </div>
-                        <div class="box-image_v03 hover-img4">
-                            <a href="shop-default.html" class="box-image_img img-style4">
-                                <img loading="lazy" width="450" height="294" src="{{ asset('assets/storefront/images/category/cate-13.jpg') }}"
-                                    alt="Image">
-                            </a>
-                            <div class="box-image_content">
-                                <a href="shop-default.html" class="title h6 fw-medium link">
-                                    Free Shipping On All Orders
-                                    <i class="icon icon-ArrowUpRight"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="tf-grid-layout gap-20 md-col-2 xl-col-1 xl-wd-full">
-                        <div class="box-image_v03 hover-img4">
-                            <a href="shop-default.html" class="box-image_img img-style4">
-                                <img loading="lazy" width="450" height="294" src="{{ asset('assets/storefront/images/category/cate-14.jpg') }}"
-                                    alt="Image">
-                            </a>
-                            <div class="box-image_content">
-                                <a href="shop-default.html" class="title h6 fw-medium link">
-                                    Free Gift With Purchase
-                                    <i class="icon icon-ArrowUpRight"></i>
-                                </a>
-                            </div>
-                        </div>
-                        <div class="box-image_v03 hover-img4">
-                            <a href="shop-default.html" class="box-image_img img-style4">
-                                <img loading="lazy" width="450" height="294" src="{{ asset('assets/storefront/images/category/cate-15.jpg') }}"
-                                    alt="Image">
-                            </a>
-                            <div class="box-image_content">
-                                <a href="shop-default.html" class="title h6 fw-medium link">
-                                    Limited Time Offer
-                                    <i class="icon icon-ArrowUpRight"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- /Collection -->
+
     <!-- Collection -->
-     <section class="flat-spacing pt-0 pb-0">
+    <div class="flat-spacing">
         <div class="container">
-            <div class="tf-grid-layout sm-col-2 gap-10">
-                <div class="box-image_v01">
-                    <a href="shop-default.html" class="box-image_img img-style">
-                        <img loading="lazy" width="700" height="933"
-                            src="{{ asset('assets/storefront/images/collection/cls-6.jpg') }}" alt="Image">
+            <div class="tf-grid-layout md-col-2 xl-col-3 xl-gap-20">
+                <div class="banner-image-text type-abs style-4">
+                    <a href="shop-default.html" class="bn-image img-style">
+                        <img loading="lazy" width="450" height="608"
+                            src="{{ asset('assets/storefront/images/section/banner-12.jpg') }}" alt="Image">
                     </a>
-                    <div class="box-image_content">
-                        <a href="shop-default.html"
-                            class="title h3 fw-medium text-white link-underline-white text-decoration-thickness">
-                            Shop Women
+                    <div class="bn-content wow fadeInUp">
+                        <a href="shop-default.html" class="title h3 fw-medium text-white link">
+                            Save 25% <br class="d-none d-sm-block">
+                            Today
+                        </a>
+                        <p class="desc cl-text-3 mb-28">
+                            T-Shirts, Hoodies & More
+                        </p>
+                        <a href="shop-default.html" class="btn-action tf-btn btn-white small ">
+                            View More
                         </a>
                     </div>
                 </div>
-                <div class="d-flex flex-column gap-10">
-                    <div class="box-image_v01 h-100">
-                        <a href="shop-default.html" class="box-image_img img-style">
-                            <img loading="lazy" width="700" height="461"
-                                src="{{ asset('assets/storefront/images/collection/cls-7.jpg') }}" alt="Image">
+                <div class="tf-grid-layout gap-20">
+                    <div class="box-image_v03 hover-img4">
+                        <a href="shop-default.html" class="box-image_img img-style4">
+                            <img loading="lazy" width="450" height="294"
+                                src="{{ asset('assets/storefront/images/category/cate-12.jpg') }}" alt="Image">
                         </a>
                         <div class="box-image_content">
-                            <a href="shop-default.html"
-                                class="title h3 fw-medium text-white link-underline-white text-decoration-thickness">
-                                Shop Men
+                            <a href="shop-default.html" class="title h6 fw-medium link">
+                                Up To 35% Off
+                                <i class="icon icon-ArrowUpRight"></i>
                             </a>
                         </div>
                     </div>
-                    <div class="box-image_v01 h-100">
-                        <a href="shop-default.html" class="box-image_img img-style">
-                            <img loading="lazy" width="700" height="461"
-                                src="{{ asset('assets/storefront/images/collection/cls-8.jpg') }}" alt="Image">
+                    <div class="box-image_v03 hover-img4">
+                        <a href="shop-default.html" class="box-image_img img-style4">
+                            <img loading="lazy" width="450" height="294"
+                                src="{{ asset('assets/storefront/images/category/cate-13.jpg') }}" alt="Image">
                         </a>
                         <div class="box-image_content">
-                            <a href="shop-default.html"
-                                class="title h3 fw-medium text-white link-underline-white text-decoration-thickness">
-                                Shop Essentials
+                            <a href="shop-default.html" class="title h6 fw-medium link">
+                                Free Shipping On All Orders
+                                <i class="icon icon-ArrowUpRight"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="tf-grid-layout gap-20 md-col-2 xl-col-1 xl-wd-full">
+                    <div class="box-image_v03 hover-img4">
+                        <a href="shop-default.html" class="box-image_img img-style4">
+                            <img loading="lazy" width="450" height="294"
+                                src="{{ asset('assets/storefront/images/category/cate-14.jpg') }}" alt="Image">
+                        </a>
+                        <div class="box-image_content">
+                            <a href="shop-default.html" class="title h6 fw-medium link">
+                                Free Gift With Purchase
+                                <i class="icon icon-ArrowUpRight"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="box-image_v03 hover-img4">
+                        <a href="shop-default.html" class="box-image_img img-style4">
+                            <img loading="lazy" width="450" height="294"
+                                src="{{ asset('assets/storefront/images/category/cate-15.jpg') }}" alt="Image">
+                        </a>
+                        <div class="box-image_content">
+                            <a href="shop-default.html" class="title h6 fw-medium link">
+                                Limited Time Offer
+                                <i class="icon icon-ArrowUpRight"></i>
                             </a>
                         </div>
                     </div>
@@ -363,7 +296,8 @@
         </div>
     </div>
     <!-- /Collection -->
-     <!-- Banner Countdown -->
+
+    <!-- Banner Countdown -->
     <section class="flat-spacing pb-0">
         <div class="container">
             <div class="banner-countdown-v01 style-3 wow fadeInUp">
@@ -394,7 +328,7 @@
             <div class="tf-grid-layout md-col-2 gap-10">
                 <div class="banner-image-text style-bottom bt-center">
                     <a href="shop-default.html" class="bn-image img-style radius-20">
-                        <img loading="lazy" width="880" height="800"
+                        <img loading="lazy" width="440" height="440"
                             src="{{ asset('assets/storefront/images/section/banner-66.jpg') }}" alt="Image">
                     </a>
                     <div class="bn-content wow fadeInUp">
@@ -411,7 +345,7 @@
                 </div>
                 <div class="banner-image-text style-bottom bt-center">
                     <a href="shop-default.html" class="bn-image img-style radius-20">
-                        <img loading="lazy" width="880" height="800"
+                        <img loading="lazy" width="440" height="440"
                             src="{{ asset('assets/storefront/images/section/banner-67.jpg') }}" alt="Image">
                     </a>
                     <div class="bn-content wow fadeInUp">
@@ -430,18 +364,109 @@
         </div>
     </section>
     <!-- /Collection -->
-   
 
-    <section id="new-arrivals" class="flat-spacing">
+    <!-- Collection -->
+    <section class="flat-spacing pb-0">
         <div class="container">
-            <div class="sect-title text-center wow fadeInUp">
-                <h2 class="s-title mb-8">New Arrivals</h2>
-                <p class="s-subtitle h6">A second static product carousel for marketplace merchandising.</p>
+            <div class="tf-grid-layout md-col-4 flat-spacing-2 pt-0">
+                <div class="banner-image-text type-abs style-1 wow fadeInLeft">
+                    <a href="shop-default.html" class="bn-image img-style">
+                        <img loading="lazy" width="690" height="388"
+                            src="{{ asset('assets/storefront/images/section/banner-4.jpg') }}" alt="Image">
+                    </a>
+                    <div class="bn-content">
+                        <a href="shop-default.html" class="title h3 fw-medium text-white link-dark">
+                            Nature’s Support <br class="d-none d-sm-block">
+                            for Modern Life
+                        </a>
+                        <p class="desc text-white text-body-1">
+                            Boost vitality and balance with clean, <br class="d-none d-sm-block">
+                            mindful ingredients.
+                        </p>
+                        <a href="shop-default.html" class="btn-action tf-btn btn-white">
+                            Shop Styles
+                        </a>
+                    </div>
+                </div>
+
+                <div class="banner-image-text type-abs style-1 wow fadeInLeft">
+                    <a href="shop-default.html" class="bn-image img-style">
+                        <img loading="lazy" width="690" height="388"
+                            src="{{ asset('assets/storefront/images/section/banner-4.jpg') }}" alt="Image">
+                    </a>
+                    <div class="bn-content">
+                        <a href="shop-default.html" class="title h3 fw-medium text-white link-dark">
+                            Nature’s Support <br class="d-none d-sm-block">
+                            for Modern Life
+                        </a>
+                        <p class="desc text-white text-body-1">
+                            Boost vitality and balance with clean, <br class="d-none d-sm-block">
+                            mindful ingredients.
+                        </p>
+                        <a href="shop-default.html" class="btn-action tf-btn btn-white">
+                            Shop Styles
+                        </a>
+                    </div>
+                </div>
+                <div class="banner-image-text type-abs style-1 wow fadeInLeft">
+                    <a href="shop-default.html" class="bn-image img-style">
+                        <img loading="lazy" width="690" height="388"
+                            src="{{ asset('assets/storefront/images/section/banner-4.jpg') }}" alt="Image">
+                    </a>
+                    <div class="bn-content">
+                        <a href="shop-default.html" class="title h3 fw-medium text-white link-dark">
+                            Nature’s Support <br class="d-none d-sm-block">
+                            for Modern Life
+                        </a>
+                        <p class="desc text-white text-body-1">
+                            Boost vitality and balance with clean, <br class="d-none d-sm-block">
+                            mindful ingredients.
+                        </p>
+                        <a href="shop-default.html" class="btn-action tf-btn btn-white">
+                            Shop Styles
+                        </a>
+                    </div>
+                </div>
+                <div class="banner-image-text type-abs style-1 wow fadeInLeft">
+                    <a href="shop-default.html" class="bn-image img-style">
+                        <img loading="lazy" width="690" height="388"
+                            src="{{ asset('assets/storefront/images/section/banner-4.jpg') }}" alt="Image">
+                    </a>
+                    <div class="bn-content">
+                        <a href="shop-default.html" class="title h3 fw-medium text-white link-dark">
+                            Nature’s Support <br class="d-none d-sm-block">
+                            for Modern Life
+                        </a>
+                        <p class="desc text-white text-body-1">
+                            Boost vitality and balance with clean, <br class="d-none d-sm-block">
+                            mindful ingredients.
+                        </p>
+                        <a href="shop-default.html" class="btn-action tf-btn btn-white">
+                            Shop Styles
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+    <!-- /Collection -->
+
+    <!-- /Banner Countdown -->
+    <section id="top-picks" class="flat-spacing">
+        <div class="container">
+            <div class="sect-heading type-2 text-center wow fadeInUp">
+                <h3 class="s-title">
+                    New Arrivals
+                </h3>
+                <p class="s-desc text-body-1 cl-text-2">
+                    Fresh styles just in! Elevate your look.
+                </p>
             </div>
             <div dir="ltr" class="swiper tf-swiper wrap-sw-over" data-preview="4" data-tablet="3"
                 data-mobile-sm="2" data-mobile="1" data-space-lg="30" data-space-md="20" data-space="15">
                 <div class="swiper-wrapper">
-                    @foreach ($newArrivals as $product)
+                    @foreach ($demoProducts as $product)
                         @include('storefront.components.product-card', ['product' => $product])
                     @endforeach
                 </div>
@@ -450,188 +475,160 @@
         </div>
     </section>
 
-    <!-- Collection -->
 
+    <!-- Testimonial -->
     <section class="flat-spacing pt-0">
         <div class="container">
-
-            <div class="infiniteSlide-brand wow fadeInUp">
-                <div class="infiniteSlide infiniteSlide-wrapper" data-clone="3">
-                    <div class="img-brand">
-                        <img width="97" height="32" src="{{ asset('assets/storefront/images/brand/findr.svg') }}"
-                            alt="Image">
+            <div class="sect-heading type-2 text-center wow fadeInUp">
+                <h3 class="s-title">
+                    Customer Say!
+                </h3>
+                <p class="s-desc text-body-1 cl-text-2">
+                    Our customers adore our products, and we constantly aim to delight them.
+                </p>
+            </div>
+            <div dir="ltr" class="swiper tf-swiper" data-preview="2" data-tablet="2" data-mobile-sm="1"
+                data-mobile="1" data-space-lg="30" data-space-md="15" data-space="10" data-pagination="1"
+                data-pagination-sm="2" data-pagination-md="2" data-pagination-lg="2">
+                <div class="swiper-wrapper">
+                    <!-- slide 1 -->
+                    <div class="swiper-slide">
+                        <div class="testimonial-v01 style-2 wow fadeInUp">
+                            <div class="tes-content">
+                                <div class="star-wrap d-flex align-items-center">
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                </div>
+                                <div class="tes_author">
+                                    <h5 class="author-name">Emma Collins</h5>
+                                    <div class="br-line"></div>
+                                    <div class="author-verified">
+                                        <i class="icon icon-CheckCircle1"></i>
+                                        <span class="cl-text-2">
+                                            Verified Buyer
+                                        </span>
+                                    </div>
+                                </div>
+                                <p class="tes_text h6 fw-medium text-capitalize">
+                                    “I love how calm and balanced I feel after using these products. Everything
+                                    feels more natural, lighter, and easy again <br class="d-none d-xxl-block">
+                                    every day.”
+                                </p>
+                                <div class="tes_product">
+                                    <div class="product-image">
+                                        <img loading="lazy" width="60" height="60"
+                                            src="{{ asset('assets/storefront/images/product/mental/product-1.jpg') }}"
+                                            alt="Image">
+                                    </div>
+                                    <div class="product-infor">
+                                        <a href="product-detail.html" class="link fw-medium lh-24">
+                                            Gaia Herbs Relax Gummies
+                                        </a>
+                                        <div class="price-wrap prd_price">
+                                            <span class="price-new text-primary fw-semibold">$74.99</span>
+                                            <span class="price-old text-caption-01 cl-text-3">$89,99</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="img-brand">
-                        <img width="117" height="32"
-                            src="{{ asset('assets/storefront/images/brand/intdeco.svg') }}" alt="Image">
+                    <!-- slide 2 -->
+                    <div class="swiper-slide">
+                        <div class="testimonial-v01 style-2 wow fadeInUp">
+                            <div class="tes-content">
+                                <div class="star-wrap d-flex align-items-center">
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                </div>
+                                <div class="tes_author">
+                                    <h5 class="author-name">Sophia Ramirez</h5>
+                                    <div class="br-line"></div>
+                                    <div class="author-verified">
+                                        <i class="icon icon-CheckCircle1"></i>
+                                        <span class="cl-text-2">
+                                            Verified Buyer
+                                        </span>
+                                    </div>
+                                </div>
+                                <p class="tes_text h6 fw-medium text-capitalize">
+                                    “These supplements have become part of my nightly routine. I sleep deeper, rest
+                                    longer, wake up feeling genuinely refreshed every morning.”
+                                </p>
+                                <div class="tes_product">
+                                    <div class="product-image">
+                                        <img loading="lazy" width="60" height="60"
+                                            src="{{ asset('assets/storefront/images/product/mental/product-3.jpg') }}"
+                                            alt="Image">
+                                    </div>
+                                    <div class="product-infor">
+                                        <a href="product-detail.html" class="link fw-medium lh-24">
+                                            Blooming Blends Sleep Drops
+                                        </a>
+                                        <div class="price-wrap prd_price">
+                                            <span class="price-new text-primary fw-semibold">$74.99</span>
+                                            <span class="price-old text-caption-01 cl-text-3">$89,99</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="img-brand">
-                        <img width="81" height="32" src="{{ asset('assets/storefront/images/brand/sopify.svg') }}"
-                            alt="Image">
-                    </div>
-                    <div class="img-brand">
-                        <img width="141" height="32" src="{{ asset('assets/storefront/images/brand/modave.svg') }}"
-                            alt="Image">
-                    </div>
-                    <div class="img-brand">
-                        <img width="168" height="32"
-                            src="{{ asset('assets/storefront/images/brand/vanfava.svg') }}" alt="Image">
+                    <!-- slide 1 -->
+                    <div class="swiper-slide">
+                        <div class="testimonial-v01 style-2 wow fadeInUp">
+                            <div class="tes-content">
+                                <div class="star-wrap d-flex align-items-center">
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                    <i class="icon icon-Star fs-24"></i>
+                                </div>
+                                <div class="tes_author">
+                                    <h5 class="author-name">Emma Collins</h5>
+                                    <div class="br-line"></div>
+                                    <div class="author-verified">
+                                        <i class="icon icon-CheckCircle1"></i>
+                                        <span class="cl-text-2">
+                                            Verified Buyer
+                                        </span>
+                                    </div>
+                                </div>
+                                <p class="tes_text h6 fw-medium text-capitalize">
+                                    “I love how calm and balanced I feel after using these products. Everything
+                                    feels more natural, lighter, and easy again <br class="d-none d-xxl-block">
+                                    every day.”
+                                </p>
+                                <div class="tes_product">
+                                    <div class="product-image">
+                                        <img loading="lazy" width="60" height="60"
+                                            src="{{ asset('assets/storefront/images/product/mental/product-1.jpg') }}"
+                                            alt="Image">
+                                    </div>
+                                    <div class="product-infor">
+                                        <a href="product-detail.html" class="link fw-medium lh-24">
+                                            Gaia Herbs Relax Gummies
+                                        </a>
+                                        <div class="price-wrap prd_price">
+                                            <span class="price-new text-primary fw-semibold">$74.99</span>
+                                            <span class="price-old text-caption-01 cl-text-3">$89,99</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+                <div class="sw-line-default style-2 tf-sw-pagination"></div>
             </div>
         </div>
     </section>
-    <!-- /Collection -->
-     <!-- Testimonial -->
-        <section class="flat-spacing pt-0">
-            <div class="container">
-                <div class="sect-heading type-2 text-center wow fadeInUp">
-                    <h3 class="s-title">
-                        Customer Say!
-                    </h3>
-                    <p class="s-desc text-body-1 cl-text-2">
-                        Our customers adore our products, and we constantly aim to delight them.
-                    </p>
-                </div>
-                <div dir="ltr" class="swiper tf-swiper" data-preview="2" data-tablet="2" data-mobile-sm="1"
-                    data-mobile="1" data-space-lg="30" data-space-md="15" data-space="10" data-pagination="1"
-                    data-pagination-sm="2" data-pagination-md="2" data-pagination-lg="2">
-                    <div class="swiper-wrapper">
-                        <!-- slide 1 -->
-                        <div class="swiper-slide">
-                            <div class="testimonial-v01 style-2 wow fadeInUp">
-                                <div class="tes-content">
-                                    <div class="star-wrap d-flex align-items-center">
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                    </div>
-                                    <div class="tes_author">
-                                        <h5 class="author-name">Emma Collins</h5>
-                                        <div class="br-line"></div>
-                                        <div class="author-verified">
-                                            <i class="icon icon-CheckCircle1"></i>
-                                            <span class="cl-text-2">
-                                                Verified Buyer
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <p class="tes_text h6 fw-medium text-capitalize">
-                                        “I love how calm and balanced I feel after using these products. Everything
-                                        feels more natural, lighter, and easy again <br class="d-none d-xxl-block">
-                                        every day.”
-                                    </p>
-                                    <div class="tes_product">
-                                        <div class="product-image">
-                                            <img loading="lazy" width="60" height="60"
-                                                src="{{ asset('assets/storefront/images/product/mental/product-1.jpg') }}" alt="Image">
-                                        </div>
-                                        <div class="product-infor">
-                                            <a href="product-detail.html" class="link fw-medium lh-24">
-                                                Gaia Herbs Relax Gummies
-                                            </a>
-                                            <div class="price-wrap prd_price">
-                                                <span class="price-new text-primary fw-semibold">$74.99</span>
-                                                <span class="price-old text-caption-01 cl-text-3">$89,99</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- slide 2 -->
-                        <div class="swiper-slide">
-                            <div class="testimonial-v01 style-2 wow fadeInUp">
-                                <div class="tes-content">
-                                    <div class="star-wrap d-flex align-items-center">
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                    </div>
-                                    <div class="tes_author">
-                                        <h5 class="author-name">Sophia Ramirez</h5>
-                                        <div class="br-line"></div>
-                                        <div class="author-verified">
-                                            <i class="icon icon-CheckCircle1"></i>
-                                            <span class="cl-text-2">
-                                                Verified Buyer
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <p class="tes_text h6 fw-medium text-capitalize">
-                                        “These supplements have become part of my nightly routine. I sleep deeper, rest
-                                        longer, wake up feeling genuinely refreshed every morning.”
-                                    </p>
-                                    <div class="tes_product">
-                                        <div class="product-image">
-                                            <img loading="lazy" width="60" height="60"
-                                                src="{{ asset('assets/storefront/images/product/mental/product-3.jpg') }}" alt="Image">
-                                        </div>
-                                        <div class="product-infor">
-                                            <a href="product-detail.html" class="link fw-medium lh-24">
-                                                Blooming Blends Sleep Drops
-                                            </a>
-                                            <div class="price-wrap prd_price">
-                                                <span class="price-new text-primary fw-semibold">$74.99</span>
-                                                <span class="price-old text-caption-01 cl-text-3">$89,99</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- slide 1 -->
-                        <div class="swiper-slide">
-                            <div class="testimonial-v01 style-2 wow fadeInUp">
-                                <div class="tes-content">
-                                    <div class="star-wrap d-flex align-items-center">
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                        <i class="icon icon-Star fs-24"></i>
-                                    </div>
-                                    <div class="tes_author">
-                                        <h5 class="author-name">Emma Collins</h5>
-                                        <div class="br-line"></div>
-                                        <div class="author-verified">
-                                            <i class="icon icon-CheckCircle1"></i>
-                                            <span class="cl-text-2">
-                                                Verified Buyer
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <p class="tes_text h6 fw-medium text-capitalize">
-                                        “I love how calm and balanced I feel after using these products. Everything
-                                        feels more natural, lighter, and easy again <br class="d-none d-xxl-block">
-                                        every day.”
-                                    </p>
-                                    <div class="tes_product">
-                                        <div class="product-image">
-                                            <img loading="lazy" width="60" height="60"
-                                                src="{{ asset('assets/storefront/images/product/mental/product-1.jpg') }}" alt="Image">
-                                        </div>
-                                        <div class="product-infor">
-                                            <a href="product-detail.html" class="link fw-medium lh-24">
-                                                Gaia Herbs Relax Gummies
-                                            </a>
-                                            <div class="price-wrap prd_price">
-                                                <span class="price-new text-primary fw-semibold">$74.99</span>
-                                                <span class="price-old text-caption-01 cl-text-3">$89,99</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="sw-line-default style-2 tf-sw-pagination"></div>
-                </div>
-            </div>
-        </section>
-        <!-- /Testimonial -->
+    <!-- /Testimonial -->
 @endsection

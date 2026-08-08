@@ -11,9 +11,9 @@
                         <div class="sld_content">
                             <div class="container">
                                 <div class="content-sld">
-                                    <p class="sub-title_sld fade-item fade-item-1">{{ $slide['eyebrow'] }}</p>
-                                    <h1 class="title-sld fw-medium fade-item fade-item-2">{{ $slide['title'] }}</h1>
-                                    <p class="desc-sld fade-item fade-item-3">{{ $slide['subtitle'] }}</p>
+                                    <p class="sub-text_sld text-body-1 text-white fade-item fade-item-1 mb-15">{{ $slide['eyebrow'] }}</p>
+                                    <h1 class="title_sld text-display fw-medium text-white fade-item fade-item-2">{{ $slide['title'] }}</h1>
+                                    <p class="desc-sld text-white fade-item fade-item-3">{{ $slide['subtitle'] }}</p>
                                     <div class="fade-item fade-item-4">
                                         <a href="#top-picks" class="tf-btn btn-white">{{ $slide['button'] }}</a>
                                     </div>
