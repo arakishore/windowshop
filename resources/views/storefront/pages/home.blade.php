@@ -14,18 +14,12 @@
         ],
         [
             'image' => 'assets/storefront/images/slider/slider-2.jpg',
-            'eyebrow' => 'NEW ARRIVALS',
-            'title' => 'Find Your Next Favourite',
-            'subtitle' => 'Browse useful, beautiful products across WindowShop categories.',
-            'button' => 'Shop Styles',
+            'eyebrow' => 'Join WindowShop Today',
+            'title' => 'Onboard your store and reach a wider audience with WindowShop',
+            'subtitle' => '',
+            'button' => 'Register now',
         ],
-        [
-            'image' => 'assets/storefront/images/slider/slider-3.jpg',
-            'eyebrow' => 'LIMITED OFFERS',
-            'title' => 'Deals Made For Today',
-            'subtitle' => 'Static demo content now, dynamic offers in the next phase.',
-            'button' => 'Shop Styles',
-        ],
+
     ];
 
     $categories = [
@@ -199,24 +193,37 @@
             </div>
         </div>
     </section>
-    <!-- Banner Countdown -->
-    <div class="banner-countdown-v01 bg-primary">
-        <div class="container">
-            <div class="content">
-                <div class="col-left">
-                    <h3 class="text-white mb-8">Hurry! Deals On</h3>
-                    <p class="text-white">Up to 50% Off Selected Styles. Don't Miss Out.</p>
+    <!-- banner -->
+    <div class="banner-v01">
+        <div class="bn_image">
+            <img loading="lazy" width="1920" height="620"
+                src="{{ asset('assets/storefront/images/section/banner-40.jpg') }}" alt="Image">
+        </div>
+        <div class="bn_content">
+            <div class="container">
+                <div class="h1 title text-white mb-12">
+                    Elevate Your <br>
+                    Workout Style
                 </div>
-                <div class="countdown-v01 text-white">
-                    <div class="js-countdown cd-has-zero cd-custom" data-timer="1093120" data-labels="Days,Hours,Mins,Secs">
-                    </div>
-                </div>
+                <p class="desc text-white mb-32">
+                    Premium activewear crafted for comfort, <br>
+                    performance, and confidence.
+                </p>
                 <a href="shop-default.html" class="tf-btn btn-white">
-                    Shop Now
+                    Shop Styles
                 </a>
             </div>
         </div>
+        <div class="infiniteSlide-text wow fadeInUp">
+            <div class="infiniteSlide infiniteSlide-wrapper" data-clone="5">
+                <p class="text h1 fw-semibold">NEW SEASON PICKS</p>
+                <p class="text h1 fw-semibold">TRENDING STYLES</p>
+                <p class="text h1 fw-semibold">LIMITED DROPS</p>
+            </div>
+        </div>
     </div>
+    <!-- /banner -->
+
 
     <!-- Collection -->
     <div class="flat-spacing">
@@ -296,32 +303,25 @@
         </div>
     </div>
     <!-- /Collection -->
-
     <!-- Banner Countdown -->
-    <section class="flat-spacing pb-0">
+    <div class="banner-countdown-v01 bg-primary">
         <div class="container">
-            <div class="banner-countdown-v01 style-3 wow fadeInUp">
-                <div class="content">
-                    <div class="col-left">
-                        <h5 class="mb-8">Limited Time Furniture Offers.</h5>
-                        <p class="text-body-1 cl-text-2">Enjoy special pricing on designs for modern homes.</p>
-                    </div>
-                    <div class="countdown-v07 h1 fw-semibold">
-                        <div class="js-countdown cd-has-zero cd-custom" data-timer="1093120">
-                        </div>
-                    </div>
-                    <p class="coupon-copy-wrap bg-dark animate-btn h6 fw-medium cs-pointer">
-                        Code:
-                        <span class="coupon-code">
-                            Amerce
-                        </span>
-                        <i class="icon icon-CopySimple fs-24"></i>
-                    </p>
+            <div class="content">
+                <div class="col-left">
+                    <h3 class="text-white mb-8">Hurry! Deals On</h3>
+                    <p class="text-white">Up to 50% Off Selected Styles. Don't Miss Out.</p>
                 </div>
+                <div class="countdown-v01 text-white">
+                    <div class="js-countdown cd-has-zero cd-custom" data-timer="1093120"
+                        data-labels="Days,Hours,Mins,Secs">
+                    </div>
+                </div>
+                <a href="shop-default.html" class="tf-btn btn-white">
+                    Shop Now
+                </a>
             </div>
         </div>
-    </section>
-    <!-- /Banner Countdown -->
+    </div>
     <!-- Collection -->
     <section class="flat-spacing pb-0">
         <div class="container-full">
@@ -368,7 +368,87 @@
     <!-- Collection -->
     <section class="flat-spacing pb-0">
         <div class="container">
-            <div class="tf-grid-layout md-col-4 flat-spacing-2 pt-0">
+            <div class="tf-grid-layout xs-col-1 sm-col-3 md-col-4 flat-spacing-2 pt-0">
+                <div class="banner-image-text type-abs style-1 wow fadeInLeft">
+                    <a href="shop-default.html" class="bn-image img-style">
+                        <img loading="lazy" width="690" height="388"
+                            src="{{ asset('assets/storefront/images/section/banner-4.jpg') }}" alt="Image">
+                    </a>
+                    <div class="bn-content">
+                        <a href="shop-default.html" class="title h3 fw-medium text-white link-dark">
+                            Nature’s Support <br class="d-none d-sm-block">
+                            for Modern Life
+                        </a>
+                        <p class="desc text-white text-body-1">
+                            Boost vitality and balance with clean, <br class="d-none d-sm-block">
+                            mindful ingredients.
+                        </p>
+                        <a href="shop-default.html" class="btn-action tf-btn btn-white">
+                            Shop Styles
+                        </a>
+                    </div>
+                </div>
+
+                <div class="banner-image-text type-abs style-1 wow fadeInLeft">
+                    <a href="shop-default.html" class="bn-image img-style">
+                        <img loading="lazy" width="690" height="388"
+                            src="{{ asset('assets/storefront/images/section/banner-4.jpg') }}" alt="Image">
+                    </a>
+                    <div class="bn-content">
+                        <a href="shop-default.html" class="title h3 fw-medium text-white link-dark">
+                            Nature’s Support <br class="d-none d-sm-block">
+                            for Modern Life
+                        </a>
+                        <p class="desc text-white text-body-1">
+                            Boost vitality and balance with clean, <br class="d-none d-sm-block">
+                            mindful ingredients.
+                        </p>
+                        <a href="shop-default.html" class="btn-action tf-btn btn-white">
+                            Shop Styles
+                        </a>
+                    </div>
+                </div>
+
+                <div class="banner-image-text type-abs style-1 wow fadeInLeft">
+                    <a href="shop-default.html" class="bn-image img-style">
+                        <img loading="lazy" width="690" height="388"
+                            src="{{ asset('assets/storefront/images/section/banner-4.jpg') }}" alt="Image">
+                    </a>
+                    <div class="bn-content">
+                        <a href="shop-default.html" class="title h3 fw-medium text-white link-dark">
+                            Nature’s Support <br class="d-none d-sm-block">
+                            for Modern Life
+                        </a>
+                        <p class="desc text-white text-body-1">
+                            Boost vitality and balance with clean, <br class="d-none d-sm-block">
+                            mindful ingredients.
+                        </p>
+                        <a href="shop-default.html" class="btn-action tf-btn btn-white">
+                            Shop Styles
+                        </a>
+                    </div>
+                </div>
+
+                <div class="banner-image-text type-abs style-1 wow fadeInLeft">
+                    <a href="shop-default.html" class="bn-image img-style">
+                        <img loading="lazy" width="690" height="388"
+                            src="{{ asset('assets/storefront/images/section/banner-4.jpg') }}" alt="Image">
+                    </a>
+                    <div class="bn-content">
+                        <a href="shop-default.html" class="title h3 fw-medium text-white link-dark">
+                            Nature’s Support <br class="d-none d-sm-block">
+                            for Modern Life
+                        </a>
+                        <p class="desc text-white text-body-1">
+                            Boost vitality and balance with clean, <br class="d-none d-sm-block">
+                            mindful ingredients.
+                        </p>
+                        <a href="shop-default.html" class="btn-action tf-btn btn-white">
+                            Shop Styles
+                        </a>
+                    </div>
+                </div>
+
                 <div class="banner-image-text type-abs style-1 wow fadeInLeft">
                     <a href="shop-default.html" class="bn-image img-style">
                         <img loading="lazy" width="690" height="388"
@@ -475,9 +555,94 @@
         </div>
     </section>
 
-
+    <!-- Store -->
+    <section class="themesFlat">
+        <div class="container">
+            <div class="sect-heading type-2 text-center wow fadeInUp">
+                <h3 class="s-title">
+                    Shop by Store
+                </h3>
+                <p class="s-desc text-body-1 cl-text-2">
+                    Elevate your wardrobe with fresh finds today!
+                </p>
+            </div>
+            <div dir="ltr" class="swiper tf-swiper" data-preview="5" data-tablet="3" data-mobile-sm="3"
+                data-mobile="2" data-space="10" data-pagination="2" data-pagination-sm="3" data-pagination-md="4"
+                data-pagination-lg="5">
+                <div class="swiper-wrapper">
+                    <!-- slide 1 -->
+                    <div class="swiper-slide">
+                        <div class="gallery-item hover-img hover-overlay wow fadeInUp">
+                            <div class="image img-style">
+                                <img loading="lazy" width="274" height="274"
+                                    src="{{ asset('assets/storefront/images/gallery/gallery-1.jpg') }}" alt="Image">
+                            </div>
+                            <a href="product-detail.html" class="box-icon hover-tooltip">
+                                <span class="icon icon-Eye"></span>
+                                <span class="tooltip">View product</span>
+                            </a>
+                        </div>
+                    </div>
+                    <!-- slide 2 -->
+                    <div class="swiper-slide">
+                        <div class="gallery-item hover-img hover-overlay wow fadeInUp">
+                            <div class="image img-style">
+                                <img loading="lazy" width="274" height="274"
+                                    src="{{ asset('assets/storefront/images/gallery/gallery-2.jpg') }}" alt="Image">
+                            </div>
+                            <a href="product-detail.html" class="box-icon hover-tooltip">
+                                <span class="icon icon-Eye"></span>
+                                <span class="tooltip">View product</span>
+                            </a>
+                        </div>
+                    </div>
+                    <!-- slide 3 -->
+                    <div class="swiper-slide">
+                        <div class="gallery-item hover-img hover-overlay wow fadeInUp">
+                            <div class="image img-style">
+                                <img loading="lazy" width="274" height="274"
+                                    src="{{ asset('assets/storefront/images/gallery/gallery-3.jpg') }}" alt="Image">
+                            </div>
+                            <a href="product-detail.html" class="box-icon hover-tooltip">
+                                <span class="icon icon-Eye"></span>
+                                <span class="tooltip">View product</span>
+                            </a>
+                        </div>
+                    </div>
+                    <!-- slide 4 -->
+                    <div class="swiper-slide">
+                        <div class="gallery-item hover-img hover-overlay wow fadeInUp">
+                            <div class="image img-style">
+                                <img loading="lazy" width="274" height="274"
+                                    src="{{ asset('assets/storefront/images/gallery/gallery-4.jpg') }}" alt="Image">
+                            </div>
+                            <a href="product-detail.html" class="box-icon hover-tooltip">
+                                <span class="icon icon-Eye"></span>
+                                <span class="tooltip">View product</span>
+                            </a>
+                        </div>
+                    </div>
+                    <!-- slide 5 -->
+                    <div class="swiper-slide">
+                        <div class="gallery-item hover-img hover-overlay wow fadeInUp">
+                            <div class="image img-style">
+                                <img loading="lazy" width="274" height="274"
+                                    src="{{ asset('assets/storefront/images/gallery/gallery-5.jpg') }}" alt="Image">
+                            </div>
+                            <a href="product-detail.html" class="box-icon hover-tooltip">
+                                <span class="icon icon-Eye"></span>
+                                <span class="tooltip">View product</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="sw-dot-default tf-sw-pagination"></div>
+            </div>
+        </div>
+    </section>
+    <!-- /Gallery -->
     <!-- Testimonial -->
-    <section class="flat-spacing pt-0">
+    <section class="flat-spacing">
         <div class="container">
             <div class="sect-heading type-2 text-center wow fadeInUp">
                 <h3 class="s-title">
