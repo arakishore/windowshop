@@ -40,6 +40,9 @@ Route::get('/privacy-policy', [StorefrontController::class, 'privacy'])->name('s
 Route::get('/return-and-refund', [StorefrontController::class, 'returns'])->name('storefront.returns');
 Route::get('/shipping', [StorefrontController::class, 'shipping'])->name('storefront.shipping');
 Route::get('/contact-us', [StorefrontController::class, 'contact'])->name('storefront.contact');
+Route::get('/login', [StorefrontController::class, 'login'])->name('storefront.login');
+Route::get('/register', [StorefrontController::class, 'register'])->name('storefront.register');
+Route::get('/forgot-password', [StorefrontController::class, 'forgotPassword'])->name('storefront.forgot-password');
 Route::get('/products', [StorefrontController::class, 'products'])->name('storefront.products');
 Route::get('/shop', [StorefrontController::class, 'products'])->name('storefront.shop');
 Route::get('/product-detail', [StorefrontController::class, 'productDetail'])->name('storefront.product.detail');

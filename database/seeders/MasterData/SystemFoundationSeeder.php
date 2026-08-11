@@ -25,6 +25,7 @@ class SystemFoundationSeeder extends Seeder
 
         $groups = [
             ['name' => 'General', 'slug' => 'general', 'sort_order' => 10],
+            ['name' => 'Marketplace', 'slug' => 'marketplace', 'sort_order' => 15],
             ['name' => 'Localization', 'slug' => 'localization', 'sort_order' => 20],
             ['name' => 'Email', 'slug' => 'email', 'sort_order' => 30],
             ['name' => 'SMS', 'slug' => 'sms', 'sort_order' => 40],
@@ -53,7 +54,7 @@ class SystemFoundationSeeder extends Seeder
         }
 
         $groupIds = DB::table('system_setting_groups')
-            ->whereIn('slug', ['general', 'localization'])
+            ->whereIn('slug', ['general', 'marketplace', 'localization'])
             ->pluck('id', 'slug');
 
         $settings = [
@@ -62,6 +63,13 @@ class SystemFoundationSeeder extends Seeder
                 'key' => 'marketplace_name',
                 'label' => 'Marketplace Name',
                 'value' => 'WindowShop',
+                'sort_order' => 10,
+            ],
+            [
+                'group_id' => $groupIds['marketplace'],
+                'key' => 'marketplace.logo',
+                'label' => 'Marketplace Logo',
+                'value' => 'assets/admin/images/logov2.png',
                 'sort_order' => 10,
             ],
             [

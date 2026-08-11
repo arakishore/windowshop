@@ -58,6 +58,24 @@
             top: 1rem;
         }
 
+        .admin-settings-logo-preview {
+            width: min(100%, 400px);
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            border: 1px solid var(--border-color, #ddd);
+            border-radius: .375rem;
+            padding: 1rem;
+        }
+
+        .admin-settings-logo-preview img {
+            max-width: 100%;
+            max-height: 120px;
+            object-fit: contain;
+        }
+
         .admin-settings-savebar {
             position: sticky;
             bottom: 0;
@@ -115,6 +133,9 @@
         $decimalSeparator = $field('currency', 'decimal_separator');
         $symbolPosition = $field('currency', 'symbol_position');
         $storefrontBannerMaxPerShop = old('settings.storefront_banner.max_per_shop', $storefrontBannerMaxPerShop ?? 3);
+        $marketplaceLogoPath = $marketplaceLogoPath ?? 'assets/admin/images/logov2.png';
+        $marketplaceLogoUrl = $marketplaceLogoUrl ?? asset('assets/admin/images/logov2.png');
+        $hasCustomMarketplaceLogo = str_starts_with($marketplaceLogoPath, 'marketplace/logo/');
         $monthOptions = [
             1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
             5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
@@ -134,7 +155,7 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ route('admin.settings.update') }}">
+    <form method="POST" action="{{ route('admin.settings.update') }}" enctype="multipart/form-data">
         @csrf
         @method('PUT')
 
@@ -145,6 +166,7 @@
                         <div class="nav nav-pills flex-column" role="tablist">
                             @foreach ([
                                 'general' => ['General', 'ph-gear'],
+                                'marketplace' => ['Marketplace', 'ph-storefront'],
                                 'regional' => ['Regional', 'ph-globe-hemisphere-east'],
                                 'currency' => ['Currency', 'ph-currency-inr'],
                                 'storefront_banner' => ['Storefront Banner', 'ph-images-square'],
@@ -174,6 +196,62 @@
                         </div>
                         <div class="card-body text-muted">
                             Global marketplace preferences will appear here later.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="settings_marketplace" role="tabpanel">
+                    <div class="card admin-settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Marketplace Logo</h5>
+                            <div class="text-muted fs-sm mt-1">Global WindowShop logo used by admin marketplace surfaces.</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="admin-settings-grid">
+                                <div>
+                                    <label class="form-label fw-semibold">Current Logo Preview</label>
+                                    <div class="admin-settings-logo-preview">
+                                        <img id="marketplace_logo_preview" src="{{ $marketplaceLogoUrl }}" data-current-src="{{ $marketplaceLogoUrl }}" alt="Marketplace logo">
+                                    </div>
+                                    <div class="text-muted small text-break mt-2">Current: {{ $marketplaceLogoPath }}</div>
+                                </div>
+                                <div>
+                                    <label for="marketplace_logo" class="form-label fw-semibold">Upload / Change Logo</label>
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <label for="marketplace_logo" class="btn btn-outline-primary btn-sm mb-0">
+                                            <i class="ph-upload me-1"></i>
+                                            Choose image
+                                        </label>
+                                        <button type="button" class="btn btn-link btn-sm text-muted js-clear-marketplace-logo-preview">
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <input
+                                        id="marketplace_logo"
+                                        name="marketplace_logo"
+                                        type="file"
+                                        accept=".png,.jpg,.jpeg,.webp"
+                                        class="d-none @error('marketplace_logo') is-invalid @enderror"
+                                    >
+                                    <div class="form-text">
+                                        Recommended size: approximately 400 x 120 px. PNG, JPG or WebP. Maximum file size: 2 MB. Transparent background is recommended.
+                                    </div>
+                                    @error('marketplace_logo')
+                                        <div class="invalid-feedback d-block">{{ $message }}</div>
+                                    @enderror
+
+                                    @if($hasCustomMarketplaceLogo)
+                                        <div class="form-check mt-3">
+                                            <input id="remove_marketplace_logo" name="remove_marketplace_logo" type="checkbox" value="1" class="form-check-input @error('remove_marketplace_logo') is-invalid @enderror">
+                                            <label for="remove_marketplace_logo" class="form-check-label">Remove Logo</label>
+                                            <div class="form-text">Removing the uploaded logo restores the default WindowShop logo.</div>
+                                        </div>
+                                        @error('remove_marketplace_logo')
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                                        @enderror
+                                    @endif
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -425,6 +503,53 @@
                 const amount = fraction === undefined ? grouped : `${grouped}${decimal}${fraction}`;
                 document.querySelector('.js-admin-currency-preview').textContent = before ? `${symbol}${amount}` : `${amount} ${symbol}`;
             };
+            const setupMarketplaceLogoPreview = () => {
+                const input = document.getElementById('marketplace_logo');
+                const preview = document.getElementById('marketplace_logo_preview');
+                const clear = document.querySelector('.js-clear-marketplace-logo-preview');
+                const remove = document.getElementById('remove_marketplace_logo');
+                let objectUrl = null;
+
+                if (!input || !preview) {
+                    return;
+                }
+
+                input.addEventListener('change', () => {
+                    const file = input.files && input.files[0];
+
+                    if (!file || !/^image\/(jpeg|jpg|png|webp)$/i.test(file.type)) {
+                        return;
+                    }
+
+                    if (remove) {
+                        remove.checked = false;
+                    }
+
+                    if (objectUrl) {
+                        URL.revokeObjectURL(objectUrl);
+                    }
+
+                    objectUrl = URL.createObjectURL(file);
+                    preview.src = objectUrl;
+                });
+
+                clear?.addEventListener('click', () => {
+                    input.value = '';
+
+                    if (objectUrl) {
+                        URL.revokeObjectURL(objectUrl);
+                        objectUrl = null;
+                    }
+
+                    preview.src = preview.dataset.currentSrc;
+                });
+
+                remove?.addEventListener('change', () => {
+                    if (remove.checked) {
+                        input.value = '';
+                    }
+                });
+            };
 
             document.querySelectorAll('.js-admin-timezone, .js-admin-date-format, .js-admin-time-format, .js-admin-financial-month')
                 .forEach((input) => input.addEventListener('input', renderRegionalPreview));
@@ -447,6 +572,7 @@
             });
             renderRegionalPreview();
             renderCurrencyPreview();
+            setupMarketplaceLogoPreview();
         });
     </script>
 @endpush

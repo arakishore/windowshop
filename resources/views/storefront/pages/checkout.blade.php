@@ -49,7 +49,7 @@
                         <div class="wrap-quick-login">
                             <p class="title cl-text-2">
                                 Already have an account?
-                                <a href="#sign" data-bs-toggle="modal" class="tf-btn-line-2 style-primary fw-semibold">
+                                <a href="{{ route('storefront.login') }}" class="tf-btn-line-2 style-primary fw-semibold">
                                     Login Here
                                 </a>
                                 </p>

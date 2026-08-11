@@ -33,7 +33,7 @@
                         </a>
                     </li>
                     <li>
-                        <a href="#sign" data-bs-toggle="modal" class="nav-icon-item link">
+                        <a href="{{ route('storefront.login') }}" class="nav-icon-item link">
                             <i class="icon icon-User"></i>
                         </a>
                     </li>

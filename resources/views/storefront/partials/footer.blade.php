@@ -37,7 +37,7 @@
                                     <li><a href="{{ route('storefront.testimonials') }}" class="cl-text-3 link">Testimonials</a></li>
                                     <li><a href="{{ route('storefront.contact') }}" class="cl-text-3 link">Contact us</a></li>
                                     <li><a href="blog.html" class="cl-text-3 link">Latest New</a></li>
-                                    <li><a href="account-page.html" class="cl-text-3 link">My Account</a></li>
+                                    <li><a href="{{ route('storefront.login') }}" class="cl-text-3 link">My Account</a></li>
                                 </ul>
                             </div>
                         </div>
@@ -57,11 +57,11 @@
                             <p class="footer-heading footer-heading-mobile text-white">MY ACCOUNT</p>
                             <div class="tf-collapse-content">
                                 <ul class="footer-menu-list">
-                                    <li><a href="login.html" class="cl-text-3 link">Login</a>
+                                    <li><a href="{{ route('storefront.login') }}" class="cl-text-3 link">Login</a>
                                     </li>
-                                    <li><a href="register.html" class="cl-text-3 link">Sign
+                                    <li><a href="{{ route('storefront.register') }}" class="cl-text-3 link">Sign
                                             up</a></li>
-                                    <li><a href="account-page.html" class="cl-text-3 link">My Account</a></li>
+                                    <li><a href="{{ route('storefront.login') }}" class="cl-text-3 link">My Account</a></li>
                                     <li><a href="wishlist.html" class="cl-text-3 link">Wish List</a></li>
                                 </ul>
                             </div>

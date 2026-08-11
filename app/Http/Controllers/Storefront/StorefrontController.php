@@ -172,6 +172,27 @@ class StorefrontController extends Controller
         ]);
     }
 
+    public function login(): View
+    {
+        return view('storefront.pages.customer-login', [
+            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
+        ]);
+    }
+
+    public function register(): View
+    {
+        return view('storefront.pages.customer-register', [
+            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
+        ]);
+    }
+
+    public function forgotPassword(): View
+    {
+        return view('storefront.pages.customer-forgot-password', [
+            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
+        ]);
+    }
+
     public function products(): View
     {
         $products = [

@@ -107,7 +107,7 @@
             </a>
         </div>
         <div class="toolbar-item">
-            <a href="account-page.html">
+            <a href="{{ route('storefront.login') }}">
                 <span class="toolbar-icon">
                     <i class="icon icon-User"></i>
                 </span>
