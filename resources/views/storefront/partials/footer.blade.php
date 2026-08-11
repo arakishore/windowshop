@@ -32,9 +32,10 @@
                             <p class="footer-heading footer-heading-mobile text-white">COMPANY</p>
                             <div class="tf-collapse-content">
                                 <ul class="footer-menu-list">
-                                    <li><a href="about.html" class="cl-text-3 link">About Us</a></li>
-                                    <li><a href="our-store.html" class="cl-text-3 link">Our Stories</a></li>
-                                    <li><a href="contact.html" class="cl-text-3 link">Contact us</a></li>
+                                    <li><a href="{{ route('storefront.about') }}" class="cl-text-3 link">About Us</a></li>
+                                    <li><a href="{{ route('storefront.stores') }}" class="cl-text-3 link">Our Stores</a></li>
+                                    <li><a href="{{ route('storefront.testimonials') }}" class="cl-text-3 link">Testimonials</a></li>
+                                    <li><a href="{{ route('storefront.contact') }}" class="cl-text-3 link">Contact us</a></li>
                                     <li><a href="blog.html" class="cl-text-3 link">Latest New</a></li>
                                     <li><a href="account-page.html" class="cl-text-3 link">My Account</a></li>
                                 </ul>
@@ -44,11 +45,11 @@
                             <p class="footer-heading footer-heading-mobile text-white">CUSTOMER</p>
                             <div class="tf-collapse-content">
                                 <ul class="footer-menu-list">
-                                    <li><a href="faq.html" class="cl-text-3 link">Shipping</a></li>
-                                    <li><a href="faq.html" class="cl-text-3 link">Return &amp; Refund</a></li>
-                                    <li><a href="faq.html" class="cl-text-3 link">Privacy Policy</a></li>
-                                    <li><a href="faq.html" class="cl-text-3 link">Terms &amp; Conditions</a></li>
-                                    <li><a href="faq.html" class="cl-text-3 link">Orders FAQs</a></li>
+                                    <li><a href="{{ route('storefront.shipping') }}" class="cl-text-3 link">Shipping</a></li>
+                                    <li><a href="{{ route('storefront.returns') }}" class="cl-text-3 link">Return &amp; Refund</a></li>
+                                    <li><a href="{{ route('storefront.privacy') }}" class="cl-text-3 link">Privacy Policy</a></li>
+                                    <li><a href="{{ route('storefront.terms') }}" class="cl-text-3 link">Terms &amp; Conditions</a></li>
+                                    <li><a href="{{ route('storefront.faq') }}" class="cl-text-3 link">Orders FAQs</a></li>
                                 </ul>
                             </div>
                         </div>
@@ -85,11 +86,11 @@
                             </form>
                             <p class="text-remember cl-text-3">
                                 By clicking subcribe, you agree to the
-                                <a href="#" class="text-white link link-underline">
+                                <a href="{{ route('storefront.terms') }}" class="text-white link link-underline">
                                     Terms of Service
                                 </a>
                                 and
-                                <a href="#" class="text-white link link-underline">
+                                <a href="{{ route('storefront.privacy') }}" class="text-white link link-underline">
                                     Privacy Policy
                                 </a>.
                             </p>

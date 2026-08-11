@@ -31,6 +31,20 @@ Route::get('/', function () {
 });
 
 Route::get('/storefront', [StorefrontController::class, 'home'])->name('storefront.home');
+Route::get('/about-us', [StorefrontController::class, 'about'])->name('storefront.about');
+Route::get('/stores', [StorefrontController::class, 'stores'])->name('storefront.stores');
+Route::get('/testimonials', [StorefrontController::class, 'testimonials'])->name('storefront.testimonials');
+Route::get('/faq', [StorefrontController::class, 'faq'])->name('storefront.faq');
+Route::get('/terms-and-conditions', [StorefrontController::class, 'terms'])->name('storefront.terms');
+Route::get('/privacy-policy', [StorefrontController::class, 'privacy'])->name('storefront.privacy');
+Route::get('/return-and-refund', [StorefrontController::class, 'returns'])->name('storefront.returns');
+Route::get('/shipping', [StorefrontController::class, 'shipping'])->name('storefront.shipping');
+Route::get('/contact-us', [StorefrontController::class, 'contact'])->name('storefront.contact');
+Route::get('/products', [StorefrontController::class, 'products'])->name('storefront.products');
+Route::get('/shop', [StorefrontController::class, 'products'])->name('storefront.shop');
+Route::get('/product-detail', [StorefrontController::class, 'productDetail'])->name('storefront.product.detail');
+Route::get('/view-cart', [StorefrontController::class, 'cart'])->name('storefront.cart');
+Route::get('/checkout', [StorefrontController::class, 'checkout'])->name('storefront.checkout');
 Route::get('/category/{slug}', [StorefrontController::class, 'category'])->name('storefront.category.show');
 Route::get('/store/{slug}', [StorefrontController::class, 'store'])->name('storefront.store.show');
 Route::get('/store/{slug}/category/{categorySlug}', [StorefrontController::class, 'storeCategory'])->name('storefront.store.category.show');

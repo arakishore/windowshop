@@ -13,6 +13,10 @@ class BannerTemplateSeeder extends Seeder
 {
     public function run(): void
     {
+        $seedCodes = collect($this->templates())
+            ->map(fn (array $template): string => strtolower($template['code']))
+            ->all();
+
         foreach ($this->templates() as $index => $template) {
             $code = strtolower($template['code']);
             $existingUuid = BannerTemplate::withTrashed()->where('code', $code)->value('uuid');
@@ -43,6 +47,11 @@ class BannerTemplateSeeder extends Seeder
                 $bannerTemplate->restore();
             }
         }
+
+        BannerTemplate::query()
+            ->whereIn('code', $this->removedSeedCodes())
+            ->whereNotIn('code', $seedCodes)
+            ->delete();
     }
 
     /**
@@ -55,9 +64,6 @@ class BannerTemplateSeeder extends Seeder
             ...$this->festivalTemplates(),
             ...$this->seasonalTemplates(),
             ...$this->fashionTemplates(),
-            ...$this->electronicsTemplates(),
-            ...$this->groceryTemplates(),
-            ...$this->serviceTemplates(),
         ];
     }
 
@@ -69,14 +75,8 @@ class BannerTemplateSeeder extends Seeder
         return [
             ['code' => 'generic_001', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Up to 50% OFF', 'subtitle' => 'Save big on selected products.'],
             ['code' => 'generic_002', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'New Arrivals', 'subtitle' => 'Fresh products just arrived.'],
-            ['code' => 'generic_003', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Limited Time Offer', 'subtitle' => "Grab these deals before they're gone."],
-            ['code' => 'generic_004', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Shop the Latest Trends', 'subtitle' => "Discover what's trending today."],
-            ['code' => 'generic_005', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Best Sellers', 'subtitle' => 'Customer favourites you will love.'],
-            ['code' => 'generic_006', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Exclusive Online Deals', 'subtitle' => 'Available only online.'],
-            ['code' => 'generic_007', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Weekend Sale', 'subtitle' => 'Special offers this weekend only.'],
-            ['code' => 'generic_008', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Buy More, Save More', 'subtitle' => 'The more you buy, the more you save.'],
-            ['code' => 'generic_009', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Clearance Sale', 'subtitle' => "Last chance before it's gone."],
-            ['code' => 'generic_010', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Premium Collection', 'subtitle' => 'Premium quality products.'],
+            ['code' => 'generic_003', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Exclusive Online Deals', 'subtitle' => 'Available only online.'],
+            ['code' => 'generic_004', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Clearance Sale', 'subtitle' => "Last chance before it's gone."],
         ];
     }
 
@@ -107,12 +107,9 @@ class BannerTemplateSeeder extends Seeder
     private function seasonalTemplates(): array
     {
         return [
-            ['code' => 'season_001', 'category' => BannerTemplateCategory::SEASONAL, 'name' => 'Summer Collection', 'subtitle' => 'Stay cool with the latest summer collection.'],
             ['code' => 'season_002', 'category' => BannerTemplateCategory::SEASONAL, 'name' => 'Winter Collection', 'subtitle' => 'Warm styles for the season.'],
             ['code' => 'season_003', 'category' => BannerTemplateCategory::SEASONAL, 'name' => 'Monsoon Sale', 'subtitle' => 'Rainy season savings.'],
             ['code' => 'season_004', 'category' => BannerTemplateCategory::SEASONAL, 'name' => 'Spring Collection', 'subtitle' => 'Fresh styles for spring.'],
-            ['code' => 'season_005', 'category' => BannerTemplateCategory::SEASONAL, 'name' => 'End of Season Sale', 'subtitle' => 'Huge discounts before the season ends.'],
-            ['code' => 'season_006', 'category' => BannerTemplateCategory::SEASONAL, 'name' => 'Back to School', 'subtitle' => 'Everything students need.'],
         ];
     }
 
@@ -124,52 +121,30 @@ class BannerTemplateSeeder extends Seeder
         return [
             ['code' => 'fashion_001', 'category' => BannerTemplateCategory::FASHION, 'name' => 'New Fashion Arrivals', 'subtitle' => 'Fresh styles added for your next look.'],
             ['code' => 'fashion_002', 'category' => BannerTemplateCategory::FASHION, 'name' => 'Trending Styles', 'subtitle' => 'Shop looks everyone is talking about.'],
-            ['code' => 'fashion_003', 'category' => BannerTemplateCategory::FASHION, 'name' => 'Ethnic Collection', 'subtitle' => 'Traditional styles for every occasion.'],
-            ['code' => 'fashion_004', 'category' => BannerTemplateCategory::FASHION, 'name' => 'Casual Wear', 'subtitle' => 'Comfortable everyday fashion picks.'],
-            ['code' => 'fashion_005', 'category' => BannerTemplateCategory::FASHION, 'name' => 'Premium Fashion', 'subtitle' => 'Elevated styles with premium quality.'],
-            ['code' => 'fashion_006', 'category' => BannerTemplateCategory::FASHION, 'name' => 'Wedding Collection', 'subtitle' => 'Celebrate in styles made for special days.'],
         ];
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return array<int, string>
      */
-    private function electronicsTemplates(): array
+    private function removedSeedCodes(): array
     {
         return [
-            ['code' => 'electronics_001', 'category' => BannerTemplateCategory::ELECTRONICS, 'name' => 'Latest Gadgets', 'subtitle' => 'Explore smart picks for modern living.'],
-            ['code' => 'electronics_002', 'category' => BannerTemplateCategory::ELECTRONICS, 'name' => 'Smartphone Sale', 'subtitle' => 'Upgrade your phone with exciting offers.'],
-            ['code' => 'electronics_003', 'category' => BannerTemplateCategory::ELECTRONICS, 'name' => 'Upgrade Today', 'subtitle' => 'Better tech for work, play, and home.'],
-            ['code' => 'electronics_004', 'category' => BannerTemplateCategory::ELECTRONICS, 'name' => 'Tech Deals', 'subtitle' => 'Save on everyday electronics and accessories.'],
-            ['code' => 'electronics_005', 'category' => BannerTemplateCategory::ELECTRONICS, 'name' => 'Smart Home Offers', 'subtitle' => 'Make your home smarter with great deals.'],
-        ];
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function groceryTemplates(): array
-    {
-        return [
-            ['code' => 'grocery_001', 'category' => BannerTemplateCategory::GROCERY, 'name' => 'Fresh Every Day', 'subtitle' => 'Fresh picks delivered for your daily needs.'],
-            ['code' => 'grocery_002', 'category' => BannerTemplateCategory::GROCERY, 'name' => 'Daily Essentials', 'subtitle' => 'Stock up on everyday household must-haves.'],
-            ['code' => 'grocery_003', 'category' => BannerTemplateCategory::GROCERY, 'name' => 'Grocery Savings', 'subtitle' => 'Save more on your regular grocery basket.'],
-            ['code' => 'grocery_004', 'category' => BannerTemplateCategory::GROCERY, 'name' => 'Healthy Choices', 'subtitle' => 'Nutritious picks for a healthier routine.'],
-            ['code' => 'grocery_005', 'category' => BannerTemplateCategory::GROCERY, 'name' => 'Family Pack Offers', 'subtitle' => 'Value packs for the whole family.'],
-        ];
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function serviceTemplates(): array
-    {
-        return [
-            ['code' => 'service_001', 'category' => BannerTemplateCategory::SERVICES, 'name' => 'Free Delivery', 'subtitle' => 'Enjoy free delivery on selected orders.'],
-            ['code' => 'service_002', 'category' => BannerTemplateCategory::SERVICES, 'name' => 'Same Day Delivery', 'subtitle' => 'Get eligible orders delivered the same day.'],
-            ['code' => 'service_003', 'category' => BannerTemplateCategory::SERVICES, 'name' => 'Easy Returns', 'subtitle' => 'Shop confidently with simple returns.'],
-            ['code' => 'service_004', 'category' => BannerTemplateCategory::SERVICES, 'name' => 'Secure Payments', 'subtitle' => 'Pay safely with trusted payment options.'],
-            ['code' => 'service_005', 'category' => BannerTemplateCategory::SERVICES, 'name' => 'Trusted Local Stores', 'subtitle' => 'Shop from reliable sellers near you.'],
+            'electronics_001',
+            'electronics_002',
+            'electronics_003',
+            'electronics_004',
+            'electronics_005',
+            'grocery_001',
+            'grocery_002',
+            'grocery_003',
+            'grocery_004',
+            'grocery_005',
+            'service_001',
+            'service_002',
+            'service_003',
+            'service_004',
+            'service_005',
         ];
     }
 }

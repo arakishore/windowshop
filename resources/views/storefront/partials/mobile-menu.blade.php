@@ -64,7 +64,10 @@
                     </div>
                 </li>
                 <li class="nav-mb-item">
-                    <a href="#;" class="mb-menu-link" data-bs-dismiss="offcanvas">Shops</a>
+                    <a href="{{ route('storefront.stores') }}" class="mb-menu-link" data-bs-dismiss="offcanvas">Shops</a>
+                </li>
+                <li class="nav-mb-item">
+                    <a href="{{ route('storefront.products') }}" class="mb-menu-link" data-bs-dismiss="offcanvas">Products</a>
                 </li>
                 <li class="nav-mb-item">
                     <a href="#;" class="mb-menu-link" data-bs-dismiss="offcanvas">Brands</a>
@@ -76,7 +79,13 @@
                     <a href="#new-arrivals" class="mb-menu-link" data-bs-dismiss="offcanvas">New Arrivals</a>
                 </li>
                 <li class="nav-mb-item">
-                    <a href="#;" class="mb-menu-link" data-bs-dismiss="offcanvas">Contact</a>
+                    <a href="{{ route('storefront.about') }}" class="mb-menu-link" data-bs-dismiss="offcanvas">About</a>
+                </li>
+                <li class="nav-mb-item">
+                    <a href="{{ route('storefront.testimonials') }}" class="mb-menu-link" data-bs-dismiss="offcanvas">Testimonials</a>
+                </li>
+                <li class="nav-mb-item">
+                    <a href="{{ route('storefront.contact') }}" class="mb-menu-link" data-bs-dismiss="offcanvas">Contact</a>
                 </li>
             </ul>
         </div>

@@ -577,7 +577,7 @@
                                 <img loading="lazy" width="274" height="274"
                                     src="{{ asset('assets/storefront/images/gallery/gallery-1.jpg') }}" alt="Image">
                             </div>
-                            <a href="product-detail.html" class="box-icon hover-tooltip">
+                            <a href="{{ route('storefront.product.detail') }}" class="box-icon hover-tooltip">
                                 <span class="icon icon-Eye"></span>
                                 <span class="tooltip">View product</span>
                             </a>
@@ -590,7 +590,7 @@
                                 <img loading="lazy" width="274" height="274"
                                     src="{{ asset('assets/storefront/images/gallery/gallery-2.jpg') }}" alt="Image">
                             </div>
-                            <a href="product-detail.html" class="box-icon hover-tooltip">
+                            <a href="{{ route('storefront.product.detail') }}" class="box-icon hover-tooltip">
                                 <span class="icon icon-Eye"></span>
                                 <span class="tooltip">View product</span>
                             </a>
@@ -603,7 +603,7 @@
                                 <img loading="lazy" width="274" height="274"
                                     src="{{ asset('assets/storefront/images/gallery/gallery-3.jpg') }}" alt="Image">
                             </div>
-                            <a href="product-detail.html" class="box-icon hover-tooltip">
+                            <a href="{{ route('storefront.product.detail') }}" class="box-icon hover-tooltip">
                                 <span class="icon icon-Eye"></span>
                                 <span class="tooltip">View product</span>
                             </a>
@@ -616,7 +616,7 @@
                                 <img loading="lazy" width="274" height="274"
                                     src="{{ asset('assets/storefront/images/gallery/gallery-4.jpg') }}" alt="Image">
                             </div>
-                            <a href="product-detail.html" class="box-icon hover-tooltip">
+                            <a href="{{ route('storefront.product.detail') }}" class="box-icon hover-tooltip">
                                 <span class="icon icon-Eye"></span>
                                 <span class="tooltip">View product</span>
                             </a>
@@ -629,7 +629,7 @@
                                 <img loading="lazy" width="274" height="274"
                                     src="{{ asset('assets/storefront/images/gallery/gallery-5.jpg') }}" alt="Image">
                             </div>
-                            <a href="product-detail.html" class="box-icon hover-tooltip">
+                            <a href="{{ route('storefront.product.detail') }}" class="box-icon hover-tooltip">
                                 <span class="icon icon-Eye"></span>
                                 <span class="tooltip">View product</span>
                             </a>
@@ -689,7 +689,7 @@
                                             alt="Image">
                                     </div>
                                     <div class="product-infor">
-                                        <a href="product-detail.html" class="link fw-medium lh-24">
+                                        <a href="{{ route('storefront.product.detail') }}" class="link fw-medium lh-24">
                                             Gaia Herbs Relax Gummies
                                         </a>
                                         <div class="price-wrap prd_price">
@@ -733,7 +733,7 @@
                                             alt="Image">
                                     </div>
                                     <div class="product-infor">
-                                        <a href="product-detail.html" class="link fw-medium lh-24">
+                                        <a href="{{ route('storefront.product.detail') }}" class="link fw-medium lh-24">
                                             Blooming Blends Sleep Drops
                                         </a>
                                         <div class="price-wrap prd_price">
@@ -778,7 +778,7 @@
                                             alt="Image">
                                     </div>
                                     <div class="product-infor">
-                                        <a href="product-detail.html" class="link fw-medium lh-24">
+                                        <a href="{{ route('storefront.product.detail') }}" class="link fw-medium lh-24">
                                             Gaia Herbs Relax Gummies
                                         </a>
                                         <div class="price-wrap prd_price">

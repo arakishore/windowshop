@@ -62,10 +62,11 @@
                 </div>
             </div>
         </li>
-        <li class="menu-item position-relative"><a href="#;" class="item-link"><span class="text cus-text">Shops</span></a></li>
+        <li class="menu-item position-relative"><a href="{{ route('storefront.stores') }}" class="item-link"><span class="text cus-text">Shops</span></a></li>
+        <li class="menu-item position-relative"><a href="{{ route('storefront.products') }}" class="item-link"><span class="text cus-text">Products</span></a></li>
         <li class="menu-item position-relative"><a href="#;" class="item-link"><span class="text cus-text">Brands</span></a></li>
         <li class="menu-item position-relative"><a href="#;" class="item-link"><span class="text cus-text">Offers</span></a></li>
         <li class="menu-item position-relative"><a href="#new-arrivals" class="item-link"><span class="text cus-text">New Arrivals</span></a></li>
-        <li class="menu-item position-relative"><a href="#;" class="item-link"><span class="text cus-text">Contact</span></a></li>
+         
     </ul>
 </nav>
