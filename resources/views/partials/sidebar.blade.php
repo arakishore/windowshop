@@ -127,6 +127,16 @@
 									</a>
 								</li>
 								<li class="nav-item">
+									<a href="{{ route('admin.master.postal-codes.index') }}" class="nav-link {{ request()->routeIs('admin.master.postal-codes.*') ? 'active' : '' }}">
+										Postal Codes
+									</a>
+								</li>
+								<li class="nav-item">
+									<a href="{{ route('admin.master.postal-code-restrictions.index') }}" class="nav-link {{ request()->routeIs('admin.master.postal-code-restrictions.*') ? 'active' : '' }}">
+										Postal Code Restrictions
+									</a>
+								</li>
+								<li class="nav-item">
 									<a href="{{ route('admin.master.product-categories.index') }}" class="nav-link {{ request()->routeIs('admin.master.product-categories.*') ? 'active' : '' }}">
 										Product Categories
 									</a>

@@ -2,9 +2,13 @@
     $storefrontNavigationCategories = $storefrontNavigationCategories ?? collect();
     $storefrontShop = $storefrontShop ?? null;
 
-    $mobileCategoryUrl = function ($category) use ($storefrontShop): string {
+    $mobileCategoryUrl = function ($category, $parentCategory = null) use ($storefrontShop): string {
         if ($storefrontShop) {
             return route('storefront.store.category.show', [$storefrontShop->slug, $category->slug]);
+        }
+
+        if ($parentCategory) {
+            return route('storefront.category.child.show', [$parentCategory->slug, $category->slug]);
         }
 
         return route('storefront.category.show', $category->slug);
@@ -42,19 +46,32 @@
                                 <li>
                                     <p class="menu-heading mb-8 mt-12">{{ $rootCategory->name }}</p>
                                     <ul class="sub-menu_list">
-                                        @forelse($rootCategory->children as $childCategory)
+                                        @foreach($rootCategory->children as $childCategory)
                                             <li>
-                                                <a href="{{ $mobileCategoryUrl($childCategory) }}" class="sub-menu_link has-text" data-bs-dismiss="offcanvas">
-                                                    <span class="cus-text">{{ $childCategory->name }}</span>
-                                                </a>
+                                                @if($childCategory->children->isNotEmpty())
+                                                    <a href="#mobile-category-{{ $childCategory->getKey() }}" class="sub-nav-link collapsed"
+                                                        data-bs-toggle="collapse" aria-expanded="false" aria-controls="mobile-category-{{ $childCategory->getKey() }}">
+                                                        <span>{{ $childCategory->name }}</span>
+                                                        <span class="icon icon-CaretDown"></span>
+                                                    </a>
+                                                    <div id="mobile-category-{{ $childCategory->getKey() }}" class="collapse">
+                                                        <ul class="sub-nav-menu sub-menu-level-2">
+                                                            @foreach($childCategory->children as $grandchildCategory)
+                                                                <li>
+                                                                    <a href="{{ $mobileCategoryUrl($grandchildCategory, $childCategory) }}" class="sub-nav-link" data-bs-dismiss="offcanvas">
+                                                                        {{ $grandchildCategory->name }}
+                                                                    </a>
+                                                                </li>
+                                                            @endforeach
+                                                        </ul>
+                                                    </div>
+                                                @else
+                                                    <a href="{{ $mobileCategoryUrl($childCategory, $rootCategory) }}" class="sub-menu_link has-text" data-bs-dismiss="offcanvas">
+                                                        <span class="cus-text">{{ $childCategory->name }}</span>
+                                                    </a>
+                                                @endif
                                             </li>
-                                        @empty
-                                            <li>
-                                                <a href="{{ $mobileCategoryUrl($rootCategory) }}" class="sub-menu_link has-text" data-bs-dismiss="offcanvas">
-                                                    <span class="cus-text">View {{ $rootCategory->name }}</span>
-                                                </a>
-                                            </li>
-                                        @endforelse
+                                        @endforeach
                                     </ul>
                                 </li>
                             @empty

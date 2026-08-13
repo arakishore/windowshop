@@ -81,7 +81,7 @@
     </div>
 
     <main id="wrapper">
-        @include('storefront.partials.topbar')
+        {{-- @include('storefront.partials.topbar') --}}
         @include('storefront.partials.header')
 
         @yield('content')

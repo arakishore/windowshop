@@ -3,10 +3,6 @@
 @section('title', 'Products | WindowShop')
 @section('meta_description', 'Browse products available from local shops on WindowShop.')
 
-@php
-    $productImage = fn(string $image): string => asset('assets/storefront/images/product/' . $image);
-@endphp
-
 @section('content')
     <section class="section-page-title text-center storefront-page-title">
         <div class="container">
@@ -71,15 +67,15 @@
                 </div>
 
                 <div class="tf-list-layout wrapper-shop" id="listLayout" style="display: none;">
-                    @foreach ($products as $product)
+                    @forelse ($products as $product)
                         <div class="card-product product-style_list" data-availability="In Stock"
-                            data-brand="{{ $product['brand'] }}">
+                            data-brand="{{ $product['brand'] ?? '' }}">
                             <div class="card-product_wrapper">
-                                <a href="{{ route('storefront.product.detail') }}" class="product-img">
+                                <a href="{{ $product['url'] }}" class="product-img">
                                     <img class="img-product" loading="lazy" width="330" height="440"
-                                        src="{{ $productImage($product['image']) }}" alt="{{ $product['name'] }}">
+                                        src="{{ $product['image'] }}" alt="{{ $product['name'] }}">
                                     <img class="img-hover" loading="lazy" width="330" height="440"
-                                        src="{{ $productImage($product['hover_image']) }}" alt="{{ $product['name'] }}">
+                                        src="{{ $product['hover_image'] }}" alt="{{ $product['name'] }}">
                                 </a>
                                 @if ($product['badge'])
                                     <ul class="product-badge_list">
@@ -89,44 +85,31 @@
                                 @endif
                             </div>
                             <div class="card-product_info">
-                                <a href="{{ route('storefront.product.detail') }}"
+                                <a href="{{ $product['url'] }}"
                                     class="name-product lh-24 fw-medium link-underline-text">{{ $product['name'] }}</a>
-                                <div class="star-wrap d-flex align-items-center">
-                                    <i class="icon icon-Star"></i>
-                                    <i class="icon icon-Star"></i>
-                                    <i class="icon icon-Star"></i>
-                                    <i class="icon icon-Star"></i>
-                                    <i class="icon icon-Star"></i>
-                                </div>
+                                @if ($product['show_rating'])
+                                    <div class="star-wrap d-flex align-items-center"></div>
+                                @endif
                                 <div class="price-wrap">
                                     <span class="price-new text-primary fw-semibold">{{ $product['price'] }}</span>
-                                    <span class="price-old text-caption-01 cl-text-3">{{ $product['old_price'] }}</span>
+                                    @if ($product['old_price'])
+                                        <span class="price-old text-caption-01 cl-text-3">{{ $product['old_price'] }}</span>
+                                    @endif
                                 </div>
                                 <p class="description text-caption-01 mb-10">
-                                    A local shop product listing with clean images, quick actions, and catalogue-ready
-                                    details.
+                                    {{ $product['description'] }}
                                 </p>
-                                <ul class="product-color_list">
-                                    <li class="product-color-item color-swatch hover-tooltip tooltip-bot active">
-                                        <span class="tooltip color-filter">Brown</span>
-                                        <span class="swatch-value bg-muted-brown"></span>
-                                        <img src="{{ $productImage($product['image']) }}"
-                                            data-src="{{ $productImage($product['image']) }}"
-                                            alt="{{ $product['name'] }}">
-                                    </li>
-                                    <li class="product-color-item color-swatch hover-tooltip tooltip-bot">
-                                        <span class="tooltip color-filter">Dark Blue</span>
-                                        <span class="swatch-value bg-dark-blue-gray"></span>
-                                        <img src="{{ $productImage($product['hover_image']) }}"
-                                            data-src="{{ $productImage($product['hover_image']) }}"
-                                            alt="{{ $product['name'] }}">
-                                    </li>
-                                </ul>
-                                <ul class="product-size_list mb-10">
-                                    <li class="size-item text-caption-01">S</li>
-                                    <li class="size-item text-caption-01">M</li>
-                                    <li class="size-item text-caption-01">L</li>
-                                </ul>
+                                @if (! empty($product['swatches']))
+                                    <ul class="product-color_list">
+                                        @foreach ($product['swatches'] as $swatch)
+                                            <li class="product-color-item color-swatch hover-tooltip tooltip-bot {{ $loop->first ? 'active' : '' }}">
+                                                <span class="tooltip color-filter">{{ $swatch['label'] }}</span>
+                                                <span class="swatch-value {{ $swatch['class'] }}"></span>
+                                                <img src="{{ $swatch['image'] }}" data-src="{{ $swatch['image'] }}" alt="{{ $swatch['label'] }}">
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
                                 <ul class="product-action_list">
                                     <li>
                                         <a href="#shoppingCart" data-bs-toggle="offcanvas"
@@ -150,27 +133,24 @@
                                 </ul>
                             </div>
                         </div>
-                    @endforeach
-                    <div class="wd-full justify-content-center">
-                        <div class="tf-page-pagination">
-                            <a href="#" class="pag-item">1</a>
-                            <p class="pag-item active">2</p>
-                            <a href="#" class="pag-item">3</a>
-                            <a href="#" class="pag-item"><i class="icon icon-CaretRightThin"></i></a>
+                    @empty
+                        <div class="wd-full text-center py-5">
+                            <p class="h5 mb-0">No products found.</p>
                         </div>
-                    </div>
+                    @endforelse
+                    @include('storefront.partials.pagination', ['paginator' => $products])
                 </div>
 
                 <div class="wrapper-shop tf-grid-layout tf-col-4" id="gridLayout">
-                    @foreach ($products as $product)
+                    @forelse ($products as $product)
                         <div class="card-product grid" data-availability="In Stock"
-                            data-brand="{{ $product['brand'] }}">
+                            data-brand="{{ $product['brand'] ?? '' }}">
                             <div class="card-product_wrapper">
-                                <a href="{{ route('storefront.product.detail') }}" class="product-img">
+                                <a href="{{ $product['url'] }}" class="product-img">
                                     <img class="img-product" loading="lazy" width="330" height="440"
-                                        src="{{ $productImage($product['image']) }}" alt="{{ $product['name'] }}">
+                                        src="{{ $product['image'] }}" alt="{{ $product['name'] }}">
                                     <img class="img-hover" loading="lazy" width="330" height="440"
-                                        src="{{ $productImage($product['hover_image']) }}" alt="{{ $product['name'] }}">
+                                        src="{{ $product['hover_image'] }}" alt="{{ $product['name'] }}">
                                 </a>
                                 <ul class="product-action_list">
                                     <li class="wishlist">
@@ -200,47 +180,37 @@
                                 </div>
                             </div>
                             <div class="card-product_info">
-                                <a href="{{ route('storefront.product.detail') }}"
+                                <a href="{{ $product['url'] }}"
                                     class="name-product lh-24 fw-medium link-underline-text">{{ $product['name'] }}</a>
-                                <div class="star-wrap d-flex align-items-center">
-                                    <i class="icon icon-Star"></i>
-                                    <i class="icon icon-Star"></i>
-                                    <i class="icon icon-Star"></i>
-                                    <i class="icon icon-Star"></i>
-                                    <i class="icon icon-Star"></i>
-                                </div>
+                                @if ($product['show_rating'])
+                                    <div class="star-wrap d-flex align-items-center"></div>
+                                @endif
                                 <div class="price-wrap">
                                     <span class="price-new text-primary fw-semibold">{{ $product['price'] }}</span>
-                                    <span class="price-old text-caption-01 cl-text-3">{{ $product['old_price'] }}</span>
+                                    @if ($product['old_price'])
+                                        <span class="price-old text-caption-01 cl-text-3">{{ $product['old_price'] }}</span>
+                                    @endif
                                 </div>
-                                <ul class="product-color_list">
-                                    <li class="product-color-item color-swatch hover-tooltip tooltip-bot active">
-                                        <span class="tooltip color-filter">Brown</span>
-                                        <span class="swatch-value bg-muted-brown"></span>
-                                        <img src="{{ $productImage($product['image']) }}"
-                                            data-src="{{ $productImage($product['image']) }}"
-                                            alt="{{ $product['name'] }}">
-                                    </li>
-                                    <li class="product-color-item color-swatch hover-tooltip tooltip-bot">
-                                        <span class="tooltip color-filter">Dark Blue</span>
-                                        <span class="swatch-value bg-dark-blue-gray"></span>
-                                        <img src="{{ $productImage($product['hover_image']) }}"
-                                            data-src="{{ $productImage($product['hover_image']) }}"
-                                            alt="{{ $product['name'] }}">
-                                    </li>
-                                </ul>
+                                @if (! empty($product['swatches']))
+                                    <ul class="product-color_list">
+                                        @foreach ($product['swatches'] as $swatch)
+                                            <li class="product-color-item color-swatch hover-tooltip tooltip-bot {{ $loop->first ? 'active' : '' }}">
+                                                <span class="tooltip color-filter">{{ $swatch['label'] }}</span>
+                                                <span class="swatch-value {{ $swatch['class'] }}"></span>
+                                                <img src="{{ $swatch['image'] }}" data-src="{{ $swatch['image'] }}" alt="{{ $swatch['label'] }}">
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
                             </div>
                         </div>
-                    @endforeach
-
-                    <div class="wd-full justify-content-center">
-                        <div class="tf-page-pagination">
-                            <a href="#" class="pag-item">1</a>
-                            <p class="pag-item active">2</p>
-                            <a href="#" class="pag-item">3</a>
-                            <a href="#" class="pag-item"><i class="icon icon-CaretRightThin"></i></a>
+                    @empty
+                        <div class="wd-full text-center py-5">
+                            <p class="h5 mb-0">No products found.</p>
                         </div>
-                    </div>
+                    @endforelse
+
+                    @include('storefront.partials.pagination', ['paginator' => $products])
                 </div>
             </div>
         </div>

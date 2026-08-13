@@ -191,6 +191,11 @@ class Product extends Model
         return $this->belongsTo(ProductImage::class, 'primary_image_id');
     }
 
+    public function storefrontCardVariant(): BelongsTo
+    {
+        return $this->belongsTo(ProductVariant::class, 'storefront_variant_id');
+    }
+
     public function variants(): HasMany
     {
         return $this->hasMany(ProductVariant::class)

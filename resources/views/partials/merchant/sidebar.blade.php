@@ -68,14 +68,17 @@
                     </ul>
                 </li>
 
-                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.shops.*') ? 'nav-item-expanded nav-item-open' : '' }}">
-                    <a href="#" class="nav-link {{ request()->routeIs('merchant.shops.*') ? 'active' : '' }}">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'active' : '' }}">
                         <i class="ph-storefront"></i>
                         <span>Shop Management</span>
                     </a>
-                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.shops.*') ? 'show' : '' }}">
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'show' : '' }}">
                         <li class="nav-item">
                             <a href="{{ route('merchant.shops.index') }}" class="nav-link {{ request()->routeIs('merchant.shops.*') ? 'active' : '' }}">My Shops</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.postal-code-restrictions.index') }}" class="nav-link {{ request()->routeIs('merchant.postal-code-restrictions.*') ? 'active' : '' }}">Postal Code Restrictions</a>
                         </li>
                     </ul>
                 </li>

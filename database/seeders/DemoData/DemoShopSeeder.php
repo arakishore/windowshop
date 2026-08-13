@@ -182,7 +182,7 @@ class DemoShopSeeder extends Seeder
                 'address_line_1' => 'Shop 12, College Road',
                 'address_line_2' => 'Near Big Bazaar',
                 'landmark' => 'Canada Corner',
-                'pincode' => '422005',
+                'pincode' => '422009',
                 'latitude' => '20.0047000',
                 'longitude' => '73.7796000',
                 'status' => 'active',

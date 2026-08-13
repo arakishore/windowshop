@@ -13,6 +13,159 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-08-12 00:25 +05:30 - Storefront Dynamic Content Step 2 Home Hero Slider
+
+### Exact User Prompt
+
+```text
+WINDOWSHOP - STOREFRONT DYNAMIC CONTENT
+STEP 2 - HOME HERO SLIDER
+
+Make ONLY the Home Hero slider dynamic.
+
+Reuse the existing banners system.
+Do NOT create a new hero_sliders table.
+Do NOT redesign the existing Hero section.
+Preserve the current storefront layout, dimensions, responsiveness, slider behaviour, and styling.
+Do NOT make other homepage sections dynamic in this task.
+
+Load eligible marketplace/global Home Hero banners from the existing banners table, respecting status, schedule,
+position, ordering, desktop/mobile images, links, fallback behaviour, and a sensible maximum limit.
+Add focused feature tests for the dynamic Home Hero slider.
+```
+
+### Final Outcome
+
+Implemented Storefront Dynamic Content Step 2 for the Home Hero Slider.
+
+- reused the existing `banners` table, `Banner` model, `BannerPosition` enum, `BannerService`, and `BannerLinkResolver`
+- used canonical position value `homepage_hero` via `BannerPosition::HOMEPAGE_HERO`
+- added `BannerService::getMarketplaceHeroBanners()` for the marketplace homepage query
+- filtered banners with `forMarketplace()`, `forPosition()`, `currentlyVisible()`, and `ordered()`
+- respected active status and schedule fields `starts_at` / `ends_at`
+- limited homepage hero banners to `BannerPosition::HOMEPAGE_HERO->maxBanners()` which is 5
+- passed `heroBanners` from `StorefrontController::home()` to the home view
+- replaced static-only hero rendering with a dynamic banner loop in `storefront.partials.hero`
+- preserved the existing Swiper hero wrapper, classes, fade effect, autoplay delay, pagination, dimensions, and static fallback slides
+- used `desktop_image_path` for desktop and `mobile_image_path` for mobile, falling back to desktop when mobile is missing
+- made dynamic slides clickable only when `BannerLinkResolver` returns a valid URL
+- preserved the existing static Hero fallback when no active marketplace Hero banners exist
+- did not make any other homepage section dynamic
+
+### Files Changed
+
+- `app/Services/Banner/BannerService.php`
+- `app/Http/Controllers/Storefront/StorefrontController.php`
+- `resources/views/storefront/partials/hero.blade.php`
+- `tests/Feature/StorefrontHomeHeroBannerTest.php`
+- `docs/Prompt_Outcome_Log.md`
+
+### Tests / Checks Run
+
+- `php -l app\Services\Banner\BannerService.php`
+- `php -l app\Http\Controllers\Storefront\StorefrontController.php`
+- `php artisan test tests\Feature\StorefrontHomeHeroBannerTest.php`
+- `php artisan test tests\Feature\BannerManagementFoundationTest.php`
+- `php artisan test tests\Feature\StorefrontMarketplaceLogoTest.php`
+- `php artisan test tests\Feature\StorefrontNavigationTest.php`
+
+## 2026-08-11 23:54 +05:30 - Storefront Dynamic Content Step 1 Marketplace Logo
+
+### Exact User Prompt
+
+```text
+WINDOWSHOP - STOREFRONT DYNAMIC CONTENT
+STEP 1 - MARKETPLACE LOGO
+
+Context:
+
+The customer storefront pages already exist as static Blade/HTML pages:
+
+- Home page
+- Product listing page
+- Product detail page
+- Cart
+- Checkout
+- Login
+
+We are now starting to convert the storefront from static content to dynamic content.
+
+This task is ONLY Step 1:
+Make the Marketplace Logo dynamic across the customer-facing storefront.
+
+Do NOT convert other storefront content yet.
+
+Use the existing global setting:
+
+group: marketplace
+key: logo
+
+Conceptually:
+
+marketplace.logo
+
+Reuse the existing Marketplace Logo resolver/helper/service.
+Replace hard-coded customer storefront logo references with the dynamic Marketplace Logo.
+Keep fallback to the default WindowShop logo if no custom logo exists or the uploaded file is missing.
+Do not expose upload/update functionality to storefront/customer routes.
+Add/update focused tests for storefront logo display and fallback behaviour.
+```
+
+### Final Outcome
+
+Implemented Storefront Dynamic Content Step 1 for the Marketplace Logo.
+
+- reused the existing `App\Services\Marketplace\MarketplaceLogoService`
+- shared the resolved Marketplace Logo URL with `storefront.partials.header` through an `AppServiceProvider` view composer
+- cached the resolved logo URL once per request inside the composer
+- replaced the hard-coded storefront header logo path in both desktop and mobile header markup
+- preserved current logo markup dimensions, layout classes, route, and `WindowShop` alt text
+- did not expose any storefront/customer logo upload or update route
+- did not make any other storefront content dynamic
+- verified uploaded managed logo paths render as `/storage/marketplace/logo/...`
+- verified missing managed logo files fall back to the default logo
+- verified no hard-coded `assets/storefront/images/logo/logo.svg` references remain in customer storefront Blade views
+
+### Files Changed
+
+- `app/Providers/AppServiceProvider.php`
+- `resources/views/storefront/partials/header.blade.php`
+- `tests/Feature/StorefrontMarketplaceLogoTest.php`
+- `docs/Prompt_Outcome_Log.md`
+
+### Shared Storefront Header Used
+
+- `resources/views/storefront/layouts/app.blade.php`
+- `resources/views/storefront/partials/header.blade.php`
+
+### Marketplace Logo Helper/Service Used
+
+- `App\Services\Marketplace\MarketplaceLogoService`
+- setting key: `marketplace.logo`
+- fallback logo: `assets/admin/images/logov2.png`
+
+### Hard-Coded Logo References
+
+Replaced:
+
+- `resources/views/storefront/partials/header.blade.php`
+  - desktop header logo
+  - mobile header logo
+
+Left unchanged intentionally:
+
+- storefront favicon references
+- non-logo `WindowShop` text in titles, metadata, body copy, and alt text
+- admin and merchant area logo references
+
+### Verification
+
+- `php -l app\Providers\AppServiceProvider.php` passed
+- `php -l tests\Feature\StorefrontMarketplaceLogoTest.php` passed
+- `php artisan test tests\Feature\StorefrontMarketplaceLogoTest.php` passed: 4 tests, 11 assertions
+- `php artisan test tests\Feature\StorefrontCustomerAuthPagesTest.php` passed: 3 tests, 37 assertions
+- `php artisan test tests\Feature\StorefrontNavigationTest.php` passed: 6 tests, 50 assertions
+
 ## 2026-08-05 12:57 +05:30 - Storefront Banner In Admin Settings
 
 ### Exact User Prompt
@@ -2389,3 +2542,77 @@ Deferred Items:
 - Cart, wishlist, customer login, checkout
 - Promotion Engine and offer logic
 - Root category icon support
+
+--------------------------------------------------
+
+Date:
+2026-08-12
+
+Feature Name:
+Dynamic Storefront Product Listing Step 1
+
+Objective:
+Convert the existing static customer `/products` page into a dynamic storefront product listing while preserving the current Blade structure and storefront design.
+
+Scope:
+Dynamic product query, storefront eligibility rules, default variant pricing, primary image fallback, discount badge calculation, empty state, Laravel pagination, and focused tests. Filters, search, real sorting, ratings, color variants, cart, wishlist, and product detail changes remain deferred.
+
+Prompt Summary:
+Move WindowShop customer storefront products from static content to dynamic data using existing models, routes, controller structure, variants, primary images, shop/merchant relationships, and current storefront design. Do not redesign the page or add fake ratings/shop names/color dots.
+
+Files Created:
+- `app/Services/Storefront/ProductListingService.php`
+- `resources/views/storefront/partials/pagination.blade.php`
+- `tests/Feature/StorefrontProductListingTest.php`
+
+Files Modified:
+- `app/Models/Product.php`
+- `app/Http/Controllers/Storefront/StorefrontController.php`
+- `resources/views/storefront/pages/products.blade.php`
+- `docs/Prompt_Outcome_Log.md`
+
+Database Changes:
+- None
+
+Routes Added:
+- None; reused existing `GET /products` named `storefront.products`.
+
+Services Added:
+- `App\Services\Storefront\ProductListingService`
+
+Controllers Added/Modified:
+- Modified `App\Http\Controllers\Storefront\StorefrontController::products()`
+
+Models Added/Modified:
+- Added `Product::storefrontCardVariant()` relation for the selected default storefront variant alias.
+
+Requests Added/Modified:
+- None
+
+Views Added/Modified:
+- Existing products page now renders dynamic product cards.
+- Added storefront pagination partial using existing `tf-page-pagination` classes.
+
+Tests Added:
+- `StorefrontProductListingTest`
+
+Verification Results:
+- `php artisan test tests\Feature\StorefrontProductListingTest.php` passed: 5 tests, 32 assertions.
+- `Invoke-WebRequest http://127.0.0.1:8082/unwanted/localhyper/windowshop/public/products` returned HTTP 200.
+
+Assumptions:
+- Current storefront publish signal is `products.status = active`; `published_at` exists but is not populated by the current admin/merchant activation flows yet.
+- Valid storefront products require an active product, active merchant, active shop tied to the same merchant, and an active sellable default variant with positive MRP and selling price.
+- Product detail remains the existing static `storefront.product.detail` route until the product detail step defines dynamic URLs.
+- No real ratings/reviews table exists yet, so product-listing stars are hidden.
+- Color variant dots are deferred because proper attribute presentation needs a separate implementation.
+
+Deferred Items:
+- Search
+- Filters
+- Dynamic sorting behaviour
+- Category listing
+- Dynamic product detail URLs/content
+- Real ratings/reviews
+- Dynamic color/variant indicators
+- Add to cart, wishlist, and quick view behaviour

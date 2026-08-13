@@ -17,6 +17,7 @@ use App\Http\Controllers\Merchant\MerchantShopContextController;
 use App\Http\Controllers\Merchant\MerchantShopController;
 use App\Http\Controllers\Merchant\MerchantTaxSettingController;
 use App\Http\Controllers\Merchant\PosController;
+use App\Http\Controllers\Merchant\PostalCodeRestrictionController;
 use App\Http\Controllers\Merchant\ProductController;
 use App\Http\Controllers\Merchant\ReturnReasonController;
 use App\Http\Controllers\Merchant\SalesHistoryController;
@@ -86,6 +87,12 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
             ->name('availability-statuses.restore');
         Route::resource('availability-statuses', AvailabilityStatusController::class)
             ->only(['index', 'store', 'update', 'destroy']);
+        Route::post('postal-code-restrictions/{postalCodeRestriction}/restore', [PostalCodeRestrictionController::class, 'restore'])
+            ->withTrashed()
+            ->name('postal-code-restrictions.restore');
+        Route::resource('postal-code-restrictions', PostalCodeRestrictionController::class)
+            ->except(['show'])
+            ->parameters(['postal-code-restrictions' => 'postalCodeRestriction']);
         Route::get('/barcodes/labels', [BarcodeLabelController::class, 'index'])->name('barcodes.labels.index');
         Route::post('/barcodes/generate-missing', [BarcodeLabelController::class, 'generateMissing'])->name('barcodes.generate-missing');
         Route::post('/barcodes/labels/print', [BarcodeLabelController::class, 'print'])->name('barcodes.labels.print');

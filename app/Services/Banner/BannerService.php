@@ -11,6 +11,20 @@ class BannerService
     /**
      * @return Collection<int, Banner>
      */
+    public function getMarketplaceHeroBanners(): Collection
+    {
+        return Banner::query()
+            ->forMarketplace()
+            ->forPosition(BannerPosition::HOMEPAGE_HERO)
+            ->currentlyVisible()
+            ->ordered()
+            ->limit(BannerPosition::HOMEPAGE_HERO->maxBanners())
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, Banner>
+     */
     public function getMarketplaceBanners(BannerPosition|string $positionCode): Collection
     {
         $position = $this->position($positionCode);

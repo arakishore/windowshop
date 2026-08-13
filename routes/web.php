@@ -10,6 +10,8 @@ use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
 use App\Http\Controllers\Admin\MasterData\OrderStatusController;
 use App\Http\Controllers\Admin\MasterData\PaymentStatusController;
+use App\Http\Controllers\Admin\MasterData\PostalCodeRestrictionController;
+use App\Http\Controllers\Admin\MasterData\PostalCodeController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupValueController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryAttributeGroupController;
@@ -43,11 +45,13 @@ Route::get('/contact-us', [StorefrontController::class, 'contact'])->name('store
 Route::get('/login', [StorefrontController::class, 'login'])->name('storefront.login');
 Route::get('/register', [StorefrontController::class, 'register'])->name('storefront.register');
 Route::get('/forgot-password', [StorefrontController::class, 'forgotPassword'])->name('storefront.forgot-password');
+Route::view('/demo/shopping-bag-box', 'storefront.pages.demo-shopping-bag-box')->name('storefront.demo.shopping-bag-box');
 Route::get('/products', [StorefrontController::class, 'products'])->name('storefront.products');
 Route::get('/shop', [StorefrontController::class, 'products'])->name('storefront.shop');
 Route::get('/product-detail', [StorefrontController::class, 'productDetail'])->name('storefront.product.detail');
 Route::get('/view-cart', [StorefrontController::class, 'cart'])->name('storefront.cart');
 Route::get('/checkout', [StorefrontController::class, 'checkout'])->name('storefront.checkout');
+Route::get('/category/{parentSlug}/{slug}', [StorefrontController::class, 'categoryWithParent'])->name('storefront.category.child.show');
 Route::get('/category/{slug}', [StorefrontController::class, 'category'])->name('storefront.category.show');
 Route::get('/store/{slug}', [StorefrontController::class, 'store'])->name('storefront.store.show');
 Route::get('/store/{slug}/category/{categorySlug}', [StorefrontController::class, 'storeCategory'])->name('storefront.store.category.show');
@@ -102,6 +106,20 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('master/payment-statuses', PaymentStatusController::class)
             ->except(['show'])
             ->names('master.payment-statuses');
+        Route::post('master/postal-codes/{postalCode}/restore', [PostalCodeController::class, 'restore'])
+            ->withTrashed()
+            ->name('master.postal-codes.restore');
+        Route::resource('master/postal-codes', PostalCodeController::class)
+            ->names('master.postal-codes');
+        Route::post('master/postal-code-restrictions/{postalCodeRestriction}/restore', [PostalCodeRestrictionController::class, 'restore'])
+            ->withTrashed()
+            ->name('master.postal-code-restrictions.restore');
+        Route::patch('master/postal-code-restrictions/{postalCodeRestriction}/toggle-status', [PostalCodeRestrictionController::class, 'toggleStatus'])
+            ->name('master.postal-code-restrictions.toggle-status');
+        Route::resource('master/postal-code-restrictions', PostalCodeRestrictionController::class)
+            ->except(['show'])
+            ->parameters(['postal-code-restrictions' => 'postalCodeRestriction'])
+            ->names('master.postal-code-restrictions');
         Route::get('master/catalogue-requests', [CatalogueMasterRequestController::class, 'index'])
             ->name('master.catalogue-requests.index');
         Route::put('master/catalogue-requests/{catalogueMasterRequest}', [CatalogueMasterRequestController::class, 'update'])

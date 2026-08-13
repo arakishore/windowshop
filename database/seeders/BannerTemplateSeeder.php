@@ -2,50 +2,30 @@
 
 namespace Database\Seeders;
 
-use App\Enums\BannerPosition;
-use App\Enums\BannerTemplateAvailability;
-use App\Enums\BannerTemplateCategory;
 use App\Models\BannerTemplate;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 
 class BannerTemplateSeeder extends Seeder
 {
     public function run(): void
     {
         $seedCodes = collect($this->templates())
-            ->map(fn (array $template): string => strtolower($template['code']))
+            ->map(fn (array $template): string => $template['code'])
             ->all();
 
-        foreach ($this->templates() as $index => $template) {
-            $code = strtolower($template['code']);
-            $existingUuid = BannerTemplate::withTrashed()->where('code', $code)->value('uuid');
-
+        foreach ($this->templates() as $template) {
             $bannerTemplate = BannerTemplate::withTrashed()->updateOrCreate(
-                ['code' => $code],
-                [
-                    'uuid' => $existingUuid ?: (string) Str::uuid(),
-                    'category' => $template['category']->value,
-                    'name' => $template['name'],
-                    'description' => $template['description'] ?? 'Ready-made WindowShop promotional banner template.',
-                    'default_title' => $template['title'] ?? $template['name'],
-                    'default_subtitle' => $template['subtitle'],
-                    'default_button_text' => 'Shop Now',
-                    'desktop_image_path' => "banner-templates/{$code}/desktop.webp",
-                    'mobile_image_path' => "banner-templates/{$code}/mobile.webp",
-                    'default_position' => BannerPosition::STORE_HERO->value,
-                    'availability' => BannerTemplateAvailability::BOTH->value,
-                    'event_code' => $template['event_code'] ?? null,
-                    'start_offset_days' => $template['start_offset_days'] ?? null,
-                    'end_offset_days' => $template['end_offset_days'] ?? null,
-                    'sort_order' => ($index + 1) * 10,
-                    'status' => BannerTemplate::STATUS_ACTIVE,
-                ],
+                ['code' => $template['code']],
+                $template,
             );
 
             if ($bannerTemplate->trashed()) {
                 $bannerTemplate->restore();
             }
+
+            $this->seedImages($template);
         }
 
         BannerTemplate::query()
@@ -60,68 +40,425 @@ class BannerTemplateSeeder extends Seeder
     private function templates(): array
     {
         return [
-            ...$this->generalTemplates(),
-            ...$this->festivalTemplates(),
-            ...$this->seasonalTemplates(),
-            ...$this->fashionTemplates(),
+            [
+                'uuid' => '98ef68f7-e5f7-48d5-af21-d7d572fbedaf',
+                'code' => 'generic_001',
+                'category' => 'general',
+                'name' => 'Up to 50% OFF',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Up to 50% OFF',
+                'default_subtitle' => 'Save big on selected products.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/98ef68f7-e5f7-48d5-af21-d7d572fbedaf/desktop-6a7b1c840f6310.75116763.jpg',
+                'mobile_image_path' => 'banner-templates/98ef68f7-e5f7-48d5-af21-d7d572fbedaf/mobile-6a7b1c84153705.39858075.jpg',
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => null,
+                'start_offset_days' => 0,
+                'end_offset_days' => 0,
+                'sort_order' => 10,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => 'b8472ece-14ff-4e6d-98cf-0e2095ec73da',
+                'code' => 'generic_002',
+                'category' => 'general',
+                'name' => 'New Arrivals',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'New Arrivals',
+                'default_subtitle' => 'Fresh products just arrived.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/b8472ece-14ff-4e6d-98cf-0e2095ec73da/desktop-6a7b19f98732a3.26217181.png',
+                'mobile_image_path' => 'banner-templates/b8472ece-14ff-4e6d-98cf-0e2095ec73da/mobile-6a7b19f98b38e5.44758075.png',
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => null,
+                'start_offset_days' => null,
+                'end_offset_days' => null,
+                'sort_order' => 20,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '63b36dfb-de1a-4a01-9cd8-fd68bd2c25a3',
+                'code' => 'generic_003',
+                'category' => 'general',
+                'name' => 'Exclusive Deals',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Exclusive Online Deals',
+                'default_subtitle' => 'Available only online.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/63b36dfb-de1a-4a01-9cd8-fd68bd2c25a3/desktop-6a7b1cf5c85d07.08174826.png',
+                'mobile_image_path' => 'banner-templates/63b36dfb-de1a-4a01-9cd8-fd68bd2c25a3/mobile-6a7b1cf5cf81c8.28015594.png',
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => null,
+                'start_offset_days' => 0,
+                'end_offset_days' => 0,
+                'sort_order' => 30,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '288b1aaa-ef47-4afb-bd80-c6a464c02d23',
+                'code' => 'generic_004',
+                'category' => 'general',
+                'name' => 'Clearance Sale',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Clearance Sale',
+                'default_subtitle' => "Last chance before it's gone.",
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/288b1aaa-ef47-4afb-bd80-c6a464c02d23/desktop-6a7b1be95fb981.87144529.jpg',
+                'mobile_image_path' => 'banner-templates/288b1aaa-ef47-4afb-bd80-c6a464c02d23/mobile-6a7b1be96748a2.31479557.jpg',
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => null,
+                'start_offset_days' => null,
+                'end_offset_days' => null,
+                'sort_order' => 40,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '8e3d9dee-66fd-4960-b441-1d6bfa8e1f26',
+                'code' => 'festival_001',
+                'category' => 'festival',
+                'name' => 'Diwali Sale',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Diwali Sale',
+                'default_subtitle' => 'Celebrate with festive savings.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/8e3d9dee-66fd-4960-b441-1d6bfa8e1f26/desktop-6a7b1b6c3b5bb2.66256747.jpg',
+                'mobile_image_path' => 'banner-templates/8e3d9dee-66fd-4960-b441-1d6bfa8e1f26/mobile-6a7b1b6c3f0e49.41187783.jpg',
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'diwali',
+                'start_offset_days' => -10,
+                'end_offset_days' => 5,
+                'sort_order' => 50,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => 'bd9ce5e9-6fdb-40bb-af1d-b39ff00d088a',
+                'code' => 'festival_002',
+                'category' => 'festival',
+                'name' => 'Holi Offers',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Holi Offers',
+                'default_subtitle' => 'Celebrate with colourful offers.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/bd9ce5e9-6fdb-40bb-af1d-b39ff00d088a/desktop-6a7b1ba63f60a6.00522129.jpg',
+                'mobile_image_path' => 'banner-templates/bd9ce5e9-6fdb-40bb-af1d-b39ff00d088a/mobile-6a7b1ba648fc43.67781055.jpg',
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'holi',
+                'start_offset_days' => -7,
+                'end_offset_days' => 7,
+                'sort_order' => 60,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => 'd198348d-9d0a-4005-960c-4c546f617ca2',
+                'code' => 'festival_003',
+                'category' => 'festival',
+                'name' => 'Independence Day Sale',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Independence Day Sale',
+                'default_subtitle' => 'Celebrate freedom with amazing deals.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/d198348d-9d0a-4005-960c-4c546f617ca2/desktop-6a7b1add94a044.94168738.jpg',
+                'mobile_image_path' => 'banner-templates/d198348d-9d0a-4005-960c-4c546f617ca2/mobile-6a7b1add992786.66420595.jpg',
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'independence_day',
+                'start_offset_days' => -7,
+                'end_offset_days' => 1,
+                'sort_order' => 70,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '24dbea04-bf0c-484e-9a43-b5f6c5fba929',
+                'code' => 'festival_004',
+                'category' => 'festival',
+                'name' => 'Republic Day Sale',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Republic Day Sale',
+                'default_subtitle' => 'Exclusive Republic Day savings.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/24dbea04-bf0c-484e-9a43-b5f6c5fba929/desktop-6a7b1c240987a3.54667262.jpg',
+                'mobile_image_path' => 'banner-templates/24dbea04-bf0c-484e-9a43-b5f6c5fba929/mobile-6a7b1c240e0ff2.39532374.jpg',
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'republic_day',
+                'start_offset_days' => -7,
+                'end_offset_days' => 8,
+                'sort_order' => 80,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => 'ab8524e5-1213-4214-8350-c729e34fc8af',
+                'code' => 'festival_005',
+                'category' => 'festival',
+                'name' => 'New Year Sale',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'New Year Sale',
+                'default_subtitle' => 'Start the year with great savings.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/ab8524e5-1213-4214-8350-c729e34fc8af/desktop-6a7b1d488ba8c5.30210483.jpg',
+                'mobile_image_path' => 'banner-templates/ab8524e5-1213-4214-8350-c729e34fc8af/mobile-6a7b1d489376d4.22244399.jpg',
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'new_year',
+                'start_offset_days' => -12,
+                'end_offset_days' => 12,
+                'sort_order' => 90,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => 'b517864c-3c8d-47b1-8bce-f91139717629',
+                'code' => 'festival_006',
+                'category' => 'festival',
+                'name' => 'Christmas Sale',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Christmas Sale',
+                'default_subtitle' => 'Celebrate Christmas with special offers.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/b517864c-3c8d-47b1-8bce-f91139717629/desktop-6a7b1d8398c038.30686421.jpg',
+                'mobile_image_path' => 'banner-templates/b517864c-3c8d-47b1-8bce-f91139717629/mobile-6a7b1d839cec01.38792099.jpg',
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'christmas',
+                'start_offset_days' => -10,
+                'end_offset_days' => 2,
+                'sort_order' => 100,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '3b73fe01-7f55-4e2b-9b02-a6e22a7ffd2a',
+                'code' => 'festival_007',
+                'category' => 'festival',
+                'name' => 'Eid Special',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Eid Special',
+                'default_subtitle' => 'Celebrate Eid with exciting offers.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/3b73fe01-7f55-4e2b-9b02-a6e22a7ffd2a/desktop-6a7b1dac3030e7.09808705.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'eid',
+                'start_offset_days' => -7,
+                'end_offset_days' => 2,
+                'sort_order' => 110,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '57c14b38-2a7e-4275-92a3-04f58892028c',
+                'code' => 'festival_008',
+                'category' => 'festival',
+                'name' => 'Raksha Bandhan',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Raksha Bandhan',
+                'default_subtitle' => 'Celebrate the special bond with gifts.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/57c14b38-2a7e-4275-92a3-04f58892028c/desktop-6a7b1dcb6a6ec0.89290373.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'raksha_bandhan',
+                'start_offset_days' => -7,
+                'end_offset_days' => 1,
+                'sort_order' => 120,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '68280bb2-93ad-4465-a2be-6437b6a22d19',
+                'code' => 'festival_009',
+                'category' => 'festival',
+                'name' => 'Navratri Collection',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Navratri Collection',
+                'default_subtitle' => 'Celebrate Navratri in style.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/68280bb2-93ad-4465-a2be-6437b6a22d19/desktop-6a7b1de4b053c3.29446235.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'navratri',
+                'start_offset_days' => -7,
+                'end_offset_days' => 2,
+                'sort_order' => 130,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '242f6647-d99a-4c7a-af89-5422b06ff60e',
+                'code' => 'festival_010',
+                'category' => 'festival',
+                'name' => 'Ganesh Festival',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Ganesh Festival',
+                'default_subtitle' => 'Celebrate Ganesh Festival with great offers.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/242f6647-d99a-4c7a-af89-5422b06ff60e/desktop-6a7b1f2b432537.86826303.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'ganesh_festival',
+                'start_offset_days' => -7,
+                'end_offset_days' => 2,
+                'sort_order' => 140,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '3dcf803f-28b5-481b-a0ff-97a91bdff8ae',
+                'code' => 'festival_011',
+                'category' => 'festival',
+                'name' => 'Wedding Season',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Wedding Season',
+                'default_subtitle' => 'Everything you need for the wedding season.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/festival_011/desktop.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'wedding_season',
+                'start_offset_days' => -15,
+                'end_offset_days' => 15,
+                'sort_order' => 150,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => 'ab0d6c9d-a058-46fb-ad91-d38143f567d5',
+                'code' => 'festival_012',
+                'category' => 'festival',
+                'name' => "Valentine's Special",
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => "Valentine's Special",
+                'default_subtitle' => 'Celebrate love with exclusive deals.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/ab0d6c9d-a058-46fb-ad91-d38143f567d5/desktop-6a7b1f0eb455c8.77728256.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => 'valentines_day',
+                'start_offset_days' => -7,
+                'end_offset_days' => 1,
+                'sort_order' => 160,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '0e7d1eed-1ef1-4e25-8973-0cd43eb8333c',
+                'code' => 'season_002',
+                'category' => 'seasonal',
+                'name' => 'Winter Collection',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Winter Collection',
+                'default_subtitle' => 'Warm styles for the season.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/0e7d1eed-1ef1-4e25-8973-0cd43eb8333c/desktop-6a7b1ef5537793.57981921.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => null,
+                'start_offset_days' => null,
+                'end_offset_days' => null,
+                'sort_order' => 170,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '787b09a3-355f-4f5f-bfe2-06fefe8ec26b',
+                'code' => 'season_003',
+                'category' => 'seasonal',
+                'name' => 'Monsoon Sale',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Monsoon Sale',
+                'default_subtitle' => 'Rainy season savings.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/787b09a3-355f-4f5f-bfe2-06fefe8ec26b/desktop-6a7b1e6e577721.16253027.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => null,
+                'start_offset_days' => null,
+                'end_offset_days' => null,
+                'sort_order' => 180,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => '70766761-4ea3-4c58-b3f5-d63a3a3905fd',
+                'code' => 'season_004',
+                'category' => 'seasonal',
+                'name' => 'Spring Collection',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Spring Collection',
+                'default_subtitle' => 'Fresh styles for spring.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/70766761-4ea3-4c58-b3f5-d63a3a3905fd/desktop-6a7b1e53861477.19248820.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => null,
+                'start_offset_days' => null,
+                'end_offset_days' => null,
+                'sort_order' => 190,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => 'cd0cff98-3647-4b4a-be88-d06aadb89ac5',
+                'code' => 'fashion_001',
+                'category' => 'fashion',
+                'name' => 'New Fashion Arrivals',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'New Fashion Arrivals',
+                'default_subtitle' => 'Fresh styles added for your next look.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/cd0cff98-3647-4b4a-be88-d06aadb89ac5/desktop-6a7b1e345bcb65.61256033.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => null,
+                'start_offset_days' => null,
+                'end_offset_days' => null,
+                'sort_order' => 200,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
+            [
+                'uuid' => 'feb3a86f-0375-4d6c-8349-704555ca5014',
+                'code' => 'fashion_002',
+                'category' => 'fashion',
+                'name' => 'Trending Styles',
+                'description' => 'Ready-made WindowShop promotional banner template.',
+                'default_title' => 'Trending Styles',
+                'default_subtitle' => 'Shop looks everyone is talking about.',
+                'default_button_text' => 'Shop Now',
+                'desktop_image_path' => 'banner-templates/feb3a86f-0375-4d6c-8349-704555ca5014/desktop-6a7b1f87660730.87412161.jpg',
+                'mobile_image_path' => null,
+                'default_position' => 'store_hero',
+                'availability' => 'both',
+                'event_code' => null,
+                'start_offset_days' => null,
+                'end_offset_days' => null,
+                'sort_order' => 210,
+                'status' => BannerTemplate::STATUS_ACTIVE,
+            ],
         ];
     }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function generalTemplates(): array
+    private function seedImages(array $template): void
     {
-        return [
-            ['code' => 'generic_001', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Up to 50% OFF', 'subtitle' => 'Save big on selected products.'],
-            ['code' => 'generic_002', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'New Arrivals', 'subtitle' => 'Fresh products just arrived.'],
-            ['code' => 'generic_003', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Exclusive Online Deals', 'subtitle' => 'Available only online.'],
-            ['code' => 'generic_004', 'category' => BannerTemplateCategory::GENERAL, 'name' => 'Clearance Sale', 'subtitle' => "Last chance before it's gone."],
-        ];
-    }
+        foreach (['desktop_image_path', 'mobile_image_path'] as $key) {
+            $path = $template[$key] ?? null;
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function festivalTemplates(): array
-    {
-        return [
-            ['code' => 'festival_001', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'Diwali Sale', 'subtitle' => 'Celebrate with festive savings.', 'event_code' => 'diwali', 'start_offset_days' => -10, 'end_offset_days' => 2],
-            ['code' => 'festival_002', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'Holi Offers', 'subtitle' => 'Celebrate with colourful offers.', 'event_code' => 'holi', 'start_offset_days' => -7, 'end_offset_days' => 2],
-            ['code' => 'festival_003', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'Independence Day Sale', 'subtitle' => 'Celebrate freedom with amazing deals.', 'event_code' => 'independence_day', 'start_offset_days' => -7, 'end_offset_days' => 1],
-            ['code' => 'festival_004', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'Republic Day Sale', 'subtitle' => 'Exclusive Republic Day savings.', 'event_code' => 'republic_day', 'start_offset_days' => -7, 'end_offset_days' => 1],
-            ['code' => 'festival_005', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'New Year Sale', 'subtitle' => 'Start the year with great savings.', 'event_code' => 'new_year', 'start_offset_days' => -12, 'end_offset_days' => 5],
-            ['code' => 'festival_006', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'Christmas Sale', 'subtitle' => 'Celebrate Christmas with special offers.', 'event_code' => 'christmas', 'start_offset_days' => -10, 'end_offset_days' => 2],
-            ['code' => 'festival_007', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'Eid Special', 'subtitle' => 'Celebrate Eid with exciting offers.', 'event_code' => 'eid', 'start_offset_days' => -7, 'end_offset_days' => 2],
-            ['code' => 'festival_008', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'Raksha Bandhan', 'subtitle' => 'Celebrate the special bond with gifts.', 'event_code' => 'raksha_bandhan', 'start_offset_days' => -7, 'end_offset_days' => 1],
-            ['code' => 'festival_009', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'Navratri Collection', 'subtitle' => 'Celebrate Navratri in style.', 'event_code' => 'navratri', 'start_offset_days' => -7, 'end_offset_days' => 2],
-            ['code' => 'festival_010', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'Ganesh Festival', 'subtitle' => 'Celebrate Ganesh Festival with great offers.', 'event_code' => 'ganesh_festival', 'start_offset_days' => -7, 'end_offset_days' => 2],
-            ['code' => 'festival_011', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => 'Wedding Season', 'subtitle' => 'Everything you need for the wedding season.', 'event_code' => 'wedding_season', 'start_offset_days' => -15, 'end_offset_days' => 15],
-            ['code' => 'festival_012', 'category' => BannerTemplateCategory::FESTIVAL, 'name' => "Valentine's Special", 'subtitle' => 'Celebrate love with exclusive deals.', 'event_code' => 'valentines_day', 'start_offset_days' => -7, 'end_offset_days' => 1],
-        ];
-    }
+            if (! $path) {
+                continue;
+            }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function seasonalTemplates(): array
-    {
-        return [
-            ['code' => 'season_002', 'category' => BannerTemplateCategory::SEASONAL, 'name' => 'Winter Collection', 'subtitle' => 'Warm styles for the season.'],
-            ['code' => 'season_003', 'category' => BannerTemplateCategory::SEASONAL, 'name' => 'Monsoon Sale', 'subtitle' => 'Rainy season savings.'],
-            ['code' => 'season_004', 'category' => BannerTemplateCategory::SEASONAL, 'name' => 'Spring Collection', 'subtitle' => 'Fresh styles for spring.'],
-        ];
-    }
+            $source = database_path("seeders/assets/{$path}");
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function fashionTemplates(): array
-    {
-        return [
-            ['code' => 'fashion_001', 'category' => BannerTemplateCategory::FASHION, 'name' => 'New Fashion Arrivals', 'subtitle' => 'Fresh styles added for your next look.'],
-            ['code' => 'fashion_002', 'category' => BannerTemplateCategory::FASHION, 'name' => 'Trending Styles', 'subtitle' => 'Shop looks everyone is talking about.'],
-        ];
+            if (! File::isFile($source)) {
+                continue;
+            }
+
+            Storage::disk('public')->put($path, File::get($source));
+        }
     }
 
     /**

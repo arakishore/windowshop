@@ -62,9 +62,16 @@ class StorefrontNavigationTest extends TestCase
             ->assertSee('Z Fashion')
             ->assertSee('Mobiles')
             ->assertSee('Shirts')
-            ->assertSee(route('storefront.category.show', $mobiles->slug), false)
-            ->assertDontSee(route('storefront.category.show', $android->slug), false)
-            ->assertDontSee('Android Phones')
+            ->assertSee(route('storefront.category.child.show', [$zRoot->slug, $shirts->slug]), false)
+            ->assertSee('mega-menu-drill-trigger', false)
+            ->assertSee(route('storefront.category.child.show', [$aRoot->slug, $mobiles->slug]), false)
+            ->assertSee('data-drill-target="mega-category-'.$mobiles->getKey().'"', false)
+            ->assertSee('mega-menu-subcategory-grid', false)
+            ->assertDontSee('sub-menu_list mega-menu-drill-list', false)
+            ->assertSee('Back')
+            ->assertSee('Android Phones')
+            ->assertSee(route('storefront.category.child.show', [$mobiles->slug, $android->slug]), false)
+            ->assertDontSee('View All')
             ->assertDontSee('Inactive Root')
             ->assertDontSee('Deleted Root')
             ->assertDontSee('Inactive Child')
@@ -131,8 +138,10 @@ class StorefrontNavigationTest extends TestCase
             ->assertSee('Fashion')
             ->assertSee('Men')
             ->assertSee(route('storefront.store.category.show', [$shop->slug, $men->slug]), false)
-            ->assertDontSee(route('storefront.store.category.show', [$shop->slug, $shirts->slug]), false)
-            ->assertDontSee('Shirts')
+            ->assertSee('mega-menu-drill-trigger', false)
+            ->assertSee('Back')
+            ->assertSee(route('storefront.store.category.show', [$shop->slug, $shirts->slug]), false)
+            ->assertSee('Shirts')
             ->assertDontSee('Women')
             ->assertDontSee('Dresses')
             ->assertDontSee('Jeans')
@@ -142,7 +151,7 @@ class StorefrontNavigationTest extends TestCase
         $response->assertSeeInOrder(['Fashion', 'Men']);
     }
 
-    public function test_category_placeholder_routes_do_not_implement_product_listing(): void
+    public function test_store_category_placeholder_route_does_not_implement_product_listing(): void
     {
         $root = $this->category('Fashion');
         $child = $this->category('Men', $root);
@@ -152,7 +161,8 @@ class StorefrontNavigationTest extends TestCase
 
         $this->get(route('storefront.category.show', $child->slug))
             ->assertOk()
-            ->assertSee('Category product listing is intentionally deferred.');
+            ->assertSee('Men')
+            ->assertSee('No products found.');
 
         $this->get(route('storefront.store.category.show', [$shop->slug, $child->slug]))
             ->assertOk()

@@ -1029,13 +1029,56 @@
                         </li>
                     `);
 
-                    $groupWrap.find(".sub-menu_list > li > a.sub-menu_link").each(function () {
+                    $groupWrap.find(".sub-menu_list > li > a.sub-menu_link").each(function (k) {
                         const $a = $(this);
                         const href = $a.attr("href") || "#";
                         const html = $a.html();
+                        const mobileLabelHtml = $a.find(".cus-text").first().prop("outerHTML") || html;
                         const activeClass = $a.hasClass("active") ? "active" : "";
 
                         if (html && html.trim()) {
+                            if ($a.hasClass("mega-menu-drill-trigger")) {
+                                const drillTarget = $a.attr("data-drill-target");
+                                const $drillPanel = drillTarget ? submenu.find(`#${drillTarget}`).first() : $();
+                                const $inlineMobileChildren = $a.siblings(".mega-menu-mobile-children").find("a.sub-menu_link");
+                                const childSubId = `${subId}-child-${k}`;
+
+                                if ($inlineMobileChildren.length || $drillPanel.length) {
+                                    const $childGroup = $(`
+                                        <li>
+                                            <a href="#${childSubId}" class="collapsed sub-nav-link ${activeClass}"
+                                                data-bs-toggle="collapse" aria-expanded="false" aria-controls="${childSubId}">
+                                                ${mobileLabelHtml}
+                                                <span class="icon ${$iconArrow2}"></span>
+                                            </a>
+                                            <div id="${childSubId}" class="collapse">
+                                                <ul class="sub-nav-menu sub-menu-level-2"></ul>
+                                            </div>
+                                        </li>
+                                    `);
+
+                                    const $mobileChildren = $inlineMobileChildren.length
+                                        ? $inlineMobileChildren
+                                        : $drillPanel.find(".mega-menu-subcategory-grid > a.sub-menu_link, .sub-menu_list > li > a.sub-menu_link");
+
+                                    $mobileChildren.each(function () {
+                                        const $childLink = $(this);
+                                        const childHref = $childLink.attr("href") || "#";
+                                        const childHtml = $childLink.html();
+                                        const childActiveClass = $childLink.hasClass("active") ? "active" : "";
+
+                                        if (childHtml && childHtml.trim()) {
+                                            $childGroup
+                                                .find(".sub-menu-level-2")
+                                                .append(`<li><a href="${childHref}" class="sub-nav-link ${childActiveClass}">${childHtml}</a></li>`);
+                                        }
+                                    });
+
+                                    $group.find(".sub-menu-level-2").append($childGroup);
+                                    return;
+                                }
+                            }
+
                             $group
                                 .find(".sub-menu-level-2")
                                 .append(`<li><a href="${href}" class="sub-nav-link ${activeClass}">${html}</a></li>`);

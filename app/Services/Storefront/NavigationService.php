@@ -10,12 +10,29 @@ use Illuminate\Support\Collection;
 
 class NavigationService
 {
+    public const HOMEPAGE_CATEGORY_LIMIT = 8;
+
     /**
      * @return EloquentCollection<int, ProductCategory>
      */
     public function getMarketplaceCategories(): EloquentCollection
     {
         return $this->activeRootTreeQuery()->get();
+    }
+
+    /**
+     * @return EloquentCollection<int, ProductCategory>
+     */
+    public function getHomepageCategories(): EloquentCollection
+    {
+        return ProductCategory::query()
+            ->whereNull('parent_id')
+            ->where('status', 'active')
+            ->whereNotNull('slug')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->limit(self::HOMEPAGE_CATEGORY_LIMIT)
+            ->get();
     }
 
     /**

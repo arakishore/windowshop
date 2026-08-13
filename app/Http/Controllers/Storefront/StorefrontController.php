@@ -5,16 +5,26 @@ namespace App\Http\Controllers\Storefront;
 use App\Http\Controllers\Controller;
 use App\Models\ProductCategory;
 use App\Models\Shop;
+use App\Services\Banner\BannerService;
 use App\Services\Storefront\NavigationService;
+use App\Services\Storefront\ProductListingService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class StorefrontController extends Controller
 {
-    public function __construct(private readonly NavigationService $navigation) {}
+    public function __construct(
+        private readonly NavigationService $navigation,
+        private readonly BannerService $banners,
+        private readonly ProductListingService $productListings,
+    ) {}
 
     public function home(): View
     {
         return view('storefront.pages.home', [
+            'heroBanners' => $this->banners->getMarketplaceHeroBanners(),
+            'homepageCategories' => $this->homepageCategoryCards(),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
@@ -195,23 +205,8 @@ class StorefrontController extends Controller
 
     public function products(): View
     {
-        $products = [
-            ['name' => 'Lyocell wrap top', 'brand' => 'Louis Vuitton', 'image' => 'product-1.jpg', 'hover_image' => 'product-1_2.jpg', 'price' => '$69,99', 'old_price' => '$99,99', 'badge' => 'NEW', 'badge_class' => 'new'],
-            ['name' => 'Buttons cotton top', 'brand' => 'Nike', 'image' => 'product-2.jpg', 'hover_image' => 'product-2_2.jpg', 'price' => '$29,99', 'old_price' => '$49,99', 'badge' => '-25%', 'badge_class' => 'sale'],
-            ['name' => 'Wool Midi Coat', 'brand' => 'Zara', 'image' => 'product-3.jpg', 'hover_image' => 'product-3_2.jpg', 'price' => '$15,99', 'old_price' => '$25,99', 'badge' => 'NEW', 'badge_class' => 'new'],
-            ['name' => 'Linen slim-fit shirt', 'brand' => 'Adidas', 'image' => 'product-4.jpg', 'hover_image' => 'product-4_2.jpg', 'price' => '$45,99', 'old_price' => '$79,99', 'badge' => null, 'badge_class' => null],
-            ['name' => 'Ribbed knit top', 'brand' => 'Gucci', 'image' => 'product-5.jpg', 'hover_image' => 'product-5_2.jpg', 'price' => '$39,99', 'old_price' => '$59,99', 'badge' => 'NEW', 'badge_class' => 'new'],
-            ['name' => 'Oversized denim jacket', 'brand' => 'Hermes', 'image' => 'product-6.jpg', 'hover_image' => 'product-6_2.jpg', 'price' => '$89,99', 'old_price' => '$119,99', 'badge' => '-15%', 'badge_class' => 'sale'],
-            ['name' => 'Leather shopper bag with stitching', 'brand' => 'Gucci', 'image' => 'product-7.jpg', 'hover_image' => 'product-7_2.jpg', 'price' => '$22,99', 'old_price' => '$39,99', 'badge' => null, 'badge_class' => null],
-            ['name' => 'Oval shoulder bag', 'brand' => 'Adidas', 'image' => 'product-8.jpg', 'hover_image' => 'product-8_2.jpg', 'price' => '$67,99', 'old_price' => '$99,99', 'badge' => '-25%', 'badge_class' => 'sale'],
-            ['name' => 'V-neck cotton t-shirt', 'brand' => 'Nike', 'image' => 'product-9.jpg', 'hover_image' => 'product-9_2.jpg', 'price' => '$12,99', 'old_price' => '$21,99', 'badge' => 'NEW', 'badge_class' => 'new'],
-            ['name' => 'Relaxed fit overshirt', 'brand' => 'Zara', 'image' => 'product-10.jpg', 'hover_image' => 'product-10.jpg', 'price' => '$52,99', 'old_price' => '$74,99', 'badge' => null, 'badge_class' => null],
-            ['name' => 'Soft everyday sneaker', 'brand' => 'Adidas', 'image' => 'product-11.jpg', 'hover_image' => 'product-11.jpg', 'price' => '$76,99', 'old_price' => '$98,99', 'badge' => 'NEW', 'badge_class' => 'new'],
-            ['name' => 'Classic casual jacket', 'brand' => 'Hermes', 'image' => 'product-12.jpg', 'hover_image' => 'product-12_2.jpg', 'price' => '$99,99', 'old_price' => '$129,99', 'badge' => '-20%', 'badge_class' => 'sale'],
-        ];
-
         return view('storefront.pages.products', [
-            'products' => $products,
+            'products' => $this->productListings->marketplaceProducts(),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
@@ -293,18 +288,81 @@ class StorefrontController extends Controller
         ]);
     }
 
-    public function category(string $slug): View
+    public function category(Request $request, string $slug): View
     {
         $category = ProductCategory::query()
+            ->with($this->categoryListingRelations())
             ->where('slug', $slug)
             ->where('status', 'active')
             ->firstOrFail();
 
-        return view('storefront.pages.placeholder', [
-            'pageTitle' => $category->name,
-            'pageDescription' => 'Category product listing is intentionally deferred.',
+        return $this->categoryListingView($request, $category);
+    }
+
+    public function categoryWithParent(Request $request, string $parentSlug, string $slug): View
+    {
+        $parent = ProductCategory::query()
+            ->where('slug', $parentSlug)
+            ->where('status', 'active')
+            ->firstOrFail();
+
+        $category = ProductCategory::query()
+            ->with($this->categoryListingRelations())
+            ->where('slug', $slug)
+            ->where('status', 'active')
+            ->where('parent_id', $parent->getKey())
+            ->firstOrFail();
+
+        return $this->categoryListingView($request, $category);
+    }
+
+    private function categoryListingView(Request $request, ProductCategory $category): View
+    {
+        $selectedFilters = [
+            'attributes' => $request->array('attributes'),
+            'price_min' => $request->input('price_min'),
+            'price_max' => $request->input('price_max'),
+            'discount_min' => $request->array('discount_min'),
+        ];
+
+        return view('storefront.pages.category-products', [
+            'category' => $category,
+            'childCategories' => $category->children,
+            'breadcrumbCategories' => $this->breadcrumbCategories($category),
+            'products' => $this->productListings->categoryProducts($category, $selectedFilters),
+            'attributeFilters' => $this->productListings->categoryAttributeFilters($category),
+            'selectedFilters' => $selectedFilters,
+            'selectedAttributeFilters' => $selectedFilters['attributes'],
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function categoryListingRelations(): array
+    {
+        return [
+            'parent.parent',
+            'children' => fn ($query) => $query
+                ->with('parent')
+                ->where('status', 'active')
+                ->orderBy('sort_order')
+                ->orderBy('name'),
+        ];
+    }
+
+    private function breadcrumbCategories(ProductCategory $category): Collection
+    {
+        $items = collect();
+        $current = $category;
+
+        while ($current) {
+            $items->prepend($current);
+            $current = $current->parent;
+        }
+
+        return $items->values();
     }
 
     public function store(string $slug): View
@@ -341,6 +399,21 @@ class StorefrontController extends Controller
             ->where('slug', $slug)
             ->where('status', 'active')
             ->firstOrFail();
+    }
+
+    private function homepageCategoryCards(): Collection
+    {
+        return $this->navigation->getHomepageCategories()
+            ->values()
+            ->map(function (ProductCategory $category, int $index): array {
+                $fallbackImage = 'assets/storefront/images/category/cate-'.(($index % NavigationService::HOMEPAGE_CATEGORY_LIMIT) + 1).'.jpg';
+
+                return [
+                    'name' => $category->name,
+                    'image' => $category->image_path ? 'storage/'.$category->image_path : $fallbackImage,
+                    'url' => route('storefront.category.show', $category->slug),
+                ];
+            });
     }
 
     private function findCategoryInTree(iterable $categories, string $slug): ?ProductCategory
