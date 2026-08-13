@@ -35,6 +35,7 @@ Route::get('/', function () {
 
 Route::get('/storefront', [StorefrontController::class, 'home'])->name('storefront.home');
 Route::post('/location/postal-code', [CustomerLocationController::class, 'store'])->name('storefront.location.postal-code.store');
+Route::post('/location/detect', [CustomerLocationController::class, 'detect'])->name('storefront.location.detect');
 Route::get('/about-us', [StorefrontController::class, 'about'])->name('storefront.about');
 Route::get('/stores', [StorefrontController::class, 'stores'])->name('storefront.stores');
 Route::get('/testimonials', [StorefrontController::class, 'testimonials'])->name('storefront.testimonials');

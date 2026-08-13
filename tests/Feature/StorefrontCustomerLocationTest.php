@@ -155,22 +155,94 @@ class StorefrontCustomerLocationTest extends TestCase
             ->assertSee('Far Shop Product');
     }
 
-    private function postalCode(string $postalCode, string $status = PostalCode::STATUS_ACTIVE): PostalCode
+    public function test_valid_latitude_longitude_detects_nearest_postal_code_without_storing_it(): void
+    {
+        $this->postalCode('422009', latitude: '19.9975000', longitude: '73.7898000', officeName: 'Cidco Colony S.O');
+        $this->postalCode('422402', latitude: '19.7167000', longitude: '73.6333000', officeName: 'Ghoti S.O');
+
+        $this->postJson(route('storefront.location.detect'), [
+            'latitude' => 19.998,
+            'longitude' => 73.79,
+            'accuracy' => 35,
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('postal_code', '422009')
+            ->assertJsonPath('locality', 'Cidco Colony S.O')
+            ->assertJsonPath('district', 'NASHIK')
+            ->assertJsonMissingPath('errors')
+            ->assertSessionMissing(CustomerLocationService::SESSION_KEY)
+            ->assertCookieMissing(CustomerLocationService::COOKIE_NAME);
+    }
+
+    public function test_invalid_latitude_longitude_is_rejected(): void
+    {
+        $this->postJson(route('storefront.location.detect'), [
+            'latitude' => 91,
+            'longitude' => 73.79,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('latitude');
+
+        $this->postJson(route('storefront.location.detect'), [
+            'latitude' => 19.99,
+            'longitude' => -181,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('longitude');
+    }
+
+    public function test_coordinate_detection_rejects_unreasonable_nearest_match(): void
+    {
+        $this->postalCode('422009', latitude: '19.9975000', longitude: '73.7898000');
+
+        $this->postJson(route('storefront.location.detect'), [
+            'latitude' => 28.6139,
+            'longitude' => 77.2090,
+            'accuracy' => 50,
+        ])
+            ->assertNotFound()
+            ->assertJsonFragment([
+                'message' => "We couldn't match your location to a nearby PIN code. Please enter your PIN code instead.",
+            ]);
+    }
+
+    public function test_location_service_retrieves_selected_pin_and_postal_code_record(): void
+    {
+        $postalCode = $this->postalCode('422009', officeName: 'Cidco Colony S.O');
+        $service = app(CustomerLocationService::class);
+        $request = \Illuminate\Http\Request::create('/');
+        $request->setLaravelSession($this->app['session.store']);
+
+        $request->session()->put(CustomerLocationService::SESSION_KEY, '422009');
+
+        $this->assertSame('422009', $service->postalCode($request));
+        $this->assertTrue($postalCode->is($service->postalCodeRecord('422009')));
+        $this->assertNull($service->postalCodeRecord('ABC009'));
+    }
+
+    private function postalCode(
+        string $postalCode,
+        string $status = PostalCode::STATUS_ACTIVE,
+        string $latitude = '19.9975000',
+        string $longitude = '73.7898000',
+        string $officeName = 'WindowShop Test H.O',
+    ): PostalCode
     {
         return PostalCode::query()->create([
-            'source_key' => sha1($postalCode.'|windowshop test h.o|ho|nashik|maharashtra'),
+            'source_key' => sha1($postalCode.'|'.strtolower($officeName).'|ho|nashik|maharashtra'),
             'circle_name' => 'Maharashtra Circle',
             'region_name' => 'Mumbai Region',
             'division_name' => 'Nashik Division',
-            'office_name' => 'WindowShop Test H.O',
+            'office_name' => $officeName,
             'postal_code' => $postalCode,
             'office_type' => 'HO',
             'delivery_status' => 'Delivery',
             'shipping_enabled' => true,
             'district' => 'NASHIK',
             'state' => 'MAHARASHTRA',
-            'latitude' => '19.9975000',
-            'longitude' => '73.7898000',
+            'latitude' => $latitude,
+            'longitude' => $longitude,
             'status' => $status,
         ]);
     }

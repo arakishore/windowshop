@@ -11,6 +11,7 @@
     aria-labelledby="customer-location-modal-title"
     data-auto-open="{{ $autoOpenLocationModal ? '1' : '0' }}"
     data-current-postal-code="{{ $currentPostalCode }}"
+    data-detect-endpoint="{{ route('storefront.location.detect') }}"
     data-endpoint="{{ route('storefront.location.postal-code.store') }}">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -21,6 +22,22 @@
                 <p class="desc-pop cl-text-2">Enter your PIN code to see shops and products near you.</p>
             </div>
             <div class="modal-main">
+                <button type="button" class="tf-btn btn-white customer-location-detect-btn">
+                    <span class="customer-location-detect-text">Use my current location</span>
+                </button>
+
+                <div class="customer-location-detected" aria-live="polite">
+                    <p class="customer-location-detected-title">Location detected</p>
+                    <p class="customer-location-detected-pin"></p>
+                    <p class="customer-location-detected-meta"></p>
+                    <div class="customer-location-detected-actions">
+                        <button type="button" class="tf-btn animate-btn customer-location-confirm-detected">Use this location</button>
+                        <button type="button" class="tf-btn btn-white customer-location-enter-manually">Enter PIN manually</button>
+                    </div>
+                </div>
+
+                <div class="customer-location-or">or</div>
+
                 <form method="POST"
                     action="{{ route('storefront.location.postal-code.store') }}"
                     class="customer-location-form"
@@ -46,7 +63,7 @@
                 <p class="customer-location-error {{ $locationError ? 'is-visible' : '' }}" role="alert">
                     {{ $locationError }}
                 </p>
-                <p class="desc-pop cl-text-2 customer-location-helper mb-0">We'll show nearby shop offers first. You can change your location anytime.</p>
+                <p class="desc-pop cl-text-2 customer-location-helper mb-0">We'll show nearby shops first. You can change your location anytime.</p>
             </div>
         </div>
     </div>

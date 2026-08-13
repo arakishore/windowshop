@@ -198,6 +198,72 @@
             margin-bottom: 24px;
         }
 
+        .customer-location-detect-btn {
+            width: 100%;
+            min-height: 46px;
+            margin-bottom: 16px;
+        }
+
+        .customer-location-or {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0 0 16px;
+            color: var(--text-2);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .customer-location-or::before,
+        .customer-location-or::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: rgba(18, 18, 18, .1);
+        }
+
+        .customer-location-detected {
+            display: none;
+            margin-bottom: 16px;
+            padding: 14px;
+            border: 1px solid rgba(18, 18, 18, .12);
+            border-radius: 8px;
+            background: rgba(18, 18, 18, .025);
+        }
+
+        .customer-location-detected.is-visible {
+            display: block;
+        }
+
+        .customer-location-detected-title {
+            margin-bottom: 6px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .customer-location-detected-pin {
+            margin-bottom: 2px;
+            font-size: 22px;
+            line-height: 1.2;
+            font-weight: 700;
+            color: var(--main);
+        }
+
+        .customer-location-detected-meta {
+            margin-bottom: 12px;
+            color: var(--text-2);
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .customer-location-detected-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
         .customer-location-form {
             display: flex;
             align-items: end;
@@ -247,6 +313,11 @@
             }
 
             .customer-location-form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .customer-location-detected-actions {
                 flex-direction: column;
                 align-items: stretch;
             }

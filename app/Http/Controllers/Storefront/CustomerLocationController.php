@@ -63,4 +63,42 @@ class CustomerLocationController extends Controller
             ->with('customer_location_saved', true)
             ->withCookie($cookie);
     }
+
+    public function detect(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'accuracy' => ['nullable', 'numeric', 'min:0'],
+        ], [
+            'latitude.between' => 'Latitude must be between -90 and 90.',
+            'longitude.between' => 'Longitude must be between -180 and 180.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'The detected location is invalid.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $validator->validated();
+        $nearest = $this->location->resolveNearestPostalCode((float) $data['latitude'], (float) $data['longitude']);
+
+        if ($nearest === null) {
+            return response()->json([
+                'message' => "We couldn't match your location to a nearby PIN code. Please enter your PIN code instead.",
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'postal_code' => $nearest['postal_code'],
+            'locality' => $nearest['locality'],
+            'district' => $nearest['district'],
+            'state' => $nearest['state'],
+            'distance_km' => $nearest['distance_km'],
+            'accuracy' => $data['accuracy'] ?? null,
+        ]);
+    }
 }
