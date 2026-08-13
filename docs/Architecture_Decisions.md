@@ -31,6 +31,64 @@ Decision Date:
 ## Decision
 
 Feature:
+Storefront Customer Shopping Postal Code
+
+Status:
+Frozen for V1 location selection
+
+Decision:
+The customer-selected shopping postal code is a browsing/location preference, not a delivery restriction.
+
+Current selected postal code is resolved centrally through:
+
+`App\Services\Storefront\CustomerLocationService::postalCode()`
+
+Storage:
+
+- Laravel session key: `storefront.shopping_postal_code`
+- Browser cookie: `windowshop_postal_code`
+- Cookie lifetime: 30 days
+
+Validation:
+
+- India V1 PIN codes must be exactly 6 digits.
+- Entered PIN codes must exist in active, non-deleted records from the existing `postal_codes` master table.
+- Do not create a duplicate postal-code master table.
+
+Storefront UX:
+
+- Auto-open the location modal only when no current shopping PIN is resolved.
+- Allow changing the PIN from the storefront header at any time.
+- Keep storefront browsing usable even if the modal is dismissed without selection.
+
+Future ranking:
+
+- Same-PIN shops/products should rank first.
+- Nearby PINs should rank next using postal-code proximity data.
+- Farther shops/products should remain accessible and rank later.
+- Do not filter products solely because they are outside the selected PIN.
+
+Separation:
+
+`postal_code_restrictions` remains a separate serviceability/restriction feature and must not be mixed with customer browsing location.
+
+Reason:
+This gives future product/shop queries a centralized location preference while preserving catalogue visibility and avoiding premature delivery/serviceability rules.
+
+Alternatives Considered:
+JavaScript localStorage only
+Overwriting customer account address
+Filtering products by selected PIN
+Combining customer location with postal-code restrictions
+
+Decision Date:
+2026-08-13
+
+--------------------------------------------------
+
+## Decision
+
+Feature:
 WindowShop Storefront Navigation V1
 
 Status:

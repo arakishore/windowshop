@@ -56,6 +56,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) co
 - Documented that Exchange is a separate workflow/policy concept, not a refund/return reason.
 - Exchange screen now shows original MRP, selling price, and paid amount per item beside exchange quantity.
 - Exchange screen now includes a static help modal explaining the exchange flow, example, and non-restock guidance.
+- Postal Code master data module with Indian postal-code records, admin management, import coverage, and latitude/longitude-ready fields.
+- Postal Code Restriction module kept separate from customer browsing location and future ranking logic.
+- Storefront customer PIN code/location selector with session and 30-day cookie storage, active postal-code master validation, auto-open behaviour, header change action, and focused tests.
+- Storefront mega menu/navigation V1 frozen around the existing `product_categories` hierarchy without adding a separate menu-builder table.
 
 ### Changed
 

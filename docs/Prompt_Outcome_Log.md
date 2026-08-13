@@ -13,6 +13,92 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-08-13 18:45 +05:30 - Postal Code, Restrictions, Storefront PIN Selector, Mega Menu Frozen
+
+### Exact User Prompt
+
+```text
+we have done 
+1 Master Postal
+2 Restrication
+3 Model Box for Pin code Storefront
+4 Mega menu frozen
+can u pls add in docs?
+```
+
+### Final Outcome
+
+Documented the completed WindowShop location/navigation foundation work.
+
+Completed items now recorded:
+
+- Master Postal Code module
+- Postal Code Restriction module
+- Storefront customer PIN code/location selector modal
+- Storefront mega menu/navigation frozen decision
+
+### Implementation Summary
+
+Master Postal Code:
+
+- Added Indian postal-code master data infrastructure using the existing `postal_codes` table and `PostalCode` model.
+- Supports active/inactive status, soft deletes, office/location metadata, delivery status, shipping-enabled flag, and latitude/longitude fields for future proximity ranking.
+- Includes CSV import coverage and admin management coverage through `AdminPostalCodeMasterTest`.
+- This is the canonical postal-code master; no duplicate postal-code master table should be created.
+
+Postal Code Restriction:
+
+- Added separate postal-code restriction infrastructure through `postal_code_restrictions`.
+- Restriction records remain independent from customer browsing location.
+- This module is for serviceability/regulatory/operational restriction rules, not for ranking shops/products by customer location.
+- Covered through `PostalCodeRestrictionTest`.
+
+Storefront Customer PIN Code / Location Selector:
+
+- Added a dedicated storefront modal with `id="customer-location-modal"`.
+- Added `POST /location/postal-code` named `storefront.location.postal-code.store`.
+- Added `App\Services\Storefront\CustomerLocationService` as the centralized resolver for current browsing postal code.
+- Stores selected PIN in Laravel session key `storefront.shopping_postal_code`.
+- Stores selected PIN in browser cookie `windowshop_postal_code` for 30 days.
+- Validates India V1 PIN codes as exactly 6 digits on frontend and backend.
+- Validates entered PIN against active, non-deleted records in `postal_codes`.
+- Auto-opens the modal only when no current PIN is resolved.
+- Lets customers change the selected shopping PIN without logout/login.
+- Header uses a compact location icon near the Account icon with tooltip text.
+- PIN selection is a ranking preference only; it does not filter or block distant products.
+
+Storefront Mega Menu Frozen:
+
+- Storefront navigation V1 remains frozen around the existing `product_categories` hierarchy.
+- No separate menu-builder table is introduced for V1.
+- Marketplace mega menu and merchant scoped category navigation continue to use the existing `NavigationService` and Blade partials.
+- The frozen decision is recorded in `docs/Architecture_Decisions.md` under `WindowShop Storefront Navigation V1`.
+
+### Files / Areas Referenced
+
+- `app/Models/PostalCode.php`
+- `app/Models/PostalCodeRestriction.php`
+- `app/Services/Storefront/CustomerLocationService.php`
+- `app/Http/Controllers/Storefront/CustomerLocationController.php`
+- `resources/views/storefront/partials/customer-location-modal.blade.php`
+- `resources/views/storefront/partials/header.blade.php`
+- `public/assets/storefront/js/customer-location.js`
+- `routes/web.php`
+- `docs/Architecture_Decisions.md`
+
+### Tests / Checks Recorded
+
+- `vendor\bin\phpunit tests\Feature\StorefrontCustomerLocationTest.php` passed: 7 tests, 34 assertions.
+- `vendor\bin\phpunit tests\Feature\StorefrontCustomerLocationTest.php tests\Feature\StorefrontProductListingTest.php` passed: 15 tests, 123 assertions.
+
+### Architectural Notes
+
+- Future nearest-shop/product ranking should read the customer browsing postal code through `CustomerLocationService::postalCode()`.
+- Ranking should prioritize same PIN first, nearby PINs next, and farther shops later.
+- Do not treat the selected browsing PIN as a delivery restriction.
+- Do not mix this selector with `postal_code_restrictions`.
+- Future proximity logic can use `postal_codes.latitude` and `postal_codes.longitude` when the nearest-shop algorithm is implemented.
+
 ## 2026-08-12 00:25 +05:30 - Storefront Dynamic Content Step 2 Home Hero Slider
 
 ### Exact User Prompt

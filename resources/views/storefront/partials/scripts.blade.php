@@ -7,3 +7,4 @@
 <script src="{{ asset('assets/storefront/js/plugin/wow.min.js') }}"></script>
 <script src="{{ asset('assets/storefront/js/carousel.js') }}"></script>
 <script src="{{ asset('assets/storefront/js/main.js') }}?v={{ filemtime(public_path('assets/storefront/js/main.js')) }}"></script>
+<script src="{{ asset('assets/storefront/js/customer-location.js') }}?v={{ filemtime(public_path('assets/storefront/js/customer-location.js')) }}"></script>

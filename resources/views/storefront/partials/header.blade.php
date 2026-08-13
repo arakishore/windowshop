@@ -33,6 +33,15 @@
                         </a>
                     </li>
                     <li>
+                        <a href="#customer-location-modal"
+                            data-bs-toggle="modal"
+                            class="nav-icon-item link customer-location-trigger"
+                            aria-label="{{ $currentPostalCode ? 'Shopping near '.$currentPostalCode.'. Change location.' : 'Choose location' }}"
+                            data-location-tooltip="{{ $currentPostalCode ? 'Shopping near '.$currentPostalCode.'. Change location.' : 'Choose location' }}">
+                            <span class="location-pin-icon" aria-hidden="true"></span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="{{ route('storefront.login') }}" class="nav-icon-item link">
                             <i class="icon icon-User"></i>
                         </a>

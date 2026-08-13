@@ -25,6 +25,7 @@ use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantShopController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\SystemSettingController;
+use App\Http\Controllers\Storefront\CustomerLocationController;
 use App\Http\Controllers\Storefront\StorefrontController;
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +34,7 @@ Route::get('/', function () {
 });
 
 Route::get('/storefront', [StorefrontController::class, 'home'])->name('storefront.home');
+Route::post('/location/postal-code', [CustomerLocationController::class, 'store'])->name('storefront.location.postal-code.store');
 Route::get('/about-us', [StorefrontController::class, 'about'])->name('storefront.about');
 Route::get('/stores', [StorefrontController::class, 'stores'])->name('storefront.stores');
 Route::get('/testimonials', [StorefrontController::class, 'testimonials'])->name('storefront.testimonials');
