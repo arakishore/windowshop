@@ -111,6 +111,9 @@
             <label for="product_name" class="form-label">Product Name <span class="text-danger">*</span></label>
             <input id="product_name" name="product_name" type="text" value="{{ old('product_name', $product?->product_name) }}" class="form-control @error('product_name') is-invalid @enderror" required>
             @error('product_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            <div class="form-text">
+                For better SEO, include the brand and category naturally. If empty, we suggest a name from selected brand and category.
+            </div>
             @if($product)
                 <div class="form-text">Slug: {{ $product->slug }}</div>
             @endif
@@ -280,12 +283,15 @@
             const shopSelect = document.getElementById('shop_id');
             const categorySelect = document.getElementById('product_category_id');
             const brandSelect = document.getElementById('brand_id');
+            const productNameInput = document.getElementById('product_name');
             const availabilitySelect = document.getElementById('availability_status_id');
             const taxClassWrap = document.querySelector('.js-tax-class-wrap');
             const taxClassSelect = document.getElementById('tax_class_id');
             const taxCategoryDefault = document.querySelector('.js-tax-category-default');
             const taxEffective = document.querySelector('.js-tax-effective');
             const taxCurrentCategory = document.querySelector('.js-tax-current-category');
+            let productNameTouched = productNameInput ? productNameInput.value.trim() !== '' : true;
+            let lastSuggestedProductName = '';
 
             if (!shopSelect || !categorySelect) {
                 return;
@@ -371,6 +377,52 @@
                 }
             };
 
+            const normalizeNamePart = function (value) {
+                return (value || '').replace(/\s+/g, ' ').trim();
+            };
+
+            const selectedOptionText = function (select) {
+                const option = select?.options[select.selectedIndex];
+
+                return option?.value ? normalizeNamePart(option.textContent) : '';
+            };
+
+            const productNameSuggestion = function () {
+                const brandName = selectedOptionText(brandSelect);
+                const categoryPath = selectedOptionText(categorySelect);
+                const categoryParts = categoryPath.split('>').map(normalizeNamePart).filter(Boolean);
+                const leafCategory = categoryParts[categoryParts.length - 1] || '';
+                const parentCategory = categoryParts[categoryParts.length - 2] || '';
+                const rootCategory = categoryParts[0] || '';
+                const audienceCategories = ['Men', 'Women', 'Boys', 'Girls', 'Kids', 'Baby', 'Babies', 'Unisex'];
+                let categoryName = leafCategory;
+
+                if (audienceCategories.includes(leafCategory) && rootCategory && rootCategory !== leafCategory) {
+                    categoryName = `${rootCategory} for ${leafCategory}`;
+                } else if (audienceCategories.includes(parentCategory) && leafCategory) {
+                    categoryName = `${leafCategory} for ${parentCategory}`;
+                } else if (parentCategory && leafCategory && parentCategory !== leafCategory) {
+                    categoryName = `${parentCategory} ${leafCategory}`;
+                }
+
+                return normalizeNamePart([brandName, categoryName].filter(Boolean).join(' '));
+            };
+
+            const syncProductNameSuggestion = function () {
+                if (!productNameInput || productNameTouched) {
+                    return;
+                }
+
+                const suggestion = productNameSuggestion();
+
+                productNameInput.placeholder = suggestion ? `Suggested: ${suggestion}` : '';
+
+                if (suggestion && (productNameInput.value.trim() === '' || productNameInput.value === lastSuggestedProductName)) {
+                    productNameInput.value = suggestion;
+                    lastSuggestedProductName = suggestion;
+                }
+            };
+
             const syncTaxConfiguration = function () {
                 const selectedMode = document.querySelector('.js-tax-mode:checked');
 
@@ -403,11 +455,33 @@
                 }
             };
 
-            if (shopSelect.tagName === 'SELECT') {
-                shopSelect.addEventListener('change', syncCategoryOptions);
+            if (productNameInput) {
+                productNameInput.addEventListener('input', function () {
+                    if (productNameInput.value.trim() === '') {
+                        productNameTouched = false;
+                        lastSuggestedProductName = '';
+                        syncProductNameSuggestion();
+                        return;
+                    }
+
+                    productNameTouched = productNameInput.value !== lastSuggestedProductName;
+                });
             }
 
-            categorySelect.addEventListener('change', syncTaxConfiguration);
+            if (shopSelect.tagName === 'SELECT') {
+                shopSelect.addEventListener('change', function () {
+                    syncCategoryOptions();
+                    syncProductNameSuggestion();
+                });
+            }
+
+            categorySelect.addEventListener('change', function () {
+                syncTaxConfiguration();
+                syncProductNameSuggestion();
+            });
+            if (brandSelect) {
+                brandSelect.addEventListener('change', syncProductNameSuggestion);
+            }
             document.querySelectorAll('.js-tax-mode').forEach(function (radio) {
                 radio.addEventListener('change', syncTaxConfiguration);
             });
@@ -418,6 +492,7 @@
 
             syncCategoryOptions();
             syncTaxConfiguration();
+            syncProductNameSuggestion();
         });
     </script>
 @endpush

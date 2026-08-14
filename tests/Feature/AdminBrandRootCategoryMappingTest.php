@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Shop;
 use App\Models\User;
+use Database\Seeders\MasterData\BrandSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -132,6 +133,24 @@ class AdminBrandRootCategoryMappingTest extends TestCase
             ])
             ->assertRedirect(route('admin.master.brands.create'))
             ->assertSessionHasErrors('short_code');
+    }
+
+    public function test_brand_seeder_allows_brands_to_belong_to_multiple_root_categories(): void
+    {
+        $jewellery = $this->createCategory('Jewellery & Accessories');
+        $footwear = $this->createCategory('Footwear');
+
+        $this->seed(BrandSeeder::class);
+
+        $mochi = Brand::query()->where('name', 'Mochi')->firstOrFail();
+
+        $this->assertSame(
+            [$jewellery->getKey(), $footwear->getKey()],
+            $mochi->rootProductCategories()
+                ->orderBy('product_categories.id')
+                ->pluck('product_categories.id')
+                ->all(),
+        );
     }
 
     public function test_product_form_filters_and_validates_brands_by_shop_type(): void

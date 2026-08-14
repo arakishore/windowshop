@@ -12,6 +12,7 @@ use App\Services\Banner\BannerService;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductListingService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -236,7 +237,7 @@ class StorefrontController extends Controller
         string $slug,
         PostalCodeServiceabilityService $serviceability,
         CustomerLocationService $location,
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $validator = Validator::make($request->all(), [
             'postal_code' => [
                 'required',
@@ -254,6 +255,14 @@ class StorefrontController extends Controller
         ]);
 
         if ($validator->fails()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $validator->errors()->first('postal_code') ?: 'Enter a valid delivery PIN code.',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
             return back()
                 ->withErrors($validator, 'deliveryCheck')
                 ->withInput();
@@ -281,13 +290,21 @@ class StorefrontController extends Controller
         $result = $serviceability->check($postalCode, (int) $product->merchant_id, (int) $product->shop_id);
 
         if (! $result['serviceable']) {
+            $payload = [
+                'status' => 'blocked',
+                'product_slug' => $product->slug,
+                'postal_code' => $postalCode,
+                'message' => $result['reason'] ?: 'Delivery is temporarily unavailable for this PIN code.',
+            ];
+
+            if ($request->expectsJson()) {
+                return response()
+                    ->json($payload)
+                    ->withCookie($cookie);
+            }
+
             return back()
-                ->with('delivery_check', [
-                    'status' => 'blocked',
-                    'product_slug' => $product->slug,
-                    'postal_code' => $postalCode,
-                    'message' => $result['reason'] ?: 'Delivery is temporarily unavailable for this PIN code.',
-                ])
+                ->with('delivery_check', $payload)
                 ->withInput()
                 ->withCookie($cookie);
         }
@@ -297,14 +314,21 @@ class StorefrontController extends Controller
             ->unique()
             ->implode(', ');
         $storeName = $product->shop?->name ?: 'the store';
+        $payload = [
+            'status' => 'available',
+            'product_slug' => $product->slug,
+            'postal_code' => $postalCode,
+            'message' => trim("Delivery is available to {$postalCode}".($locationText !== '' ? " ({$locationText})" : '').". Estimated date will be confirmed by {$storeName}."),
+        ];
+
+        if ($request->expectsJson()) {
+            return response()
+                ->json($payload)
+                ->withCookie($cookie);
+        }
 
         return back()
-            ->with('delivery_check', [
-                'status' => 'available',
-                'product_slug' => $product->slug,
-                'postal_code' => $postalCode,
-                'message' => trim("Delivery is available to {$postalCode}".($locationText !== '' ? " ({$locationText})" : '').". Estimated date will be confirmed by {$storeName}."),
-            ])
+            ->with('delivery_check', $payload)
             ->withInput()
             ->withCookie($cookie);
     }

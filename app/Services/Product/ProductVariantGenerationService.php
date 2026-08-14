@@ -18,6 +18,7 @@ class ProductVariantGenerationService
         private readonly ProductAttributeConfigurationService $attributeConfigurationService,
         private readonly ProductVariantManagementService $variantManagementService,
         private readonly ProductBarcodeService $barcodeService,
+        private readonly ProductSkuGenerator $skuGenerator,
     ) {
     }
 
@@ -84,7 +85,9 @@ class ProductVariantGenerationService
                 $firstCombination = $missingCombinations->shift();
 
                 $baseVariant->forceFill([
-                    'sku' => $baseVariant->sku ?: $this->uniqueSku($product, $firstCombination, $baseVariant),
+                    'sku' => $this->skuGenerator->shouldRegenerate($baseVariant->sku)
+                        ? $this->uniqueSku($product, $firstCombination, $baseVariant)
+                        : $baseVariant->sku,
                     'barcode' => $baseVariant->barcode ?: $this->barcodeService->generate($product->shop),
                     'name' => $firstCombination['name'],
                     'mrp' => $variantDefaults['mrp'],
@@ -403,9 +406,7 @@ class ProductVariantGenerationService
      */
     private function uniqueSku(Product $product, array $combination, ?ProductVariant $ignoreVariant = null): string
     {
-        $base = Str::upper(Str::slug($product->slug ?: $product->product_name, '-'));
-        $suffix = Str::upper(Str::slug(collect($combination['values'])->pluck('value_name')->implode('-'), '-'));
-        $skuBase = Str::limit(trim("{$base}-{$suffix}", '-'), 80, '');
+        $skuBase = Str::limit($this->skuGenerator->forCombination($product, $combination['values']), 80, '');
         $sku = $skuBase !== '' ? $skuBase : 'VARIANT-'.$product->getKey();
         $counter = 2;
 
@@ -438,7 +439,7 @@ class ProductVariantGenerationService
 
             $variant = ProductVariant::query()->whereKey($variantId)->first();
 
-            if (! $variant instanceof ProductVariant || trim((string) $variant->sku) !== '') {
+            if (! $variant instanceof ProductVariant || ! $this->skuGenerator->shouldRegenerate($variant->sku)) {
                 continue;
             }
 

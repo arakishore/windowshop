@@ -9,6 +9,7 @@ use App\Models\ProductAttributeGroupValue;
 use App\Models\ProductCategory;
 use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductVariant;
+use App\Models\Brand;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\Product\ProductVariantGenerationService;
@@ -313,6 +314,7 @@ class AdminProductVariantGenerationTest extends TestCase
     public function test_blank_generated_variant_sku_is_rebuilt_when_variant_row_is_saved(): void
     {
         [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->prepareShortCodeSkuFixture($product, $color, $size);
         $this->selectValues($product, [
             [$color, ['Red']],
             [$size, ['M']],
@@ -336,7 +338,39 @@ class AdminProductVariantGenerationTest extends TestCase
             ->assertSessionHas('success', '1 variant rows updated successfully.');
 
         $this->assertSame(
-            Str::upper($product->slug).'-RED-M',
+            'NIKE-AP-TS-'.str_pad((string) $product->getKey(), 3, '0', STR_PAD_LEFT).'-M-RED',
+            $variant->fresh()->sku,
+        );
+    }
+
+    public function test_demo_placeholder_variant_sku_is_rebuilt_when_variant_row_is_saved(): void
+    {
+        [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->prepareShortCodeSkuFixture($product, $color, $size);
+        $this->selectValues($product, [
+            [$color, ['Red']],
+            [$size, ['M']],
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
+        $variant = $product->variants()->where('name', 'Red / M')->firstOrFail();
+        $variant->forceFill(['sku' => 'DEMO-3'])->save();
+
+        $this->actingAs($admin)
+            ->put(route('admin.products.variants.update', $product), [
+                'default_variant_id' => $variant->getKey(),
+                'variants' => [
+                    $variant->getKey() => [
+                        ...$this->variantPayload($variant->fresh()),
+                        'sku' => 'DEMO-3',
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertSessionHas('success', '1 variant rows updated successfully.');
+
+        $this->assertSame(
+            'NIKE-AP-TS-'.str_pad((string) $product->getKey(), 3, '0', STR_PAD_LEFT).'-M-RED',
             $variant->fresh()->sku,
         );
     }
@@ -344,6 +378,7 @@ class AdminProductVariantGenerationTest extends TestCase
     public function test_regenerating_existing_variants_backfills_missing_skus(): void
     {
         [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->prepareShortCodeSkuFixture($product, $color, $size);
         $this->selectValues($product, [
             [$color, ['Red']],
             [$size, ['M']],
@@ -365,9 +400,38 @@ class AdminProductVariantGenerationTest extends TestCase
             ->assertSessionHas('success', '1 missing SKU(s) filled successfully.');
 
         $this->assertSame(
-            Str::upper($product->slug).'-RED-M',
+            'NIKE-AP-TS-'.str_pad((string) $product->getKey(), 3, '0', STR_PAD_LEFT).'-M-RED',
             $variant->fresh()->sku,
         );
+    }
+
+    public function test_generated_variant_sku_uses_brand_category_and_attribute_short_codes(): void
+    {
+        [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->prepareShortCodeSkuFixture($product, $color, $size);
+        $this->selectValues($product, [
+            [$color, ['Red']],
+            [$size, ['M', 'L']],
+        ]);
+        $product->variants()->where('is_default', true)->firstOrFail()->forceFill(['sku' => null])->save();
+
+        $this->actingAs($admin)
+            ->post(route('admin.products.variants.generate', $product))
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertSessionHas('success', '2 product variants generated successfully.');
+
+        $sequence = str_pad((string) $product->getKey(), 3, '0', STR_PAD_LEFT);
+
+        $this->assertDatabaseHas('product_variants', [
+            'product_id' => $product->getKey(),
+            'name' => 'Red / M',
+            'sku' => "NIKE-AP-TS-{$sequence}-M-RED",
+        ]);
+        $this->assertDatabaseHas('product_variants', [
+            'product_id' => $product->getKey(),
+            'name' => 'Red / L',
+            'sku' => "NIKE-AP-TS-{$sequence}-L-RED",
+        ]);
     }
 
     public function test_stale_generated_variants_can_be_removed_after_attribute_selection_changes(): void
@@ -833,6 +897,27 @@ class AdminProductVariantGenerationTest extends TestCase
         }
 
         return [$admin, $product, $color->load('values'), $size->load('values'), $material->load('values')];
+    }
+
+    private function prepareShortCodeSkuFixture(Product $product, ProductAttributeGroup $color, ProductAttributeGroup $size): void
+    {
+        $brand = Brand::query()->create([
+            'name' => 'Nike',
+            'short_code' => 'NIKE',
+            'slug' => 'nike-'.Str::random(6),
+            'status' => 'active',
+        ]);
+
+        $product->rootProductCategory->forceFill(['short_code' => 'AP'])->save();
+        $product->category->forceFill(['short_code' => 'TS'])->save();
+        $product->forceFill(['brand_id' => $brand->getKey()])->save();
+
+        $color->forceFill(['code' => 'color'])->save();
+        $size->forceFill(['code' => 'size'])->save();
+
+        $color->values->firstWhere('name', 'Red')?->update(['short_code' => 'RED']);
+        $size->values->firstWhere('name', 'M')?->update(['short_code' => 'M']);
+        $size->values->firstWhere('name', 'L')?->update(['short_code' => 'L']);
     }
 
     private function createBaseVariant(Product $product): ProductVariant

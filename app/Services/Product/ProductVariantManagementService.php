@@ -15,6 +15,7 @@ class ProductVariantManagementService
 {
     public function __construct(
         private readonly ProductBarcodeService $barcodeService,
+        private readonly ProductSkuGenerator $skuGenerator,
     ) {
     }
 
@@ -85,7 +86,7 @@ class ProductVariantManagementService
             foreach ($ownedVariants as $variant) {
                 $changes = $this->normalizeRowChanges($variants[$variant->getKey()] ?? []);
 
-                if (($changes['sku'] ?? null) === null) {
+                if ($this->skuGenerator->shouldRegenerate($changes['sku'] ?? null)) {
                     $generatedSku = $this->skuForGeneratedVariant($product, $variant);
 
                     if ($generatedSku !== null) {
@@ -448,25 +449,13 @@ class ProductVariantManagementService
 
     private function skuForGeneratedVariant(Product $product, ProductVariant $variant): ?string
     {
-        $variant->loadMissing('attributes.value');
+        $skuBase = $this->skuGenerator->forVariant($product, $variant);
 
-        $values = $variant->attributes
-            ->filter(fn ($attribute): bool => $attribute->value !== null)
-            ->sortBy([
-                fn ($left, $right): int => ((int) $left->product_attribute_group_id) <=> ((int) $right->product_attribute_group_id),
-                fn ($left, $right): int => ((int) $left->product_attribute_group_value_id) <=> ((int) $right->product_attribute_group_value_id),
-            ])
-            ->pluck('value.name')
-            ->filter()
-            ->implode('-');
-
-        if ($values === '') {
+        if ($skuBase === null) {
             return null;
         }
 
-        $productBase = Str::upper(Str::slug($product->slug ?: $product->product_name, '-'));
-        $suffix = Str::upper(Str::slug($values, '-'));
-        $skuBase = Str::limit(trim("{$productBase}-{$suffix}", '-'), 80, '');
+        $skuBase = Str::limit($skuBase, 80, '');
         $sku = $skuBase !== '' ? $skuBase : 'VARIANT-'.$product->getKey();
         $counter = 2;
 

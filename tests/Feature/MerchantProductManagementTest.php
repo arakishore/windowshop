@@ -56,6 +56,13 @@ class MerchantProductManagementTest extends TestCase
         $this->assertSame($shop->merchant_id, $product->merchant_id);
         $this->assertSame('active', $product->status);
         $this->assertSame(1, $product->variants()->where('is_default', true)->count());
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->get(route('merchant.products.edit', $product))
+            ->assertOk()
+            ->assertSee('View Storefront')
+            ->assertSee(route('storefront.product.show', $product->slug), false);
     }
 
     public function test_merchant_create_product_shows_only_active_shop_categories(): void

@@ -10,6 +10,8 @@
     $deliveryCheck = session('delivery_check');
     $deliveryCheck = is_array($deliveryCheck) && ($deliveryCheck['product_slug'] ?? null) === $product['slug'] ? $deliveryCheck : null;
     $deliveryCheckError = $errors->getBag('deliveryCheck')->first('postal_code');
+    $deliveryCheckMessage = $deliveryCheckError ?: (is_array($deliveryCheck) ? ($deliveryCheck['message'] ?? '') : '');
+    $deliveryCheckMessageType = $deliveryCheckError ? 'error' : (($deliveryCheck['status'] ?? null) === 'available' ? 'success' : 'error');
     $shopOfferUrl = $product['store_url'] ?: '#;';
     $shopOffers = [
         [
@@ -40,25 +42,23 @@
 @endpush
 
 @section('content')
-    <section class="section-page-title text-center storefront-page-title">
+    <div class="flat-spacing pt-0 pb-0">
         <div class="container">
-            <div class="main-page-title product-detail-page-title-wrap">
-                <h1 class="product-detail-page-title">{{ $product['name'] }}</h1>
-
-                <div class="breadcrumbs">
-                    <a href="{{ route('storefront.home') }}" class="text-caption-01 cl-text-3 link">Home</a>
-                    <i class="icon icon-CaretRightThin cl-text-3"></i>
-                    <a href="{{ route('storefront.products') }}" class="text-caption-01 cl-text-3 link">Products</a>
-                    <i class="icon icon-CaretRightThin cl-text-3"></i>
-                    <a href="{{ $product['category_url'] }}" class="text-caption-01 cl-text-3 link">{{ $product['category'] }}</a>
-                    <i class="icon icon-CaretRightThin cl-text-3"></i>
-                    <p class="text-caption-01">{{ $product['name'] }}</p>
+            <div class="category-listing-header product-detail-breadcrumb-header">
+                <div class="category-listing-breadcrumbs pb-3">
+                    <a href="{{ route('storefront.home') }}">Home</a>
+                    <span>/</span>
+                    <a href="{{ route('storefront.products') }}">Products</a>
+                    <span>/</span>
+                    <a href="{{ $product['category_url'] }}">{{ $product['category'] }}</a>
+                    <span>/</span>
+                    <span>{{ $product['name'] }}</span>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
 
-    <section class="section-product-single tf-main-product section-image-zoom flat-spacing">
+    <section class="section-product-single tf-main-product section-image-zoom flat-spacing pt-0">
         <div class="container">
             <div class="row">
                 <div class="col-md-6">
@@ -112,7 +112,7 @@
                                     </a>
                                 </div>
 
-                                <div class="product-infor-meta mb-20">
+                                <div class="product-infor-meta mb-16">
                                     <div class="meta_rate">
                                         @if ($product['reviews'] !== '0 reviews')
                                             <div class="star-wrap normal d-flex align-items-center">
@@ -124,16 +124,6 @@
                                         @else
                                             <span class="text-caption-01 cl-text-2">Reviews coming soon</span>
                                         @endif
-                                    </div>
-                                    <div class="br-line type-vertical"></div>
-                                    <div class="meta_sold">
-                                        <i class="icon icon-Lightning text-primary"></i>
-                                        <span class="text-caption-01 cl-text-2">{{ $product['sold_text'] }}</span>
-                                    </div>
-                                    <div class="br-line type-vertical"></div>
-                                    <div class="meta_prd_code text-caption-01">
-                                        <span class="cl-text-2">SKU:</span>
-                                        <span>{{ $product['sku'] }}</span>
                                     </div>
                                 </div>
 
@@ -157,12 +147,6 @@
                                     </button>
                                 </div>
 
-                                <div class="product-infor-reality lh-24">
-                                    <div class="ic d-flex">
-                                        <i class="icon icon-Eye text-white"></i>
-                                    </div>
-                                    <span class="text-caption-01">{{ $product['viewing_text'] }}</span>
-                                </div>
                             </div>
 
                             <div class="br-line"></div>
@@ -237,38 +221,41 @@
                                 </div>
                             </div>
 
-                            @if (! empty($product['other_attributes']))
-                                <div class="br-line"></div>
+                            <div class="br-line"></div>
 
-                                <div class="box-desc product-specification">
-                                    <h5 class="desc_title">Specification</h5>
-                                    <div class="product_d_table">
-                                        <table>
-                                            <tbody>
-                                                @foreach ($product['other_attributes'] as $attribute)
-                                                    <tr>
-                                                        <td>{{ $attribute['label'] }}</td>
-                                                        <td>{{ $attribute['value'] }}</td>
-                                                    </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
+                            <div class="product-delivery-check" data-product-delivery-check>
+                                <div class="product-delivery-check__heading">
+                                    <label for="product-delivery-postal-code" class="product-delivery-check__label">
+                                        Check Delivery Availability
+                                    </label>
+                                    <span class="product-delivery-check__current" data-product-delivery-current {{ $currentPostalCode ? '' : 'hidden' }}>
+                                        Current PIN: {{ $currentPostalCode }}
+                                    </span>
                                 </div>
-                            @endif
-
-                            @if (! empty($product['disclaimers']))
-                                 
-
-                                <div class="box-desc product-disclaimer">
-                                    <h5 class="desc_title">Product Disclaimer</h5>
-                                    <div class="product-disclaimer-list">
-                                        @foreach ($product['disclaimers'] as $disclaimer)
-                                            <p>{{ $disclaimer }}</p>
-                                        @endforeach
-                                    </div>
-                                </div>
-                            @endif
+                                <form method="POST" action="{{ $product['delivery_check_url'] }}" class="product-delivery-check__form" data-product-delivery-form>
+                                    @csrf
+                                    <input
+                                        id="product-delivery-postal-code"
+                                        type="text"
+                                        name="postal_code"
+                                        value="{{ old('postal_code', $currentPostalCode ?? '') }}"
+                                        inputmode="numeric"
+                                        pattern="[0-9]{6}"
+                                        maxlength="6"
+                                        autocomplete="postal-code"
+                                        placeholder="Enter Delivery Pincode"
+                                        class="product-delivery-check__input {{ $deliveryCheckError ? 'is-invalid' : '' }}"
+                                        data-product-delivery-input>
+                                    <button type="submit" class="product-delivery-check__button" data-product-delivery-button>Check</button>
+                                </form>
+                                <p
+                                    class="product-delivery-check__message product-delivery-check__message--{{ $deliveryCheckMessageType }}"
+                                    data-product-delivery-message
+                                    role="status"
+                                    {{ $deliveryCheckMessage !== '' ? '' : 'hidden' }}>
+                                    {{ $deliveryCheckMessage }}
+                                </p>
+                            </div>
 
                             <div class="sold-by-card">
                                 <h5 class="sold-by-card__title">Sold By</h5>
@@ -305,43 +292,6 @@
                                         Share
                                     </a>
                                 </div>
-                            </div>
-
-                            <div class="br-line"></div>
-
-                            <div class="product-delivery-check">
-                                <div class="product-delivery-check__heading">
-                                    <label for="product-delivery-postal-code" class="product-delivery-check__label">
-                                        Check Delivery Availability
-                                    </label>
-                                    @if ($currentPostalCode)
-                                        <span class="product-delivery-check__current">Current PIN: {{ $currentPostalCode }}</span>
-                                    @endif
-                                </div>
-                                <form method="POST" action="{{ $product['delivery_check_url'] }}" class="product-delivery-check__form">
-                                    @csrf
-                                    <input
-                                        id="product-delivery-postal-code"
-                                        type="text"
-                                        name="postal_code"
-                                        value="{{ old('postal_code', $currentPostalCode ?? '') }}"
-                                        inputmode="numeric"
-                                        pattern="[0-9]{6}"
-                                        maxlength="6"
-                                        autocomplete="postal-code"
-                                        placeholder="Enter Delivery Pincode"
-                                        class="product-delivery-check__input {{ $deliveryCheckError ? 'is-invalid' : '' }}">
-                                    <button type="submit" class="product-delivery-check__button">Check</button>
-                                </form>
-                                @if ($deliveryCheckError)
-                                    <p class="product-delivery-check__message product-delivery-check__message--error">
-                                        {{ $deliveryCheckError }}
-                                    </p>
-                                @elseif (is_array($deliveryCheck))
-                                    <p class="product-delivery-check__message product-delivery-check__message--{{ $deliveryCheck['status'] === 'available' ? 'success' : 'error' }}">
-                                        {{ $deliveryCheck['message'] }}
-                                    </p>
-                                @endif
                             </div>
 
                             <div class="br-line"></div>
@@ -494,25 +444,69 @@
                     <div id="description-introduction" class="collapse show" data-bs-parent="#prdDes">
                         <div class="accordion-content tab-content_desc tf-grid-layout md-col-2">
                             <div class="box-desc">
-                                <h5 class="desc_title">Product Details</h5>
+                                <h5 class="desc_title">Description</h5>
                                 <div class="desc_info">
                                     <p class="cl-text-2">
                                         {{ $product['description'] }}
                                     </p>
                                 </div>
                             </div>
-                            <div class="box-desc">
-                                <h5 class="desc_title">Highlights</h5>
-                                <ul class="list">
-                                    <li class="cl-text-2">- Sold by {{ $product['store'] }}</li>
-                                    <li class="cl-text-2">- Category: {{ $product['category'] }}</li>
-                                    <li class="cl-text-2">- SKU: {{ $product['sku'] }}</li>
-                                    <li class="cl-text-2">- Availability: {{ $product['availability'] }}</li>
-                                </ul>
+                            <div class="box-desc product-specification">
+                                <h5 class="desc_title">Product Details</h5>
+                                <div class="product_d_table product-detail-spec-table">
+                                    <table>
+                                        <tbody>
+                                            <tr>
+                                                <td>Sold By</td>
+                                                <td>{{ $product['store'] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Category</td>
+                                                <td>{{ $product['category'] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>SKU</td>
+                                                <td>{{ $product['sku'] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Availability</td>
+                                                <td>{{ $product['availability'] }}</td>
+                                            </tr>
+                                            @foreach ($product['other_attributes'] as $attribute)
+                                                <tr>
+                                                    <td>{{ $attribute['label'] }}</td>
+                                                    <td>{{ $attribute['value'] }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                @if (! empty($product['disclaimers']))
+                    <div class="accordion-item_v2 style-2">
+                        <div class="accordion-action h5 fw-medium collapsed" data-bs-target="#product-disclaimer"
+                            data-bs-toggle="collapse" aria-expanded="false" aria-controls="product-disclaimer"
+                            role="button">
+                            <span>Product Disclaimer</span>
+                            <span class="icon ic-accordion-custom cl-2"></span>
+                        </div>
+                        <div id="product-disclaimer" class="collapse" data-bs-parent="#prdDes">
+                            <div class="accordion-content tab-content_desc">
+                                <div class="box-desc product-disclaimer">
+                                    <div class="product-disclaimer-list">
+                                        @foreach ($product['disclaimers'] as $disclaimer)
+                                            <p>{{ $disclaimer }}</p>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                @endif
 
                 <div class="accordion-item_v2 style-2">
                     <div class="accordion-action h5 fw-medium collapsed" data-bs-target="#customer-reviews"
@@ -757,6 +751,135 @@
                 toggle.addEventListener('click', () => {
                     const collapsed = wrap.classList.toggle('is-collapsed');
                     toggle.textContent = collapsed ? 'Read more' : 'Read less';
+                });
+            });
+
+            document.querySelectorAll('[data-product-delivery-form]').forEach((form) => {
+                const panel = form.closest('[data-product-delivery-check]');
+                const input = form.querySelector('[data-product-delivery-input]');
+                const button = form.querySelector('[data-product-delivery-button]');
+                const current = panel ? panel.querySelector('[data-product-delivery-current]') : null;
+                const message = panel ? panel.querySelector('[data-product-delivery-message]') : null;
+                const defaultButtonText = button ? button.textContent : 'Check';
+
+                const csrfToken = () => {
+                    const tokenInput = form.querySelector('input[name="_token"]');
+                    const metaToken = document.querySelector('meta[name="csrf-token"]');
+
+                    return tokenInput ? tokenInput.value : (metaToken ? metaToken.getAttribute('content') : '');
+                };
+
+                const showMessage = (text, type) => {
+                    if (!message) {
+                        return;
+                    }
+
+                    message.textContent = text;
+                    message.hidden = false;
+                    message.classList.remove('product-delivery-check__message--success', 'product-delivery-check__message--error');
+                    message.classList.add(type === 'success' ? 'product-delivery-check__message--success' : 'product-delivery-check__message--error');
+                };
+
+                const setLoading = (isLoading) => {
+                    if (!button) {
+                        return;
+                    }
+
+                    button.disabled = isLoading;
+                    button.textContent = isLoading ? 'Checking...' : defaultButtonText;
+                };
+
+                const syncLocationLabels = (postalCode) => {
+                    if (!postalCode) {
+                        return;
+                    }
+
+                    if (current) {
+                        current.textContent = `Current PIN: ${postalCode}`;
+                        current.hidden = false;
+                    }
+
+                    document.querySelectorAll('.customer-location-trigger').forEach((trigger) => {
+                        const label = `Shopping near ${postalCode}. Change location.`;
+                        trigger.setAttribute('aria-label', label);
+                        trigger.dataset.locationTooltip = label;
+                    });
+
+                    const modal = document.getElementById('customer-location-modal');
+                    if (modal) {
+                        modal.dataset.currentPostalCode = postalCode;
+
+                        const modalInput = modal.querySelector('#customer-location-postal-code');
+                        const modalCurrentWrap = modal.querySelector('.customer-location-current');
+                        const modalCurrent = modal.querySelector('.customer-location-current span');
+
+                        if (modalInput) {
+                            modalInput.value = postalCode;
+                        }
+
+                        if (modalCurrent) {
+                            modalCurrent.textContent = postalCode;
+                        }
+
+                        if (modalCurrentWrap) {
+                            modalCurrentWrap.hidden = false;
+                        }
+                    }
+                };
+
+                if (!input || !button || !window.fetch) {
+                    return;
+                }
+
+                input.addEventListener('input', () => {
+                    input.value = input.value.replace(/\D/g, '').slice(0, 6);
+                    input.classList.remove('is-invalid');
+                });
+
+                form.addEventListener('submit', async (event) => {
+                    const postalCode = input.value.trim();
+
+                    if (!/^\d{6}$/.test(postalCode)) {
+                        event.preventDefault();
+                        input.classList.add('is-invalid');
+                        showMessage('Enter a valid 6-digit PIN code.', 'error');
+                        return;
+                    }
+
+                    event.preventDefault();
+                    input.classList.remove('is-invalid');
+                    setLoading(true);
+
+                    try {
+                        const body = new FormData(form);
+                        const response = await fetch(form.action, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': csrfToken(),
+                            },
+                            body,
+                            credentials: 'same-origin',
+                        });
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok) {
+                            const errors = data.errors && data.errors.postal_code;
+                            input.classList.add('is-invalid');
+                            showMessage(errors && errors.length ? errors[0] : (data.message || 'Delivery check failed. Please try again.'), 'error');
+                            return;
+                        }
+
+                        const nextPostalCode = data.postal_code || postalCode;
+                        input.value = nextPostalCode;
+                        syncLocationLabels(nextPostalCode);
+                        showMessage(data.message || 'Delivery availability checked.', data.status === 'available' ? 'success' : 'error');
+                    } catch (error) {
+                        showMessage('Delivery check failed. Please try again.', 'error');
+                    } finally {
+                        setLoading(false);
+                    }
                 });
             });
         });

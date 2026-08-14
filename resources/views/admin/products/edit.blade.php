@@ -33,9 +33,15 @@
                     {{ $product->shop?->name ?? '-' }} · {{ $product->category?->name ?? '-' }} · {{ $product->brand?->name ?? '-' }}
                 </div>
             </div>
-            <span class="badge {{ $statuses[$product->status]['badge_class'] ?? 'bg-secondary' }}">
-                {{ $statuses[$product->status]['label'] ?? ucfirst($product->status) }}
-            </span>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <a href="{{ route('storefront.product.show', $product->slug) }}" class="btn btn-light border btn-sm" target="_blank" rel="noopener noreferrer">
+                    <i class="ph-eye me-1"></i>
+                    View Storefront
+                </a>
+                <span class="badge {{ $statuses[$product->status]['badge_class'] ?? 'bg-secondary' }}">
+                    {{ $statuses[$product->status]['label'] ?? ucfirst($product->status) }}
+                </span>
+            </div>
         </div>
 
         <div class="card-body border-bottom">

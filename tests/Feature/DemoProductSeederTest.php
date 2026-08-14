@@ -43,6 +43,13 @@ class DemoProductSeederTest extends TestCase
             ->leftJoin('product_variants', 'product_variants.product_id', '=', 'products.id')
             ->whereNull('product_variants.id')
             ->count());
+        $this->assertSame(0, DB::table('products')
+            ->whereNull('deleted_at')
+            ->where(function ($query): void {
+                $query->whereNull('short_description')
+                    ->orWhere('short_description', '');
+            })
+            ->count());
         $this->assertSame(0, DB::table('product_variants')
             ->where(function ($query): void {
                 $query->where('mrp', '<=', 0)

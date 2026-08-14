@@ -53,6 +53,8 @@ class AdminProductAttributesTabTest extends TestCase
             ->assertSee('Other Attributes')
             ->assertSee('Variant')
             ->assertSee('Save Attributes')
+            ->assertSee('View Storefront')
+            ->assertSee(route('storefront.product.show', $product->slug), false)
             ->assertDontSee($color->code)
             ->assertDontSee($material->code);
     }

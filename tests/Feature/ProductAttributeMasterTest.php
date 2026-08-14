@@ -210,6 +210,53 @@ class ProductAttributeMasterTest extends TestCase
                 ->variantGroupsForCategory($men)
                 ->pluck('group.code')
                 ->all(),
+            );
+    }
+
+    public function test_footwear_attribute_mapping_marks_color_and_size_as_variant(): void
+    {
+        $footwear = ProductCategory::query()->create([
+            'parent_id' => null,
+            'name' => 'Footwear',
+            'slug' => 'footwear-test',
+            'status' => 'active',
+        ]);
+        $men = ProductCategory::query()->create([
+            'parent_id' => $footwear->getKey(),
+            'name' => 'Men',
+            'slug' => 'footwear-men-test',
+            'status' => 'active',
+        ]);
+
+        $this->seed(ProductAttributeSeeder::class);
+
+        $mappings = app(ProductAttributeConfigurationService::class)
+            ->forCategory($men)
+            ->mapWithKeys(fn ($mapping): array => [
+                $mapping->group->code => [
+                    'is_required' => $mapping->is_required,
+                    'is_variant' => $mapping->is_variant,
+                    'is_image_attribute' => $mapping->is_image_attribute,
+                ],
+            ]);
+
+        $this->assertSame([
+            'is_required' => true,
+            'is_variant' => true,
+            'is_image_attribute' => true,
+        ], $mappings->get('color'));
+        $this->assertSame([
+            'is_required' => true,
+            'is_variant' => true,
+            'is_image_attribute' => false,
+        ], $mappings->get('size'));
+
+        $this->assertSame(
+            ['color', 'size'],
+            app(ProductAttributeConfigurationService::class)
+                ->variantGroupsForCategory($men)
+                ->pluck('group.code')
+                ->all(),
         );
     }
 

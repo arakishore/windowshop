@@ -229,29 +229,50 @@ class BrandSeeder extends Seeder
                 $booksBrands,
                 $genericBrands,
             ): void {
-                $categoryNames = ['Apparel'];
+                $categoryNames = [];
 
                 if (in_array($brand->name, $beautyBrands, true)) {
-                    $categoryNames = ['Beauty & Cosmetics'];
-                } elseif (in_array($brand->name, $bagBrands, true)) {
-                    $categoryNames = ['Jewellery & Accessories'];
-                } elseif (in_array($brand->name, $footwearBrands, true)) {
-                    $categoryNames = ['Footwear'];
-                } elseif (in_array($brand->name, $electronicsBrands, true)) {
-                    $categoryNames = ['Mobile & Electronics'];
-                } elseif (in_array($brand->name, $groceryBrands, true)) {
-                    $categoryNames = ['Grocery & Daily Needs'];
-                } elseif (in_array($brand->name, $homeBrands, true)) {
-                    $categoryNames = ['Home & Furniture'];
-                } elseif (in_array($brand->name, $sportsBrands, true)) {
-                    $categoryNames = ['Sports & Fitness'];
-                } elseif (in_array($brand->name, $booksBrands, true)) {
-                    $categoryNames = ['Books & Stationery'];
-                } elseif (in_array($brand->name, $genericBrands, true)) {
+                    $categoryNames[] = 'Beauty & Cosmetics';
+                }
+
+                if (in_array($brand->name, $bagBrands, true)) {
+                    $categoryNames[] = 'Jewellery & Accessories';
+                }
+
+                if (in_array($brand->name, $footwearBrands, true)) {
+                    $categoryNames[] = 'Footwear';
+                }
+
+                if (in_array($brand->name, $electronicsBrands, true)) {
+                    $categoryNames[] = 'Mobile & Electronics';
+                }
+
+                if (in_array($brand->name, $groceryBrands, true)) {
+                    $categoryNames[] = 'Grocery & Daily Needs';
+                }
+
+                if (in_array($brand->name, $homeBrands, true)) {
+                    $categoryNames[] = 'Home & Furniture';
+                }
+
+                if (in_array($brand->name, $sportsBrands, true)) {
+                    $categoryNames[] = 'Sports & Fitness';
+                }
+
+                if (in_array($brand->name, $booksBrands, true)) {
+                    $categoryNames[] = 'Books & Stationery';
+                }
+
+                if (in_array($brand->name, $genericBrands, true)) {
                     $categoryNames = $rootCategories->keys()->all();
                 }
 
+                if ($categoryNames === []) {
+                    $categoryNames = ['Apparel'];
+                }
+
                 $ids = collect($categoryNames)
+                    ->unique()
                     ->map(fn (string $name) => $rootCategories[$name] ?? null)
                     ->filter()
                     ->values()

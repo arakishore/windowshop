@@ -155,6 +155,40 @@ class StorefrontCustomerLocationTest extends TestCase
             ->assertSee('Far Shop Product');
     }
 
+    public function test_product_delivery_check_can_return_json_without_redirecting(): void
+    {
+        $this->postalCode('422009', officeName: 'Cidco Colony S.O');
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Delivery Check Product');
+        $this->variant($product);
+
+        $this->postJson(route('storefront.product.delivery-check', $product->slug), [
+            'postal_code' => '422009',
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'available')
+            ->assertJsonPath('postal_code', '422009')
+            ->assertJsonFragment([
+                'product_slug' => $product->slug,
+            ])
+            ->assertSessionHas(CustomerLocationService::SESSION_KEY, '422009')
+            ->assertCookie(CustomerLocationService::COOKIE_NAME);
+    }
+
+    public function test_product_delivery_check_json_validation_errors_do_not_redirect(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Invalid Delivery Check Product');
+        $this->variant($product);
+
+        $this->postJson(route('storefront.product.delivery-check', $product->slug), [
+            'postal_code' => '4220',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('status', 'error')
+            ->assertJsonValidationErrors('postal_code');
+    }
+
     public function test_valid_latitude_longitude_detects_nearest_postal_code_without_storing_it(): void
     {
         $this->postalCode('422009', latitude: '19.9975000', longitude: '73.7898000', officeName: 'Cidco Colony S.O');

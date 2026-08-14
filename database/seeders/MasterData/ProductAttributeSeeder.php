@@ -1314,8 +1314,8 @@ class ProductAttributeSeeder extends Seeder
                 ['code' => 'country_of_origin'],
             ],
             'Footwear' => [
-                ['code' => 'color'],
-                ['code' => 'size'],
+                ['code' => 'color', 'is_required' => true, 'is_variant' => true, 'is_image_attribute' => true],
+                ['code' => 'size', 'is_required' => true, 'is_variant' => true],
                 ['code' => 'material'],
                 ['code' => 'style'],
                 ['code' => 'occasion'],

@@ -13,11 +13,8 @@
                             <div class="swiper-slide">
                                 <div class="d-flex align-items-center justify-content-center gap-8">
                                     <i class="icon icon-SealPercent text-primary fs-20"></i>
-                                    <p class="text-white text-start text-line-clamp-1">Midseason Sale: 20% Off - Auto Applied at Checkout - Limited Time Only</p>
+                                    <p class="text-white text-start text-line-clamp-1">Check products before visiting the store</p>
                                 </div>
-                            </div>
-                            <div class="swiper-slide">
-                                <p class="text-white text-line-clamp-1">20% Off - Auto Applied at Checkout - Limited Time Only</p>
                             </div>
                         </div>
                     </div>

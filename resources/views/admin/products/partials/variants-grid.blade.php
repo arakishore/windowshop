@@ -5,7 +5,7 @@
     $hasSelectedVariantAttributes = ($variantPreview['selected_variant_value_count'] ?? 0) > 0;
     $hasGeneratedVariants = $product->variants->contains(fn ($variant) => $variant->attributes->isNotEmpty());
     $missingGeneratedSkuCount = $product->variants
-        ->filter(fn ($variant) => $variant->attributes->isNotEmpty() && trim((string) $variant->sku) === '')
+        ->filter(fn ($variant) => $variant->attributes->isNotEmpty() && (trim((string) $variant->sku) === '' || str_contains(strtoupper((string) $variant->sku), 'DEMO')))
         ->count();
     $variantStatuses = ['active' => 'Active', 'inactive' => 'Inactive'];
     $availabilityStatuses = $availabilityStatuses ?? collect();
@@ -83,7 +83,7 @@
             <div class="d-flex flex-column flex-lg-row justify-content-lg-between gap-3">
                 <div>
                     <h6 class="fw-semibold mb-1">{{ $missingGeneratedSkuCount }} generated variant SKU(s) can be filled.</h6>
-                    <div class="text-muted">Blank SKUs on generated variants will be rebuilt from the product and variant attributes. Existing custom SKUs are kept unchanged.</div>
+                    <div class="text-muted">Blank or DEMO SKUs on generated variants will be rebuilt from the product and variant attributes. Existing custom SKUs are kept unchanged.</div>
                 </div>
 
                 <form method="POST" action="{{ route($productRoutePrefix.'.products.variants.generate', $product) }}" class="align-self-lg-start">

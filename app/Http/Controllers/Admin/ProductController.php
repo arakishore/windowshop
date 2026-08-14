@@ -195,7 +195,7 @@ class ProductController extends Controller
             $this->variantManagementService->assertProductCanBePublished($product);
         }
 
-        $product->forceFill([
+        $updates = [
             'merchant_id' => $shop->merchant_id,
             'shop_id' => $shop->getKey(),
             'root_product_category_id' => $shop->root_product_category_id,
@@ -205,11 +205,16 @@ class ProductController extends Controller
             ...$request->taxConfiguration(),
             'product_name' => $data['product_name'],
             'slug' => $this->slugForProduct($product, $data['product_name']),
-            'short_description' => $this->nullable($data['short_description'] ?? null),
             ...$request->merchandisingConfiguration(),
             'status' => $data['status'],
             'updated_by' => Auth::id(),
-        ])->save();
+        ];
+
+        if ($request->has('short_description')) {
+            $updates['short_description'] = $this->nullable($data['short_description'] ?? null);
+        }
+
+        $product->forceFill($updates)->save();
 
         return redirect()
             ->route('admin.products.edit', $product)
