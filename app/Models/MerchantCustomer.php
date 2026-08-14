@@ -49,6 +49,7 @@ class MerchantCustomer extends Model
     {
         static::deleting(function (MerchantCustomer $customer): void {
             $customer->orders()->update(['customer_id' => null]);
+            $customer->carts()->update(['customer_id' => null]);
         });
     }
 
@@ -70,6 +71,11 @@ class MerchantCustomer extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class, 'customer_id');
+    }
+
+    public function carts(): HasMany
+    {
+        return $this->hasMany(Cart::class, 'customer_id');
     }
 
     public function addresses(): HasMany
