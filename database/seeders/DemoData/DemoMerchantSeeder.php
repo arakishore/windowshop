@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\DemoData;
 
+use App\Enums\UserRegistrationSource;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -48,6 +49,7 @@ class DemoMerchantSeeder extends Seeder
                         'updated_at' => $now,
                     ], $userExists ? [] : [
                         'uuid' => (string) Str::uuid(),
+                        'registration_source' => UserRegistrationSource::ADMIN->value,
                         'created_at' => $now,
                     ]),
                 );

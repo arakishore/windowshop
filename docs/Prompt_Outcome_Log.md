@@ -13,6 +13,39 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-08-14 - Customer Identity Step 3 Cart Ownership to Global User
+
+Prompt:
+Change cart ownership from merchant-specific `merchant_customers.id` to global `users.id`. Keep guest carts by `session_token`, keep `cart_items` unchanged, do not change `orders.customer_id`, and do not implement Add to Cart or checkout/cart merge behavior.
+
+Outcome:
+Folded cart ownership into the base carts migration so `carts` is created with nullable `user_id -> users.id` and `ON DELETE SET NULL` from the start. Updated `Cart` to belong to `User`, added `User::carts()`, removed the obsolete `MerchantCustomer::carts()` relationship, and added cart ownership foundation tests. `cart_items` and `orders.customer_id` were left unchanged.
+
+## 2026-08-14 - Customer Identity Corrective Step Nullable POS Email
+
+Prompt:
+Remove fake POS customer email generation from the global `users` identity flow. Make `users.email` nullable while preserving email uniqueness, clean only exact generated `pos-customer-<uuid>@windowshop.local` placeholder emails, keep secure random password handling, and do not change cart/order/customer ownership architecture.
+
+Outcome:
+Folded nullable `users.email` into the base users migration and removed fake POS email generation. Updated POS identity creation to store `NULL` when no real email is provided and normalized real email when present. Existing mobile-first identity matching, random hashed POS passwords, and unverified email/mobile fields are preserved. Added POS tests for null email users, real email reuse, and multiple null emails.
+
+## 2026-08-14 - Customer Identity Step 2 POS Global User Link
+
+Prompt:
+Implement Customer Identity Step 2 - POS customer creates or links a global `users` record. New POS customers should resolve an existing global user by normalized mobile first, then valid email if needed, or create a secure POS-origin user and link `merchant_customers.user_id`. Do not change cart ownership, checkout ownership, storefront/mobile registration, OTP, account activation, bulk backfill, or customer edit relinking.
+
+Outcome:
+Added `CustomerIdentityResolver` for POS identity resolution/creation, added `MerchantCustomerService::createFromPos()`, and updated `PosController::storeCustomer()` to use that POS-specific flow. POS-created users get `registration_source = pos`, active status, local mobile stored on the global user, optional valid email when available, and a secure random hashed password. Existing users are reused without changing their original `registration_source`; duplicate merchant customers still reuse the existing merchant customer; legacy `merchant_customers.user_id = NULL` rows are not backfilled.
+
+## 2026-08-14 - Customer Identity Step 1 Registration Source
+
+Prompt:
+Implement Customer Identity Step 1 - Registration Source only. Add a nullable indexed `registration_source` field to `users`, centralize supported source values, update the User model, update only clearly-known seed/application creation paths, and do not change POS customer creation, cart relationships, or customer/user synchronization.
+
+Outcome:
+Added a migration for `users.registration_source`, created `UserRegistrationSource` enum values, added `registration_source` to the `User` model fillable list, set `admin` for newly inserted super admin/demo merchant seeded users, and set `admin` for merchant users created by the admin merchant service. Existing users are not backfilled or overwritten by the migration.
+
+
 ## 2026-08-13 18:45 +05:30 - Postal Code, Restrictions, Storefront PIN Selector, Mega Menu Frozen
 
 ### Exact User Prompt

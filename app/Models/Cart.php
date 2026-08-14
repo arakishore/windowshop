@@ -13,7 +13,7 @@ class Cart extends Model
 
     protected $fillable = [
         'uuid',
-        'customer_id',
+        'user_id',
         'session_token',
     ];
 
@@ -22,9 +22,9 @@ class Cart extends Model
         return 'uuid';
     }
 
-    public function customer(): BelongsTo
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(MerchantCustomer::class, 'customer_id')->withTrashed();
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function items(): HasMany

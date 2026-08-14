@@ -26,6 +26,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'registration_source',
     ];
 
     /**
@@ -60,5 +61,10 @@ class User extends Authenticatable
     public function merchantCustomerProfiles(): HasMany
     {
         return $this->hasMany(MerchantCustomer::class, 'user_id');
+    }
+
+    public function carts(): HasMany
+    {
+        return $this->hasMany(Cart::class);
     }
 }

@@ -319,6 +319,7 @@ class PosController extends Controller
             'name' => ['nullable', 'string', 'max:150'],
             'mobile_country_code' => ['nullable', 'string', 'max:10'],
             'mobile' => ['required', 'string', 'max:30'],
+            'email' => ['nullable', 'email', 'max:190'],
         ]);
         $mobile = $normalizer->normalize(
             (string) $data['mobile'],
@@ -333,10 +334,11 @@ class PosController extends Controller
 
         if (! $customer instanceof MerchantCustomer) {
             $name = trim((string) ($data['name'] ?? ''));
-            $customer = $this->customerService->create($shop->merchant, [
+            $customer = $this->customerService->createFromPos($shop->merchant, [
                 'name' => $name !== '' ? $name : 'Walk-in Customer - '.$mobile['mobile'],
                 'mobile_country_code' => $mobile['country_code'],
                 'mobile' => $mobile['mobile'],
+                'email' => $data['email'] ?? null,
                 'status' => MerchantCustomer::STATUS_ACTIVE,
             ]);
             $created = true;

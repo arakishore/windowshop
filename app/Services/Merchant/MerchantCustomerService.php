@@ -4,6 +4,7 @@ namespace App\Services\Merchant;
 
 use App\Models\MerchantCustomer;
 use App\Models\MerchantProfile;
+use App\Services\Customer\CustomerIdentityResolver;
 use App\Services\Shared\MobileNumberNormalizer;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,7 @@ class MerchantCustomerService
     public function __construct(
         private readonly CustomerCodeGenerator $customerCodeGenerator,
         private readonly MobileNumberNormalizer $mobileNumberNormalizer,
+        private readonly CustomerIdentityResolver $customerIdentityResolver,
     ) {
     }
 
@@ -26,6 +28,26 @@ class MerchantCustomerService
                 $payload = $this->payload($data);
                 $payload['merchant_id'] = $merchant->getKey();
                 $payload['customer_code'] = $data['customer_code'] ?? $this->customerCodeGenerator->generate($merchant);
+
+                return MerchantCustomer::query()->create($payload);
+            });
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public function createFromPos(MerchantProfile $merchant, array $data): MerchantCustomer
+    {
+        return $this->retryOnDuplicate(function () use ($merchant, $data): MerchantCustomer {
+            return DB::transaction(function () use ($merchant, $data): MerchantCustomer {
+                $payload = $this->payload($data);
+                $user = $this->customerIdentityResolver->resolveOrCreateForPos($payload);
+
+                $payload['merchant_id'] = $merchant->getKey();
+                $payload['customer_code'] = $data['customer_code'] ?? $this->customerCodeGenerator->generate($merchant);
+                $payload['user_id'] = $user->getKey();
+                $payload['linked_at'] = now();
 
                 return MerchantCustomer::query()->create($payload);
             });

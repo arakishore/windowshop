@@ -15,14 +15,14 @@ return new class extends Migration
 
             $table->id();
             $table->uuid('uuid')->unique();
-            $table->foreignId('customer_id')
+            $table->foreignId('user_id')
                 ->nullable()
-                ->constrained('merchant_customers')
+                ->constrained('users')
                 ->nullOnDelete();
             $table->string('session_token', 100)->nullable();
             $table->timestamps();
 
-            $table->index('customer_id', 'carts_customer_idx');
+            $table->index('user_id', 'carts_user_idx');
             $table->index('session_token', 'carts_session_token_idx');
         });
     }

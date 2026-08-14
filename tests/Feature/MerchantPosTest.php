@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Enums\UserRegistrationSource;
+use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderTotal;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\Merchant\MerchantCustomerService;
 use App\Services\Product\ProductVariantManagementService;
 use Database\Seeders\MasterData\LocationSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -1400,6 +1404,19 @@ class MerchantPosTest extends TestCase
             'mobile_normalized' => '919876543210',
             'status' => 'active',
         ]);
+        $linkedUserId = (int) DB::table('merchant_customers')->where('id', $customerId)->value('user_id');
+        $this->assertGreaterThan(0, $linkedUserId);
+        $this->assertDatabaseHas('users', [
+            'id' => $linkedUserId,
+            'email' => null,
+            'mobile' => '9876543210',
+            'registration_source' => UserRegistrationSource::POS->value,
+            'status' => 'active',
+        ]);
+        $this->assertNotSame(
+            'password',
+            DB::table('users')->where('id', $linkedUserId)->value('password'),
+        );
 
         $this
             ->actingAs(User::query()->findOrFail($userId))
@@ -1417,6 +1434,156 @@ class MerchantPosTest extends TestCase
             ->where('merchant_id', $merchantId)
             ->where('mobile_normalized', '919876543210')
             ->count());
+        $this->assertSame(1, DB::table('users')
+            ->where('mobile', '9876543210')
+            ->count());
+    }
+
+    public function test_pos_customer_with_real_email_stores_it_and_reuses_unique_email(): void
+    {
+        [$firstUserId, $firstShopId] = $this->merchantShopFixture();
+        [$secondUserId, $secondShopId] = $this->merchantShopFixture();
+
+        $first = $this
+            ->actingAs(User::query()->findOrFail($firstUserId))
+            ->withSession(['active_shop_id' => $firstShopId])
+            ->postJson(route('merchant.pos.customers.store'), [
+                'name' => 'Email POS Buyer',
+                'mobile' => '9876543210',
+                'email' => 'EmailBuyer@Example.TEST',
+            ]);
+
+        $first->assertCreated();
+        $globalUserId = (int) DB::table('merchant_customers')->where('id', $first->json('customer.id'))->value('user_id');
+        $this->assertDatabaseHas('users', [
+            'id' => $globalUserId,
+            'email' => 'emailbuyer@example.test',
+            'mobile' => '9876543210',
+            'registration_source' => UserRegistrationSource::POS->value,
+        ]);
+
+        $second = $this
+            ->actingAs(User::query()->findOrFail($secondUserId))
+            ->withSession(['active_shop_id' => $secondShopId])
+            ->postJson(route('merchant.pos.customers.store'), [
+                'name' => 'Same Email POS Buyer',
+                'mobile' => '9123456780',
+                'email' => 'emailbuyer@example.test',
+            ]);
+
+        $second->assertCreated();
+        $this->assertSame($globalUserId, (int) DB::table('merchant_customers')->where('id', $second->json('customer.id'))->value('user_id'));
+        $this->assertSame(1, DB::table('users')->where('email', 'emailbuyer@example.test')->count());
+    }
+
+    public function test_two_pos_customers_without_email_can_create_two_null_email_users(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+
+        foreach (['9876543210', '9123456780'] as $mobile) {
+            $this
+                ->actingAs(User::query()->findOrFail($userId))
+                ->withSession(['active_shop_id' => $shopId])
+                ->postJson(route('merchant.pos.customers.store'), [
+                    'name' => 'No Email Buyer '.$mobile,
+                    'mobile' => $mobile,
+                ])
+                ->assertCreated();
+        }
+
+        $this->assertSame(2, DB::table('users')
+            ->where('registration_source', UserRegistrationSource::POS->value)
+            ->whereNull('email')
+            ->count());
+    }
+
+    public function test_pos_customer_reuses_existing_web_user_without_overwriting_registration_source(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $merchantId = $this->merchantIdForShop($shopId);
+        $webUserId = (int) DB::table('users')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Existing Web Buyer',
+            'email' => 'existing-web-buyer@example.test',
+            'mobile' => '9422945125',
+            'password' => Hash::make('secret-password'),
+            'status' => 'active',
+            'registration_source' => UserRegistrationSource::WEB->value,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.customers.store'), [
+                'name' => 'POS Buyer',
+                'mobile' => '+91 9422945125',
+            ]);
+
+        $response->assertCreated()->assertJsonPath('created', true);
+        $customerId = (int) $response->json('customer.id');
+
+        $this->assertDatabaseHas('merchant_customers', [
+            'id' => $customerId,
+            'merchant_id' => $merchantId,
+            'user_id' => $webUserId,
+            'mobile_normalized' => '919422945125',
+        ]);
+        $this->assertSame(UserRegistrationSource::WEB->value, DB::table('users')->where('id', $webUserId)->value('registration_source'));
+        $this->assertSame(1, DB::table('users')->where('mobile', '9422945125')->count());
+    }
+
+    public function test_pos_customer_same_global_user_can_be_linked_to_second_merchant(): void
+    {
+        [$firstUserId, $firstShopId] = $this->merchantShopFixture();
+        [$secondUserId, $secondShopId] = $this->merchantShopFixture();
+
+        $first = $this
+            ->actingAs(User::query()->findOrFail($firstUserId))
+            ->withSession(['active_shop_id' => $firstShopId])
+            ->postJson(route('merchant.pos.customers.store'), [
+                'name' => 'Shared POS Buyer',
+                'mobile' => '9422945125',
+            ]);
+        $first->assertCreated();
+        $globalUserId = (int) DB::table('merchant_customers')->where('id', $first->json('customer.id'))->value('user_id');
+
+        $second = $this
+            ->actingAs(User::query()->findOrFail($secondUserId))
+            ->withSession(['active_shop_id' => $secondShopId])
+            ->postJson(route('merchant.pos.customers.store'), [
+                'name' => 'Shared POS Buyer',
+                'mobile' => '91-9422945125',
+            ]);
+
+        $second->assertCreated();
+        $this->assertSame($globalUserId, (int) DB::table('merchant_customers')->where('id', $second->json('customer.id'))->value('user_id'));
+        $this->assertNotSame($first->json('customer.id'), $second->json('customer.id'));
+        $this->assertSame(2, DB::table('merchant_customers')->where('user_id', $globalUserId)->count());
+        $this->assertSame(1, DB::table('users')->where('mobile', '9422945125')->count());
+    }
+
+    public function test_pos_identity_creation_rolls_back_when_merchant_customer_create_fails(): void
+    {
+        [, $shopId] = $this->merchantShopFixture();
+        $merchant = MerchantProfile::query()->findOrFail($this->merchantIdForShop($shopId));
+        $this->createCustomer($shopId, 'Existing Duplicate', '9422945125', 'existing-duplicate@example.test');
+
+        try {
+            app(MerchantCustomerService::class)->createFromPos($merchant, [
+                'name' => 'Duplicate POS Buyer',
+                'mobile' => '+91 9422945125',
+                'status' => 'active',
+            ]);
+            $this->fail('Expected duplicate merchant customer creation to fail.');
+        } catch (QueryException) {
+            $this->assertSame(0, DB::table('users')->where('mobile', '9422945125')->count());
+            $this->assertSame(1, DB::table('merchant_customers')
+                ->where('merchant_id', $merchant->getKey())
+                ->where('mobile_normalized', '919422945125')
+                ->count());
+        }
     }
 
     public function test_pos_delivery_checkout_requires_address_and_stores_snapshots(): void

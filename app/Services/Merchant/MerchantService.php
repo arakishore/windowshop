@@ -5,6 +5,7 @@ namespace App\Services\Merchant;
 use App\Enums\MerchantBusinessType;
 use App\Enums\MerchantStatus;
 use App\Enums\MerchantVerificationStatus;
+use App\Enums\UserRegistrationSource;
 use App\Models\MerchantAddress;
 use App\Models\MerchantProfile;
 use App\Models\User;
@@ -213,6 +214,7 @@ class MerchantService
                 'mobile' => $this->nullable($data['mobile'] ?? null),
                 'password' => Hash::make($data['password']),
                 'status' => $data['status'],
+                'registration_source' => UserRegistrationSource::ADMIN->value,
             ])->save();
 
             $merchant = MerchantProfile::create([

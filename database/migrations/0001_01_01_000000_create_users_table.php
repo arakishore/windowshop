@@ -17,7 +17,7 @@ return new class extends Migration
                 ->unique()
                 ->comment('Public identifier exposed in URLs and APIs');
             $table->string('name');
-            $table->string('email')->unique();
+            $table->string('email')->nullable()->unique();
             $table->string('mobile', 20)->nullable()->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->timestamp('mobile_verified_at')->nullable();
@@ -27,6 +27,9 @@ return new class extends Migration
                 ->collation('utf8mb4_unicode_ci')
                 ->default('active')
                 ->comment('active,inactive,suspended,deleted')
+                ->index();
+            $table->string('registration_source', 30)
+                ->nullable()
                 ->index();
             $table->timestamp('last_login_at')
                 ->nullable()
