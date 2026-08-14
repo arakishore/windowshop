@@ -19,6 +19,7 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->string('name', 150)->unique();
+            $table->string('short_code', 20)->nullable()->index('brands_short_code_idx');
             $table->string('slug', 180)->unique();
             $table->text('description')->nullable();
             $table->string('logo_path')->nullable();

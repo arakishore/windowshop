@@ -165,6 +165,7 @@ class ProductCategorySeeder extends Seeder
         $category->forceFill([
             'parent_id' => $parent?->getKey(),
             'name' => $name,
+            'short_code' => $this->shortCodeFor($name, $parent),
             'sort_order' => $sortOrder,
             'status' => $status,
         ])->save();
@@ -216,5 +217,139 @@ class ProductCategorySeeder extends Seeder
             ->each(function (ProductCategory $parent): void {
                 $this->createCategory('Other', $parent, 99);
             });
+    }
+
+    private function shortCodeFor(string $name, ?ProductCategory $parent): string
+    {
+        if ($parent === null) {
+            return [
+                'Apparel' => 'APP',
+                'Footwear' => 'FW',
+                'Mobile & Electronics' => 'ME',
+                'Beauty & Cosmetics' => 'BCOS',
+                'Jewellery & Accessories' => 'JA',
+                'Grocery & Daily Needs' => 'GDN',
+                'Home & Furniture' => 'HF',
+                'Sports & Fitness' => 'SF',
+                'Books & Stationery' => 'BS',
+            ][$name] ?? $this->fallbackShortCode($name);
+        }
+
+        $codesByParent = [
+            'Apparel' => [
+                'Men' => 'MEN',
+                'Women' => 'WOM',
+                'Boys' => 'BOY',
+                'Girls' => 'GRL',
+                'Baby Clothing' => 'BC',
+                'Unisex' => 'UNI',
+                'Other' => 'APPO',
+            ],
+            'Men' => [
+                'T-Shirts' => 'MT',
+                'Shirts' => 'MS',
+                'Polo T-Shirts' => 'MPT',
+                'Sweatshirts' => 'MSW',
+                'Jackets' => 'MJKT',
+                'Jeans' => 'MJ',
+                'Trousers' => 'MTR',
+                'Shorts' => 'MSH',
+                'Track Pants' => 'MTP',
+                'Kurtas' => 'MK',
+                'Kurta Sets' => 'MKS',
+                'Sherwanis' => 'MSR',
+                'Innerwear' => 'MIN',
+                'Sleepwear' => 'MSL',
+                'Winter Wear' => 'MWW',
+                'Other' => 'MO',
+            ],
+            'Women' => [
+                'T-Shirts' => 'WT',
+                'Tops' => 'WTO',
+                'Shirts' => 'WS',
+                'Kurtis' => 'WK',
+                'Kurta Sets' => 'WKS',
+                'Sarees' => 'WSA',
+                'Lehengas' => 'WL',
+                'Dresses' => 'WD',
+                'Jeans' => 'WJ',
+                'Leggings' => 'WLG',
+                'Skirts' => 'WSK',
+                'Trousers' => 'WTR',
+                'Innerwear' => 'WIN',
+                'Sleepwear' => 'WSL',
+                'Winter Wear' => 'WWW',
+                'Other' => 'WO',
+            ],
+            'Footwear' => [
+                'Men' => 'FM',
+                'Women' => 'FWO',
+                'Kids' => 'FK',
+                'Other' => 'FWOH',
+            ],
+            'Mobile & Electronics' => [
+                'Mobile Phones' => 'MP',
+                'Laptops' => 'LAP',
+                'Accessories' => 'MEA',
+                'Audio' => 'AUD',
+                'Smart Watches' => 'SW',
+                'Other' => 'MEO',
+            ],
+            'Beauty & Cosmetics' => [
+                'Makeup' => 'MKP',
+                'Skin Care' => 'SC',
+                'Hair Care' => 'HC',
+                'Other' => 'BCO',
+            ],
+            'Jewellery & Accessories' => [
+                'Fashion Jewellery' => 'FJ',
+                'Bags' => 'BAG',
+                'Accessories' => 'JAA',
+                'Other' => 'JAO',
+            ],
+            'Grocery & Daily Needs' => [
+                'Staples' => 'STP',
+                'Snacks' => 'SNK',
+                'Beverages' => 'BEV',
+                'Personal Care' => 'PC',
+                'Household' => 'HH',
+                'Other' => 'GDNO',
+            ],
+            'Home & Furniture' => [
+                'Furniture' => 'FUR',
+                'Home Decor' => 'HD',
+                'Kitchen' => 'KIT',
+                'Dining' => 'DIN',
+                'Bedding' => 'BED',
+                'Other' => 'HFO',
+            ],
+            'Sports & Fitness' => [
+                'Fitness Equipment' => 'FE',
+                'Sportswear' => 'SPW',
+                'Sports Shoes' => 'SPS',
+                'Accessories' => 'SFA',
+                'Other' => 'SFO',
+            ],
+            'Books & Stationery' => [
+                'Books' => 'BKS',
+                'Notebooks' => 'NB',
+                'Pens' => 'PEN',
+                'Art Supplies' => 'AS',
+                'Office Supplies' => 'OS',
+                'Other' => 'BSO',
+            ],
+        ];
+
+        return $codesByParent[$parent->name][$name] ?? $this->fallbackShortCode($name);
+    }
+
+    private function fallbackShortCode(string $name): string
+    {
+        return Str::of($name)
+            ->replaceMatches('/[^A-Za-z0-9 ]/', '')
+            ->explode(' ')
+            ->filter()
+            ->map(fn (string $part) => Str::upper(Str::substr($part, 0, 1)))
+            ->join('') ?: 'CAT';
     }
 }

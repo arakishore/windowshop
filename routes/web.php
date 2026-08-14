@@ -50,6 +50,8 @@ Route::get('/register', [StorefrontController::class, 'register'])->name('storef
 Route::get('/forgot-password', [StorefrontController::class, 'forgotPassword'])->name('storefront.forgot-password');
 Route::view('/demo/shopping-bag-box', 'storefront.pages.demo-shopping-bag-box')->name('storefront.demo.shopping-bag-box');
 Route::get('/products', [StorefrontController::class, 'products'])->name('storefront.products');
+Route::post('/products/{slug}/delivery-check', [StorefrontController::class, 'checkProductDelivery'])->name('storefront.product.delivery-check');
+Route::get('/products/{slug}', [StorefrontController::class, 'productDetail'])->name('storefront.product.show');
 Route::get('/shop', [StorefrontController::class, 'products'])->name('storefront.shop');
 Route::get('/product-detail', [StorefrontController::class, 'productDetail'])->name('storefront.product.detail');
 Route::get('/view-cart', [StorefrontController::class, 'cart'])->name('storefront.cart');

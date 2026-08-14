@@ -20,6 +20,11 @@
                 <span class="customer-location-badge">PIN</span>
                 <h3 class="title-pop mb-8" id="customer-location-modal-title">Choose your location</h3>
                 <p class="desc-pop cl-text-2">Enter your PIN code to see shops and products near you.</p>
+                @if ($currentPostalCode)
+                    <p class="customer-location-current mb-0">
+                        Current PIN: <span>{{ $currentPostalCode }}</span>
+                    </p>
+                @endif
             </div>
             <div class="modal-main">
                 <button type="button" class="tf-btn btn-white customer-location-detect-btn">

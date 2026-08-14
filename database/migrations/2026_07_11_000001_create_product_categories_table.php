@@ -23,8 +23,12 @@ return new class extends Migration
                 ->constrained('product_categories')
                 ->nullOnDelete();
             $table->string('name');
+            $table->string('short_code', 20)->nullable()->index('product_categories_short_code_idx');
             $table->string('slug')->nullable()->unique();
             $table->text('description')->nullable();
+            $table->string('meta_title')->nullable();
+            $table->string('meta_description', 500)->nullable();
+            $table->text('product_disclaimer')->nullable();
             $table->string('image_path')->nullable();
             $table->unsignedInteger('sort_order')->default(0)->index();
             $table->string('status', 30)

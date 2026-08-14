@@ -124,6 +124,9 @@ class ProductAttributeMasterTest extends TestCase
             ->firstOrFail();
 
         $this->assertContains('multicolor', $color->values->pluck('code')->all());
+        $this->assertSame('#111111', $color->values->firstWhere('code', 'black')?->swatch_hex);
+        $this->assertSame('#1e3a8a', $color->values->firstWhere('code', 'navy')?->swatch_hex);
+        $this->assertNull($color->values->firstWhere('code', 'multicolor')?->swatch_hex);
 
         $occasion = ProductAttributeGroup::query()
             ->where('code', 'occasion')

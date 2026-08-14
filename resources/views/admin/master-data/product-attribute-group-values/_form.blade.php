@@ -16,10 +16,16 @@
 
 <div class="border rounded bg-white p-3">
     <div class="row g-3">
-        <div class="col-md-5">
+        <div class="col-md-4">
             <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
             <input id="name" name="name" type="text" value="{{ old('name', $value?->name) }}" class="form-control @error('name') is-invalid @enderror" required>
             @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+        </div>
+
+        <div class="col-md-2">
+            <label for="short_code" class="form-label">Short Code</label>
+            <input id="short_code" name="short_code" type="text" maxlength="20" value="{{ old('short_code', $value?->short_code) }}" class="form-control @error('short_code') is-invalid @enderror" placeholder="BLU">
+            @error('short_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
 
         <div class="col-md-3">
@@ -29,7 +35,7 @@
             <div class="form-text">Unique within {{ $group->name }}.</div>
         </div>
 
-        <div class="col-md-2">
+        <div class="col-md-1">
             <label for="sort_order" class="form-label">Sort Order</label>
             <input id="sort_order" name="sort_order" type="number" min="0" value="{{ old('sort_order', $value?->sort_order ?? 0) }}" class="form-control @error('sort_order') is-invalid @enderror">
             @error('sort_order')<div class="invalid-feedback">{{ $message }}</div>@enderror
@@ -49,6 +55,16 @@
             <textarea id="description" name="description" rows="4" class="form-control @error('description') is-invalid @enderror">{{ old('description', $value?->description) }}</textarea>
             @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
+
+        <div class="col-md-4">
+            <label for="swatch_hex" class="form-label">Swatch Color</label>
+            <div class="input-group">
+                <input id="swatch_hex_picker" type="color" value="{{ old('swatch_hex', $value?->swatch_hex) ?: '#000000' }}" class="form-control form-control-color" aria-label="Choose swatch color">
+                <input id="swatch_hex" name="swatch_hex" type="text" value="{{ old('swatch_hex', $value?->swatch_hex) }}" placeholder="#000000" class="form-control @error('swatch_hex') is-invalid @enderror">
+                @error('swatch_hex')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+            <div class="form-text">Optional. Use for color values, e.g. #111111.</div>
+        </div>
     </div>
 </div>
 
@@ -56,3 +72,26 @@
     <a href="{{ route('admin.master.product-attributes.values.index', $group) }}" class="btn btn-light border">Cancel</a>
     <button type="submit" class="btn btn-primary">{{ $isEdit ? 'Update Value' : 'Create Value' }}</button>
 </div>
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const picker = document.getElementById('swatch_hex_picker');
+            const input = document.getElementById('swatch_hex');
+
+            if (!picker || !input) {
+                return;
+            }
+
+            picker.addEventListener('input', function () {
+                input.value = picker.value;
+            });
+
+            input.addEventListener('input', function () {
+                if (/^#[0-9a-fA-F]{6}$/.test(input.value)) {
+                    picker.value = input.value;
+                }
+            });
+        });
+    </script>
+@endpush

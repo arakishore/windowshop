@@ -95,6 +95,7 @@ class BrandSeeder extends Seeder
                 ['slug' => $slug],
                 fn(bool $exists) => [
                     'name' => $name,
+                    'short_code' => $this->shortCodeFor($name),
                     'description' => null,
                     'website_url' => null,
                     'sort_order' => $index + 1,
@@ -111,6 +112,85 @@ class BrandSeeder extends Seeder
         }
 
         $this->seedBrandCategoryMappings();
+    }
+
+    private function shortCodeFor(string $name): string
+    {
+        return [
+            'Allen Solly' => 'AS',
+            'Anokhi' => 'ANK',
+            'Aurelia' => 'AUR',
+            'Bata' => 'BATA',
+            'Being Human' => 'BH',
+            'Biba' => 'BIBA',
+            'Blackberrys' => 'BBY',
+            'Bombay Dyeing' => 'BD',
+            'boAt' => 'BOAT',
+            'Cambridge' => 'CAM',
+            'Caprese' => 'CAP',
+            'Chhabra 555' => 'C555',
+            'Colorbar' => 'CBR',
+            'Classmate' => 'CLS',
+            'Decathlon' => 'DEC',
+            'Fabindia' => 'FAB',
+            'Flying Machine' => 'FM',
+            'Gini & Jony' => 'GJ',
+            'Global Desi' => 'GD',
+            'Globus' => 'GLO',
+            'Indian Terrain' => 'IT',
+            'J. Hampstead' => 'JH',
+            'John Players' => 'JP',
+            'Kalyan Silks' => 'KS',
+            'Kent' => 'KENT',
+            'Libas' => 'LIB',
+            'Louis Philippe' => 'LP',
+            'Lux Cozi' => 'LC',
+            'Milton' => 'MLT',
+            'Maybelline' => 'MAY',
+            'Manyavar' => 'MNY',
+            'Max Fashion' => 'MAX',
+            'Meena Bazaar' => 'MB',
+            'Monte Carlo' => 'MC',
+            'Mufti' => 'MFT',
+            'Nykaa Cosmetics' => 'NYK',
+            'Nalli Silks' => 'NS',
+            'Neeru\'s' => 'NEE',
+            'Numero Uno' => 'NU',
+            'Oxemberg' => 'OXB',
+            'Pantaloons' => 'PAN',
+            'Park Avenue' => 'PA',
+            'Peter England' => 'PE',
+            'Pothys' => 'POT',
+            'Prestige' => 'PRE',
+            'Rangriti' => 'RAN',
+            'Raymond' => 'RAY',
+            'Relaxo' => 'RLX',
+            'Samsung' => 'SAM',
+            'Lavie' => 'LAV',
+            'Lakme' => 'LAK',
+            'Lino Perros' => 'LPR',
+            'Mochi' => 'MOC',
+            'Shahi Exports' => 'SE',
+            'Siyaram\'s' => 'SIY',
+            'Soch' => 'SOCH',
+            'Spykar' => 'SPY',
+            'Tata Sampann' => 'TS',
+            'Swayamvar' => 'SWY',
+            'Trends' => 'TRD',
+            'Van Heusen' => 'VH',
+            'Vardhman' => 'VAR',
+            'Wildcraft' => 'WLD',
+            'Westside' => 'WST',
+            'W for Woman' => 'WFW',
+            'Zodiac' => 'ZOD',
+            'Zudio' => 'ZUD',
+            'Other' => 'OTH',
+        ][$name] ?? Str::of($name)
+            ->replaceMatches('/[^A-Za-z0-9 ]/', '')
+            ->explode(' ')
+            ->filter()
+            ->map(fn (string $part) => Str::upper(Str::substr($part, 0, 1)))
+            ->join('');
     }
 
     private function seedBrandCategoryMappings(): void

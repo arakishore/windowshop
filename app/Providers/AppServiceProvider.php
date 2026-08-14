@@ -27,7 +27,11 @@ class AppServiceProvider extends ServiceProvider
     {
         Paginator::useBootstrapFive();
 
-        View::composer(['storefront.partials.header', 'storefront.partials.customer-location-modal'], function ($view): void {
+        View::composer([
+            'storefront.partials.header',
+            'storefront.partials.customer-location-modal',
+            'storefront.pages.product-detail',
+        ], function ($view): void {
             static $marketplaceLogoUrl = null;
 
             $marketplaceLogoUrl ??= app(MarketplaceLogoService::class)->url();

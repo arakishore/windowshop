@@ -24,6 +24,7 @@ class StoreProductAttributeGroupValueRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:150'],
+            'short_code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'code' => [
                 'required',
                 'string',
@@ -32,6 +33,7 @@ class StoreProductAttributeGroupValueRequest extends FormRequest
                     ->where(fn ($query) => $query->where('product_attribute_group_id', $groupId)),
             ],
             'description' => ['nullable', 'string'],
+            'swatch_hex' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ];
@@ -41,8 +43,24 @@ class StoreProductAttributeGroupValueRequest extends FormRequest
     {
         $this->merge([
             'name' => $this->normalizeString('name'),
+            'short_code' => $this->normalizeShortCode($this->input('short_code')),
             'code' => $this->normalizeCode($this->input('code') ?: $this->input('name')),
+            'swatch_hex' => $this->normalizeSwatchHex($this->input('swatch_hex')),
         ]);
+    }
+
+    private function normalizeShortCode(mixed $value): ?string
+    {
+        $value = $this->normalizeStringValue($value);
+
+        return $value === null ? null : strtoupper($value);
+    }
+
+    private function normalizeSwatchHex(mixed $value): ?string
+    {
+        $value = $this->normalizeStringValue($value);
+
+        return $value === null ? null : mb_strtolower($value);
     }
 
     private function normalizeCode(mixed $value): ?string

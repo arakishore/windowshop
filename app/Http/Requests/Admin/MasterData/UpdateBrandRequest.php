@@ -18,6 +18,7 @@ class UpdateBrandRequest extends StoreBrandRequest
 
         return [
             'name' => ['required', 'string', 'max:150', Rule::unique('brands', 'name')->ignore($brandId)],
+            'short_code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'description' => ['nullable', 'string'],
             'website_url' => ['nullable', 'url', 'max:255'],
             'logo' => [

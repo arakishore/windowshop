@@ -71,6 +71,7 @@
                         <tr>
                             <th>Logo</th>
                             <th>Brand Name</th>
+                            <th>Short Code</th>
                             <th>Slug</th>
                             <th>Applicable Shop Types</th>
                             <th>Sort Order</th>
@@ -98,6 +99,13 @@
                                     @endif
                                     @if($brand->description)
                                         <div class="fs-sm text-muted">{{ \Illuminate\Support\Str::limit($brand->description, 80) }}</div>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($brand->short_code)
+                                        <code>{{ $brand->short_code }}</code>
+                                    @else
+                                        -
                                     @endif
                                 </td>
                                 <td><code>{{ $brand->slug }}</code></td>

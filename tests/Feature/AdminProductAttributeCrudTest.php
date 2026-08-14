@@ -173,8 +173,10 @@ class AdminProductAttributeCrudTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.master.product-attributes.values.store', $group), [
                 'name' => 'Long',
+                'short_code' => 'lg',
                 'code' => 'Long',
                 'description' => 'Long length',
+                'swatch_hex' => '#FF0000',
                 'status' => 'active',
                 'sort_order' => 2,
             ])
@@ -189,8 +191,10 @@ class AdminProductAttributeCrudTest extends TestCase
         $this->actingAs($admin)
             ->put(route('admin.master.product-attributes.values.update', [$group, $value]), [
                 'name' => 'Extra Long',
+                'short_code' => 'xl',
                 'code' => 'extra-long',
                 'description' => null,
+                'swatch_hex' => '#00ff00',
                 'status' => 'inactive',
                 'sort_order' => 3,
             ])
@@ -200,7 +204,9 @@ class AdminProductAttributeCrudTest extends TestCase
         $this->assertDatabaseHas('product_attribute_group_values', [
             'id' => $value->getKey(),
             'name' => 'Extra Long',
+            'short_code' => 'XL',
             'code' => 'extra-long',
+            'swatch_hex' => '#00ff00',
             'status' => 'inactive',
             'sort_order' => 3,
         ]);
@@ -239,6 +245,46 @@ class AdminProductAttributeCrudTest extends TestCase
             ])
             ->assertRedirect(route('admin.master.product-attributes.values.create', $group))
             ->assertSessionHasErrors('code');
+    }
+
+    public function test_attribute_group_value_swatch_hex_must_be_valid(): void
+    {
+        $admin = $this->createAdminUser();
+        $group = $this->createGroup([
+            'name' => 'Color',
+            'code' => 'color',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.product-attributes.values.store', $group), [
+                'name' => 'Bad Color',
+                'code' => 'bad-color',
+                'swatch_hex' => 'red',
+                'status' => 'active',
+                'sort_order' => 1,
+            ])
+            ->assertSessionHasErrors('swatch_hex');
+    }
+
+    public function test_attribute_group_value_short_code_must_be_alphanumeric(): void
+    {
+        $admin = $this->createAdminUser();
+        $group = $this->createGroup([
+            'name' => 'Size',
+            'code' => 'size',
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-attributes.values.create', $group))
+            ->post(route('admin.master.product-attributes.values.store', $group), [
+                'name' => 'Medium',
+                'short_code' => 'M-1',
+                'code' => 'medium',
+                'status' => 'active',
+                'sort_order' => 1,
+            ])
+            ->assertRedirect(route('admin.master.product-attributes.values.create', $group))
+            ->assertSessionHasErrors('short_code');
     }
 
     private function createAdminUser(): User
@@ -294,8 +340,10 @@ class AdminProductAttributeCrudTest extends TestCase
         return ProductAttributeGroupValue::query()->create([
             'product_attribute_group_id' => $attributes['product_attribute_group_id'],
             'name' => $attributes['name'] ?? 'Test Value',
+            'short_code' => $attributes['short_code'] ?? null,
             'code' => $attributes['code'] ?? 'test-value',
             'description' => $attributes['description'] ?? null,
+            'swatch_hex' => $attributes['swatch_hex'] ?? null,
             'status' => $attributes['status'] ?? 'active',
             'sort_order' => $attributes['sort_order'] ?? 0,
         ]);

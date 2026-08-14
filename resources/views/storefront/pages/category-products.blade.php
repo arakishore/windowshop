@@ -1,7 +1,27 @@
 @extends('storefront.layouts.app')
 
-@section('title', $category->name.' | WindowShop')
-@section('meta_description', 'Browse '.$category->name.' products available from local shops on WindowShop.')
+@php
+    $marketplaceName = app(\App\Services\System\SystemSettingService::class)->marketplaceName();
+    $categoryMetaTitleBase = $category->meta_title ?: $category->name;
+    $legacyMarketplaceSuffix = ' | WindowShop';
+
+    if (str_ends_with($categoryMetaTitleBase, $legacyMarketplaceSuffix)) {
+        $categoryMetaTitleBase = substr($categoryMetaTitleBase, 0, -strlen($legacyMarketplaceSuffix));
+    }
+
+    $categoryMetaTitle = $categoryMetaTitleBase.' | '.$marketplaceName;
+    $categoryMetaDescriptionBase = $category->meta_description
+        ?: ($category->description ?: 'Browse '.$category->name.' products available from local shops on WindowShop.');
+
+    if (str_ends_with($categoryMetaDescriptionBase, ' on WindowShop.')) {
+        $categoryMetaDescriptionBase = substr($categoryMetaDescriptionBase, 0, -strlen(' on WindowShop.')).'.';
+    }
+
+    $categoryMetaDescription = rtrim($categoryMetaDescriptionBase, '.').' on '.$marketplaceName.'.';
+@endphp
+
+@section('title', $categoryMetaTitle)
+@section('meta_description', $categoryMetaDescription)
 
 @push('styles')
     <style>

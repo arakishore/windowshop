@@ -41,8 +41,10 @@ class ProductAttributeGroupValueController extends Controller
 
         $productAttribute->values()->create([
             'name' => $data['name'],
+            'short_code' => $this->nullable($data['short_code'] ?? null),
             'code' => $data['code'],
             'description' => $this->nullable($data['description'] ?? null),
+            'swatch_hex' => $this->nullable($data['swatch_hex'] ?? null),
             'status' => $data['status'],
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'created_by' => $actorId,
@@ -75,8 +77,10 @@ class ProductAttributeGroupValueController extends Controller
 
         $productAttributeGroupValue->forceFill([
             'name' => $data['name'],
+            'short_code' => $this->nullable($data['short_code'] ?? null),
             'code' => $data['code'],
             'description' => $this->nullable($data['description'] ?? null),
+            'swatch_hex' => $this->nullable($data['swatch_hex'] ?? null),
             'status' => $data['status'],
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'updated_by' => Auth::id(),

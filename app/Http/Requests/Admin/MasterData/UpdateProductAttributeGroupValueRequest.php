@@ -20,6 +20,7 @@ class UpdateProductAttributeGroupValueRequest extends StoreProductAttributeGroup
 
         return [
             'name' => ['required', 'string', 'max:150'],
+            'short_code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'code' => [
                 'required',
                 'string',
@@ -29,6 +30,7 @@ class UpdateProductAttributeGroupValueRequest extends StoreProductAttributeGroup
                     ->ignore($valueId),
             ],
             'description' => ['nullable', 'string'],
+            'swatch_hex' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ];

@@ -29,13 +29,19 @@
     </div>
     <div class="card-body">
         <div class="row g-3">
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
                 <input id="name" name="name" type="text" value="{{ old('name', $category?->name) }}" class="form-control @error('name') is-invalid @enderror" required>
                 @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 @if($isEdit)
                     <div class="form-text">Slug: {{ $category->slug }}</div>
                 @endif
+            </div>
+
+            <div class="col-md-2">
+                <label for="short_code" class="form-label">Short Code</label>
+                <input id="short_code" name="short_code" type="text" maxlength="20" value="{{ old('short_code', $category?->short_code) }}" class="form-control @error('short_code') is-invalid @enderror" placeholder="MJ">
+                @error('short_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
             <div class="col-md-3">
@@ -52,7 +58,7 @@
                 @error('parent_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
-            <div class="col-md-2">
+            <div class="col-md-1">
                 <label for="sort_order" class="form-label">Sort Order</label>
                 <input id="sort_order" name="sort_order" type="number" min="0" value="{{ old('sort_order', $category?->sort_order ?? 0) }}" class="form-control @error('sort_order') is-invalid @enderror">
                 @error('sort_order')<div class="invalid-feedback">{{ $message }}</div>@enderror
@@ -100,6 +106,34 @@
                 <label for="description" class="form-label">Description</label>
                 <textarea id="description" name="description" rows="4" class="form-control @error('description') is-invalid @enderror">{{ old('description', $category?->description) }}</textarea>
                 @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+
+            <div class="col-12">
+                <div class="border rounded p-3">
+                    <h6 class="mb-3">SEO</h6>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="meta_title" class="form-label">Meta Title</label>
+                            <input id="meta_title" name="meta_title" type="text" maxlength="255" value="{{ old('meta_title', $category?->meta_title) }}" class="form-control @error('meta_title') is-invalid @enderror">
+                            <div class="form-text">Recommended: around 50-60 characters. Maximum 255 characters.</div>
+                            @error('meta_title')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="col-12">
+                            <label for="meta_description" class="form-label">Meta Description</label>
+                            <textarea id="meta_description" name="meta_description" rows="3" maxlength="500" class="form-control @error('meta_description') is-invalid @enderror">{{ old('meta_description', $category?->meta_description) }}</textarea>
+                            <div class="form-text">Recommended: around 140-160 characters. Maximum 500 characters.</div>
+                            @error('meta_description')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <label for="product_disclaimer" class="form-label">Product Disclaimer</label>
+                <textarea id="product_disclaimer" name="product_disclaimer" rows="3" maxlength="1000" class="form-control @error('product_disclaimer') is-invalid @enderror">{{ old('product_disclaimer', $category?->product_disclaimer) }}</textarea>
+                <div class="form-text">Optional category-specific disclaimer shown on product detail pages. Leave blank to inherit from parent/root category.</div>
+                @error('product_disclaimer')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
             <div class="col-12">

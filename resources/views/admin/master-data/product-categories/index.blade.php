@@ -105,6 +105,7 @@
                                 <input type="checkbox" class="form-check-input js-product-category-check-all" aria-label="Select all leaf categories">
                             </th>
                             <th>Name</th>
+                            <th>Short Code</th>
                             <th>Parent Category</th>
                             <th>Category Path</th>
                             <th>Default Tax Class</th>
@@ -143,6 +144,13 @@
                                     </div>
                                     @if($category->description)
                                         <div class="fs-sm text-muted">{{ \Illuminate\Support\Str::limit($category->description, 80) }}</div>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($category->short_code)
+                                        <code>{{ $category->short_code }}</code>
+                                    @else
+                                        -
                                     @endif
                                 </td>
                                 <td>{{ $category->parent?->name ?? '-' }}</td>

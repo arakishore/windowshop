@@ -4,15 +4,19 @@ namespace Tests\Feature;
 
 use App\Models\AdminSetting;
 use App\Models\MerchantProfile;
+use App\Models\PostalCode;
 use App\Models\Product;
 use App\Models\ProductAttributeGroup;
 use App\Models\ProductAttributeGroupValue;
 use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductCategory;
+use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
+use App\Models\ProductVariantAttribute;
 use App\Models\Shop;
 use App\Models\User;
+use App\Services\Storefront\CustomerLocationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -126,7 +130,7 @@ class StorefrontProductListingTest extends TestCase
         $fixture = $this->fixture();
 
         foreach (range(1, 13) as $index) {
-            $product = $this->product($fixture, 'Paged Product '.$index, overrides: ['created_at' => now()->subMinutes($index)]);
+            $product = $this->product($fixture, 'Paged Product '.$index, overrides: ['sort_order' => $index]);
             $this->variant($product);
         }
 
@@ -144,6 +148,176 @@ class StorefrontProductListingTest extends TestCase
         $this->get(route('storefront.products'))
             ->assertOk()
             ->assertSee('No products found.');
+    }
+
+    public function test_product_cards_link_to_dynamic_product_detail_page(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Linked Product');
+        $this->variant($product);
+
+        $this->get(route('storefront.products'))
+            ->assertOk()
+            ->assertSee(route('storefront.product.show', $product->slug), false);
+    }
+
+    public function test_product_detail_page_renders_live_product_data_and_seo(): void
+    {
+        $fixture = $this->fixture();
+        $fixture['root']->forceFill(['name' => 'Apparel'])->save();
+        $fixture['category']->forceFill(['name' => 'Women'])->save();
+        $fixture['category'] = ProductCategory::query()->create([
+            'parent_id' => $fixture['category']->getKey(),
+            'name' => 'T-Shirts',
+            'slug' => 'women-t-shirts-'.Str::random(8),
+            'status' => 'active',
+        ]);
+        $fixture['shop']->forceFill([
+            'whatsapp_number' => '9870035848',
+        ])->save();
+        DB::table('system_settings')->insert([
+            'key' => 'marketplace_name',
+            'label' => 'Marketplace Name',
+            'value' => 'LocalHyper',
+            'value_type' => 'string',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $fixture['category']->forceFill([
+            'product_disclaimer' => 'Category fit and color disclaimer.',
+        ])->save();
+        $product = $this->product($fixture, 'Dynamic Cotton Shirt', overrides: [
+            'availability_status_id' => ProductAvailabilityStatus::query()->create([
+                'uuid' => (string) Str::uuid(),
+                'merchant_id' => $fixture['merchant']->getKey(),
+                'code' => 'READY_NOW',
+                'name' => 'Ready Now',
+                'customer_description' => 'This product is ready at the shop.',
+                'purchase_allowed' => true,
+                'badge_type' => ProductAvailabilityStatus::BADGE_SUCCESS,
+                'status' => ProductAvailabilityStatus::STATUS_ACTIVE,
+            ])->getKey(),
+            'short_description' => 'Short cotton shirt summary.',
+            'description' => 'Full cotton shirt product description from the database.',
+            'meta_title' => 'Cotton Shirt Detail',
+            'meta_description' => 'Cotton shirt meta description',
+        ]);
+        $variant = $this->variant($product, mrp: '1000.00', sellingPrice: '750.00');
+        $this->image($product, 'products/dynamic-shirt/thumb.webp');
+        $colorGroup = $this->attributeGroup('Color', ['Black']);
+        $black = $colorGroup->values->firstWhere('code', 'black');
+        $black->forceFill(['swatch_hex' => '#111111'])->save();
+        ProductVariantAttribute::query()->create([
+            'product_variant_id' => $variant->getKey(),
+            'product_attribute_group_id' => $colorGroup->getKey(),
+            'product_attribute_group_value_id' => $black->getKey(),
+        ]);
+        $sizeGroup = $this->attributeGroup('Size', ['M', 'L']);
+        $medium = $sizeGroup->values->firstWhere('code', 'm');
+        ProductVariantAttribute::query()->create([
+            'product_variant_id' => $variant->getKey(),
+            'product_attribute_group_id' => $sizeGroup->getKey(),
+            'product_attribute_group_value_id' => $medium->getKey(),
+        ]);
+        $largeVariant = $this->variant($product, mrp: '1100.00', sellingPrice: '850.00');
+        $largeVariant->forceFill([
+            'is_default' => false,
+            'sort_order' => 1,
+        ])->save();
+        $large = $sizeGroup->values->firstWhere('code', 'l');
+        ProductVariantAttribute::query()->create([
+            'product_variant_id' => $largeVariant->getKey(),
+            'product_attribute_group_id' => $sizeGroup->getKey(),
+            'product_attribute_group_value_id' => $large->getKey(),
+        ]);
+        $materialGroup = $this->attributeGroup('Material', ['Cotton']);
+        $product->attributes()->create([
+            'product_attribute_group_id' => $materialGroup->getKey(),
+            'product_attribute_group_value_id' => $materialGroup->values->firstWhere('code', 'cotton')->getKey(),
+        ]);
+
+        $related = $this->product($fixture, 'Related Cotton Shirt');
+        $this->variant($related);
+
+        $content = $this->get(route('storefront.product.show', $product->slug))
+            ->assertOk()
+            ->assertSee('Dynamic Cotton Shirt')
+            ->assertSee('Full cotton shirt product description from the database.')
+            ->assertSee('product-heading-row', false)
+            ->assertSee('product-wishlist-btn', false)
+            ->assertSee('Reviews coming soon')
+            ->assertSee('Available from local shop')
+            ->assertSee($fixture['shop']->name)
+            ->assertSee($fixture['category']->name)
+            ->assertSee('INR 750.00')
+            ->assertSee('INR 1,000.00')
+            ->assertSee('-25%')
+            ->assertSee('Ready Now')
+            ->assertSee('This product is ready at the shop.')
+            ->assertSee('/storage/products/dynamic-shirt/thumb.webp', false)
+            ->assertSee('data-color="Black"', false)
+            ->assertSee('background: #111111', false)
+            ->assertDontSee('data-color="green"', false)
+            ->assertSee('Size:')
+            ->assertSee('data-size="M"', false)
+            ->assertSee('data-price="750"', false)
+            ->assertSee('data-size="L"', false)
+            ->assertSee('data-price="850"', false)
+            ->assertSee('sticky-price-add', false)
+            ->assertSee('Size Guide')
+            ->assertSee('Women T-Shirts Size Chart')
+            ->assertSee('assets/storefront/images/size-guides/women-tshirts-size-guide.png', false)
+            ->assertSee('Specification')
+            ->assertSee('Material')
+            ->assertSee('Cotton')
+            ->assertSee('Product Disclaimer')
+            ->assertSee('Product images, prices, availability and details are provided by shops or suppliers and may vary.')
+            ->assertSee('Category fit and color disclaimer.')
+            ->assertSee('Sold By')
+            ->assertSee('View Shop')
+            ->assertSee('WhatsApp')
+            ->assertSee('https://wa.me/919870035848?text=', false)
+            ->assertSee('Dynamic%20Cotton%20Shirt', false)
+            ->assertSee('Ask A Question')
+            ->assertSee('Offers from '.$fixture['shop']->name)
+            ->assertSee('Store deals will appear here')
+            ->assertDontSee('shop-default.html', false)
+            ->assertSee('Related Cotton Shirt')
+            ->getContent();
+
+        $this->assertStringContainsString('<title>Cotton Shirt Detail | LocalHyper</title>', $content);
+        $this->assertStringContainsString('<meta name="description" content="Cotton shirt meta description on LocalHyper.">', $content);
+        $this->assertStringContainsString('assets/storefront/css/photoswipe.css', $content);
+        $this->assertStringContainsString('assets/storefront/css/drift-basic.min.css', $content);
+        $this->assertStringContainsString('data-pswp-width="576px"', $content);
+        $this->assertStringContainsString('assets/storefront/js/plugin/photoswipe-lightbox.umd.min.js', $content);
+        $this->assertStringContainsString('assets/storefront/js/plugin/photoswipe.umd.min.js', $content);
+        $this->assertStringNotContainsString('static placeholders', $content);
+        $this->assertStringContainsString('product-specification', $content);
+        $this->assertStringContainsString('product_d_table', $content);
+        $this->assertStringContainsString('Add To Cart', $content);
+        $this->assertStringContainsString('sold-by-card', $content);
+        $this->assertStringContainsString('Customer Reviews', $content);
+        $this->assertStringContainsString('Sample review layout', $content);
+        $this->assertStringContainsString('Useful product details before visiting', $content);
+        $this->assertStringNotContainsString('(0 reviews)', $content);
+        $this->assertStringNotContainsString('Contact Store', $content);
+    }
+
+    public function test_product_detail_rejects_inactive_or_unavailable_products(): void
+    {
+        $fixture = $this->fixture();
+        $inactive = $this->product($fixture, 'Inactive Detail Product', status: 'inactive');
+        $this->variant($inactive);
+
+        $this->get(route('storefront.product.show', $inactive->slug))
+            ->assertNotFound();
+
+        $noVariant = $this->product($fixture, 'No Variant Detail Product');
+
+        $this->get(route('storefront.product.show', $noVariant->slug))
+            ->assertNotFound();
     }
 
     public function test_category_page_renders_products_for_selected_category_tree_only(): void
@@ -209,6 +383,32 @@ class StorefrontProductListingTest extends TestCase
 
         $this->get(route('storefront.category.child.show', [$sibling->slug, $fixture['category']->slug]))
             ->assertNotFound();
+    }
+
+    public function test_category_page_renders_category_seo_meta_without_keywords(): void
+    {
+        $fixture = $this->fixture();
+        DB::table('system_settings')->insert([
+            'key' => 'marketplace_name',
+            'label' => 'Marketplace Name',
+            'value' => 'LocalHyper',
+            'value_type' => 'string',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $fixture['category']->forceFill([
+            'meta_title' => "Women's T-Shirts Online",
+            'meta_description' => "Deals & styles from nearby shops.",
+        ])->save();
+
+        $content = $this->get(route('storefront.category.child.show', [$fixture['root']->slug, $fixture['category']->slug]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('<title>Women&#039;s T-Shirts Online | LocalHyper</title>', $content);
+        $this->assertStringContainsString('<meta name="description" content="Deals &amp; styles from nearby shops on LocalHyper.">', $content);
+        $this->assertStringNotContainsString('name="keywords"', $content);
     }
 
     public function test_category_page_renders_mapped_attribute_filters_and_filters_products(): void
@@ -294,10 +494,130 @@ class StorefrontProductListingTest extends TestCase
             ->assertDontSee('Premium Price Product');
     }
 
+    public function test_category_page_orders_same_pin_then_nearby_then_farther_without_filtering(): void
+    {
+        $this->postalCode('422009', '19.9975000', '73.7898000');
+        $this->postalCode('422010', '20.0100000', '73.8000000');
+        $this->postalCode('422402', '19.7167000', '73.6333000');
+
+        $fixture = $this->fixture(shopPincode: '422402');
+        $sameShop = $this->shop($fixture['merchant'], $fixture['root'], 'Same Pin Shop', pincode: '422009');
+        $nearShop = $this->shop($fixture['merchant'], $fixture['root'], 'Near Pin Shop', pincode: '422010');
+        $farShop = $this->shop($fixture['merchant'], $fixture['root'], 'Far Pin Shop', pincode: '422402');
+        $unknownShop = $this->shop($fixture['merchant'], $fixture['root'], 'Unknown Pin Shop', pincode: '499999');
+
+        $products = [
+            $this->product([...$fixture, 'shop' => $sameShop], 'Location Same Pin Product', overrides: ['created_at' => now()->subDays(4)]),
+            $this->product([...$fixture, 'shop' => $nearShop], 'Location Near Pin Product', overrides: ['created_at' => now()->subDays(3)]),
+            $this->product([...$fixture, 'shop' => $farShop], 'Location Far Pin Product', overrides: ['created_at' => now()->subDays(2)]),
+            $this->product([...$fixture, 'shop' => $unknownShop], 'Location Unknown Pin Product', overrides: ['created_at' => now()]),
+        ];
+
+        foreach ($products as $product) {
+            $this->variant($product);
+        }
+
+        $this->withSession([CustomerLocationService::SESSION_KEY => '422009'])
+            ->get(route('storefront.category.child.show', [$fixture['root']->slug, $fixture['category']->slug]))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'Location Same Pin Product',
+                'Location Near Pin Product',
+                'Location Far Pin Product',
+                'Location Unknown Pin Product',
+            ]);
+    }
+
+    public function test_category_page_without_selected_pin_keeps_existing_ordering(): void
+    {
+        $this->postalCode('422009', '19.9975000', '73.7898000');
+        $this->postalCode('422402', '19.7167000', '73.6333000');
+
+        $fixture = $this->fixture(shopPincode: '422009');
+        $nearShop = $this->shop($fixture['merchant'], $fixture['root'], 'No Pin Near Shop', pincode: '422009');
+        $farShop = $this->shop($fixture['merchant'], $fixture['root'], 'No Pin Far Shop', pincode: '422402');
+        $nearProduct = $this->product([...$fixture, 'shop' => $nearShop], 'No Pin Later Near Product', overrides: ['sort_order' => 2]);
+        $farProduct = $this->product([...$fixture, 'shop' => $farShop], 'No Pin Earlier Far Product', overrides: ['sort_order' => 1]);
+
+        $this->variant($nearProduct);
+        $this->variant($farProduct);
+
+        $this->flushSession();
+
+        $this->get(route('storefront.category.child.show', [$fixture['root']->slug, $fixture['category']->slug]))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'No Pin Earlier Far Product',
+                'No Pin Later Near Product',
+            ]);
+    }
+
+    public function test_changing_selected_pin_changes_category_product_ordering(): void
+    {
+        $this->postalCode('422009', '19.9975000', '73.7898000');
+        $this->postalCode('422402', '19.7167000', '73.6333000');
+
+        $fixture = $this->fixture(shopPincode: '422009');
+        $nashikShop = $this->shop($fixture['merchant'], $fixture['root'], 'Nashik Shop', pincode: '422009');
+        $ghotiShop = $this->shop($fixture['merchant'], $fixture['root'], 'Ghoti Shop', pincode: '422402');
+        $nashikProduct = $this->product([...$fixture, 'shop' => $nashikShop], 'Change Pin Nashik Product');
+        $ghotiProduct = $this->product([...$fixture, 'shop' => $ghotiShop], 'Change Pin Ghoti Product');
+
+        $this->variant($nashikProduct);
+        $this->variant($ghotiProduct);
+
+        $this->withSession([CustomerLocationService::SESSION_KEY => '422009'])
+            ->get(route('storefront.category.child.show', [$fixture['root']->slug, $fixture['category']->slug]))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'Change Pin Nashik Product',
+                'Change Pin Ghoti Product',
+            ]);
+
+        $this->flushSession();
+
+        $this->withSession([CustomerLocationService::SESSION_KEY => '422402'])
+            ->get(route('storefront.category.child.show', [$fixture['root']->slug, $fixture['category']->slug]))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'Change Pin Ghoti Product',
+                'Change Pin Nashik Product',
+            ]);
+    }
+
+    public function test_category_pagination_happens_after_location_ordering(): void
+    {
+        $this->postalCode('422009', '19.9975000', '73.7898000');
+        $this->postalCode('422402', '19.7167000', '73.6333000');
+
+        $fixture = $this->fixture(shopPincode: '422402');
+        $nearShop = $this->shop($fixture['merchant'], $fixture['root'], 'Paged Near Shop', pincode: '422009');
+        $farShop = $this->shop($fixture['merchant'], $fixture['root'], 'Paged Far Shop', pincode: '422402');
+        $nearProduct = $this->product([...$fixture, 'shop' => $nearShop], 'Paged Location Near Product', overrides: ['created_at' => now()->subDays(10)]);
+        $this->variant($nearProduct);
+
+        foreach (range(1, 12) as $index) {
+            $farProduct = $this->product([...$fixture, 'shop' => $farShop], 'Paged Location Far Product '.$index, overrides: ['created_at' => now()->subMinutes($index)]);
+            $this->variant($farProduct);
+        }
+
+        $this->withSession([CustomerLocationService::SESSION_KEY => '422009'])
+            ->get(route('storefront.category.child.show', [$fixture['root']->slug, $fixture['category']->slug]))
+            ->assertOk()
+            ->assertSee('Paged Location Near Product')
+            ->assertDontSee('Paged Location Far Product 12');
+
+        $this->withSession([CustomerLocationService::SESSION_KEY => '422009'])
+            ->get(route('storefront.category.child.show', [$fixture['root']->slug, $fixture['category']->slug, 'page' => 2]))
+            ->assertOk()
+            ->assertDontSee('Paged Location Near Product')
+            ->assertSee('Paged Location Far Product 12');
+    }
+
     /**
      * @return array{merchant: MerchantProfile, shop: Shop, root: ProductCategory, category: ProductCategory}
      */
-    private function fixture(): array
+    private function fixture(?string $shopPincode = null): array
     {
         $merchant = $this->merchant('Listing Merchant');
         $root = ProductCategory::query()->create([
@@ -311,7 +631,7 @@ class StorefrontProductListingTest extends TestCase
             'slug' => 'listing-leaf-'.Str::random(8),
             'status' => 'active',
         ]);
-        $shop = $this->shop($merchant, $root);
+        $shop = $this->shop($merchant, $root, pincode: $shopPincode);
 
         return compact('merchant', 'shop', 'root', 'category');
     }
@@ -335,7 +655,7 @@ class StorefrontProductListingTest extends TestCase
         ]);
     }
 
-    private function shop(MerchantProfile $merchant, ProductCategory $root, string $name = 'Listing Shop', string $status = 'active'): Shop
+    private function shop(MerchantProfile $merchant, ProductCategory $root, string $name = 'Listing Shop', string $status = 'active', ?string $pincode = null): Shop
     {
         return Shop::query()->create([
             'merchant_id' => $merchant->getKey(),
@@ -343,6 +663,7 @@ class StorefrontProductListingTest extends TestCase
             'name' => $name,
             'slug' => Str::slug($name).'-'.Str::random(6),
             'address_line_1' => 'Main Road',
+            'pincode' => $pincode,
             'status' => $status,
         ]);
     }
@@ -433,6 +754,26 @@ class StorefrontProductListingTest extends TestCase
             ['group' => 'currency', 'setting_key' => $key],
             ['setting_value' => $value, 'setting_type' => $type],
         );
+    }
+
+    private function postalCode(string $postalCode, string $latitude, string $longitude): PostalCode
+    {
+        return PostalCode::query()->create([
+            'source_key' => sha1($postalCode.'|listing test h.o|ho|nashik|maharashtra'),
+            'circle_name' => 'Maharashtra Circle',
+            'region_name' => 'Mumbai Region',
+            'division_name' => 'Nashik Division',
+            'office_name' => 'Listing Test H.O',
+            'postal_code' => $postalCode,
+            'office_type' => 'HO',
+            'delivery_status' => 'Delivery',
+            'shipping_enabled' => true,
+            'district' => 'NASHIK',
+            'state' => 'MAHARASHTRA',
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'status' => PostalCode::STATUS_ACTIVE,
+        ]);
     }
 
     private function productCardSection(string $content, string $productName): string

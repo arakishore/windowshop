@@ -30,7 +30,11 @@ class UpdateProductCategoryRequest extends StoreProductCategoryRequest
                 Rule::notIn(array_filter([$categoryId])),
             ],
             'name' => ['required', 'string', 'max:255'],
+            'short_code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'description' => ['nullable', 'string'],
+            'meta_title' => ['nullable', 'string', 'max:255'],
+            'meta_description' => ['nullable', 'string', 'max:500'],
+            'product_disclaimer' => ['nullable', 'string', 'max:1000'],
             'image' => [
                 'nullable',
                 'image',

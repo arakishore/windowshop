@@ -17,6 +17,7 @@ class SystemFoundationSeeder extends Seeder
         $this->call(LocationSeeder::class);
         $this->call(ShopAudienceSeeder::class);
         $this->call(ProductCategorySeeder::class);
+        $this->call(ProductCategorySeoSeeder::class);
         $this->call(BrandSeeder::class);
         $this->call(ProductAttributeSeeder::class);
         $this->call(ProductDescriptionTemplateSeeder::class);
@@ -73,6 +74,14 @@ class SystemFoundationSeeder extends Seeder
                 'sort_order' => 10,
             ],
             [
+                'group_id' => $groupIds['marketplace'],
+                'key' => 'storefront.product_disclaimer.global',
+                'label' => 'Global Product Disclaimer',
+                'value' => 'Product images, prices, availability and details are provided by shops or suppliers and may vary. Please verify key details with the shop before purchase.',
+                'value_type' => 'text',
+                'sort_order' => 20,
+            ],
+            [
                 'group_id' => $groupIds['localization'],
                 'key' => 'default_country_code',
                 'label' => 'Default Country Code',
@@ -123,7 +132,7 @@ class SystemFoundationSeeder extends Seeder
                     'group_id' => $setting['group_id'],
                     'label' => $setting['label'],
                     'value' => $setting['value'],
-                    'value_type' => 'string',
+                    'value_type' => $setting['value_type'] ?? 'string',
                     'is_public' => false,
                     'is_encrypted' => false,
                     'sort_order' => $setting['sort_order'],

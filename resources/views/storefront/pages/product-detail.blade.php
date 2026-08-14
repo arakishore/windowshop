@@ -1,23 +1,56 @@
 @extends('storefront.layouts.app')
 
-@section('title', $product['name'] . ' | WindowShop')
-@section('meta_description', 'View product details, images, store information, and local availability on WindowShop.')
-
 @php
-    $singleImage = fn(string $image): string => asset('assets/storefront/images/product/single/' . $image);
-    $productImage = fn(string $image): string => asset('assets/storefront/images/product/' . $image);
+    $marketplaceName = app(\App\Services\System\SystemSettingService::class)->marketplaceName();
+    $singleImage = fn(string $image): string => $image;
+    $productMetaTitle = $product['meta_title'].' | '.$marketplaceName;
+    $productMetaDescription = rtrim($product['meta_description'], '.').' on '.$marketplaceName.'.';
+    $selectedColor = $product['colors'][0]['name'] ?? '';
+    $selectedSize = $product['sizes'][0]['name'] ?? '';
+    $deliveryCheck = session('delivery_check');
+    $deliveryCheck = is_array($deliveryCheck) && ($deliveryCheck['product_slug'] ?? null) === $product['slug'] ? $deliveryCheck : null;
+    $deliveryCheckError = $errors->getBag('deliveryCheck')->first('postal_code');
+    $shopOfferUrl = $product['store_url'] ?: '#;';
+    $shopOffers = [
+        [
+            'title' => 'Shop Offers',
+            'subtitle' => 'Store deals will appear here',
+            'description' => 'This section is ready for merchant offers, discounts, and local shop promotions.',
+            'button' => 'View Shop',
+            'image' => asset('assets/storefront/images/section/banner-4.jpg'),
+            'url' => $shopOfferUrl,
+        ],
+        [
+            'title' => 'Local Deals',
+            'subtitle' => 'Coming soon from this shop',
+            'description' => 'Show coupon codes, seasonal savings, and in-store offer notes once connected.',
+            'button' => 'View Shop',
+            'image' => asset('assets/storefront/images/section/banner-4.jpg'),
+            'url' => $shopOfferUrl,
+        ],
+    ];
 @endphp
+
+@section('title', $productMetaTitle)
+@section('meta_description', $productMetaDescription)
+
+@push('styles')
+    <link rel="stylesheet" href="{{ asset('assets/storefront/css/drift-basic.min.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/storefront/css/photoswipe.css') }}">
+@endpush
 
 @section('content')
     <section class="section-page-title text-center storefront-page-title">
         <div class="container">
-            <div class="main-page-title">
-                <h1>{{ $product['name'] }}</h1>
+            <div class="main-page-title product-detail-page-title-wrap">
+                <h1 class="product-detail-page-title">{{ $product['name'] }}</h1>
 
                 <div class="breadcrumbs">
                     <a href="{{ route('storefront.home') }}" class="text-caption-01 cl-text-3 link">Home</a>
                     <i class="icon icon-CaretRightThin cl-text-3"></i>
                     <a href="{{ route('storefront.products') }}" class="text-caption-01 cl-text-3 link">Products</a>
+                    <i class="icon icon-CaretRightThin cl-text-3"></i>
+                    <a href="{{ $product['category_url'] }}" class="text-caption-01 cl-text-3 link">{{ $product['category'] }}</a>
                     <i class="icon icon-CaretRightThin cl-text-3"></i>
                     <p class="text-caption-01">{{ $product['name'] }}</p>
                 </div>
@@ -36,7 +69,7 @@
                                     data-spacing="0">
                                     <div class="swiper-wrapper">
                                         @foreach ($product['images'] as $image)
-                                            <div class="swiper-slide" data-color="green" data-size="M">
+                                            <div class="swiper-slide" data-color="{{ $selectedColor }}" data-size="{{ $selectedSize }}">
                                                 <a href="{{ $singleImage($image) }}" target="_blank" class="item"
                                                     data-pswp-width="576px" data-pswp-height="768px">
                                                     <img loading="lazy" width="576" height="768" class="tf-image-zoom"
@@ -71,17 +104,26 @@
                         <div class="tf-zoom-main sticky-top"></div>
                         <div class="tf-product-info-list other-image-zoom">
                             <div class="tf-product-info-heading">
-                                <p class="product-infor-cate text-caption-01 mb-4">{{ $product['category'] }}</p>
-                                <h3 class="product-infor-name mb-12">{{ $product['name'] }}</h3>
+                                <p class="product-infor-cate text-caption-01 mb-4">{{ $product['availability'] }}</p>
+                                <div class="product-heading-row mb-12">
+                                    <h1 class="product-infor-name mb-0">{{ $product['name'] }}</h1>
+                                    <a href="#;" class="box-icon product-wishlist-btn" title="Add to Wishlist" aria-label="Add to Wishlist">
+                                        <span class="icon icon-heart"></span>
+                                    </a>
+                                </div>
 
                                 <div class="product-infor-meta mb-20">
                                     <div class="meta_rate">
-                                        <div class="star-wrap normal d-flex align-items-center">
-                                            @for ($i = 0; $i < 5; $i++)
-                                                <i class="icon icon-Star"></i>
-                                            @endfor
-                                        </div>
-                                        <span class="text-caption-01 cl-text-2">({{ $product['reviews'] }})</span>
+                                        @if ($product['reviews'] !== '0 reviews')
+                                            <div class="star-wrap normal d-flex align-items-center">
+                                                @for ($i = 0; $i < 5; $i++)
+                                                    <i class="icon icon-Star"></i>
+                                                @endfor
+                                            </div>
+                                            <span class="text-caption-01 cl-text-2">({{ $product['reviews'] }})</span>
+                                        @else
+                                            <span class="text-caption-01 cl-text-2">Reviews coming soon</span>
+                                        @endif
                                     </div>
                                     <div class="br-line type-vertical"></div>
                                     <div class="meta_sold">
@@ -98,13 +140,22 @@
                                 <div class="product-infor-price mb-12">
                                     <h4 class="price-on-sale">{{ $product['price'] }}</h4>
                                     <div class="br-line type-vertical"></div>
-                                    <p class="cl-text-3 text-decoration-line-through">{{ $product['old_price'] }}</p>
-                                    <span class="badge-sale text-white fw-semibold text-caption-02">
-                                        {{ $product['discount'] }}
-                                    </span>
+                                    @if ($product['old_price'])
+                                        <p class="cl-text-3 text-decoration-line-through">{{ $product['old_price'] }}</p>
+                                    @endif
+                                    @if ($product['discount'])
+                                        <span class="badge-sale text-white fw-semibold text-caption-02">
+                                            {{ $product['discount'] }}
+                                        </span>
+                                    @endif
                                 </div>
 
-                                <p class="product-infor-desc cl-text-2 mb-12">{{ $product['description'] }}</p>
+                                <div class="product-infor-desc-wrap mb-12" data-product-description>
+                                    <p class="product-infor-desc cl-text-2 mb-0">{{ $product['description'] }}</p>
+                                    <button type="button" class="product-infor-desc-toggle" data-product-description-toggle hidden>
+                                        Read more
+                                    </button>
+                                </div>
 
                                 <div class="product-infor-reality lh-24">
                                     <div class="ic d-flex">
@@ -117,49 +168,52 @@
                             <div class="br-line"></div>
 
                             <div class="tf-product-variant">
-                                <div class="variant-picker-item variant-color">
-                                    <div class="variant-picker-label">
-                                        <div>
-                                            Colors:
-                                            <span class="variant-picker-label-value value-currentColor text-capitalize fw-medium">
-                                                {{ $product['colors'][0]['name'] }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="variant-picker-values">
-                                        @foreach ($product['colors'] as $color)
-                                            <div class="hover-tooltip tooltip-bot color-btn style-image {{ $loop->first ? 'active' : '' }}"
-                                                data-color="{{ $color['color'] }}">
-                                                <div class="img">
-                                                    <img loading="lazy" width="60" height="60"
-                                                        src="{{ $singleImage($color['image']) }}"
-                                                        data-src="{{ $singleImage($color['image']) }}"
-                                                        alt="{{ $color['name'] }}">
-                                                </div>
-                                                <span class="tooltip">{{ $color['name'] }}</span>
+                                @if (! empty($product['colors']))
+                                    <div class="variant-picker-item variant-color">
+                                        <div class="variant-picker-label">
+                                            <div>
+                                                Colors:
+                                                <span class="variant-picker-label-value value-currentColor text-capitalize fw-medium">
+                                                    {{ $selectedColor }}
+                                                </span>
                                             </div>
-                                        @endforeach
-                                    </div>
-                                </div>
-
-                                <div class="variant-picker-item variant-size">
-                                    <div class="variant-picker-label">
-                                        <div>
-                                            Size:
-                                            <span class="variant-picker-label-value value-currentSize text-capitalize fw-medium">M</span>
                                         </div>
-                                        <a href="#findSize" data-bs-toggle="modal"
-                                            class="tf-btn-line-2 style-primary text-caption-01 fw-semibold">
-                                            Size Guide
-                                        </a>
+                                        <div class="variant-picker-values">
+                                            @foreach ($product['colors'] as $color)
+                                                <div class="hover-tooltip tooltip-bot color-btn {{ $loop->first ? 'active' : '' }}"
+                                                    data-color="{{ $color['name'] }}">
+                                                    <span class="swatch-value rounded-circle border"
+                                                        style="display: block; width: 34px; height: 34px; background: {{ $color['hex'] ?: '#f3f4f6' }};"></span>
+                                                    <span class="tooltip">{{ $color['name'] }}</span>
+                                                </div>
+                                            @endforeach
+                                        </div>
                                     </div>
-                                    <div class="variant-picker-values">
-                                        @foreach ($product['sizes'] as $size)
-                                            <span class="size-btn {{ $size === 'M' ? 'active' : '' }}"
-                                                data-size="{{ $size }}">{{ $size }}</span>
-                                        @endforeach
+                                @endif
+
+                                @if (! empty($product['sizes']))
+                                    <div class="variant-picker-item variant-size">
+                                        <div class="variant-picker-label">
+                                            <div>
+                                                Size:
+                                                <span class="variant-picker-label-value value-currentSize text-capitalize fw-medium">{{ $selectedSize }}</span>
+                                            </div>
+                                            @if (! empty($product['size_guide']))
+                                                <a href="#findSize" data-bs-toggle="modal"
+                                                    class="tf-btn-line-2 style-primary text-caption-01 fw-semibold">
+                                                    Size Guide
+                                                </a>
+                                            @endif
+                                        </div>
+                                        <div class="variant-picker-values">
+                                            @foreach ($product['sizes'] as $size)
+                                                <span class="size-btn {{ $loop->first ? 'active' : '' }}"
+                                                    data-size="{{ $size['name'] }}"
+                                                    data-price="{{ $size['raw_price'] }}">{{ $size['name'] }}</span>
+                                            @endforeach
+                                        </div>
                                     </div>
-                                </div>
+                                @endif
 
                                 <div class="tf-product-total-quantity">
                                     <p>Quantity:</p>
@@ -180,23 +234,114 @@
                                             <span class="price-add d-none d-sm-block d-md-none d-lg-block">{{ $product['price'] }}</span>
                                         </a>
                                     </div>
-                                    <a href="#;" class="tf-btn type-xl btn-primary animate-btn w-100">Contact Store</a>
                                 </div>
                             </div>
 
-                            <div class="tf-product-extra-link">
-                                <a href="#;" class="product-extra-icon link">
-                                    <i class="icon icon-storefront"></i>
-                                    {{ $product['store'] }}
-                                </a>
-                                <a href="#;" class="product-extra-icon link">
-                                    <i class="icon icon-Question"></i>
-                                    Ask A Question
-                                </a>
-                                <a href="#;" class="product-extra-icon link">
-                                    <i class="icon icon-ShareNetwork"></i>
-                                    Share
-                                </a>
+                            @if (! empty($product['other_attributes']))
+                                <div class="br-line"></div>
+
+                                <div class="box-desc product-specification">
+                                    <h5 class="desc_title">Specification</h5>
+                                    <div class="product_d_table">
+                                        <table>
+                                            <tbody>
+                                                @foreach ($product['other_attributes'] as $attribute)
+                                                    <tr>
+                                                        <td>{{ $attribute['label'] }}</td>
+                                                        <td>{{ $attribute['value'] }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            @endif
+
+                            @if (! empty($product['disclaimers']))
+                                 
+
+                                <div class="box-desc product-disclaimer">
+                                    <h5 class="desc_title">Product Disclaimer</h5>
+                                    <div class="product-disclaimer-list">
+                                        @foreach ($product['disclaimers'] as $disclaimer)
+                                            <p>{{ $disclaimer }}</p>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+
+                            <div class="sold-by-card">
+                                <h5 class="sold-by-card__title">Sold By</h5>
+                                <div class="sold-by-card__content">
+                                    <div class="sold-by-card__icon">
+                                        <i class="icon icon-storefront"></i>
+                                    </div>
+                                    <div class="sold-by-card__body">
+                                        <p class="sold-by-card__name">{{ $product['store'] }}</p>
+                                        @if ($product['store_address'])
+                                            <p class="sold-by-card__meta">{{ $product['store_address'] }}</p>
+                                        @endif
+                                        <p class="sold-by-card__meta">Local Availability: {{ $product['availability'] }}</p>
+                                    </div>
+                                    @if ($product['store_url'])
+                                        <a href="{{ $product['store_url'] }}" class="tf-btn btn-line sold-by-card__button">View Shop</a>
+                                    @endif
+                                </div>
+                                <div class="sold-by-card__actions">
+                                    @if ($product['store_whatsapp_url'])
+                                        <a href="{{ $product['store_whatsapp_url'] }}" class="link sold-by-card__whatsapp" target="_blank" rel="noopener noreferrer" aria-label="Chat with {{ $product['store'] }} on WhatsApp">
+                                            <svg aria-hidden="true" class="sold-by-card__whatsapp-icon" viewBox="0 0 32 32" focusable="false">
+                                                <path d="M19.11 17.54c-.29-.14-1.71-.84-1.98-.94-.27-.1-.46-.14-.65.14-.19.29-.75.94-.92 1.13-.17.19-.34.21-.63.07-.29-.14-1.22-.45-2.33-1.44-.86-.77-1.44-1.72-1.61-2.01-.17-.29-.02-.44.13-.59.13-.13.29-.34.43-.51.14-.17.19-.29.29-.48.1-.19.05-.36-.02-.51-.07-.14-.65-1.57-.89-2.15-.23-.56-.47-.48-.65-.49h-.56c-.19 0-.51.07-.77.36-.27.29-1.01.99-1.01 2.41s1.04 2.8 1.18 2.99c.14.19 2.04 3.12 4.95 4.37.69.3 1.23.48 1.65.61.69.22 1.32.19 1.82.12.56-.08 1.71-.7 1.95-1.37.24-.67.24-1.25.17-1.37-.07-.12-.26-.19-.55-.34ZM16.03 4.8c-6.17 0-11.18 5.01-11.18 11.18 0 2.11.59 4.08 1.61 5.76L4.75 28l6.4-1.68a11.1 11.1 0 0 0 4.88 1.13c6.17 0 11.18-5.01 11.18-11.18S22.2 4.8 16.03 4.8Zm0 20.74c-1.61 0-3.18-.41-4.58-1.18l-.33-.18-3.8 1 1.01-3.7-.22-.38a9.48 9.48 0 0 1-1.36-4.89c0-5.25 4.03-9.52 9.28-9.52s9.28 4.27 9.28 9.52-4.03 9.33-9.28 9.33Z"></path>
+                                            </svg>
+                                            WhatsApp
+                                        </a>
+                                    @endif
+                                    <a href="#;" class="link">
+                                        <i class="icon icon-Question"></i>
+                                        Ask A Question
+                                    </a>
+                                    <a href="#;" class="link">
+                                        <i class="icon icon-ShareNetwork"></i>
+                                        Share
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="br-line"></div>
+
+                            <div class="product-delivery-check">
+                                <div class="product-delivery-check__heading">
+                                    <label for="product-delivery-postal-code" class="product-delivery-check__label">
+                                        Check Delivery Availability
+                                    </label>
+                                    @if ($currentPostalCode)
+                                        <span class="product-delivery-check__current">Current PIN: {{ $currentPostalCode }}</span>
+                                    @endif
+                                </div>
+                                <form method="POST" action="{{ $product['delivery_check_url'] }}" class="product-delivery-check__form">
+                                    @csrf
+                                    <input
+                                        id="product-delivery-postal-code"
+                                        type="text"
+                                        name="postal_code"
+                                        value="{{ old('postal_code', $currentPostalCode ?? '') }}"
+                                        inputmode="numeric"
+                                        pattern="[0-9]{6}"
+                                        maxlength="6"
+                                        autocomplete="postal-code"
+                                        placeholder="Enter Delivery Pincode"
+                                        class="product-delivery-check__input {{ $deliveryCheckError ? 'is-invalid' : '' }}">
+                                    <button type="submit" class="product-delivery-check__button">Check</button>
+                                </form>
+                                @if ($deliveryCheckError)
+                                    <p class="product-delivery-check__message product-delivery-check__message--error">
+                                        {{ $deliveryCheckError }}
+                                    </p>
+                                @elseif (is_array($deliveryCheck))
+                                    <p class="product-delivery-check__message product-delivery-check__message--{{ $deliveryCheck['status'] === 'available' ? 'success' : 'error' }}">
+                                        {{ $deliveryCheck['message'] }}
+                                    </p>
+                                @endif
                             </div>
 
                             <div class="br-line"></div>
@@ -206,9 +351,15 @@
                                     <i class="icon icon-Timer"></i>
                                     <p>
                                         Local Availability:
-                                        <span class="fw-semibold">Ready at nearby store</span>
+                                        <span class="fw-semibold">{{ $product['availability'] }}</span>
                                     </p>
                                 </div>
+                                @if ($product['availability_note'])
+                                    <div class="product-delivery return">
+                                        <i class="icon icon-Info"></i>
+                                        <p>{{ $product['availability_note'] }}</p>
+                                    </div>
+                                @endif
                                 <div class="product-delivery return">
                                     <i class="icon icon-ArrowClockwise"></i>
                                     <p>
@@ -218,18 +369,6 @@
                                 </div>
                             </div>
 
-                            <div class="tf-product-trust-seal">
-                                <p class="h6 text-seal">Payment Options:</p>
-                                <ul class="list-card">
-                                    @foreach (['visa.svg', 'master-card.svg', 'amex.svg', 'paypal.svg', 'water.svg', 'discover.svg'] as $card)
-                                        <li class="card-item">
-                                            <img width="50" height="32"
-                                                src="{{ asset('assets/storefront/images/payment/' . $card) }}"
-                                                alt="Payment">
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -255,16 +394,18 @@
                 </div>
                 <div class="tf-sticky-atc-infos">
                     <form>
-                        <div class="tf-sticky-atc-variant-price">
-                            <p class="title">Size:</p>
-                            <div class="tf-select style-2">
-                                <select>
-                                    @foreach ($product['sizes'] as $size)
-                                        <option {{ $size === 'M' ? 'selected' : '' }}>{{ $size }}</option>
-                                    @endforeach
-                                </select>
+                        @if (! empty($product['sizes']))
+                            <div class="tf-sticky-atc-variant-price">
+                                <p class="title">Size:</p>
+                                <div class="tf-select style-2">
+                                    <select>
+                                        @foreach ($product['sizes'] as $size)
+                                            <option value="{{ $size['name'] }}" data-price="{{ $size['raw_price'] }}" {{ $loop->first ? 'selected' : '' }}>{{ $size['name'] }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
                             </div>
-                        </div>
+                        @endif
                         <div class="tf-product-info-quantity">
                             <p class="title">Quantity:</p>
                             <div class="wg-quantity style-2">
@@ -278,7 +419,7 @@
                             </div>
                         </div>
                         <a href="#shoppingCart" data-bs-toggle="offcanvas" class="tf-btn animate-btn btn-add-to-cart">
-                            Add To Cart - {{ $product['price'] }}
+                            Add To Cart - <span class="sticky-price-add">{{ $product['price'] }}</span>
                         </a>
                     </form>
                 </div>
@@ -286,7 +427,61 @@
         </div>
     </div>
 
-    <section class="section-product-description flat-spacing">
+    @if (! empty($product['size_guide']))
+        <div class="modal modalCentered fade modal-find_size" id="findSize">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-heading d-flex align-items-center justify-content-between">
+                        <h4 class="title-pop">{{ $product['size_guide']['title'] }}</h4>
+                        <span class="cs-pointer d-flex link" data-bs-dismiss="modal">
+                            <i class="icon-X2 fs-24"></i>
+                        </span>
+                    </div>
+                    <div class="modal-main">
+                        <div class="tf-rte">
+                            <div class="tf-table-res-df mb-0">
+                                <p class="h6 fw-medium mb-16 cl-text-main">{{ $product['size_guide']['subtitle'] }}</p>
+                                <img loading="lazy" class="img-fluid w-100"
+                                    src="{{ $product['size_guide']['image'] }}"
+                                    alt="{{ $product['size_guide']['title'] }}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <section class="product-shop-offers flat-spacing pt-0 pb-0">
+        <div class="container">
+            <div class="product-shop-offers__heading">
+                <h5>Offers from {{ $product['store'] }}</h5>
+                <p>Shop-level offers will appear here once merchant promotions are connected.</p>
+            </div>
+            <div class="tf-grid-layout xs-col-1 sm-col-2 md-col-2 flat-spacing-2 pt-0">
+                @foreach ($shopOffers as $offer)
+                    <div class="banner-image-text type-abs style-1 product-shop-offer">
+                        <a href="{{ $offer['url'] }}" class="bn-image img-style">
+                            <img loading="lazy" width="690" height="388" src="{{ $offer['image'] }}" alt="{{ $offer['title'] }}">
+                        </a>
+                        <div class="bn-content">
+                            <p class="product-shop-offer__eyebrow text-white">{{ $offer['subtitle'] }}</p>
+                            <a href="{{ $offer['url'] }}" class="title h4 fw-medium text-white link-dark">
+                                {{ $offer['title'] }}
+                            </a>
+                            <p class="desc text-white text-body-1">
+                                {{ $offer['description'] }}
+                            </p>
+                            <a href="{{ $offer['url'] }}" class="btn-action tf-btn btn-white">
+                                {{ $offer['button'] }}
+                            </a>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    </section>
+    <section class="section-product-description flat-spacing pt-0">
         <div class="container">
             <div class="faq-descriptions" id="prdDes">
                 <div class="accordion-item_v2 style-2">
@@ -302,22 +497,17 @@
                                 <h5 class="desc_title">Product Details</h5>
                                 <div class="desc_info">
                                     <p class="cl-text-2">
-                                        This page is ready for a merchant catalogue product. Images, price, variants,
-                                        reviews, and store actions are static placeholders right now.
-                                    </p>
-                                    <p class="cl-text-2">
-                                        The layout keeps the original gallery and product controls from the template,
-                                        while the content is adjusted for local shop browsing.
+                                        {{ $product['description'] }}
                                     </p>
                                 </div>
                             </div>
                             <div class="box-desc">
                                 <h5 class="desc_title">Highlights</h5>
                                 <ul class="list">
-                                    <li class="cl-text-2">- Clean product photo gallery</li>
-                                    <li class="cl-text-2">- Local store name and availability section</li>
-                                    <li class="cl-text-2">- Variant and quantity controls ready for live data</li>
-                                    <li class="cl-text-2">- Contact-store action for WindowShop marketplace flow</li>
+                                    <li class="cl-text-2">- Sold by {{ $product['store'] }}</li>
+                                    <li class="cl-text-2">- Category: {{ $product['category'] }}</li>
+                                    <li class="cl-text-2">- SKU: {{ $product['sku'] }}</li>
+                                    <li class="cl-text-2">- Availability: {{ $product['availability'] }}</li>
                                 </ul>
                             </div>
                         </div>
@@ -340,7 +530,7 @@
                                             <i class="icon icon-Star fs-24"></i>
                                         @endfor
                                     </div>
-                                    <p class="rate-number">({{ $product['reviews'] }})</p>
+                                    <p class="rate-number">Sample review layout</p>
                                 </div>
                                 <div class="rating-progress-list">
                                     @foreach ([60, 24, 10, 4, 2] as $index => $percent)
@@ -365,12 +555,12 @@
                                     </div>
                                     <div class="info_author">
                                         <p class="h6 author__name">Useful product details before visiting</p>
-                                        <p class="author_date text-caption-01 cl-text-3">1 day ago</p>
+                                        <p class="author_date text-caption-01 cl-text-3">Sample placeholder</p>
                                     </div>
                                 </div>
                                 <p class="comment_text text-body-1">
-                                    The photos and store details made it easier to decide whether this was worth
-                                    checking in person.
+                                    This review area is a storefront placeholder so we can finalise the UI before real
+                                    customer reviews are connected.
                                 </p>
                             </div>
                         </div>
@@ -454,8 +644,7 @@
                                 <h5 class="desc_title">{{ $product['store'] }}</h5>
                                 <div class="desc_info">
                                     <p class="cl-text-2">
-                                        Local shop information can show address, business hours, website URL, and
-                                        contact options when the merchant data is connected.
+                                        {{ $product['store_address'] ?: 'Store address and contact details will appear here when available.' }}
                                     </p>
                                 </div>
                             </div>
@@ -483,15 +672,15 @@
             </div>
 
             <div class="tf-grid-layout tf-col-4">
-                @foreach ($relatedProducts as $relatedProduct)
+                @forelse ($relatedProducts as $relatedProduct)
                     <div class="card-product grid">
                         <div class="card-product_wrapper">
-                            <a href="{{ route('storefront.product.detail') }}" class="product-img">
+                            <a href="{{ $relatedProduct['url'] }}" class="product-img">
                                 <img class="img-product" loading="lazy" width="330" height="440"
-                                    src="{{ $productImage($relatedProduct['image']) }}"
+                                    src="{{ $relatedProduct['image'] }}"
                                     alt="{{ $relatedProduct['name'] }}">
                                 <img class="img-hover" loading="lazy" width="330" height="440"
-                                    src="{{ $productImage($relatedProduct['hover_image']) }}"
+                                    src="{{ $relatedProduct['hover_image'] }}"
                                     alt="{{ $relatedProduct['name'] }}">
                             </a>
                             <ul class="product-action_list">
@@ -510,7 +699,7 @@
                             </ul>
                             @if ($relatedProduct['badge'])
                                 <ul class="product-badge_list">
-                                    <li class="product-badge_item text-caption-01 {{ $relatedProduct['badge'] === 'NEW' ? 'new' : 'sale' }}">
+                                    <li class="product-badge_item text-caption-01 {{ $relatedProduct['badge_class'] }}">
                                         {{ $relatedProduct['badge'] }}
                                     </li>
                                 </ul>
@@ -522,22 +711,21 @@
                             </div>
                         </div>
                         <div class="card-product_info">
-                            <a href="{{ route('storefront.product.detail') }}"
+                            <a href="{{ $relatedProduct['url'] }}"
                                 class="name-product lh-24 fw-medium link-underline-text">
                                 {{ $relatedProduct['name'] }}
                             </a>
-                            <div class="star-wrap d-flex align-items-center">
-                                @for ($i = 0; $i < 5; $i++)
-                                    <i class="icon icon-Star"></i>
-                                @endfor
-                            </div>
                             <div class="price-wrap">
                                 <span class="price-new text-primary fw-semibold">{{ $relatedProduct['price'] }}</span>
-                                <span class="price-old text-caption-01 cl-text-3">{{ $relatedProduct['old_price'] }}</span>
+                                @if ($relatedProduct['old_price'])
+                                    <span class="price-old text-caption-01 cl-text-3">{{ $relatedProduct['old_price'] }}</span>
+                                @endif
                             </div>
                         </div>
                     </div>
-                @endforeach
+                @empty
+                    <p class="text-center cl-text-2 mb-0">No related products found.</p>
+                @endforelse
             </div>
         </div>
     </section>
@@ -545,7 +733,32 @@
 
 @push('scripts')
     <script src="{{ asset('assets/storefront/js/plugin/drift.min.js') }}"></script>
-    <script src="{{ asset('assets/storefront/js/zoom.js') }}"></script>
     <script src="{{ asset('assets/storefront/js/plugin/photoswipe-lightbox.umd.min.js') }}"></script>
     <script src="{{ asset('assets/storefront/js/plugin/photoswipe.umd.min.js') }}"></script>
+    <script src="{{ asset('assets/storefront/js/zoom.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('[data-product-description]').forEach((wrap) => {
+                const text = wrap.querySelector('.product-infor-desc');
+                const toggle = wrap.querySelector('[data-product-description-toggle]');
+
+                if (!text || !toggle) {
+                    return;
+                }
+
+                wrap.classList.add('is-collapsed');
+
+                if (text.scrollHeight <= text.clientHeight + 2) {
+                    wrap.classList.remove('is-collapsed');
+                    return;
+                }
+
+                toggle.hidden = false;
+                toggle.addEventListener('click', () => {
+                    const collapsed = wrap.classList.toggle('is-collapsed');
+                    toggle.textContent = collapsed ? 'Read more' : 'Read less';
+                });
+            });
+        });
+    </script>
 @endpush

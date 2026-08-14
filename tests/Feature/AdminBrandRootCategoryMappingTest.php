@@ -41,6 +41,7 @@ class AdminBrandRootCategoryMappingTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.master.brands.store'), [
                 'name' => 'Mapped Brand',
+                'short_code' => 'mb',
                 'description' => null,
                 'website_url' => null,
                 'sort_order' => 1,
@@ -52,6 +53,8 @@ class AdminBrandRootCategoryMappingTest extends TestCase
 
         $brand = Brand::query()->where('name', 'Mapped Brand')->firstOrFail();
         $apparelOnlyBrand = $this->createBrand('Apparel Only Brand', [$apparel]);
+
+        $this->assertSame('MB', $brand->short_code);
 
         $this->assertSame(
             [$apparel->getKey(), $beauty->getKey()],
@@ -83,6 +86,7 @@ class AdminBrandRootCategoryMappingTest extends TestCase
         $this->actingAs($admin)
             ->put(route('admin.master.brands.update', $brand), [
                 'name' => 'Mapped Brand Updated',
+                'short_code' => 'mbu',
                 'description' => null,
                 'website_url' => null,
                 'sort_order' => 2,
@@ -95,11 +99,13 @@ class AdminBrandRootCategoryMappingTest extends TestCase
             [$beauty->getKey()],
             $brand->fresh()->rootProductCategories()->pluck('product_categories.id')->all(),
         );
+        $this->assertSame('MBU', $brand->fresh()->short_code);
 
         $this->actingAs($admin)
             ->from(route('admin.master.brands.edit', $brand))
             ->put(route('admin.master.brands.update', $brand), [
                 'name' => 'Mapped Brand Updated',
+                'short_code' => 'mbu',
                 'description' => null,
                 'website_url' => null,
                 'sort_order' => 2,
@@ -108,6 +114,24 @@ class AdminBrandRootCategoryMappingTest extends TestCase
             ])
             ->assertRedirect(route('admin.master.brands.edit', $brand))
             ->assertSessionHasErrors('root_product_category_ids');
+    }
+
+    public function test_brand_short_code_must_be_alphanumeric(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.brands.create'))
+            ->post(route('admin.master.brands.store'), [
+                'name' => 'Invalid Code Brand',
+                'short_code' => 'bad-code',
+                'description' => null,
+                'website_url' => null,
+                'sort_order' => 1,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.brands.create'))
+            ->assertSessionHasErrors('short_code');
     }
 
     public function test_product_form_filters_and_validates_brands_by_shop_type(): void
@@ -284,6 +308,7 @@ class AdminBrandRootCategoryMappingTest extends TestCase
     {
         $brand = Brand::query()->create([
             'name' => $name,
+            'short_code' => null,
             'slug' => Str::slug($name).'-'.Str::random(6),
             'status' => 'active',
             'sort_order' => 1,

@@ -735,6 +735,10 @@ class ProductAttributeSeeder extends Seeder
                 ->value('id');
 
             foreach ($group['values'] as $valueIndex => $name) {
+                $swatchHex = $group['code'] === 'color'
+                    ? $this->colorSwatchHex(Str::slug($name))
+                    : null;
+
                 DB::table('product_attribute_group_values')->updateOrInsert(
                     [
                         'product_attribute_group_id' => $groupId,
@@ -742,6 +746,7 @@ class ProductAttributeSeeder extends Seeder
                     ],
                     fn (bool $exists) => [
                         'name' => $name,
+                        'short_code' => $this->shortCodeForValue($group['code'], $name),
                         'description' => null,
                         'status' => 'active',
                         'sort_order' => $valueIndex + 1,
@@ -750,12 +755,532 @@ class ProductAttributeSeeder extends Seeder
                             'uuid' => (string) Str::uuid(),
                             'created_at' => $now,
                         ]),
+                        ...(! $exists && $swatchHex !== null ? [
+                            'swatch_hex' => $swatchHex,
+                        ] : []),
                     ],
                 );
             }
         }
 
+        $this->seedColorSwatches($now);
         $this->seedCategoryMappings($now);
+    }
+
+    private function seedColorSwatches(mixed $now): void
+    {
+        $colorGroupId = DB::table('product_attribute_groups')
+            ->where('code', 'color')
+            ->value('id');
+
+        if (! $colorGroupId) {
+            return;
+        }
+
+        foreach ($this->colorSwatchMap() as $code => $hex) {
+            DB::table('product_attribute_group_values')
+                ->where('product_attribute_group_id', $colorGroupId)
+                ->where('code', $code)
+                ->whereNull('swatch_hex')
+                ->update([
+                    'swatch_hex' => $hex,
+                    'updated_at' => $now,
+                ]);
+        }
+    }
+
+    private function colorSwatchHex(string $code): ?string
+    {
+        return $this->colorSwatchMap()[$code] ?? null;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function colorSwatchMap(): array
+    {
+        return [
+            'black' => '#111111',
+            'white' => '#ffffff',
+            'red' => '#dc2626',
+            'blue' => '#2563eb',
+            'green' => '#16a34a',
+            'yellow' => '#facc15',
+            'pink' => '#ec4899',
+            'purple' => '#9333ea',
+            'orange' => '#f97316',
+            'brown' => '#92400e',
+            'grey' => '#6b7280',
+            'beige' => '#d6b98c',
+            'navy' => '#1e3a8a',
+            'maroon' => '#7f1d1d',
+            'gold' => '#d4af37',
+            'silver' => '#c0c0c0',
+        ];
+    }
+
+    private function shortCodeForValue(string $groupCode, string $name): string
+    {
+        $maps = [
+            'size' => [
+                'XS' => 'XS',
+                'S' => 'S',
+                'M' => 'M',
+                'L' => 'L',
+                'XL' => 'XL',
+                'XXL' => 'XXL',
+                '3XL' => '3XL',
+                '4XL' => '4XL',
+                '5XL' => '5XL',
+                '6XL' => '6XL',
+                'Free Size' => 'FS',
+                'Shoe Size 5' => '5',
+                'Shoe Size 6' => '6',
+                'Shoe Size 7' => '7',
+                'Shoe Size 8' => '8',
+                'Shoe Size 9' => '9',
+                'Shoe Size 10' => '10',
+                'Shoe Size 11' => '11',
+                'Shoe Size 12' => '12',
+            ],
+            'color' => [
+                'Black' => 'BLK',
+                'White' => 'WHT',
+                'Red' => 'RED',
+                'Blue' => 'BLU',
+                'Green' => 'GRN',
+                'Yellow' => 'YLW',
+                'Pink' => 'PNK',
+                'Purple' => 'PRP',
+                'Orange' => 'ORG',
+                'Brown' => 'BRN',
+                'Grey' => 'GRY',
+                'Beige' => 'BGE',
+                'Navy' => 'NVY',
+                'Maroon' => 'MRN',
+                'Gold' => 'GLD',
+                'Silver' => 'SLV',
+                'Multicolor' => 'MULTI',
+            ],
+            'material' => [
+                'Cotton' => 'COT',
+                'Polyester' => 'POL',
+                'Rayon' => 'RAY',
+                'Silk' => 'SLK',
+                'Wool' => 'WOL',
+                'Linen' => 'LIN',
+                'Denim' => 'DNM',
+                'Leather' => 'LTR',
+                'Faux Leather' => 'FLTR',
+                'Nylon' => 'NYL',
+                'Viscose' => 'VIS',
+                'Acrylic' => 'ACR',
+                'Spandex' => 'SPX',
+                'Blended' => 'BLD',
+            ],
+            'fit' => [
+                'Regular Fit' => 'REG',
+                'Slim Fit' => 'SLIM',
+                'Relaxed Fit' => 'RLX',
+                'Loose Fit' => 'LOOS',
+                'Oversized Fit' => 'OVR',
+                'Tailored Fit' => 'TAIL',
+                'Straight Fit' => 'STR',
+                'Skinny Fit' => 'SKN',
+            ],
+            'sleeve' => [
+                'Sleeveless' => 'SLVLS',
+                'Short Sleeve' => 'SS',
+                'Half Sleeve' => 'HS',
+                'Three Quarter Sleeve' => 'TQS',
+                'Full Sleeve' => 'FS',
+                'Cap Sleeve' => 'CS',
+                'Bell Sleeve' => 'BS',
+                'Puff Sleeve' => 'PS',
+                'Raglan Sleeve' => 'RS',
+            ],
+            'neck' => [
+                'Round Neck' => 'RN',
+                'V Neck' => 'VN',
+                'Collared Neck' => 'CN',
+                'Mandarin Collar' => 'MC',
+                'Boat Neck' => 'BN',
+                'Square Neck' => 'SQN',
+                'Halter Neck' => 'HN',
+                'Scoop Neck' => 'SCN',
+                'High Neck' => 'HGN',
+                'Sweetheart Neck' => 'SHN',
+            ],
+            'pattern' => [
+                'Solid' => 'SOL',
+                'Printed' => 'PRT',
+                'Striped' => 'STRP',
+                'Checked' => 'CHK',
+                'Floral' => 'FLR',
+                'Geometric' => 'GEO',
+                'Embroidered' => 'EMB',
+                'Textured' => 'TEX',
+                'Polka Dot' => 'PD',
+                'Paisley' => 'PSL',
+                'Abstract' => 'ABS',
+            ],
+            'occasion' => [
+                'Casual' => 'CAS',
+                'Formal' => 'FOR',
+                'Party' => 'PTY',
+                'Festive' => 'FES',
+                'Wedding' => 'WED',
+                'Engagement' => 'ENG',
+                'Reception' => 'REC',
+                'Sangeet' => 'SAN',
+                'Haldi' => 'HAL',
+                'Mehendi' => 'MEH',
+                'Work' => 'WRK',
+                'Sports' => 'SPT',
+                'Travel' => 'TRV',
+                'Daily Wear' => 'DW',
+                'Ethnic' => 'ETH',
+                'Puja' => 'PUJ',
+                'Gifting' => 'GFT',
+            ],
+            'festival' => [
+                'Diwali' => 'DIW',
+                'Navratri' => 'NAV',
+                'Dussehra' => 'DUS',
+                'Raksha Bandhan' => 'RB',
+                'Ganesh Chaturthi' => 'GC',
+                'Eid' => 'EID',
+                'Christmas' => 'XMAS',
+                'New Year' => 'NY',
+                'Holi' => 'HOL',
+                'Makar Sankranti' => 'MS',
+                'Pongal' => 'PON',
+                'Onam' => 'ONM',
+                'Karwa Chauth' => 'KC',
+                'Bhai Dooj' => 'BD',
+                'Valentine Day' => 'VD',
+            ],
+            'season' => [
+                'Summer' => 'SUM',
+                'Winter' => 'WIN',
+                'Monsoon' => 'MON',
+                'Spring' => 'SPR',
+                'Autumn' => 'AUT',
+                'All Season' => 'ALL',
+            ],
+            'style' => [
+                'Traditional' => 'TRAD',
+                'Modern' => 'MOD',
+                'Contemporary' => 'CONT',
+                'Minimal' => 'MIN',
+                'Classic' => 'CLS',
+                'Bohemian' => 'BOH',
+                'Indo Western' => 'IW',
+                'Streetwear' => 'STW',
+                'Office Wear' => 'OW',
+                'Designer' => 'DSN',
+            ],
+            'length' => [
+                'Crop' => 'CRP',
+                'Waist Length' => 'WL',
+                'Hip Length' => 'HL',
+                'Knee Length' => 'KL',
+                'Calf Length' => 'CL',
+                'Ankle Length' => 'AL',
+                'Floor Length' => 'FL',
+                'Regular Length' => 'RL',
+                'Longline' => 'LL',
+            ],
+            'waist_rise' => [
+                'Low Rise' => 'LR',
+                'Mid Rise' => 'MR',
+                'High Rise' => 'HR',
+                'Ultra High Rise' => 'UHR',
+            ],
+            'closure' => [
+                'Button' => 'BTN',
+                'Zip' => 'ZIP',
+                'Hook' => 'HOK',
+                'Drawstring' => 'DRW',
+                'Elastic' => 'ELS',
+                'Slip On' => 'SO',
+                'Tie Up' => 'TU',
+                'Velcro' => 'VLC',
+                'No Closure' => 'NC',
+            ],
+            'care' => [
+                'Machine Wash' => 'MW',
+                'Hand Wash' => 'HW',
+                'Dry Clean' => 'DC',
+                'Gentle Wash' => 'GW',
+                'Do Not Bleach' => 'DNB',
+                'Warm Iron' => 'WI',
+                'Do Not Iron' => 'DNI',
+            ],
+            'country_of_origin' => [
+                'India' => 'IN',
+                'Imported' => 'IMP',
+                'China' => 'CN',
+                'Bangladesh' => 'BD',
+                'Vietnam' => 'VN',
+                'Turkey' => 'TR',
+            ],
+            'brand_model' => [
+                'Standard' => 'STD',
+                'Pro' => 'PRO',
+                'Plus' => 'PLUS',
+                'Max' => 'MAX',
+                'Mini' => 'MINI',
+                'Lite' => 'LITE',
+                'Classic' => 'CLS',
+                'Premium' => 'PREM',
+            ],
+            'connectivity' => [
+                'Bluetooth' => 'BT',
+                'Wi-Fi' => 'WIFI',
+                'USB' => 'USB',
+                'Type-C' => 'TC',
+                'Lightning' => 'LTG',
+                'AUX' => 'AUX',
+                '4G' => '4G',
+                '5G' => '5G',
+                'NFC' => 'NFC',
+            ],
+            'pack_size' => [
+                'Single' => 'SGL',
+                'Pack of 2' => 'P2',
+                'Pack of 3' => 'P3',
+                'Pack of 4' => 'P4',
+                'Pack of 5' => 'P5',
+                'Pack of 6' => 'P6',
+                'Pack of 10' => 'P10',
+                'Family Pack' => 'FP',
+                'Combo Pack' => 'CP',
+            ],
+            'net_quantity' => [
+                '50 g' => '50G',
+                '100 g' => '100G',
+                '200 g' => '200G',
+                '250 g' => '250G',
+                '500 g' => '500G',
+                '1 kg' => '1KG',
+                '2 kg' => '2KG',
+                '100 ml' => '100ML',
+                '250 ml' => '250ML',
+                '500 ml' => '500ML',
+                '1 L' => '1L',
+                '2 L' => '2L',
+            ],
+            'flavor' => [
+                'Original' => 'ORG',
+                'Masala' => 'MSL',
+                'Spicy' => 'SPC',
+                'Sweet' => 'SWT',
+                'Salted' => 'SLT',
+                'Chocolate' => 'CHO',
+                'Vanilla' => 'VAN',
+                'Strawberry' => 'STRB',
+                'Lemon' => 'LEM',
+                'Mint' => 'MNT',
+                'Rose' => 'ROS',
+            ],
+            'shelf_life' => [
+                '7 Days' => '7D',
+                '15 Days' => '15D',
+                '1 Month' => '1M',
+                '3 Months' => '3M',
+                '6 Months' => '6M',
+                '9 Months' => '9M',
+                '12 Months' => '12M',
+                '24 Months' => '24M',
+            ],
+            'diet_type' => [
+                'Vegetarian' => 'VEG',
+                'Non Vegetarian' => 'NONV',
+                'Egg' => 'EGG',
+                'Vegan' => 'VGN',
+                'Jain' => 'JAIN',
+                'Gluten Free' => 'GF',
+                'Sugar Free' => 'SF',
+                'Organic' => 'ORG',
+            ],
+            'food_type' => [
+                'Beverage' => 'BEV',
+                'Snack' => 'SNK',
+                'Meal' => 'MEAL',
+                'Bakery' => 'BAK',
+                'Dessert' => 'DES',
+                'Breakfast' => 'BRKF',
+                'Combo' => 'CMB',
+            ],
+            'spice_level' => [
+                'No Spice' => 'NS',
+                'Mild' => 'MLD',
+                'Medium' => 'MED',
+                'Spicy' => 'SPC',
+                'Extra Spicy' => 'XSPC',
+            ],
+            'portion_size' => [
+                'Small' => 'S',
+                'Regular' => 'REG',
+                'Medium' => 'M',
+                'Large' => 'L',
+                'Family' => 'FAM',
+                'Single Serve' => 'SS',
+                'Serves 2' => 'S2',
+                'Serves 4' => 'S4',
+            ],
+            'shade' => [
+                'Ivory' => 'IVR',
+                'Natural' => 'NAT',
+                'Beige' => 'BGE',
+                'Sand' => 'SND',
+                'Caramel' => 'CAR',
+                'Honey' => 'HNY',
+                'Rose' => 'ROS',
+                'Coral' => 'COR',
+                'Berry' => 'BRY',
+                'Nude' => 'NUD',
+                'Plum' => 'PLM',
+                'Red' => 'RED',
+            ],
+            'skin_type' => [
+                'All Skin Types' => 'ALL',
+                'Dry' => 'DRY',
+                'Oily' => 'OIL',
+                'Combination' => 'COMB',
+                'Sensitive' => 'SNS',
+                'Normal' => 'NML',
+                'Acne Prone' => 'ACN',
+            ],
+            'finish' => [
+                'Matte' => 'MAT',
+                'Glossy' => 'GLS',
+                'Satin' => 'SAT',
+                'Dewy' => 'DEW',
+                'Natural' => 'NAT',
+                'Metallic' => 'MET',
+                'Textured' => 'TEX',
+                'Polished' => 'POL',
+            ],
+            'form' => [
+                'Liquid' => 'LIQ',
+                'Cream' => 'CRM',
+                'Gel' => 'GEL',
+                'Powder' => 'PWD',
+                'Stick' => 'STK',
+                'Spray' => 'SPY',
+                'Bar' => 'BAR',
+                'Tablet' => 'TAB',
+                'Capsule' => 'CAP',
+            ],
+            'dimensions' => [
+                'Small' => 'S',
+                'Medium' => 'M',
+                'Large' => 'L',
+                'Extra Large' => 'XL',
+                'Single' => 'SGL',
+                'Double' => 'DBL',
+                'Queen' => 'QN',
+                'King' => 'KG',
+                'Custom' => 'CUST',
+            ],
+            'room_type' => [
+                'Living Room' => 'LR',
+                'Bedroom' => 'BR',
+                'Kitchen' => 'KIT',
+                'Dining Room' => 'DR',
+                'Bathroom' => 'BATH',
+                'Office' => 'OFC',
+                'Outdoor' => 'OUT',
+                'Kids Room' => 'KR',
+            ],
+            'assembly_required' => [
+                'No' => 'NO',
+                'Yes' => 'YES',
+                'Basic Assembly' => 'BA',
+                'Professional Assembly' => 'PA',
+            ],
+            'sport_type' => [
+                'Running' => 'RUN',
+                'Training' => 'TRN',
+                'Yoga' => 'YOG',
+                'Cricket' => 'CRI',
+                'Football' => 'FTB',
+                'Badminton' => 'BAD',
+                'Cycling' => 'CYC',
+                'Gym' => 'GYM',
+                'Outdoor' => 'OUT',
+            ],
+            'weight' => [
+                'Lightweight' => 'LTW',
+                '500 g' => '500G',
+                '1 kg' => '1KG',
+                '2 kg' => '2KG',
+                '5 kg' => '5KG',
+                '10 kg' => '10KG',
+                '15 kg' => '15KG',
+                '20 kg' => '20KG',
+                'Heavy' => 'HVY',
+            ],
+            'language' => [
+                'English' => 'ENG',
+                'Hindi' => 'HIN',
+                'Marathi' => 'MAR',
+                'Gujarati' => 'GUJ',
+                'Tamil' => 'TAM',
+                'Telugu' => 'TEL',
+                'Kannada' => 'KAN',
+                'Bilingual' => 'BIL',
+            ],
+            'binding' => [
+                'Paperback' => 'PB',
+                'Hardcover' => 'HC',
+                'Spiral' => 'SPR',
+                'Stapled' => 'STP',
+                'Perfect Bound' => 'PFB',
+                'Loose Sheets' => 'LS',
+            ],
+            'subject' => [
+                'English' => 'ENG',
+                'Maths' => 'MATH',
+                'Science' => 'SCI',
+                'History' => 'HIS',
+                'Geography' => 'GEO',
+                'Computer' => 'COMP',
+                'Art' => 'ART',
+                'Commerce' => 'COM',
+                'General Knowledge' => 'GK',
+            ],
+            'class_standard' => [
+                'Nursery' => 'NUR',
+                'KG' => 'KG',
+                'Class 1' => 'C1',
+                'Class 2' => 'C2',
+                'Class 3' => 'C3',
+                'Class 4' => 'C4',
+                'Class 5' => 'C5',
+                'Class 6' => 'C6',
+                'Class 7' => 'C7',
+                'Class 8' => 'C8',
+                'Class 9' => 'C9',
+                'Class 10' => 'C10',
+                'Class 11' => 'C11',
+                'Class 12' => 'C12',
+            ],
+        ];
+
+        if (isset($maps[$groupCode][$name])) {
+            return $maps[$groupCode][$name];
+        }
+
+        return Str::of($name)
+            ->upper()
+            ->replaceMatches('/[^A-Z0-9 ]/', '')
+            ->explode(' ')
+            ->filter()
+            ->map(fn (string $part) => ctype_digit($part) ? $part : Str::substr($part, 0, 4))
+            ->join('');
     }
 
     private function seedCategoryMappings(mixed $now): void
@@ -840,6 +1365,15 @@ class ProductAttributeSeeder extends Seeder
                 ['code' => 'form'],
                 ['code' => 'country_of_origin'],
             ],
+            'Cafe & Restaurant' => [
+                ['code' => 'food_type'],
+                ['code' => 'spice_level'],
+                ['code' => 'portion_size'],
+                ['code' => 'diet_type'],
+                ['code' => 'flavor'],
+                ['code' => 'net_quantity'],
+                ['code' => 'country_of_origin'],
+            ],
             'Home & Furniture' => [
                 ['code' => 'material'],
                 ['code' => 'color'],
@@ -869,6 +1403,15 @@ class ProductAttributeSeeder extends Seeder
                 ['code' => 'class_standard'],
                 ['code' => 'pack_size'],
                 ['code' => 'color'],
+                ['code' => 'country_of_origin'],
+            ],
+            'Other' => [
+                ['code' => 'brand_model'],
+                ['code' => 'color'],
+                ['code' => 'size'],
+                ['code' => 'material'],
+                ['code' => 'warranty'],
+                ['code' => 'dimensions'],
                 ['code' => 'country_of_origin'],
             ],
         ];

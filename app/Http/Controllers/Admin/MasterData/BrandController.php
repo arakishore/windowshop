@@ -77,6 +77,7 @@ class BrandController extends Controller
 
         $brand = Brand::create([
             'name' => $data['name'],
+            'short_code' => $this->nullable($data['short_code'] ?? null),
             'slug' => $this->uniqueSlug($data['name']),
             'description' => $this->nullable($data['description'] ?? null),
             'logo_path' => null,
@@ -131,6 +132,7 @@ class BrandController extends Controller
 
         $brand->forceFill([
             'name' => $data['name'],
+            'short_code' => $this->nullable($data['short_code'] ?? null),
             'slug' => $slug,
             'description' => $this->nullable($data['description'] ?? null),
             'logo_path' => $logoPath,

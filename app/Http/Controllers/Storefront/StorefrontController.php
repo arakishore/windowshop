@@ -3,13 +3,20 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Models\PostalCode;
+use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Shop;
+use App\Services\PostalCodeServiceabilityService;
 use App\Services\Banner\BannerService;
+use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductListingService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class StorefrontController extends Controller
@@ -211,50 +218,95 @@ class StorefrontController extends Controller
         ]);
     }
 
-    public function productDetail(): View
+    public function productDetail(?string $slug = null): View
     {
-        $product = [
-            'name' => 'Lyocell wrap top',
-            'category' => 'Fashion & Lifestyle',
-            'store' => 'Style Corner',
-            'price' => '$79.99',
-            'old_price' => '$98.99',
-            'discount' => '-25%',
-            'sku' => 'WS-STYLE-001',
-            'reviews' => '134 reviews',
-            'sold_text' => '18 sold in last 32 hours',
-            'viewing_text' => '28 people are viewing this right now',
-            'description' => 'A catalogue-ready local shop product with soft fabric, easy styling, and clean storefront presentation for customers browsing before they visit.',
-            'images' => [
-                'detail-1.jpg',
-                'detail-1_2.jpg',
-                'detail-1_3.jpg',
-                'detail-1_4.jpg',
-                'detail-1_5.jpg',
-                'detail-1_6.jpg',
-                'detail-1_7.jpg',
-                'detail-1_8.jpg',
-            ],
-            'colors' => [
-                ['name' => 'Green', 'image' => 'img_square/detail-1_2.jpg', 'color' => 'green'],
-                ['name' => 'Gray', 'image' => 'img_square/detail-1_5.jpg', 'color' => 'gray'],
-                ['name' => 'Black', 'image' => 'img_square/detail-1_7.jpg', 'color' => 'black'],
-            ],
-            'sizes' => ['S', 'M', 'L', 'XL'],
-        ];
+        $detail = $this->productListings->productDetail($slug);
 
-        $relatedProducts = [
-            ['name' => 'Buttons cotton top', 'image' => 'product-2.jpg', 'hover_image' => 'product-2_2.jpg', 'price' => '$29,99', 'old_price' => '$49,99', 'badge' => '-25%'],
-            ['name' => 'Wool Midi Coat', 'image' => 'product-3.jpg', 'hover_image' => 'product-3_2.jpg', 'price' => '$15,99', 'old_price' => '$25,99', 'badge' => 'NEW'],
-            ['name' => 'Linen slim-fit shirt', 'image' => 'product-4.jpg', 'hover_image' => 'product-4_2.jpg', 'price' => '$45,99', 'old_price' => '$79,99', 'badge' => null],
-            ['name' => 'Ribbed knit top', 'image' => 'product-5.jpg', 'hover_image' => 'product-5_2.jpg', 'price' => '$39,99', 'old_price' => '$59,99', 'badge' => 'NEW'],
-        ];
+        abort_if($detail === null, 404);
 
         return view('storefront.pages.product-detail', [
-            'product' => $product,
-            'relatedProducts' => $relatedProducts,
+            'product' => $detail['product'],
+            'relatedProducts' => $detail['relatedProducts'],
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
+    }
+
+    public function checkProductDelivery(
+        Request $request,
+        string $slug,
+        PostalCodeServiceabilityService $serviceability,
+        CustomerLocationService $location,
+    ): RedirectResponse {
+        $validator = Validator::make($request->all(), [
+            'postal_code' => [
+                'required',
+                'string',
+                'regex:/^\d{6}$/',
+                Rule::exists('postal_codes', 'postal_code')
+                    ->where('status', PostalCode::STATUS_ACTIVE)
+                    ->where('shipping_enabled', true)
+                    ->whereNull('deleted_at'),
+            ],
+        ], [
+            'postal_code.required' => 'Please enter your delivery PIN code.',
+            'postal_code.regex' => 'Enter a valid 6-digit PIN code.',
+            'postal_code.exists' => 'Delivery is not available for this PIN code yet.',
+        ]);
+
+        if ($validator->fails()) {
+            return back()
+                ->withErrors($validator, 'deliveryCheck')
+                ->withInput();
+        }
+
+        $product = Product::query()
+            ->with(['shop:id,merchant_id,name,status'])
+            ->where('slug', $slug)
+            ->where('status', 'active')
+            ->whereHas('merchant', fn ($query) => $query->where('status', 'active'))
+            ->whereHas('shop', fn ($query) => $query
+                ->where('status', 'active')
+                ->whereColumn('shops.merchant_id', 'products.merchant_id')
+                ->whereHas('merchant', fn ($query) => $query->where('status', 'active')))
+            ->firstOrFail();
+
+        $postalCode = $location->store($request, (string) $validator->validated()['postal_code']);
+        $cookie = cookie(CustomerLocationService::COOKIE_NAME, $postalCode, CustomerLocationService::COOKIE_MINUTES);
+        $record = PostalCode::query()
+            ->active()
+            ->shippingEnabled()
+            ->where('postal_code', $postalCode)
+            ->orderBy('office_name')
+            ->first();
+        $result = $serviceability->check($postalCode, (int) $product->merchant_id, (int) $product->shop_id);
+
+        if (! $result['serviceable']) {
+            return back()
+                ->with('delivery_check', [
+                    'status' => 'blocked',
+                    'product_slug' => $product->slug,
+                    'postal_code' => $postalCode,
+                    'message' => $result['reason'] ?: 'Delivery is temporarily unavailable for this PIN code.',
+                ])
+                ->withInput()
+                ->withCookie($cookie);
+        }
+
+        $locationText = collect([$record?->office_name, $record?->district, $record?->state])
+            ->filter()
+            ->unique()
+            ->implode(', ');
+        $storeName = $product->shop?->name ?: 'the store';
+
+        return back()
+            ->with('delivery_check', [
+                'status' => 'available',
+                'product_slug' => $product->slug,
+                'postal_code' => $postalCode,
+                'message' => trim("Delivery is available to {$postalCode}".($locationText !== '' ? " ({$locationText})" : '').". Estimated date will be confirmed by {$storeName}."),
+            ])
+            ->withInput()
+            ->withCookie($cookie);
     }
 
     public function cart(): View

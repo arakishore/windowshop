@@ -23,6 +23,7 @@ class StoreBrandRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:150', Rule::unique('brands', 'name')],
+            'short_code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'description' => ['nullable', 'string'],
             'website_url' => ['nullable', 'url', 'max:255'],
             'logo' => [
@@ -44,6 +45,13 @@ class StoreBrandRequest extends FormRequest
                     ->whereNull('deleted_at')),
             ],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'short_code' => $this->normalizeShortCode($this->input('short_code')),
+        ]);
     }
 
     public function withValidator(Validator $validator): void
@@ -83,5 +91,16 @@ class StoreBrandRequest extends FormRequest
             ->unique()
             ->values()
             ->all();
+    }
+
+    private function normalizeShortCode(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : strtoupper($value);
     }
 }

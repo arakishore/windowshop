@@ -55,6 +55,138 @@ class AdminProductCategoryHierarchyTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_create_category_with_seo_fields(): void
+    {
+        $admin = $this->createAdminUser();
+        $parent = $this->createCategory('Apparel', 'apparel');
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.product-categories.store'), [
+                'parent_id' => $parent->getKey(),
+                'name' => 'Women',
+                'short_code' => 'wj',
+                'description' => 'Women fashion',
+                'meta_title' => "Women's Fashion & Clothing | WindowShop",
+                'meta_description' => "Explore women's fashion and clothing from local shops.",
+                'product_disclaimer' => 'Colors and fit may vary slightly.',
+                'sort_order' => 2,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.index'))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('product_categories', [
+            'parent_id' => $parent->getKey(),
+            'name' => 'Women',
+            'short_code' => 'WJ',
+            'meta_title' => "Women's Fashion & Clothing | WindowShop",
+            'meta_description' => "Explore women's fashion and clothing from local shops.",
+            'product_disclaimer' => 'Colors and fit may vary slightly.',
+        ]);
+    }
+
+    public function test_admin_can_update_category_seo_fields(): void
+    {
+        $admin = $this->createAdminUser();
+        $parent = $this->createCategory('Apparel', 'apparel');
+        $category = $this->createCategory('T-Shirts', 't-shirts', $parent);
+
+        $this->actingAs($admin)
+            ->put(route('admin.master.product-categories.update', $category), [
+                'parent_id' => $parent->getKey(),
+                'name' => 'T-Shirts',
+                'short_code' => 'mtj',
+                'description' => null,
+                'meta_title' => "Women's T-Shirts Online | WindowShop",
+                'meta_description' => "Explore women's T-shirts from local shops.",
+                'product_disclaimer' => 'Check size and fabric before purchase.',
+                'sort_order' => 1,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.edit', $category))
+            ->assertSessionHasNoErrors();
+
+        $category->refresh();
+
+        $this->assertSame("Women's T-Shirts Online | WindowShop", $category->meta_title);
+        $this->assertSame('MTJ', $category->short_code);
+        $this->assertSame("Explore women's T-shirts from local shops.", $category->meta_description);
+        $this->assertSame('Check size and fabric before purchase.', $category->product_disclaimer);
+    }
+
+    public function test_category_seo_fields_are_optional(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $this->actingAs($admin)
+            ->post(route('admin.master.product-categories.store'), [
+                'parent_id' => null,
+                'name' => 'Footwear',
+                'description' => null,
+                'meta_title' => null,
+                'meta_description' => null,
+                'sort_order' => 1,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.index'))
+            ->assertSessionHasNoErrors();
+
+        $category = ProductCategory::query()->where('name', 'Footwear')->firstOrFail();
+
+        $this->assertNull($category->meta_title);
+        $this->assertNull($category->meta_description);
+    }
+
+    public function test_category_seo_fields_enforce_max_lengths(): void
+    {
+        $admin = $this->createAdminUser();
+        $parent = $this->createCategory('Apparel', 'apparel');
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.create'))
+            ->post(route('admin.master.product-categories.store'), [
+                'parent_id' => $parent->getKey(),
+                'name' => 'Women',
+                'meta_title' => str_repeat('a', 256),
+                'meta_description' => str_repeat('b', 501),
+                'product_disclaimer' => str_repeat('c', 1001),
+                'sort_order' => 1,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.create'))
+            ->assertSessionHasErrors(['meta_title', 'meta_description', 'product_disclaimer']);
+    }
+
+    public function test_category_short_code_must_be_alphanumeric_and_max_twenty_characters(): void
+    {
+        $admin = $this->createAdminUser();
+        $parent = $this->createCategory('Apparel', 'apparel');
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.create'))
+            ->post(route('admin.master.product-categories.store'), [
+                'parent_id' => $parent->getKey(),
+                'name' => 'Women Jeans',
+                'short_code' => 'women-jeans',
+                'sort_order' => 1,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.create'))
+            ->assertSessionHasErrors('short_code');
+
+        $this->actingAs($admin)
+            ->from(route('admin.master.product-categories.create'))
+            ->post(route('admin.master.product-categories.store'), [
+                'parent_id' => $parent->getKey(),
+                'name' => 'Women Shirts',
+                'short_code' => str_repeat('A', 21),
+                'sort_order' => 1,
+                'status' => 'active',
+            ])
+            ->assertRedirect(route('admin.master.product-categories.create'))
+            ->assertSessionHasErrors('short_code');
+    }
+
     public function test_category_name_is_unique_within_same_parent(): void
     {
         $admin = $this->createAdminUser();

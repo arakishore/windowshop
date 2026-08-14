@@ -20,8 +20,10 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->foreignId('product_attribute_group_id');
             $table->string('name');
+            $table->string('short_code', 20)->nullable()->index('product_attr_group_values_short_code_idx');
             $table->string('code');
             $table->text('description')->nullable();
+            $table->string('swatch_hex', 7)->nullable();
             $table->string('status', 30)
                 ->default('active')
                 ->comment('active,inactive')

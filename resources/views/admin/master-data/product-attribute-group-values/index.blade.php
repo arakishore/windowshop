@@ -33,6 +33,8 @@
                     <tr>
                         <th>Name</th>
                         <th>Code</th>
+                        <th>Short Code</th>
+                        <th>Swatch</th>
                         <th>Status</th>
                         <th>Sort Order</th>
                         <th class="text-center">Actions</th>
@@ -48,6 +50,23 @@
                                 @endif
                             </td>
                             <td><code>{{ $value->code }}</code></td>
+                            <td>
+                                @if($value->short_code)
+                                    <code>{{ $value->short_code }}</code>
+                                @else
+                                    -
+                                @endif
+                            </td>
+                            <td>
+                                @if($value->swatch_hex)
+                                    <span class="d-inline-flex align-items-center gap-2">
+                                        <span class="border rounded-circle" style="width: 22px; height: 22px; background: {{ $value->swatch_hex }};"></span>
+                                        <code>{{ $value->swatch_hex }}</code>
+                                    </span>
+                                @else
+                                    -
+                                @endif
+                            </td>
                             <td>
                                 <span class="badge {{ $statusClasses[$value->status] ?? 'bg-secondary' }}">
                                     {{ ucfirst($value->status) }}
@@ -104,7 +123,7 @@
                 jQuery('#product-attribute-group-values-table').DataTable({
                     responsive: true,
                     pageLength: 25,
-                    order: [[3, 'asc'], [0, 'asc']],
+                    order: [[5, 'asc'], [0, 'asc']],
                     columnDefs: [
                         { orderable: false, targets: -1 },
                         { responsivePriority: 1, targets: 0 },

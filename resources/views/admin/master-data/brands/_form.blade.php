@@ -26,13 +26,19 @@
     </div>
     <div class="card-body">
         <div class="row g-3">
-            <div class="col-md-8">
+            <div class="col-md-6">
                 <label for="name" class="form-label">Brand Name <span class="text-danger">*</span></label>
                 <input id="name" name="name" type="text" value="{{ old('name', $brand?->name) }}" class="form-control @error('name') is-invalid @enderror" required>
                 @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 @if($isEdit)
                     <div class="form-text">Slug: {{ $brand->slug }}</div>
                 @endif
+            </div>
+
+            <div class="col-md-2">
+                <label for="short_code" class="form-label">Short Code</label>
+                <input id="short_code" name="short_code" type="text" maxlength="20" value="{{ old('short_code', $brand?->short_code) }}" class="form-control @error('short_code') is-invalid @enderror" placeholder="NIKE">
+                @error('short_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
             <div class="col-md-2">

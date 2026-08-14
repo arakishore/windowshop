@@ -34,6 +34,25 @@ class SystemSettingService
         return $limit >= 1 && $limit <= 10 ? $limit : 3;
     }
 
+    public function marketplaceName(): string
+    {
+        $value = trim((string) $this->get('marketplace_name', 'WindowShop'));
+
+        return $value === '' ? 'WindowShop' : $value;
+    }
+
+    public function globalProductDisclaimer(): string
+    {
+        $value = trim((string) $this->get(
+            'storefront.product_disclaimer.global',
+            'Product images, prices, availability and details are provided by shops or suppliers and may vary. Please verify key details with the shop before purchase.',
+        ));
+
+        return $value === ''
+            ? 'Product images, prices, availability and details are provided by shops or suppliers and may vary. Please verify key details with the shop before purchase.'
+            : $value;
+    }
+
     private function cast(?string $value, string $type, mixed $default): mixed
     {
         return match ($type) {

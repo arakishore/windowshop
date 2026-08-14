@@ -34,7 +34,11 @@ class StoreProductCategoryRequest extends FormRequest
                     ->where('status', 'active')),
             ],
             'name' => ['required', 'string', 'max:255'],
+            'short_code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'description' => ['nullable', 'string'],
+            'meta_title' => ['nullable', 'string', 'max:255'],
+            'meta_description' => ['nullable', 'string', 'max:500'],
+            'product_disclaimer' => ['nullable', 'string', 'max:1000'],
             'image' => [
                 'nullable',
                 'image',
@@ -116,8 +120,20 @@ class StoreProductCategoryRequest extends FormRequest
     {
         $this->merge([
             'parent_id' => $this->input('parent_id') === '' ? null : $this->input('parent_id'),
+            'short_code' => $this->normalizeShortCode($this->input('short_code')),
             'default_tax_class_id' => $this->input('default_tax_class_id') === '' ? null : $this->input('default_tax_class_id'),
         ]);
+    }
+
+    protected function normalizeShortCode(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : strtoupper($value);
     }
 
     protected function defaultTaxService(): ProductCategoryDefaultTaxService

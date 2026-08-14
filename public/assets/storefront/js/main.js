@@ -452,15 +452,21 @@
             var priceEl = productItem.find(".price-on-sale");
             var quantityInput = productItem.find(".quantity-product");
             if (!priceEl.data("price")) {
-                var initialPrice = parseFloat(priceEl.text().replace("$", "").replace(/,/g, ""));
+                var initialPrice = parseFloat(priceEl.text().replace(/[^0-9.-]/g, ""));
                 priceEl.data("price", initialPrice);
             }
             productItem.find(".size-btn").on("click", function () {
                 var rawPrice = $(this).attr("data-price");
-                var newPrice = parseFloat(rawPrice.replace(/,/g, "")) || basePrice;
+                var basePrice = parseFloat(priceEl.data("price"));
+                var newPrice = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.-]/g, "")) : basePrice;
+
+                if (isNaN(newPrice)) {
+                    return;
+                }
+
                 quantityInput.val(1);
                 productItem.find(".price-on-sale")
-                    .text(`$${newPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}`)
+                    .text(formatProductPrice(priceEl, newPrice))
                     .data("price", newPrice);
                 updateTotalPrice(newPrice, productItem);
             });
@@ -482,10 +488,84 @@
             function updateTotalPrice(price, scope) {
                 var currentPrice = price || parseFloat(scope.find(".price-on-sale").data("price"));
                 var quantity = parseInt(scope.find(".quantity-product").val(), 10);
+                if (isNaN(currentPrice) || isNaN(quantity)) {
+                    scope.find(".price-add").text("");
+                    return;
+                }
                 var totalPrice = currentPrice * quantity;
-                scope.find(".price-add").text(`$${totalPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}`);
+                scope.find(".price-add").text(formatProductPrice(scope.find(".price-on-sale"), totalPrice));
+            }
+
+            function formatProductPrice(priceElement, amount) {
+                var sample = priceElement.text().trim();
+                var prefixMatch = sample.match(/^[^0-9-]*/);
+                var prefix = prefixMatch ? prefixMatch[0] : "$";
+
+                return `${prefix}${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
             }
             updateTotalPrice(null, productItem);
+        });
+    };
+
+    var stickyProductPrice = function () {
+        $(".tf-sticky-btn-atc").each(function () {
+            var sticky = $(this);
+            var select = sticky.find(".tf-sticky-atc-variant-price select");
+            var quantityInput = sticky.find(".quantity-product");
+            var priceLabel = sticky.find(".price__prd");
+            var addPrice = sticky.find(".sticky-price-add");
+
+            if (!quantityInput.length || !addPrice.length) {
+                return;
+            }
+
+            function parsePrice(value) {
+                return parseFloat(String(value || "").replace(/[^0-9.-]/g, ""));
+            }
+
+            function formatPrice(amount) {
+                var sample = priceLabel.text().trim() || addPrice.text().trim();
+                var prefixMatch = sample.match(/^[^0-9-]*/);
+                var prefix = prefixMatch ? prefixMatch[0] : "$";
+
+                return `${prefix}${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+            }
+
+            function selectedBasePrice() {
+                var selectedOption = select.find("option:selected");
+                var optionPrice = parsePrice(selectedOption.data("price"));
+
+                if (!isNaN(optionPrice)) {
+                    return optionPrice;
+                }
+
+                return parsePrice(priceLabel.text() || addPrice.text());
+            }
+
+            function updateStickyTotal() {
+                var basePrice = selectedBasePrice();
+                var quantity = parseInt(quantityInput.val(), 10) || 1;
+
+                if (isNaN(basePrice)) {
+                    addPrice.text("");
+                    return;
+                }
+
+                priceLabel.text(formatPrice(basePrice));
+                addPrice.text(formatPrice(basePrice * quantity));
+            }
+
+            select.on("change", function () {
+                quantityInput.val(1);
+                updateStickyTotal();
+            });
+
+            sticky.find(".plus-btn, .minus-btn").on("click", function () {
+                setTimeout(updateStickyTotal, 0);
+            });
+
+            quantityInput.on("input change", updateStickyTotal);
+            updateStickyTotal();
         });
     };
     /* Handle Progress
@@ -2061,6 +2141,7 @@
         clickModalSecond();
         autoPopup();
         totalPriceVariant();
+        stickyProductPrice();
         handleProgress();
         handleFooter();
         infiniteSlide();
