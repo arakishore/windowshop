@@ -102,6 +102,12 @@
         </div>
 
         <div class="container">
+            @if (session('error'))
+                <div class="alert alert-warning mb-24" role="alert">
+                    {{ session('error') }}
+                </div>
+            @endif
+
             <div data-cart-empty {{ $cart['is_empty'] ? '' : 'hidden' }}>
                 <div class="text-center py-5">
                     <h4 class="mb-12">Your cart is empty</h4>

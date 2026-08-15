@@ -10,9 +10,11 @@ use App\Models\Shop;
 use App\Services\PostalCodeServiceabilityService;
 use App\Services\Banner\BannerService;
 use App\Services\Cart\CartPageService;
+use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductListingService;
+use App\Services\Storefront\StorefrontCustomerContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -191,16 +193,42 @@ class StorefrontController extends Controller
         ]);
     }
 
-    public function login(): View
+    public function login(Request $request, CheckoutFlowService $checkout, StorefrontCustomerContext $customerContext): View|RedirectResponse
     {
+        $checkoutMode = $request->query('from') === 'checkout' && $checkout->hasCartItems($request);
+
+        if ($checkoutMode) {
+            $checkout->rememberIntent($request);
+
+            if ($customerContext->user($request) !== null) {
+                return redirect()->route(CheckoutFlowService::ADDRESS_ROUTE);
+            }
+        } elseif ($customerContext->user($request) !== null) {
+            return redirect()->route('storefront.account');
+        }
+
         return view('storefront.pages.customer-login', [
+            'checkoutMode' => $checkoutMode,
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
 
-    public function register(): View
+    public function register(Request $request, CheckoutFlowService $checkout, StorefrontCustomerContext $customerContext): View|RedirectResponse
     {
+        $checkoutMode = $request->query('from') === 'checkout' && $checkout->hasCartItems($request);
+
+        if ($checkoutMode) {
+            $checkout->rememberIntent($request);
+
+            if ($customerContext->user($request) !== null) {
+                return redirect()->route(CheckoutFlowService::ADDRESS_ROUTE);
+            }
+        } elseif ($customerContext->user($request) !== null) {
+            return redirect()->route('storefront.account');
+        }
+
         return view('storefront.pages.customer-register', [
+            'checkoutMode' => $checkoutMode,
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
@@ -340,21 +368,6 @@ class StorefrontController extends Controller
 
         return view('storefront.pages.cart', [
             'cart' => $cart,
-            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
-        ]);
-    }
-
-    public function checkout(): View
-    {
-        $cartItems = $this->staticCartItems();
-        $totals = $this->staticCartTotals($cartItems);
-
-        return view('storefront.pages.checkout', [
-            'cartItems' => $cartItems,
-            'subtotal' => $totals['subtotal'],
-            'discount' => $totals['discount'],
-            'shipping' => $totals['shipping'],
-            'total' => $totals['total'],
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
@@ -504,47 +517,4 @@ class StorefrontController extends Controller
         return null;
     }
 
-    private function staticCartItems(): array
-    {
-        return [
-            [
-                'name' => 'V-neck cotton T-shirt',
-                'image' => 'product-3.jpg',
-                'price' => 29.99,
-                'quantity' => 1,
-                'color' => 'Light Gray',
-                'size' => 'Small',
-            ],
-            [
-                'name' => 'Square metallic sunglasses',
-                'image' => 'product-6.jpg',
-                'price' => 69.99,
-                'quantity' => 1,
-                'color' => 'Charcoal',
-                'size' => 'Medium',
-            ],
-            [
-                'name' => 'Oval shoulder bag',
-                'image' => 'product-8.jpg',
-                'price' => 49.99,
-                'quantity' => 1,
-                'color' => 'Taupe',
-                'size' => 'One Size',
-            ],
-        ];
-    }
-
-    private function staticCartTotals(array $cartItems): array
-    {
-        $subtotal = collect($cartItems)->sum(fn (array $item): float => $item['price'] * $item['quantity']);
-        $discount = 20.00;
-        $shipping = 0.00;
-
-        return [
-            'subtotal' => $subtotal,
-            'discount' => $discount,
-            'shipping' => $shipping,
-            'total' => $subtotal - $discount + $shipping,
-        ];
-    }
 }

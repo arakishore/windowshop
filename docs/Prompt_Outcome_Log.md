@@ -13,6 +13,58 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-08-15 - Checkout Step 1 Login/Register Gate
+
+Prompt:
+Implement Checkout Step 1 only: Cart to Checkout Account Gate to Login/Register to Merge Cart to Address placeholder. Reuse existing storefront auth/cart architecture, require customer auth for address, block empty carts, merge guest carts once after checkout login/register, and do not implement address CRUD, shipping, payment, checkout processing, or order creation.
+
+Outcome:
+Added a checkout gate flow with `/checkout`, `/checkout/account`, and `/checkout/address`. Guests with non-empty carts are sent to the existing two-column account UI; authenticated customers skip directly to the address placeholder. Empty carts are redirected back to `/view-cart` with “Your cart is empty.” The existing login/register pages now submit through shared customer auth handlers, and checkout-origin auth redirects to the address placeholder after merging the guest cart.
+
+Implementation summary:
+
+- Checkout intent is stored as `storefront_checkout_intent` in the Laravel session and paired with the internal intended address route.
+- `CartMergeService` preserves the guest cart token before authentication, then merges that guest cart into the authenticated customer cart inside a transaction.
+- If the customer has no cart, the guest cart is attached to the customer and the session token is cleared.
+- If the customer has a cart, matching `product_variant_id` lines are combined and different variants remain separate.
+- Merge reuses `CartItemQuantityValidator` for purchasability, quantity, stock, and current selling price checks; stale invalid guest items are dropped without crashing auth.
+- Guest cart session identity is cleared after successful merge, and the guest cart record is deleted when merged into an existing customer cart.
+- Repeated checkout/address requests do not merge again because the guest session token is removed and the guest cart is no longer independently active.
+- Normal login/register redirects remain storefront-normal; checkout redirects only when the checkout session intent exists.
+- Added client-side JavaScript validation to storefront login, registration, and checkout account forms for required fields, email format, optional phone format, password length, password confirmation, and terms acceptance; server-side Laravel validation remains authoritative.
+- Added a customer account placeholder and routed header/mobile/footer My Account links through it; authenticated customers are redirected away from login/register to My Account, while guests are sent to login.
+- `/checkout/address` is a customer-only placeholder and does not implement address CRUD, shipping, payment, order creation, stock deduction, tax, coupons, or checkout processing.
+
+Files changed:
+
+- `app/Http/Controllers/Customer/Auth/CustomerAuthController.php`
+- `app/Http/Controllers/Storefront/CustomerAccountController.php`
+- `app/Http/Controllers/Storefront/CheckoutController.php`
+- `app/Http/Controllers/Storefront/StorefrontController.php`
+- `app/Services/Cart/CartMergeService.php`
+- `app/Services/Checkout/CheckoutFlowService.php`
+- `resources/views/storefront/pages/cart.blade.php`
+- `resources/views/storefront/pages/customer-login.blade.php`
+- `resources/views/storefront/pages/customer-register.blade.php`
+- `resources/views/storefront/pages/checkout-address.blade.php`
+- `resources/views/storefront/pages/customer-account.blade.php`
+- `resources/views/storefront/partials/header.blade.php`
+- `resources/views/storefront/partials/footer.blade.php`
+- `resources/views/storefront/layouts/app.blade.php`
+- `routes/web.php`
+- `tests/Feature/StorefrontCheckoutGateTest.php`
+
+Tests / checks run:
+
+- `php artisan test tests\Feature\StorefrontCheckoutGateTest.php` passed: 12 tests, 69 assertions.
+- `php artisan test tests\Feature\StorefrontCheckoutGateTest.php` passed after JS validation update: 12 tests, 74 assertions.
+- `php artisan test tests\Feature\StorefrontCustomerAuthPagesTest.php` passed after JS validation update: 3 tests, 43 assertions.
+- `php artisan test tests\Feature\StorefrontCustomerAuthPagesTest.php` passed after account placeholder update: 4 tests, 60 assertions.
+- `php artisan test tests\Feature\StorefrontCartPageTest.php` passed: 18 tests, 103 assertions.
+- `php artisan test tests\Feature\StorefrontAddToCartTest.php` passed: 18 tests, 81 assertions.
+- PHP syntax checks passed for checkout/auth controllers, checkout/cart services, and checkout gate tests.
+- `git diff --check` passed for the changed checkout/auth/cart files.
+
 ## 2026-08-15 - Cart UI/UX Refinement Drawer Review and Remove Confirmation
 
 Prompt:
@@ -2808,3 +2860,313 @@ Deferred Items:
 - Real ratings/reviews
 - Dynamic color/variant indicators
 - Add to cart, wishlist, and quick view behaviour
+
+--------------------------------------------------
+
+Date:
+2026-08-15
+
+Feature Name:
+Checkout One-Page Foundation
+
+Objective:
+Convert the temporary checkout wizard/address placeholder into a one-page checkout foundation reached at `/checkout` after customer login/register and cart merge.
+
+Scope:
+One-page checkout route, customer auth gate, `/checkout/address` compatibility redirect, delivery address section, saved/default address selection, inline Add/Edit address forms, postal-code validation, delivery option structure, COD payment structure, server-side cart order summary, deferred Place Order endpoint, and fast-checkout-ready default preselection.
+
+Prompt Summary:
+Use one main checkout page instead of Address -> Shipping -> Payment pages. Reuse existing cart pricing and customer address architecture, avoid duplicate checkout address tables, keep guests out of final checkout, and do not implement real order creation or payment gateways yet.
+
+Files Created:
+- `app/Http/Controllers/Storefront/CheckoutAddressController.php`
+- `app/Services/Checkout/CheckoutPageService.php`
+- `resources/views/storefront/pages/partials/checkout-address-form.blade.php`
+
+Files Modified:
+- `app/Http/Controllers/Storefront/CheckoutController.php`
+- `app/Http/Controllers/Storefront/StorefrontController.php`
+- `app/Services/Checkout/CheckoutFlowService.php`
+- `routes/web.php`
+- `resources/views/storefront/pages/checkout.blade.php`
+- `tests/Feature/StorefrontCheckoutGateTest.php`
+- `docs/Prompt_Outcome_Log.md`
+
+Files Removed:
+- `resources/views/storefront/pages/checkout-address.blade.php`
+
+Routes Changed:
+- `GET /checkout` now renders the authenticated one-page checkout or redirects guests to `/checkout/account`.
+- `GET /checkout/address` now redirects to `/checkout` for backward compatibility.
+- Added `POST /checkout/address/select`.
+- Added `POST /checkout/addresses`.
+- Added `PATCH /checkout/addresses/{address}`.
+- Added deferred `POST /checkout/place-order` placeholder.
+
+Address Model/Table Reused:
+- Reused `merchant_customer_addresses` through `merchant_customers.user_id`.
+- New checkout addresses are attached to the cart's first merchant customer profile; the merchant-customer link is created only when needed.
+
+Default Address Selection:
+- Active default shipping address is selected first.
+- If there is exactly one active saved address, it is selected automatically.
+- A valid manually selected address is kept in checkout session state.
+
+Shipping/PIN Foundation:
+- Selected address PIN is exposed to the delivery options section.
+- Current V1 shows a controlled Standard Delivery structure only after an address with a valid PIN is selected.
+- Complex shipping pricing/serviceability remains deferred.
+
+Order Summary:
+- Uses `CartPageService` current server-side cart data and totals.
+- Browser-submitted totals are ignored by the deferred place-order endpoint.
+
+Fast Checkout Preparation:
+- Shows a disabled fast-checkout panel when the customer has a selected/default address and eligible checkout state.
+- It uses the same selected address, shipping, payment, and cart summary data as the normal checkout foundation.
+
+Tests Added/Updated:
+- Updated checkout gate/merge redirects for `/checkout`.
+- Added coverage for saved/default addresses, address validation, add/update address, address ownership, current cart totals, ignored browser totals, old route redirect, stale/unavailable cart items, and absence of wizard navigation.
+
+Verification Results:
+- `php artisan test tests\Feature\StorefrontCheckoutGateTest.php` passed: 19 tests, 108 assertions.
+- `php artisan test tests\Feature\StorefrontCustomerAuthPagesTest.php` passed: 4 tests, 60 assertions.
+- `php artisan test tests\Feature\StorefrontCartPageTest.php` passed: 18 tests, 103 assertions.
+- `php artisan test tests\Feature\StorefrontAddToCartTest.php` passed: 18 tests, 81 assertions.
+
+Deferred Items:
+- Full shipping engine and delivery pricing.
+- Payment gateway integrations beyond COD display.
+- Final order creation and immutable address snapshot.
+- Invoice, fulfillment, and final fast checkout one-click ordering.
+
+--------------------------------------------------
+
+Date:
+2026-08-15
+
+Feature Name:
+Delivery Address Step 1 - India PIN Validation
+
+Objective:
+Make checkout delivery addresses country-aware, using `postal_codes` only for India PIN validation/autofill and `loc_*` masters for the actual saved customer address location.
+
+Scope:
+Country field, Home/Work/Other address type, India PIN blur lookup, backend India PIN validation, city/district and state autofill, `loc_countries`/`loc_states`/`loc_cities` ID resolution on save, shop-level postal-code restriction lookup, shipping-disabled distinction, and default delivery address preservation.
+
+Files Created:
+- `app/Services/Checkout/CheckoutPostalCodeLookupService.php`
+
+Files Modified:
+- `app/Http/Controllers/Storefront/CheckoutAddressController.php`
+- `app/Services/Checkout/CheckoutPageService.php`
+- `routes/web.php`
+- `resources/views/storefront/pages/checkout.blade.php`
+- `resources/views/storefront/pages/partials/checkout-address-form.blade.php`
+- `tests/Feature/StorefrontCheckoutGateTest.php`
+- `docs/Prompt_Outcome_Log.md`
+
+Routes Added:
+- `GET /checkout/postal-code/{postalCode}` named `storefront.checkout.postal-code.show`
+
+Service/Controller:
+- `CheckoutAddressController::postalCode()` is the thin lookup endpoint.
+- `CheckoutPostalCodeLookupService` validates India PINs, resolves district/state, reports `shipping_enabled`, and checks current-cart shop restrictions.
+
+India Identification:
+- India is resolved from active `loc_countries` by `iso2 = IN`, `iso3 = IND`, or name `India`.
+
+Country Preselection:
+- The checkout address form defaults Country to India when the India country master exists. This is only a preselection; saved validation uses the submitted `country_id`.
+
+PIN Lookup:
+- For India, the PIN field triggers lookup on blur and the backend repeats validation on save.
+- Lookup uses active, non-deleted `postal_codes` rows and supports multiple rows per PIN.
+
+City/State Population:
+- `postal_codes.district` is shown as City and `postal_codes.state` as State in the form.
+- These frontend values are never trusted for save; the backend re-resolves from the submitted PIN.
+
+Customer Address Mapping:
+- India saves `country_id` from `loc_countries`, `state_id` by `loc_states.name + country_id`, and `city_id` by `loc_cities.name + state_id + country_id`.
+- No foreign keys were added from `postal_codes` to `loc_*`.
+
+City-Master Mismatch:
+- A valid Indian PIN is not rejected only because an exact `loc_cities` match is unavailable.
+- In that case, `city_id` remains nullable rather than assigning a wrong city.
+
+Shop Restrictions:
+- Restrictions are checked for every shop in the current cart.
+- The lookup returns per-shop availability and honors active status, soft deletes, `starts_at`, and `ends_at`.
+- Active shop-specific, merchant-level, and global restriction scopes are supported without one query per shop.
+
+Tests Added/Updated:
+- India selected requires PIN.
+- Non-India skips India PIN validation.
+- Valid/invalid PIN behavior.
+- City/district and State lookup.
+- `shipping_enabled = false` remains valid but unavailable.
+- Active restrictions are detected.
+- Inactive, future, and expired restrictions are ignored.
+- Multiple shops return per-shop availability.
+- India save ignores spoofed city/state fields.
+- City-master mismatch does not reject a valid PIN.
+- Existing address add/update and checkout merge flows continue to pass.
+
+Verification Results:
+- `php artisan test tests\Feature\StorefrontCheckoutGateTest.php` passed: 25 tests, 137 assertions.
+- `php artisan test tests\Feature\StorefrontCustomerAuthPagesTest.php` passed: 4 tests, 60 assertions.
+- `php artisan test tests\Feature\StorefrontCartPageTest.php` passed: 18 tests, 103 assertions.
+- `php artisan test tests\Feature\StorefrontAddToCartTest.php` passed: 18 tests, 81 assertions.
+
+Deferred Items:
+- Billing address.
+- Full shipping engine and delivery pricing.
+- Payment and order creation.
+- Final restriction enforcement during order placement.
+
+---
+
+Feature Name:
+Checkout Country Handling - India-First Default Country Resolver
+
+Objective:
+Make checkout delivery addresses India-first without hardcoding India IDs, while keeping the address schema and checkout flow multi-country-ready.
+
+Scope:
+Backend default-country resolution, hidden checkout Country UI, server-side `country_id` assignment, India-only PIN validation, and PIN lookup based on backend storefront country instead of browser-submitted country data.
+
+Files Created:
+- `app/Services/Storefront/StorefrontCountryResolver.php`
+
+Files Modified:
+- `app/Http/Controllers/Storefront/CheckoutAddressController.php`
+- `app/Services/Checkout/CheckoutPageService.php`
+- `app/Services/Checkout/CheckoutPostalCodeLookupService.php`
+- `resources/views/storefront/pages/checkout.blade.php`
+- `resources/views/storefront/pages/partials/checkout-address-form.blade.php`
+- `tests/Feature/StorefrontCheckoutGateTest.php`
+- `docs/Prompt_Outcome_Log.md`
+
+Default Country Resolution:
+- `StorefrontCountryResolver` reads `system_settings.default_country_code`.
+- If unavailable, it falls back to `config('location.default_country_code')`.
+- The resolved code is normalized to uppercase ISO2 and mapped to an active `loc_countries.iso2` record.
+- Invalid or missing active country configuration fails safely with a logged configuration error.
+
+Checkout Address Behavior:
+- The visible Country selector was removed from the current delivery address form.
+- No hidden `country_id` is trusted from the browser.
+- `CheckoutAddressController` resolves the storefront default country and assigns `merchant_customer_addresses.country_id` server-side.
+- Tampered request `country_id` values cannot override the backend default country.
+
+India PIN Behavior:
+- India-specific validation only runs when the resolved default country has `iso2 = IN`.
+- For India, PIN remains required, six digits, active in `postal_codes`, and eligible for shipping/restriction lookup.
+- PIN lookup endpoint now uses backend default-country resolution and does not require browser country input.
+- State lookup remains scoped by `country_id`; city lookup remains scoped by `state_id + country_id`.
+- Valid PINs are not rejected only because the city master has no exact district match; `city_id` remains nullable in that case.
+
+Future Compatibility:
+- Customer addresses still use generic `country_id`, `state_id`, `city_id`, and `postal_code`.
+- No India-specific columns or postal-code foreign keys were added.
+- Future multi-country checkout can re-enable a Country selector and validate an accepted country selection without redesigning customer address storage.
+
+Verification Results:
+- `php artisan test tests\Feature\StorefrontCheckoutGateTest.php` passed: 28 tests, 147 assertions.
+- `php artisan test tests\Feature\StorefrontCustomerAuthPagesTest.php` passed: 4 tests, 60 assertions.
+- `php artisan test tests\Feature\StorefrontCartPageTest.php` passed: 18 tests, 103 assertions.
+- `php artisan test tests\Feature\StorefrontAddToCartTest.php` passed: 18 tests, 81 assertions.
+
+Deferred Items:
+- Billing Address.
+- Shipping engine and delivery pricing.
+- Payment.
+- Order creation.
+- Merchant/shop delivery-country configuration.
+
+---
+
+Feature Name:
+Checkout Billing Address Section
+
+Objective:
+Add Billing Address to the one-page checkout between Delivery Address and Delivery Options, while reusing existing customer address storage and checkout address validation.
+
+Scope:
+Billing same-as-delivery state, separate billing address selection, adding billing addresses through the shared address form, default billing preselection, and place-order readiness validation without creating orders.
+
+Files Modified:
+- `app/Http/Controllers/Storefront/CheckoutAddressController.php`
+- `app/Http/Controllers/Storefront/CheckoutController.php`
+- `app/Services/Checkout/CheckoutPageService.php`
+- `routes/web.php`
+- `resources/views/storefront/pages/checkout.blade.php`
+- `resources/views/storefront/pages/partials/checkout-address-form.blade.php`
+- `tests/Feature/StorefrontCheckoutGateTest.php`
+- `docs/Prompt_Outcome_Log.md`
+
+Routes Added:
+- `POST /checkout/billing/same` named `storefront.checkout.billing.same`
+- `POST /checkout/billing-address/select` named `storefront.checkout.billing-addresses.select`
+- `POST /checkout/billing-addresses` named `storefront.checkout.billing-addresses.store`
+
+Checkout State:
+- Delivery address continues to use `storefront.checkout.selected_address_id`.
+- Billing same-as-delivery uses `storefront.checkout.billing_same_as_delivery`.
+- Separate selected billing address uses `storefront.checkout.selected_billing_address_id`.
+
+Behavior:
+- Billing Address section appears after Delivery Address.
+- `Same as delivery address` is checked by default.
+- When checked, billing resolves internally to the selected delivery address.
+- When unchecked, saved customer-owned addresses are shown as selectable billing addresses.
+- Existing `is_default_billing` is used to preselect billing address when available.
+- Adding a billing address reuses the existing address validation/save path, storefront default country resolver, India PIN validation, postal-code lookup, and `loc_*` resolution.
+- Billing address IDs are ownership-checked and cannot be selected from another customer.
+- Delivery and billing addresses can be different.
+- Place-order placeholder now validates billing state before continuing, but still does not create an order.
+
+Verification Results:
+- `php artisan test tests\Feature\StorefrontCheckoutGateTest.php` passed: 35 tests, 181 assertions.
+- `php artisan test tests\Feature\StorefrontCustomerAuthPagesTest.php` passed: 4 tests, 60 assertions.
+- `php artisan test tests\Feature\StorefrontCartPageTest.php` passed: 18 tests, 103 assertions.
+- `php artisan test tests\Feature\StorefrontAddToCartTest.php` passed: 18 tests, 81 assertions.
+
+Deferred Items:
+- Shipping engine and delivery pricing.
+- Payment gateway.
+- Order creation.
+- Fast Checkout expansion.
+
+---
+
+Feature Name:
+Checkout Address AJAX Saves
+
+Objective:
+Prevent full-page reloads when adding or editing checkout addresses on the one-page checkout.
+
+Scope:
+AJAX form submission for Add Delivery Address, Edit Delivery Address, and Add Billing Address, while preserving normal non-JavaScript form fallback.
+
+Files Modified:
+- `app/Http/Controllers/Storefront/CheckoutAddressController.php`
+- `resources/views/storefront/pages/checkout.blade.php`
+- `resources/views/storefront/pages/partials/checkout-address-form.blade.php`
+- `tests/Feature/StorefrontCheckoutGateTest.php`
+- `docs/Prompt_Outcome_Log.md`
+
+Behavior:
+- Checkout address forms now submit with `fetch()` when JavaScript is available.
+- Successful AJAX saves return JSON and refresh the checkout content area in the background.
+- Validation failures return JSON `422` and render inline field errors without a full page reload.
+- PIN lookup/autofill still works after the checkout content is refreshed.
+- Normal redirect-based form submission remains available as fallback.
+
+Verification Results:
+- `php artisan test tests\Feature\StorefrontCheckoutGateTest.php` passed: 38 tests, 193 assertions.
+- `php artisan test tests\Feature\StorefrontCustomerAuthPagesTest.php` passed: 4 tests, 60 assertions.
+- `php artisan test tests\Feature\StorefrontCartPageTest.php` passed: 18 tests, 103 assertions.
+- `php artisan test tests\Feature\StorefrontAddToCartTest.php` passed: 18 tests, 81 assertions.

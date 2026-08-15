@@ -377,7 +377,7 @@
             </a>
         </div>
         <div class="toolbar-item">
-            <a href="{{ route('storefront.login') }}">
+            <a href="{{ route('storefront.account') }}">
                 <span class="toolbar-icon">
                     <i class="icon icon-User"></i>
                 </span>

@@ -3,6 +3,8 @@
 @section('title', 'Customer Register | WindowShop')
 @section('meta_description', 'Static customer registration page for WindowShop shoppers.')
 
+@php($checkoutMode = $checkoutMode ?? false)
+
 @push('styles')
     <style>
         .customer-register-wrap {
@@ -47,6 +49,20 @@
             border-color: rgba(18, 18, 18, .08);
             background: #ffffff;
             border-radius: 8px;
+        }
+
+        .customer-register-field-error {
+            display: none;
+            margin-top: 6px;
+            color: #c62828;
+        }
+
+        .customer-register-field-error.is-visible {
+            display: block;
+        }
+
+        .customer-register-wrap .form-get input.is-invalid {
+            border-color: #c62828;
         }
 
         .customer-register-visual {
@@ -150,6 +166,31 @@
             text-align: center;
         }
 
+        .checkout-progress {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 28px;
+            color: #6b7280;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .checkout-progress span {
+            padding: 6px 12px;
+            border: 1px solid #d8dee6;
+            border-radius: 999px;
+            background: #ffffff;
+        }
+
+        .checkout-progress .active {
+            color: #ffffff;
+            border-color: #121212;
+            background: #121212;
+        }
+
         @media (max-width: 991px) {
             .customer-register-shell {
                 grid-template-columns: 1fr;
@@ -171,63 +212,100 @@
 @section('content')
     <section class="flat-spacing customer-register-wrap">
         <div class="container">
+            @if ($checkoutMode)
+                <div class="checkout-progress" aria-label="Checkout progress">
+                    <span class="active">Account</span>
+                    <span>Address</span>
+                    <span>Shipping</span>
+                    <span>Payment</span>
+                </div>
+            @endif
+
             <div class="customer-register-shell">
                 <div class="customer-register-form">
                     <h1>Create Your Account</h1>
                     <p class="auth-subtitle">Welcome back! Please enter your details.</p>
 
-                    <form action="#;" method="POST" class="form-get">
+                    <form action="{{ route('storefront.register.store') }}" method="POST" class="form-get" data-customer-register-form novalidate>
+                        @csrf
                         <h6 class="mb-16">Your Personal Details</h6>
                         <div class="mb-16">
-                            <label for="customer_first_name" class="form-label">Name</label>
+                            <label for="customer_first_name" class="form-label">First Name</label>
                             <fieldset>
-                                <input id="customer_first_name" type="text">
+                                <input id="customer_first_name" name="name" type="text" value="{{ old('name') }}" data-register-name>
                             </fieldset>
+                            <p class="text-caption-01 customer-register-field-error" data-field-error="name"></p>
+                            @error('name')
+                                <p class="text-caption-01 text-danger mt-1 mb-0">{{ $message }}</p>
+                            @enderror
                         </div>
                         <div class="mb-16">
                             <label for="customer_last_name" class="form-label">Last Name</label>
                             <fieldset>
-                                <input id="customer_last_name" type="text">
+                                <input id="customer_last_name" name="last_name" type="text" value="{{ old('last_name') }}">
                             </fieldset>
+                            @error('last_name')
+                                <p class="text-caption-01 text-danger mt-1 mb-0">{{ $message }}</p>
+                            @enderror
                         </div>
                         <div class="mb-16">
-                            <label for="customer_mobile" class="form-label">Mobile Number</label>
+                            <label for="customer_mobile" class="form-label">Phone Number</label>
                             <fieldset>
-                                <input id="customer_mobile" type="tel">
+                                <input id="customer_mobile" name="mobile" type="tel" value="{{ old('mobile') }}" data-register-mobile>
                             </fieldset>
+                            <p class="text-caption-01 customer-register-field-error" data-field-error="mobile"></p>
+                            @error('mobile')
+                                <p class="text-caption-01 text-danger mt-1 mb-0">{{ $message }}</p>
+                            @enderror
                         </div>
                         <div class="mb-16">
                             <label for="customer_register_email" class="form-label">E-Mail</label>
                             <fieldset>
-                                <input id="customer_register_email" type="email">
+                                <input id="customer_register_email" name="email" type="email" value="{{ old('email') }}" data-register-email>
                             </fieldset>
+                            <p class="text-caption-01 customer-register-field-error" data-field-error="email"></p>
+                            @error('email')
+                                <p class="text-caption-01 text-danger mt-1 mb-0">{{ $message }}</p>
+                            @enderror
                         </div>
 
                         <h6 class="mb-16 mt-24">Your Password</h6>
                         <div class="mb-16">
                             <label for="customer_register_password" class="form-label">Password</label>
                             <fieldset>
-                                <input id="customer_register_password" type="password">
+                                <input id="customer_register_password" name="password" type="password" data-register-password>
                             </fieldset>
+                            <p class="text-caption-01 customer-register-field-error" data-field-error="password"></p>
+                            @error('password')
+                                <p class="text-caption-01 text-danger mt-1 mb-0">{{ $message }}</p>
+                            @enderror
                         </div>
                         <div class="mb-16">
                             <label for="customer_confirm_password" class="form-label">Confirm password: <span class="text-primary">*</span></label>
                             <fieldset>
-                                <input id="customer_confirm_password" type="password">
+                                <input id="customer_confirm_password" name="password_confirmation" type="password" data-register-password-confirmation>
                             </fieldset>
+                            <p class="text-caption-01 customer-register-field-error" data-field-error="password_confirmation"></p>
                         </div>
 
                         <label class="checkbox-wrap mb-0">
-                            <input type="checkbox">
+                            <input type="checkbox" name="terms" value="1" {{ old('terms') ? 'checked' : '' }} data-register-terms>
                             <span class="checkbox-box"></span>
-                            <span class="text-caption-01">I accept the terms and conditions.</span>
+                            <span class="text-caption-01">
+                                I accept the
+                                <a href="{{ route('storefront.terms') }}" target="_blank" rel="noopener noreferrer" class="customer-auth-link">Terms &amp; Conditions</a>.
+                            </span>
                         </label>
+                        <p class="text-caption-01 customer-register-field-error" data-field-error="terms"></p>
+                        @error('terms')
+                            <p class="text-caption-01 text-danger mt-1 mb-0">{{ $message }}</p>
+                        @enderror
 
                         <div class="customer-register-actions">
-                            <button type="submit" class="tf-btn animate-btn">Sign in</button>
+                            <button type="submit" class="tf-btn animate-btn">Create Account</button>
                             <p class="customer-register-login mb-0">
                                 Already have an account?
-                                <a href="{{ route('storefront.login') }}" class="customer-auth-link">Sign in</a>
+                                <a href="{{ $checkoutMode ? route('storefront.login', ['from' => 'checkout']) : route('storefront.login') }}" class="customer-auth-link">Sign in</a>
                             </p>
                         </div>
                     </form>
@@ -289,3 +367,107 @@
         </div>
     </section>
 @endsection
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.querySelector('[data-customer-register-form]');
+
+            if (!form) {
+                return;
+            }
+
+            const fields = {
+                name: form.querySelector('[data-register-name]'),
+                mobile: form.querySelector('[data-register-mobile]'),
+                email: form.querySelector('[data-register-email]'),
+                password: form.querySelector('[data-register-password]'),
+                passwordConfirmation: form.querySelector('[data-register-password-confirmation]'),
+                terms: form.querySelector('[data-register-terms]'),
+            };
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const mobilePattern = /^[0-9+\-\s()]{7,20}$/;
+
+            const setError = (input, field, message = '') => {
+                const error = form.querySelector(`[data-field-error="${field}"]`);
+
+                input?.classList.toggle('is-invalid', message !== '');
+                if (error) {
+                    error.textContent = message;
+                    error.classList.toggle('is-visible', message !== '');
+                }
+            };
+
+            const validate = (shouldFocus = false) => {
+                let firstInvalid = null;
+
+                if (!fields.name.value.trim()) {
+                    setError(fields.name, 'name', 'Please enter your name.');
+                    firstInvalid = firstInvalid || fields.name;
+                } else {
+                    setError(fields.name, 'name');
+                }
+
+                if (fields.mobile.value.trim() && !mobilePattern.test(fields.mobile.value.trim())) {
+                    setError(fields.mobile, 'mobile', 'Please enter a valid phone number.');
+                    firstInvalid = firstInvalid || fields.mobile;
+                } else {
+                    setError(fields.mobile, 'mobile');
+                }
+
+                if (!fields.email.value.trim()) {
+                    setError(fields.email, 'email', 'Please enter your email address.');
+                    firstInvalid = firstInvalid || fields.email;
+                } else if (!emailPattern.test(fields.email.value.trim())) {
+                    setError(fields.email, 'email', 'Please enter a valid email address.');
+                    firstInvalid = firstInvalid || fields.email;
+                } else {
+                    setError(fields.email, 'email');
+                }
+
+                if (!fields.password.value) {
+                    setError(fields.password, 'password', 'Please enter a password.');
+                    firstInvalid = firstInvalid || fields.password;
+                } else if (fields.password.value.length < 8) {
+                    setError(fields.password, 'password', 'Password must be at least 8 characters.');
+                    firstInvalid = firstInvalid || fields.password;
+                } else {
+                    setError(fields.password, 'password');
+                }
+
+                if (!fields.passwordConfirmation.value) {
+                    setError(fields.passwordConfirmation, 'password_confirmation', 'Please confirm your password.');
+                    firstInvalid = firstInvalid || fields.passwordConfirmation;
+                } else if (fields.password.value !== fields.passwordConfirmation.value) {
+                    setError(fields.passwordConfirmation, 'password_confirmation', 'Passwords do not match.');
+                    firstInvalid = firstInvalid || fields.passwordConfirmation;
+                } else {
+                    setError(fields.passwordConfirmation, 'password_confirmation');
+                }
+
+                if (!fields.terms.checked) {
+                    setError(fields.terms, 'terms', 'Please accept the terms and conditions.');
+                    firstInvalid = firstInvalid || fields.terms;
+                } else {
+                    setError(fields.terms, 'terms');
+                }
+
+                if (shouldFocus) {
+                    firstInvalid?.focus();
+                }
+
+                return firstInvalid === null;
+            };
+
+            Object.values(fields).forEach((input) => {
+                input?.addEventListener(input.type === 'checkbox' ? 'change' : 'input', () => validate(false));
+            });
+
+            form.addEventListener('submit', (event) => {
+                if (!validate(true)) {
+                    event.preventDefault();
+                }
+            });
+        });
+    </script>
+@endpush

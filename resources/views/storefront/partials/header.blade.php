@@ -42,7 +42,7 @@
                         </a>
                     </li>
                     <li>
-                        <a href="{{ route('storefront.login') }}" class="nav-icon-item link">
+                        <a href="{{ route('storefront.account') }}" class="nav-icon-item link">
                             <i class="icon icon-User"></i>
                         </a>
                     </li>

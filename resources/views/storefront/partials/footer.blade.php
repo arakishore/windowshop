@@ -37,7 +37,7 @@
                                     <li><a href="{{ route('storefront.testimonials') }}" class="cl-text-3 link">Testimonials</a></li>
                                     <li><a href="{{ route('storefront.contact') }}" class="cl-text-3 link">Contact us</a></li>
                                     <li><a href="blog.html" class="cl-text-3 link">Latest New</a></li>
-                                    <li><a href="{{ route('storefront.login') }}" class="cl-text-3 link">My Account</a></li>
+                                    <li><a href="{{ route('storefront.account') }}" class="cl-text-3 link">My Account</a></li>
                                 </ul>
                             </div>
                         </div>
@@ -61,7 +61,7 @@
                                     </li>
                                     <li><a href="{{ route('storefront.register') }}" class="cl-text-3 link">Sign
                                             up</a></li>
-                                    <li><a href="{{ route('storefront.login') }}" class="cl-text-3 link">My Account</a></li>
+                                    <li><a href="{{ route('storefront.account') }}" class="cl-text-3 link">My Account</a></li>
                                     <li><a href="wishlist.html" class="cl-text-3 link">Wish List</a></li>
                                 </ul>
                             </div>

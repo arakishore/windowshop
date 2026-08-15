@@ -3,6 +3,8 @@
 @section('title', 'Customer Login | WindowShop')
 @section('meta_description', 'Customer login page for WindowShop shoppers.')
 
+@php($checkoutMode = $checkoutMode ?? false)
+
 @push('styles')
     <style>
         .customer-auth-wrap {
@@ -102,6 +104,45 @@
             font-size: 12px;
         }
 
+        .customer-auth-field-error {
+            display: none;
+            margin-top: 6px;
+            color: #c62828;
+        }
+
+        .customer-auth-field-error.is-visible {
+            display: block;
+        }
+
+        .customer-auth-wrap .form-get input.is-invalid {
+            border-color: #c62828;
+        }
+
+        .checkout-progress {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 28px;
+            color: #6b7280;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .checkout-progress span {
+            padding: 6px 12px;
+            border: 1px solid #d8dee6;
+            border-radius: 999px;
+            background: #ffffff;
+        }
+
+        .checkout-progress .active {
+            color: #ffffff;
+            border-color: #121212;
+            background: #121212;
+        }
+
         @media (max-width: 991px) {
             .customer-auth-returning {
                 order: -1;
@@ -117,15 +158,24 @@
                 <div class="breadcrumbs">
                     <a href="{{ route('storefront.home') }}" class="text-caption-01 cl-text-3 link">Home</a>
                     <i class="icon icon-CaretRightThin cl-text-3"></i>
-                    <p class="text-caption-01">Customer Login</p>
+                    <p class="text-caption-01">{{ $checkoutMode ? 'Checkout Account' : 'Customer Login' }}</p>
                 </div>
-                <h3>Customer Login</h3>
+                <h3>{{ $checkoutMode ? 'Checkout Account' : 'Customer Login' }}</h3>
             </div>
         </div>
     </section>
 
     <section class="flat-spacing customer-auth-wrap">
         <div class="container">
+            @if ($checkoutMode)
+                <div class="checkout-progress" aria-label="Checkout progress">
+                    <span class="active">Account</span>
+                    <span>Address</span>
+                    <span>Shipping</span>
+                    <span>Payment</span>
+                </div>
+            @endif
+
             <div class="row g-4">
                 <div class="col-lg-6 d-flex customer-auth-new">
                     <div class="customer-auth-card">
@@ -152,7 +202,7 @@
                             </div>
                         </div>
                         <div class="customer-auth-actions">
-                            <a href="{{ route('storefront.register') }}" class="tf-btn animate-btn small">Create Account</a>
+                            <a href="{{ $checkoutMode ? route('storefront.register', ['from' => 'checkout']) : route('storefront.register') }}" class="tf-btn animate-btn small">Create Account</a>
                         </div>
                     </div>
                 </div>
@@ -160,18 +210,27 @@
                     <div class="customer-auth-card">
                         <h4>Returning Customer</h4>
                         <p class="auth-subtitle">I am a returning customer</p>
-                        <form action="#;" method="POST" class="form-get">
+                        <form action="{{ route('storefront.login.store') }}" method="POST" class="form-get" data-customer-login-form novalidate>
+                            @csrf
                             <div class="mb-20">
                                 <label for="customer_login_email" class="form-label">E-Mail Address</label>
                                 <fieldset>
-                                    <input id="customer_login_email" type="email" value="demo">
+                                    <input id="customer_login_email" name="email" type="email" value="{{ old('email') }}" data-login-email>
                                 </fieldset>
+                                <p class="text-caption-01 customer-auth-field-error" data-field-error="email"></p>
+                                @error('email')
+                                    <p class="text-caption-01 text-danger mt-1 mb-0">{{ $message }}</p>
+                                @enderror
                             </div>
                             <div class="mb-8">
                                 <label for="customer_login_password" class="form-label">Password</label>
                                 <fieldset>
-                                    <input id="customer_login_password" type="password" value="demo">
+                                    <input id="customer_login_password" name="password" type="password" data-login-password>
                                 </fieldset>
+                                <p class="text-caption-01 customer-auth-field-error" data-field-error="password"></p>
+                                @error('password')
+                                    <p class="text-caption-01 text-danger mt-1 mb-0">{{ $message }}</p>
+                                @enderror
                             </div>
                             <a href="{{ route('storefront.forgot-password') }}" class="customer-auth-link">Forgotten Password</a>
                             <div class="customer-auth-actions">
@@ -184,3 +243,66 @@
         </div>
     </section>
 @endsection
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.querySelector('[data-customer-login-form]');
+
+            if (!form) {
+                return;
+            }
+
+            const email = form.querySelector('[data-login-email]');
+            const password = form.querySelector('[data-login-password]');
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            const setError = (input, field, message = '') => {
+                const error = form.querySelector(`[data-field-error="${field}"]`);
+
+                input?.classList.toggle('is-invalid', message !== '');
+                if (error) {
+                    error.textContent = message;
+                    error.classList.toggle('is-visible', message !== '');
+                }
+            };
+
+            const validate = (shouldFocus = false) => {
+                let firstInvalid = null;
+
+                if (!email.value.trim()) {
+                    setError(email, 'email', 'Please enter your email address.');
+                    firstInvalid = firstInvalid || email;
+                } else if (!emailPattern.test(email.value.trim())) {
+                    setError(email, 'email', 'Please enter a valid email address.');
+                    firstInvalid = firstInvalid || email;
+                } else {
+                    setError(email, 'email');
+                }
+
+                if (!password.value) {
+                    setError(password, 'password', 'Please enter your password.');
+                    firstInvalid = firstInvalid || password;
+                } else {
+                    setError(password, 'password');
+                }
+
+                if (shouldFocus) {
+                    firstInvalid?.focus();
+                }
+
+                return firstInvalid === null;
+            };
+
+            [email, password].forEach((input) => {
+                input?.addEventListener('input', () => validate(false));
+            });
+
+            form.addEventListener('submit', (event) => {
+                if (!validate(true)) {
+                    event.preventDefault();
+                }
+            });
+        });
+    </script>
+@endpush
