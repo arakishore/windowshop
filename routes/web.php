@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\MerchantShopController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\SystemSettingController;
 use App\Http\Controllers\Storefront\CustomerLocationController;
+use App\Http\Controllers\Storefront\CartItemController;
 use App\Http\Controllers\Storefront\StorefrontController;
 use Illuminate\Support\Facades\Route;
 
@@ -50,6 +51,7 @@ Route::get('/register', [StorefrontController::class, 'register'])->name('storef
 Route::get('/forgot-password', [StorefrontController::class, 'forgotPassword'])->name('storefront.forgot-password');
 Route::view('/demo/shopping-bag-box', 'storefront.pages.demo-shopping-bag-box')->name('storefront.demo.shopping-bag-box');
 Route::get('/products', [StorefrontController::class, 'products'])->name('storefront.products');
+Route::post('/cart/items', [CartItemController::class, 'store'])->name('storefront.cart.items.store');
 Route::post('/products/{slug}/delivery-check', [StorefrontController::class, 'checkProductDelivery'])->name('storefront.product.delivery-check');
 Route::get('/products/{slug}', [StorefrontController::class, 'productDetail'])->name('storefront.product.show');
 Route::get('/shop', [StorefrontController::class, 'products'])->name('storefront.shop');

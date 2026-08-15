@@ -396,7 +396,7 @@
             <a href="{{ route('storefront.cart') }}">
                 <span class="toolbar-icon">
                     <i class="icon icon-Handbag"></i>
-                    <span class="toolbar-count">12</span>
+                    <span class="toolbar-count" data-storefront-cart-count>{{ $storefrontCartCount ?? '0' }}</span>
                 </span>
                 <span class="toolbar-label">Cart</span>
             </a>

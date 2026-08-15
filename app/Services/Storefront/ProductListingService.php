@@ -118,7 +118,7 @@ class ProductListingService
                 'primaryImage' => fn ($query) => $query
                     ->where('status', 'active')
                     ->select('id', 'product_id', 'image_path', 'thumbnail_path', 'alt_text', 'status'),
-                'storefrontCardVariant:id,product_id,mrp,selling_price,is_default,status,is_sellable',
+                'storefrontCardVariant:id,product_id,mrp,selling_price,stock_quantity,allow_backorder,is_default,status,is_sellable',
             ])
             ->where('products.status', 'active')
             ->when($categoryIds !== null, fn (Builder $query) => $query->whereIn('products.product_category_id', $categoryIds))
@@ -177,11 +177,11 @@ class ProductListingService
                 'images' => fn ($query) => $query
                     ->where('status', 'active')
                     ->select('id', 'product_id', 'image_path', 'thumbnail_path', 'alt_text', 'sort_order', 'status'),
-                'storefrontCardVariant:id,product_id,shop_id,availability_status_id,sku,name,mrp,selling_price,stock_quantity,is_default,status,is_sellable',
+                'storefrontCardVariant:id,product_id,shop_id,availability_status_id,sku,name,mrp,selling_price,stock_quantity,allow_backorder,is_default,status,is_sellable',
                 'variants' => fn ($query) => $query
                     ->where('status', 'active')
                     ->where('is_sellable', true)
-                    ->select('id', 'product_id', 'shop_id', 'sku', 'name', 'mrp', 'selling_price', 'stock_quantity', 'is_default', 'sort_order', 'status', 'is_sellable')
+                    ->select('id', 'product_id', 'shop_id', 'sku', 'name', 'mrp', 'selling_price', 'stock_quantity', 'allow_backorder', 'is_default', 'sort_order', 'status', 'is_sellable')
                     ->orderByDesc('is_default')
                     ->orderBy('sort_order')
                     ->orderBy('id')
@@ -340,6 +340,9 @@ class ProductListingService
             'image' => $image,
             'hover_image' => $image,
             'price' => $this->money($sellingPrice),
+            'selected_variant_id' => $variant->getKey(),
+            'can_add_to_cart' => (float) $variant->stock_quantity > 0 || (bool) $variant->allow_backorder,
+            'add_to_cart_url' => route('storefront.cart.items.store'),
             'old_price' => $hasDiscount ? $this->money($mrp) : null,
             'badge' => $discountPercent > 0 ? '-'.$discountPercent.'%' : null,
             'badge_class' => $discountPercent > 0 ? 'sale' : null,
@@ -375,6 +378,9 @@ class ProductListingService
             'store_address' => $this->shopAddress($product->shop),
             'store_whatsapp_url' => $this->whatsappUrl($product),
             'price' => $this->money($sellingPrice),
+            'selected_variant_id' => $variant->getKey(),
+            'can_add_to_cart' => (float) $variant->stock_quantity > 0 || (bool) $variant->allow_backorder,
+            'add_to_cart_url' => route('storefront.cart.items.store'),
             'old_price' => $hasDiscount ? $this->money($mrp) : null,
             'discount' => $discountPercent > 0 ? '-'.$discountPercent.'%' : null,
             'sku' => $variant->sku ?: 'SKU-'.$variant->getKey(),
@@ -423,7 +429,7 @@ class ProductListingService
     }
 
     /**
-     * @return array<int, array{name: string, price: string, raw_price: float}>
+     * @return array<int, array{name: string, price: string, raw_price: float, variant_id: int}>
      */
     private function sizeLabels(Product $product): array
     {
@@ -440,6 +446,7 @@ class ProductListingService
                     'name' => $size->value->name,
                     'price' => $this->money((float) $variant->selling_price),
                     'raw_price' => (float) $variant->selling_price,
+                    'variant_id' => $variant->getKey(),
                 ];
             })
             ->filter()
@@ -467,6 +474,7 @@ class ProductListingService
                     'name' => $label,
                     'price' => $this->money((float) $variant->selling_price),
                     'raw_price' => (float) $variant->selling_price,
+                    'variant_id' => $variant->getKey(),
                 ];
             })
             ->filter()

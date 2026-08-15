@@ -193,7 +193,9 @@
                                             @foreach ($product['sizes'] as $size)
                                                 <span class="size-btn {{ $loop->first ? 'active' : '' }}"
                                                     data-size="{{ $size['name'] }}"
-                                                    data-price="{{ $size['raw_price'] }}">{{ $size['name'] }}</span>
+                                                    data-price="{{ $size['raw_price'] }}"
+                                                    data-price-label="{{ $size['price'] }}"
+                                                    data-variant-id="{{ $size['variant_id'] }}">{{ $size['name'] }}</span>
                                             @endforeach
                                         </div>
                                     </div>
@@ -201,23 +203,33 @@
 
                                 <div class="tf-product-total-quantity">
                                     <p>Quantity:</p>
-                                    <div class="group-action">
+                                    <form method="POST" action="{{ $product['add_to_cart_url'] }}" class="group-action" data-add-to-cart-form>
+                                        @csrf
+                                        <input type="hidden" name="product_variant_id" value="{{ $product['selected_variant_id'] }}" data-cart-variant-input>
                                         <div class="wg-quantity">
                                             <button class="btn-quantity btn-decrease" type="button">
                                                 <i class="icon icon-minus"></i>
                                             </button>
-                                            <input class="quantity-product" type="text" name="number" value="1">
+                                            <input class="quantity-product" type="text" name="quantity" value="1" inputmode="numeric" data-cart-quantity-input>
                                             <button class="btn-quantity btn-increase" type="button">
                                                 <i class="icon icon-plus"></i>
                                             </button>
                                         </div>
-                                        <a href="#shoppingCart" data-bs-toggle="offcanvas"
-                                            class="btn-action-price tf-btn type-xl animate-btn w-100">
-                                            Add To Cart
+                                        <button type="submit"
+                                            class="btn-action-price tf-btn type-xl animate-btn w-100"
+                                            data-add-to-cart-button
+                                            {{ $product['can_add_to_cart'] ? '' : 'disabled' }}>
+                                            {{ $product['can_add_to_cart'] ? 'Add To Cart' : 'Out of Stock' }}
                                             <span class="d-none d-sm-block d-md-none d-lg-block">&nbsp;-&nbsp;</span>
                                             <span class="price-add d-none d-sm-block d-md-none d-lg-block">{{ $product['price'] }}</span>
-                                        </a>
-                                    </div>
+                                        </button>
+                                    </form>
+                                    <p class="text-caption-01 mt-2 mb-0 {{ $errors->getBag('cart')->any() ? 'text-danger' : 'text-success' }}"
+                                        data-add-to-cart-message
+                                        role="status"
+                                        {{ $errors->getBag('cart')->any() || session('cart_success') ? '' : 'hidden' }}>
+                                        {{ $errors->getBag('cart')->first('quantity') ?: $errors->getBag('cart')->first('product_variant_id') ?: session('cart_success') }}
+                                    </p>
                                 </div>
                             </div>
 
@@ -343,14 +355,20 @@
                     </div>
                 </div>
                 <div class="tf-sticky-atc-infos">
-                    <form>
+                    <form method="POST" action="{{ $product['add_to_cart_url'] }}" data-add-to-cart-form>
+                        @csrf
+                        <input type="hidden" name="product_variant_id" value="{{ $product['selected_variant_id'] }}" data-cart-variant-input>
                         @if (! empty($product['sizes']))
                             <div class="tf-sticky-atc-variant-price">
                                 <p class="title">Size:</p>
                                 <div class="tf-select style-2">
-                                    <select>
+                                    <select data-sticky-variant-select>
                                         @foreach ($product['sizes'] as $size)
-                                            <option value="{{ $size['name'] }}" data-price="{{ $size['raw_price'] }}" {{ $loop->first ? 'selected' : '' }}>{{ $size['name'] }}</option>
+                                            <option value="{{ $size['name'] }}"
+                                                data-price="{{ $size['raw_price'] }}"
+                                                data-price-label="{{ $size['price'] }}"
+                                                data-variant-id="{{ $size['variant_id'] }}"
+                                                {{ $loop->first ? 'selected' : '' }}>{{ $size['name'] }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -362,15 +380,19 @@
                                 <button class="btn-quantity minus-btn" type="button">
                                     <i class="icon icon-minus"></i>
                                 </button>
-                                <input class="quantity-product" type="text" name="number" value="1">
+                                <input class="quantity-product" type="text" name="quantity" value="1" inputmode="numeric" data-cart-quantity-input>
                                 <button class="btn-quantity plus-btn" type="button">
                                     <i class="icon icon-plus"></i>
                                 </button>
                             </div>
                         </div>
-                        <a href="#shoppingCart" data-bs-toggle="offcanvas" class="tf-btn animate-btn btn-add-to-cart">
-                            Add To Cart - <span class="sticky-price-add">{{ $product['price'] }}</span>
-                        </a>
+                        <button type="submit"
+                            class="tf-btn animate-btn btn-add-to-cart"
+                            data-add-to-cart-button
+                            {{ $product['can_add_to_cart'] ? '' : 'disabled' }}>
+                            {{ $product['can_add_to_cart'] ? 'Add To Cart' : 'Out of Stock' }} - <span class="sticky-price-add">{{ $product['price'] }}</span>
+                        </button>
+                        <p class="text-caption-01 mt-2 mb-0" data-add-to-cart-message role="status" hidden></p>
                     </form>
                 </div>
             </div>
@@ -751,6 +773,122 @@
                 toggle.addEventListener('click', () => {
                     const collapsed = wrap.classList.toggle('is-collapsed');
                     toggle.textContent = collapsed ? 'Read more' : 'Read less';
+                });
+            });
+
+            document.querySelectorAll('[data-add-to-cart-form]').forEach((form) => {
+                const variantInput = form.querySelector('[data-cart-variant-input]');
+                const quantityInput = form.querySelector('[data-cart-quantity-input]');
+                const button = form.querySelector('[data-add-to-cart-button]');
+                const message = form.parentElement ? form.parentElement.querySelector('[data-add-to-cart-message]') : null;
+                const defaultButtonText = button ? button.textContent.trim() : 'Add To Cart';
+
+                const csrfToken = () => {
+                    const tokenInput = form.querySelector('input[name="_token"]');
+                    const metaToken = document.querySelector('meta[name="csrf-token"]');
+
+                    return tokenInput ? tokenInput.value : (metaToken ? metaToken.getAttribute('content') : '');
+                };
+
+                const showCartMessage = (text, type) => {
+                    if (!message) {
+                        return;
+                    }
+
+                    message.textContent = text;
+                    message.hidden = false;
+                    message.classList.toggle('text-success', type === 'success');
+                    message.classList.toggle('text-danger', type !== 'success');
+                };
+
+                const setLoading = (isLoading) => {
+                    if (!button) {
+                        return;
+                    }
+
+                    button.disabled = isLoading;
+                    button.dataset.loading = isLoading ? 'true' : 'false';
+                    button.childNodes[0].textContent = isLoading ? 'Adding...' : defaultButtonText.replace(/\s+-\s+.*$/, '');
+                };
+
+                document.querySelectorAll('[data-size][data-variant-id]').forEach((sizeButton) => {
+                    sizeButton.addEventListener('click', () => {
+                        if (variantInput) {
+                            variantInput.value = sizeButton.dataset.variantId || variantInput.value;
+                        }
+
+                        const price = sizeButton.dataset.priceLabel;
+                        const priceTarget = form.querySelector('.price-add') || form.querySelector('.sticky-price-add');
+
+                        if (price && priceTarget) {
+                            priceTarget.textContent = price;
+                        }
+                    });
+                });
+
+                const stickySelect = form.querySelector('[data-sticky-variant-select]');
+
+                if (stickySelect) {
+                    stickySelect.addEventListener('change', () => {
+                        const option = stickySelect.selectedOptions[0];
+
+                        if (!option) {
+                            return;
+                        }
+
+                        if (variantInput) {
+                            variantInput.value = option.dataset.variantId || variantInput.value;
+                        }
+
+                        const priceTarget = form.querySelector('.sticky-price-add');
+
+                        if (option.dataset.priceLabel && priceTarget) {
+                            priceTarget.textContent = option.dataset.priceLabel;
+                        }
+                    });
+                }
+
+                if (!quantityInput || !button || !window.fetch) {
+                    return;
+                }
+
+                quantityInput.addEventListener('input', () => {
+                    quantityInput.value = quantityInput.value.replace(/[^\d.]/g, '');
+                });
+
+                form.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    setLoading(true);
+
+                    try {
+                        const response = await fetch(form.action, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': csrfToken(),
+                            },
+                            body: new FormData(form),
+                            credentials: 'same-origin',
+                        });
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok) {
+                            const errors = data.errors || {};
+                            const firstError = Object.values(errors).flat()[0];
+                            showCartMessage(firstError || data.message || 'Could not add this product to cart.', 'error');
+                            return;
+                        }
+
+                        document.querySelectorAll('[data-storefront-cart-count]').forEach((count) => {
+                            count.textContent = data.cart_count || '0';
+                        });
+                        showCartMessage(data.message || 'Product added to cart.', 'success');
+                    } catch (error) {
+                        showCartMessage('Could not add this product to cart. Please try again.', 'error');
+                    } finally {
+                        setLoading(false);
+                    }
                 });
             });
 
