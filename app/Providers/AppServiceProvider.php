@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Services\DateTime\DateDisplayService;
 use App\Services\Marketplace\MarketplaceLogoService;
 use App\Services\Cart\CartResolver;
+use App\Services\Cart\CartPageService;
 use App\Services\Storefront\CustomerLocationService;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
@@ -31,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
         View::composer([
             'storefront.partials.header',
             'storefront.layouts.app',
+            'storefront.partials.search',
             'storefront.partials.customer-location-modal',
             'storefront.pages.product-detail',
         ], function ($view): void {
@@ -45,6 +47,7 @@ class AppServiceProvider extends ServiceProvider
                 'currentPostalCode' => $currentPostalCode,
                 'shouldAutoOpenCustomerLocationModal' => $currentPostalCode === null,
                 'storefrontCartCount' => app(CartResolver::class)->itemCount(request()),
+                'storefrontMiniCart' => app(CartPageService::class)->pageData(request()),
             ]);
         });
     }

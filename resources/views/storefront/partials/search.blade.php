@@ -100,17 +100,229 @@
 </div>
 
 <div class="offcanvas offcanvas-end popup-shopping-cart" id="shoppingCart">
-    <div class="canvas-wrapper">
-        <div class="canvas-header">
-            <h5 class="title">Shopping Cart</h5>
-            <span class="icon-X2 icon-close-popup" data-bs-dismiss="offcanvas"></span>
+    @php
+        $miniCart = $storefrontMiniCart ?? [
+            'is_empty' => true,
+            'shop_groups' => [],
+            'subtotal' => 'INR 0.00',
+            'total' => 'INR 0.00',
+        ];
+    @endphp
+    <div class="canvas-wrapper" data-mini-cart>
+        <div class="popup-header">
+            <div class="d-flex align-items-center justify-content-between mb-12">
+                <h5 class="title">Shopping Cart</h5>
+                <span class="icon-X2 icon-close-popup" data-bs-dismiss="offcanvas"></span>
+            </div>
         </div>
-        <div class="canvas-body">
-            <div class="box-text_empty type-shop_cart">
-                <div class="shop-empty_top">
-                    <p class="text-center cl-text-2 mb-0">Your cart is empty.</p>
+        <div class="wrap">
+            <div class="tf-mini-cart-wrap list-file-delete wrap-empty_text">
+                <div class="tf-mini-cart-main">
+                    <div class="tf-mini-cart-sroll">
+                        <div class="tf-mini-cart-items list-empty" data-mini-cart-items>
+                            <div class="box-text_empty type-shop_cart" data-mini-cart-empty {{ $miniCart['is_empty'] ? '' : 'hidden' }}>
+                                <div class="shop-empty_top">
+                                    <span class="icon">
+                                        <i class="icon-Handbag"></i>
+                                    </span>
+                                    <h4 class="text-emp">Your cart is empty</h4>
+                                    <p class="cl-text-2">Your cart is currently empty. Let us assist you in finding the right product</p>
+                                </div>
+                                <div class="shop-empty_bot">
+                                    <a href="{{ route('storefront.products') }}" class="tf-btn animate-btn">Shopping</a>
+                                    <a href="{{ route('storefront.home') }}" class="tf-btn btn-stroke">Back to home</a>
+                                </div>
+                            </div>
+                        @foreach ($miniCart['shop_groups'] as $shopGroup)
+                            <div class="mini-cart-shop" data-mini-cart-shop="{{ $shopGroup['shop_id'] }}">
+                                <div class="d-flex align-items-center justify-content-between mb-12">
+                                    <p class="fw-semibold mb-0">{{ $shopGroup['shop_name'] }}</p>
+                                    <span class="text-caption-01 cl-text-2" data-mini-shop-subtotal="{{ $shopGroup['shop_id'] }}">{{ $shopGroup['subtotal'] }}</span>
+                                </div>
+                                @foreach ($shopGroup['items'] as $item)
+                                    <div class="tf-mini-cart-item file-delete" data-mini-cart-item="{{ $item['id'] }}" data-mini-cart-shop-id="{{ $shopGroup['shop_id'] }}">
+                                        <a href="{{ $item['product_url'] }}" class="tf-mini-cart-image">
+                                            <img loading="lazy" src="{{ $item['image'] }}" alt="{{ $item['product_name'] }}">
+                                        </a>
+                                        <div class="tf-mini-cart-info">
+                                            <a href="{{ $item['product_url'] }}" class="name fw-medium link text-line-clamp-1">{{ $item['product_name'] }}</a>
+                                            @foreach ($item['attributes'] as $attribute)
+                                                <div class="tf-prd-select text-caption-01 mb-4">
+                                                    <span class="type-text cl-text-3">{{ $attribute['label'] }}:&nbsp;</span>
+                                                    <span class="fw-medium">{{ $attribute['value'] }}</span>
+                                                </div>
+                                            @endforeach
+                                            @if (! $item['is_available'])
+                                                <p class="text-caption-01 text-danger mb-0">{{ $item['availability_message'] ?: 'Currently unavailable.' }}</p>
+                                            @endif
+                                        </div>
+                                        <div class="tf-mini-cart-price">
+                                            <div class="fw-semibold d-flex align-items-center justify-content-between gap-4">
+                                                <span class="number" data-mini-cart-item-quantity>{{ $item['quantity'] }}</span>
+                                                <span>x</span>
+                                                <span class="price" data-mini-cart-item-price>{{ $item['unit_price'] }}</span>
+                                            </div>
+                                            <div class="text-caption-01 cl-text-2 text-end" data-mini-cart-item-subtotal>{{ $item['line_subtotal'] }}</div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endforeach
+                        </div>
+                    </div>
+                </div>
+                <div class="tf-mini-cart-bottom box-empty_clear" data-mini-cart-filled {{ $miniCart['is_empty'] ? 'hidden' : '' }}>
+                    <div class="tf-mini-cart-bottom-wrap">
+                        <div class="tf-mini-cart-total">
+                            <h5 class="text-total d-flex align-content-center justify-content-between">
+                                <span class="subtotal">Sub-total</span>
+                                <span class="total-price" data-mini-cart-subtotal>{{ $miniCart['subtotal'] }}</span>
+                            </h5>
+                        </div>
+                        <div class="tf-mini-cart-view-checkout">
+                            <a href="{{ route('storefront.cart') }}" class="tf-btn btn-stroke">
+                                View cart
+                            </a>
+                            <a href="{{ route('storefront.checkout') }}" class="tf-btn animate-btn">
+                                Check Out
+                            </a>
+                        </div>
+                        <a href="{{ route('storefront.products') }}" class="d-flex justify-content-center fw-semibold text-center link">
+                            Or Continue Shopping
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@push('scripts')
+    <script>
+        window.WindowShopMiniCart = window.WindowShopMiniCart || {};
+        window.WindowShopMiniCart.sync = (payload) => {
+            const miniCart = document.querySelector('[data-mini-cart]');
+
+            if (!miniCart || !payload) {
+                return;
+            }
+
+            const productsUrl = @json(route('storefront.products'));
+            const homeUrl = @json(route('storefront.home'));
+            document.querySelectorAll('[data-storefront-cart-count]').forEach((count) => {
+                count.textContent = payload.cart_count || '0';
+            });
+
+            let empty = miniCart.querySelector('[data-mini-cart-empty]');
+            const filled = miniCart.querySelector('[data-mini-cart-filled]');
+            const subtotal = miniCart.querySelector('[data-mini-cart-subtotal]');
+            const itemsWrap = miniCart.querySelector('[data-mini-cart-items]');
+
+            if (subtotal && payload.subtotal) {
+                subtotal.textContent = payload.subtotal;
+            }
+
+            if (payload.is_empty) {
+                filled?.setAttribute('hidden', '');
+                if (itemsWrap) {
+                    itemsWrap.innerHTML = `
+                        <div class="box-text_empty type-shop_cart" data-mini-cart-empty>
+                            <div class="shop-empty_top">
+                                <span class="icon">
+                                    <i class="icon-Handbag"></i>
+                                </span>
+                                <h4 class="text-emp">Your cart is empty</h4>
+                                <p class="cl-text-2">Your cart is currently empty. Let us assist you in finding the right product</p>
+                            </div>
+                            <div class="shop-empty_bot">
+                                <a class="tf-btn animate-btn">Shopping</a>
+                                <a class="tf-btn btn-stroke">Back to home</a>
+                            </div>
+                        </div>
+                    `;
+                    itemsWrap.querySelector('.shop-empty_bot .tf-btn.animate-btn').href = productsUrl;
+                    itemsWrap.querySelector('.shop-empty_bot .tf-btn.btn-stroke').href = homeUrl;
+                    empty = itemsWrap.querySelector('[data-mini-cart-empty]');
+                }
+                empty?.removeAttribute('hidden');
+                return;
+            }
+
+            empty?.setAttribute('hidden', '');
+            filled?.removeAttribute('hidden');
+
+            if (itemsWrap) {
+                itemsWrap.replaceChildren();
+            }
+
+            (payload.shop_groups || []).forEach((shop) => {
+                if (!itemsWrap) {
+                    return;
+                }
+
+                const shopWrap = document.createElement('div');
+                shopWrap.className = 'mini-cart-shop';
+                shopWrap.dataset.miniCartShop = shop.shop_id;
+                shopWrap.innerHTML = `
+                    <div class="d-flex align-items-center justify-content-between mb-12">
+                        <p class="fw-semibold mb-0"></p>
+                        <span class="text-caption-01 cl-text-2" data-mini-shop-subtotal></span>
+                    </div>
+                `;
+                shopWrap.querySelector('p').textContent = shop.shop_name || 'Shop';
+                shopWrap.querySelector('[data-mini-shop-subtotal]').textContent = shop.subtotal || '';
+
+                (shop.items || []).forEach((item) => {
+                    const row = document.createElement('div');
+                    row.className = 'tf-mini-cart-item file-delete';
+                    row.dataset.miniCartItem = item.id;
+                    row.dataset.miniCartShopId = shop.shop_id;
+                    row.innerHTML = `
+                        <a class="tf-mini-cart-image">
+                            <img loading="lazy">
+                        </a>
+                        <div class="tf-mini-cart-info">
+                            <a class="name fw-medium link text-line-clamp-1"></a>
+                            <div data-mini-cart-attributes></div>
+                            <p class="text-caption-01 text-danger mb-0" data-mini-cart-warning hidden></p>
+                        </div>
+                        <div class="tf-mini-cart-price">
+                            <div class="fw-semibold d-flex align-items-center justify-content-between gap-4">
+                                <span class="number" data-mini-cart-item-quantity></span>
+                                <span>x</span>
+                                <span class="price" data-mini-cart-item-price></span>
+                            </div>
+                            <div class="text-caption-01 cl-text-2 text-end" data-mini-cart-item-subtotal></div>
+                        </div>
+                    `;
+                    row.querySelector('.tf-mini-cart-image').href = item.product_url || '#';
+                    row.querySelector('.tf-mini-cart-image img').src = item.image || '';
+                    row.querySelector('.tf-mini-cart-image img').alt = item.product_name || 'Product';
+                    row.querySelector('.name').href = item.product_url || '#';
+                    row.querySelector('.name').textContent = item.product_name || 'Product';
+                    row.querySelector('[data-mini-cart-item-quantity]').textContent = item.quantity || '0';
+                    row.querySelector('[data-mini-cart-item-price]').textContent = item.unit_price || '';
+                    row.querySelector('[data-mini-cart-item-subtotal]').textContent = item.line_subtotal || '';
+
+                    const attributesWrap = row.querySelector('[data-mini-cart-attributes]');
+                    (item.attributes || []).forEach((attribute) => {
+                        const attributeLine = document.createElement('div');
+                        attributeLine.className = 'tf-prd-select text-caption-01 mb-4';
+                        attributeLine.textContent = `${attribute.label}: ${attribute.value}`;
+                        attributesWrap.append(attributeLine);
+                    });
+
+                    if (!item.is_available) {
+                        const warning = row.querySelector('[data-mini-cart-warning]');
+                        warning.textContent = item.availability_message || 'Currently unavailable.';
+                        warning.hidden = false;
+                    }
+
+                    shopWrap.append(row);
+                });
+
+                itemsWrap.append(shopWrap);
+            });
+        };
+    </script>
+@endpush

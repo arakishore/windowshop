@@ -13,6 +13,79 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-08-15 - Cart UI/UX Refinement Drawer Review and Remove Confirmation
+
+Prompt:
+Refine the cart UI only: remove item deletion from the right-side mini-cart drawer, keep deletion on `/view-cart`, require a Bootstrap-style confirmation modal before deleting, preserve existing cart ownership/security rules, and keep totals/header/sidebar synchronized after removal.
+
+Outcome:
+Removed all mini-cart drawer Remove controls and the drawer-side DELETE listener so the drawer is quick-review only. Kept the full cart page Remove action, but it now opens a confirmation modal with Cancel and Remove actions before calling the existing AJAX DELETE endpoint. The backend ownership checks remain unchanged through the current `CartResolver` cart and cart item mutation flow.
+
+Implementation summary:
+
+- Right drawer still renders shop groups, products, quantities, prices, line amounts, shop subtotals, subtotal, View Cart, Checkout, and Continue Shopping.
+- Dynamic drawer/cart totals no longer use the template's legacy USD recalculation classes, preventing populated cart totals from being overwritten as `$0.00`.
+- Full cart page stores the selected row/delete URL as pending state when Remove is clicked and sends the DELETE request only from the modal confirm button.
+- Remove confirmation modal styling is scoped to the cart modal with slimmer buttons, tighter padding, and a smaller close control.
+- Cancel closes the modal without calling the delete endpoint or changing the database.
+- Confirmed removal updates the row, empty shop heading, cart subtotal/total, header count, empty cart state, and sidebar mini-cart from the existing cart payload.
+- Checkout, cart ownership rules, customer context rules, add-to-cart rules, stock/backorder rules, pricing rules, and database architecture were not changed.
+
+Files changed:
+
+- `resources/views/storefront/partials/search.blade.php`
+- `resources/views/storefront/pages/cart.blade.php`
+- `tests/Feature/StorefrontCartPageTest.php`
+- `docs/Prompt_Outcome_Log.md`
+
+Tests / checks run:
+
+- `php artisan test tests\Feature\StorefrontCartPageTest.php` passed: 18 tests, 95 assertions.
+- `php artisan test tests\Feature\StorefrontAddToCartTest.php` passed: 18 tests, 81 assertions.
+- PHP syntax checks passed for `CartItemController`, `CartItemMutationService`, `CartPageService`, and `StorefrontCartPageTest`.
+
+## 2026-08-15 - Cart Step 5 Dynamic Cart Page
+
+Prompt:
+Convert the existing static storefront Cart page into a dynamic cart page using `CartResolver::current()`, without creating carts on page view and without implementing checkout. Show real cart items grouped by shop, support quantity update and remove, refresh prices from current variant selling price, preserve customer/guest/admin/merchant cart context security, and add focused tests.
+
+Outcome:
+Converted the existing `GET /view-cart` page to render the current resolved cart instead of static demo data. Added cart page, quantity validation, and mutation services so Add to Cart and cart-page quantity updates share the same product/variant/shop/merchant, quantity, stock, and backorder rules. Added `PATCH /cart/items/{cartItem}` for quantity updates and `DELETE /cart/items/{cartItem}` for item removal, both enforcing that the item belongs to the current `StorefrontCustomerContext`/`CartResolver` cart.
+
+Implementation summary:
+
+- `CartPageService` loads the current cart with products, variants, shops, primary images, variant attributes, and availability relationships.
+- Cart display is grouped by shop with shop subtotals, cart subtotal, and cart total.
+- Cart page uses current database variant selling price for valid items and refreshes `cart_items.unit_price` during render/update.
+- Quantity update validates `quantity > 0`, integer/decimal rules, minimum, maximum, increment, stock, and purchase-allowed/backorder status.
+- Remove deletes only the `cart_items` row and leaves cart/user/product/variant/shop records intact.
+- Empty cart state renders without creating a cart record.
+- Unavailable or soft-deleted products/variants/shops remain visible with a warning and can be removed.
+- Frontend AJAX updates item quantity, line subtotal, shop subtotal, cart subtotal/total, and header cart count.
+- The global sidebar/offcanvas cart (`#shoppingCart`) now uses the template mini-cart structure and renders the same current cart data instead of the static empty message.
+- Add-to-cart, cart quantity update, and mini-cart remove responses include the cart payload needed to keep the sidebar cart and header count synchronized.
+- Checkout, order creation, stock deduction, tax, shipping, coupons, cart merge, and impersonation were not implemented.
+
+Files changed:
+
+- `app/Http/Controllers/Storefront/CartItemController.php`
+- `app/Http/Controllers/Storefront/StorefrontController.php`
+- `app/Services/Cart/AddToCartService.php`
+- `app/Services/Cart/CartItemMutationService.php`
+- `app/Services/Cart/CartItemQuantityValidator.php`
+- `app/Services/Cart/CartPageService.php`
+- `resources/views/storefront/pages/cart.blade.php`
+- `resources/views/storefront/partials/search.blade.php`
+- `routes/web.php`
+- `tests/Feature/StorefrontCartPageTest.php`
+
+Tests / checks run:
+
+- `php artisan test tests\Feature\StorefrontCartPageTest.php` passed: 16 tests, 79 assertions.
+- `php artisan test tests\Feature\StorefrontAddToCartTest.php` passed: 18 tests, 81 assertions.
+- `php artisan test tests\Feature\CartOwnershipFoundationTest.php` passed: 4 tests, 14 assertions.
+- PHP syntax checks passed for changed cart services, storefront controllers, and `StorefrontCartPageTest`.
+
 ## 2026-08-14 - Customer Identity Step 3 Cart Ownership to Global User
 
 Prompt:

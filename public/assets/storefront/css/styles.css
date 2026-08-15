@@ -5610,7 +5610,7 @@ header.header-sticky.tf-header-landing {
   gap: 24px;
 }
 .tf-mini-cart-item .tf-mini-cart-image {
-  max-width: 100px;
+  max-width: 75px;
   border-radius: 8px;
   overflow: hidden;
 }

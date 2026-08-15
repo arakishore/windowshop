@@ -9,6 +9,7 @@ use App\Models\ProductCategory;
 use App\Models\Shop;
 use App\Services\PostalCodeServiceabilityService;
 use App\Services\Banner\BannerService;
+use App\Services\Cart\CartPageService;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductListingService;
@@ -333,18 +334,12 @@ class StorefrontController extends Controller
             ->withCookie($cookie);
     }
 
-    public function cart(): View
+    public function cart(Request $request, CartPageService $cartPage): View
     {
-        $cartItems = $this->staticCartItems();
-        $totals = $this->staticCartTotals($cartItems);
+        $cart = $cartPage->pageData($request);
 
         return view('storefront.pages.cart', [
-            'cartItems' => $cartItems,
-            'subtotal' => $totals['subtotal'],
-            'discount' => $totals['discount'],
-            'shipping' => $totals['shipping'],
-            'total' => $totals['total'],
-            'freeShippingRemaining' => 70.00,
+            'cart' => $cart,
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }

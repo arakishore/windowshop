@@ -52,6 +52,8 @@ Route::get('/forgot-password', [StorefrontController::class, 'forgotPassword'])-
 Route::view('/demo/shopping-bag-box', 'storefront.pages.demo-shopping-bag-box')->name('storefront.demo.shopping-bag-box');
 Route::get('/products', [StorefrontController::class, 'products'])->name('storefront.products');
 Route::post('/cart/items', [CartItemController::class, 'store'])->name('storefront.cart.items.store');
+Route::patch('/cart/items/{cartItem}', [CartItemController::class, 'update'])->name('storefront.cart.items.update');
+Route::delete('/cart/items/{cartItem}', [CartItemController::class, 'destroy'])->name('storefront.cart.items.destroy');
 Route::post('/products/{slug}/delivery-check', [StorefrontController::class, 'checkProductDelivery'])->name('storefront.product.delivery-check');
 Route::get('/products/{slug}', [StorefrontController::class, 'productDetail'])->name('storefront.product.show');
 Route::get('/shop', [StorefrontController::class, 'products'])->name('storefront.shop');

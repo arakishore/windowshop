@@ -883,6 +883,7 @@
                         document.querySelectorAll('[data-storefront-cart-count]').forEach((count) => {
                             count.textContent = data.cart_count || '0';
                         });
+                        window.WindowShopMiniCart?.sync?.(data);
                         showCartMessage(data.message || 'Product added to cart.', 'success');
                     } catch (error) {
                         showCartMessage('Could not add this product to cart. Please try again.', 'error');

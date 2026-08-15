@@ -152,7 +152,7 @@
                             </div>
                         </div>
                         <div class="customer-auth-actions">
-                            <a href="{{ route('storefront.register') }}" class="tf-btn animate-btn small">Continue</a>
+                            <a href="{{ route('storefront.register') }}" class="tf-btn animate-btn small">Create Account</a>
                         </div>
                     </div>
                 </div>
@@ -175,7 +175,7 @@
                             </div>
                             <a href="{{ route('storefront.forgot-password') }}" class="customer-auth-link">Forgotten Password</a>
                             <div class="customer-auth-actions">
-                                <button type="submit" class="tf-btn animate-btn small">Login</button>
+                                <button type="submit" class="tf-btn animate-btn small">Login & Continue</button>
                             </div>
                         </form>
                     </div>

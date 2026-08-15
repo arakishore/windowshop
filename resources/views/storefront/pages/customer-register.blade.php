@@ -191,7 +191,7 @@
                             </fieldset>
                         </div>
                         <div class="mb-16">
-                            <label for="customer_mobile" class="form-label">Phone Number</label>
+                            <label for="customer_mobile" class="form-label">Mobile Number</label>
                             <fieldset>
                                 <input id="customer_mobile" type="tel">
                             </fieldset>
