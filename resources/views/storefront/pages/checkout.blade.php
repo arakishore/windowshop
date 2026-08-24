@@ -80,6 +80,38 @@
             border-color: #111;
         }
 
+        .checkout-option.is-disabled {
+            opacity: .62;
+            background: #f8fafc;
+        }
+
+        .checkout-fulfillment-description {
+            display: grid;
+            gap: 3px;
+            margin-top: 4px;
+        }
+
+        .checkout-fulfillment-line {
+            display: block;
+            line-height: 1.45;
+        }
+
+        .checkout-fulfillment-line--shop {
+            color: #111827;
+            font-weight: 600;
+        }
+
+        .checkout-fulfillment-line--address {
+            color: #4b5563;
+            font-size: 14px;
+        }
+
+        .checkout-fulfillment-line--instructions {
+            color: #6b7280;
+            font-size: 13px;
+            font-style: italic;
+        }
+
         .checkout-address-card input,
         .checkout-option input {
             margin-top: 5px;
@@ -410,7 +442,7 @@
                         </div>
                     </div>
 
-                    <div class="checkout-section">
+                    <div class="checkout-section" data-fulfillment-url="{{ route('storefront.checkout.fulfillment') }}">
                         <div class="checkout-section-title">
                             <h5 class="mb-0">Delivery Options</h5>
                             @if ($selectedPostalCode)
@@ -419,15 +451,48 @@
                         </div>
 
                         @if ($shippingOptions === [])
-                            <div class="checkout-empty-panel">Delivery options will be calculated after selecting an address.</div>
+                            <div class="checkout-empty-panel">No delivery or pickup options are currently available for this cart.</div>
                         @else
                             <div class="checkout-options">
                                 @foreach ($shippingOptions as $option)
-                                    <label class="checkout-option {{ $option['selected'] ? 'is-selected' : '' }}">
-                                        <input type="radio" name="shipping_method_visual" value="{{ $option['id'] }}" checked disabled>
+                                    <label
+                                        class="checkout-option {{ $option['selected'] ? 'is-selected' : '' }} {{ $option['available'] ? '' : 'is-disabled' }}"
+                                        data-fulfillment-option="{{ $option['id'] }}"
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="shipping_method_visual"
+                                            value="{{ $option['id'] }}"
+                                            data-fulfillment-radio
+                                            @checked($option['selected'])
+                                            @disabled(! $option['available'])
+                                        >
                                         <span>
-                                            <strong>{{ $option['label'] }}</strong>
-                                            <span class="d-block cl-text-2">{{ $option['description'] }}</span>
+                                            <span class="d-flex justify-content-between gap-3">
+                                                <strong>{{ $option['label'] }}</strong>
+                                                <strong data-fulfillment-amount>{{ $option['amount'] }}</strong>
+                                            </span>
+                                            <span class="checkout-fulfillment-description" data-fulfillment-description>
+                                                @foreach (($option['description_lines'] ?? [$option['description']]) as $line)
+                                                    @if (is_array($line))
+                                                        @continue(($line['text'] ?? '') === '')
+                                                        <span class="checkout-fulfillment-line checkout-fulfillment-line--{{ $line['type'] ?? 'summary' }}">{{ $line['text'] }}</span>
+                                                    @else
+                                                        @continue($line === '')
+                                                        <span class="checkout-fulfillment-line checkout-fulfillment-line--summary">{{ $line }}</span>
+                                                    @endif
+                                                @endforeach
+                                            </span>
+                                            @if ($option['estimate'])
+                                                <span class="d-block cl-text-2" data-fulfillment-estimate>{{ $option['estimate'] }}</span>
+                                            @else
+                                                <span class="d-none cl-text-2" data-fulfillment-estimate></span>
+                                            @endif
+                                            @if (! $option['available'] && $option['reason'])
+                                                <span class="d-block text-danger text-caption-01" data-fulfillment-reason>{{ $option['reason'] }}</span>
+                                            @else
+                                                <span class="d-none text-danger text-caption-01" data-fulfillment-reason></span>
+                                            @endif
                                         </span>
                                     </label>
                                 @endforeach
@@ -492,7 +557,7 @@
                     </div>
                     <div class="checkout-total-row">
                         <span>Shipping</span>
-                        <strong>Calculated later</strong>
+                        <strong data-checkout-shipping-total>{{ $cartData['shipping'] ?? 'Calculated later' }}</strong>
                     </div>
                     <div class="checkout-total-row">
                         <span>Tax</span>
@@ -500,7 +565,7 @@
                     </div>
                     <div class="checkout-total-row grand">
                         <span>Grand Total</span>
-                        <strong>{{ $cartData['total'] }}</strong>
+                        <strong data-checkout-grand-total>{{ $cartData['total'] }}</strong>
                     </div>
 
                     <form method="POST" action="{{ route('storefront.checkout.place-order') }}" class="mt-20">
@@ -508,9 +573,9 @@
                         <input type="hidden" name="address_id" value="{{ $selectedAddressId }}">
                         <input type="hidden" name="billing_same_as_delivery" value="{{ $billingSameForView ? 1 : 0 }}" data-billing-same-order-field>
                         <input type="hidden" name="billing_address_id" value="{{ $selectedBillingAddressIdForView }}">
-                        <input type="hidden" name="shipping_method" value="standard">
+                        <input type="hidden" name="shipping_method" value="{{ $selectedFulfillment ?: 'delivery' }}" data-selected-fulfillment-field>
                         <input type="hidden" name="payment_method" value="cod">
-                        <button type="submit" class="tf-btn animate-btn w-100" {{ $canPlaceOrder ? '' : 'disabled' }}>
+                        <button type="submit" class="tf-btn animate-btn w-100" data-place-order-button {{ $canPlaceOrder ? '' : 'disabled' }}>
                             Place Order
                         </button>
                     </form>
@@ -531,6 +596,11 @@
             const panel = document.querySelector('[data-billing-address-panel]');
             const orderField = document.querySelector('[data-billing-same-order-field]');
             const billingAddressCollapse = document.getElementById('checkout-add-billing-address');
+            const fulfillmentSection = document.querySelector('[data-fulfillment-url]');
+            const selectedFulfillmentField = document.querySelector('[data-selected-fulfillment-field]');
+            const shippingTotal = document.querySelector('[data-checkout-shipping-total]');
+            const grandTotal = document.querySelector('[data-checkout-grand-total]');
+            const placeOrderButton = document.querySelector('[data-place-order-button]');
 
             if (!form || !toggle || !panel || !orderField) {
                 return;
@@ -591,6 +661,126 @@
 
             toggle.addEventListener('change', () => {
                 syncBillingSameState(applyBillingSameState());
+            });
+
+            const optionNode = (id) => Array.from(document.querySelectorAll('[data-fulfillment-option]'))
+                .find((node) => node.dataset.fulfillmentOption === id);
+            const renderFulfillmentOptions = (options, selected) => {
+                if (!Array.isArray(options)) {
+                    return;
+                }
+
+                options.forEach((option) => {
+                    const node = optionNode(option.id);
+                    if (!node) {
+                        return;
+                    }
+
+                    const radio = node.querySelector('[data-fulfillment-radio]');
+                    const amount = node.querySelector('[data-fulfillment-amount]');
+                    const description = node.querySelector('[data-fulfillment-description]');
+                    const estimate = node.querySelector('[data-fulfillment-estimate]');
+                    const reason = node.querySelector('[data-fulfillment-reason]');
+                    const isSelected = option.id === selected;
+                    const isAvailable = Boolean(option.available);
+
+                    node.classList.toggle('is-selected', isSelected);
+                    node.classList.toggle('is-disabled', !isAvailable);
+
+                    if (radio) {
+                        radio.checked = isSelected;
+                        radio.disabled = !isAvailable;
+                    }
+
+                    if (amount) {
+                        amount.textContent = option.amount || '';
+                    }
+
+                    if (description) {
+                        description.innerHTML = '';
+                        (option.description_lines || [option.description || '']).filter(Boolean).forEach((line) => {
+                            const lineText = typeof line === 'object' ? (line.text || '') : line;
+                            const lineType = typeof line === 'object' ? (line.type || 'summary') : 'summary';
+
+                            if (!lineText) {
+                                return;
+                            }
+
+                            const lineNode = document.createElement('span');
+                            lineNode.className = `checkout-fulfillment-line checkout-fulfillment-line--${lineType}`;
+                            lineNode.textContent = lineText;
+                            description.appendChild(lineNode);
+                        });
+                    }
+
+                    if (estimate) {
+                        estimate.textContent = option.estimate || '';
+                        estimate.classList.toggle('d-none', !option.estimate);
+                    }
+
+                    if (reason) {
+                        reason.textContent = option.reason || '';
+                        reason.classList.toggle('d-none', isAvailable || !option.reason);
+                    }
+                });
+            };
+
+            const syncFulfillment = async (fulfillment) => {
+                if (!fulfillmentSection || !window.fetch) {
+                    return;
+                }
+
+                const body = new URLSearchParams();
+                body.set('fulfillment', fulfillment);
+
+                try {
+                    const response = await fetch(fulfillmentSection.dataset.fulfillmentUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': csrfToken(),
+                        },
+                        body,
+                        credentials: 'same-origin',
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Fulfillment preference sync failed.');
+                    }
+
+                    const payload = await response.json();
+                    const selected = payload.selected_fulfillment || fulfillment;
+
+                    renderFulfillmentOptions(payload.shipping_options, selected);
+
+                    if (selectedFulfillmentField) {
+                        selectedFulfillmentField.value = selected;
+                    }
+
+                    if (shippingTotal && payload.shipping) {
+                        shippingTotal.textContent = payload.shipping;
+                    }
+
+                    if (grandTotal && payload.total) {
+                        grandTotal.textContent = payload.total;
+                    }
+
+                    if (placeOrderButton) {
+                        placeOrderButton.disabled = !payload.can_place_order;
+                    }
+                } catch (error) {
+                    console.warn(error.message);
+                }
+            };
+
+            document.querySelectorAll('[data-fulfillment-radio]').forEach((radio) => {
+                radio.addEventListener('change', () => {
+                    if (radio.checked && !radio.disabled) {
+                        syncFulfillment(radio.value);
+                    }
+                });
             });
 
             applyBillingSameState();

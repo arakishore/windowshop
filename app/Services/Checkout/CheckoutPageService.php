@@ -20,6 +20,7 @@ class CheckoutPageService
         private readonly CartPageService $cartPage,
         private readonly CheckoutPostalCodeLookupService $postalLookup,
         private readonly CustomerLocationService $location,
+        private readonly StorefrontDeliveryService $delivery,
     ) {
     }
 
@@ -37,6 +38,11 @@ class CheckoutPageService
         $selectedPostalCode = $selectedAddress instanceof MerchantCustomerAddress
             ? $this->location->normalize($selectedAddress->postal_code)
             : null;
+        $deliveryData = $this->delivery->resolve($request, $cart, $cartData, $selectedAddress);
+        $cartData['shipping_cents'] = $deliveryData['shipping_cents'];
+        $cartData['shipping'] = $deliveryData['shipping'];
+        $cartData['total_cents'] = $deliveryData['total_cents'];
+        $cartData['total'] = $deliveryData['total'];
 
         return [
             'cart' => $cart,
@@ -51,11 +57,14 @@ class CheckoutPageService
             'primaryMerchantId' => $this->primaryMerchantId($cart),
             'countries' => $this->postalLookup->countries(),
             'defaultCountry' => $this->postalLookup->defaultCountry(),
-            'shippingOptions' => $this->shippingOptions($selectedPostalCode),
+            'shippingOptions' => $deliveryData['options'],
+            'selectedFulfillment' => $deliveryData['selected'],
+            'shippingTotal' => $deliveryData['shipping'],
             'paymentMethods' => $this->paymentMethods(),
             'canPlaceOrder' => $selectedAddress instanceof MerchantCustomerAddress
                 && $selectedBillingAddress instanceof MerchantCustomerAddress
                 && $selectedPostalCode !== null
+                && $deliveryData['selected'] !== null
                 && ! (bool) $cartData['is_empty'],
         ];
     }
@@ -157,26 +166,6 @@ class CheckoutPageService
         $item = $cart?->items->first();
 
         return $item?->shop?->merchant_id !== null ? (int) $item->shop->merchant_id : null;
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function shippingOptions(?string $postalCode): array
-    {
-        if ($postalCode === null) {
-            return [];
-        }
-
-        return [
-            [
-                'id' => 'standard',
-                'label' => 'Standard Delivery',
-                'description' => 'Delivery availability and charges will be resolved from this PIN code before order placement.',
-                'amount' => null,
-                'selected' => true,
-            ],
-        ];
     }
 
     /**

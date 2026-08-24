@@ -996,6 +996,9 @@
                                         rows="3"
                                         placeholder="Please bring your order number when collecting your order."
                                     >{{ $pickupInstructions['value'] }}</textarea>
+                                    <div class="form-text">
+                                        Example: Please bring your order number when collecting your order. Pickup available between 11 AM and 8 PM.
+                                    </div>
                                     @if ($errors->has($pickupInstructions['errorKey']))
                                         <div class="invalid-feedback d-block">{{ $errors->first($pickupInstructions['errorKey']) }}</div>
                                     @endif

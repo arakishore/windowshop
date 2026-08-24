@@ -16,13 +16,17 @@ class ShopDeliveryQuoteService
     }
 
     /**
-     * @return array{available: bool, charge: ?float, reason: ?string, estimated_min_days: ?int, estimated_max_days: ?int}
+     * @return array{available: bool, charge: ?float, reason: ?string, estimated_min_days: ?int, estimated_max_days: ?int, shop_subtotal: float, minimum_order_amount: ?float, free_delivery_above: ?float, flat_delivery_charge: float}
      */
     public function quote(Shop $shop, float|int|string $shopSubtotal, ?string $postalCode = null): array
     {
         $shopId = (int) $shop->getKey();
         $this->initializer->initialize($shopId);
 
+        $subtotal = max(0, (float) $shopSubtotal);
+        $minimum = $this->nullablePositiveMoney($this->settings->get($shopId, 'fulfillment', 'delivery_min_order_amount'));
+        $freeAbove = $this->nullablePositiveMoney($this->settings->get($shopId, 'fulfillment', 'free_delivery_above'));
+        $flatCharge = max(0, (float) ($this->settings->get($shopId, 'fulfillment', 'delivery_flat_charge', 0) ?? 0));
         $estimateMin = $this->nullablePositiveInteger($this->settings->get($shopId, 'fulfillment', 'delivery_estimate_min_days'));
         $estimateMax = $this->nullablePositiveInteger($this->settings->get($shopId, 'fulfillment', 'delivery_estimate_max_days'));
         $base = [
@@ -31,6 +35,10 @@ class ShopDeliveryQuoteService
             'reason' => null,
             'estimated_min_days' => $estimateMin,
             'estimated_max_days' => $estimateMax,
+            'shop_subtotal' => $subtotal,
+            'minimum_order_amount' => $minimum,
+            'free_delivery_above' => $freeAbove,
+            'flat_delivery_charge' => $flatCharge,
         ];
 
         if (! (bool) $this->settings->get($shopId, 'fulfillment', 'delivery_enabled', true)) {
@@ -56,9 +64,6 @@ class ShopDeliveryQuoteService
             ];
         }
 
-        $subtotal = max(0, (float) $shopSubtotal);
-        $minimum = $this->nullablePositiveMoney($this->settings->get($shopId, 'fulfillment', 'delivery_min_order_amount'));
-
         if ($minimum !== null && $subtotal < $minimum) {
             return [
                 ...$base,
@@ -66,8 +71,6 @@ class ShopDeliveryQuoteService
             ];
         }
 
-        $freeAbove = $this->nullablePositiveMoney($this->settings->get($shopId, 'fulfillment', 'free_delivery_above'));
-        $flatCharge = max(0, (float) ($this->settings->get($shopId, 'fulfillment', 'delivery_flat_charge', 0) ?? 0));
         $charge = $freeAbove !== null && $subtotal >= $freeAbove ? 0.0 : $flatCharge;
 
         return [

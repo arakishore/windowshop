@@ -50,6 +50,7 @@ class CartPageService
     {
         return $this->cartResolver->current($request)?->load([
             'items' => fn ($query) => $query->orderBy('shop_id')->orderBy('id'),
+            'items.shop.city',
             'items.shop.merchant',
             'items.product.primaryImage',
             'items.product.merchant',

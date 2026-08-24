@@ -77,6 +77,7 @@ Route::patch('/checkout/addresses/{address}', [CheckoutAddressController::class,
 Route::post('/checkout/billing/same', [CheckoutAddressController::class, 'billingSame'])->name('storefront.checkout.billing.same');
 Route::post('/checkout/billing-address/select', [CheckoutAddressController::class, 'selectBilling'])->name('storefront.checkout.billing-addresses.select');
 Route::post('/checkout/billing-addresses', [CheckoutAddressController::class, 'storeBilling'])->name('storefront.checkout.billing-addresses.store');
+Route::post('/checkout/fulfillment', [CheckoutController::class, 'fulfillment'])->name('storefront.checkout.fulfillment');
 Route::post('/checkout/place-order', [CheckoutController::class, 'placeOrder'])->name('storefront.checkout.place-order');
 Route::get('/category/{parentSlug}/{slug}', [StorefrontController::class, 'categoryWithParent'])->name('storefront.category.child.show');
 Route::get('/category/{slug}', [StorefrontController::class, 'category'])->name('storefront.category.show');

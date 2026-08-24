@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Storefront;
 use App\Http\Controllers\Controller;
 use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Checkout\CheckoutPageService;
+use App\Services\Checkout\StorefrontDeliveryService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\StorefrontCustomerContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -18,6 +20,7 @@ class CheckoutController extends Controller
     public function __construct(
         private readonly CheckoutFlowService $checkout,
         private readonly CheckoutPageService $checkoutPage,
+        private readonly StorefrontDeliveryService $delivery,
         private readonly NavigationService $navigation,
         private readonly StorefrontCustomerContext $customerContext,
     ) {
@@ -73,6 +76,42 @@ class CheckoutController extends Controller
         return redirect()->route(CheckoutFlowService::CHECKOUT_ROUTE);
     }
 
+    public function fulfillment(Request $request): JsonResponse|RedirectResponse
+    {
+        $customer = $this->customerContext->user($request);
+        abort_unless($customer !== null, 403);
+
+        if (! $this->checkout->hasCartItems($request)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Your cart is empty.',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'fulfillment' => ['required', Rule::in([
+                StorefrontDeliveryService::FULFILLMENT_DELIVERY,
+                StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            ])],
+        ]);
+
+        $this->delivery->select($request, $data['fulfillment']);
+        $pageData = $this->checkoutPage->pageData($request, $customer);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'selected_fulfillment' => $pageData['selectedFulfillment'],
+                'shipping_options' => $pageData['shippingOptions'],
+                'shipping' => $pageData['shippingTotal'],
+                'total' => $pageData['cartData']['total'],
+                'can_place_order' => $pageData['canPlaceOrder'],
+            ]);
+        }
+
+        return redirect()->route('storefront.checkout');
+    }
+
     public function placeOrder(Request $request): RedirectResponse
     {
         $customer = $this->customerContext->user($request);
@@ -88,7 +127,11 @@ class CheckoutController extends Controller
             'address_id' => ['required', 'integer', 'exists:merchant_customer_addresses,id'],
             'billing_same_as_delivery' => ['nullable', 'boolean'],
             'billing_address_id' => ['nullable', 'integer', 'exists:merchant_customer_addresses,id'],
-            'shipping_method' => ['required', Rule::in(['standard'])],
+            'shipping_method' => ['required', Rule::in([
+                StorefrontDeliveryService::FULFILLMENT_DELIVERY,
+                StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                StorefrontDeliveryService::LEGACY_FULFILLMENT_STANDARD,
+            ])],
             'payment_method' => ['required', Rule::in(['cod'])],
             'browser_total' => ['nullable'],
         ]);
@@ -97,6 +140,7 @@ class CheckoutController extends Controller
         abort_unless($this->checkoutPage->addressBelongsToCustomer($address, $customer), 404);
 
         $request->session()->put(CheckoutPageService::SELECTED_ADDRESS_SESSION_KEY, $address->getKey());
+        $this->delivery->select($request, $data['shipping_method']);
         $billingSameAsDelivery = (bool) ($data['billing_same_as_delivery'] ?? $this->checkoutPage->billingSameAsDelivery($request));
 
         if ($billingSameAsDelivery) {

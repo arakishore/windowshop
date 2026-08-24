@@ -13,10 +13,12 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
+use App\Models\ShopSetting;
 use App\Models\User;
 use App\Services\Cart\CartResolver;
 use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Checkout\CheckoutPageService;
+use App\Services\Merchant\ShopSettingsService;
 use App\Services\Storefront\StorefrontCountryResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -840,6 +842,194 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertJsonFragment(['shop_id' => $second['shop']->getKey(), 'available' => false, 'reason' => 'Delivery temporarily unavailable']);
     }
 
+    public function test_checkout_delivery_uses_flat_shop_delivery_charge(): void
+    {
+        $customer = $this->customerUser('delivery-flat@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_flat_charge', 50, ShopSetting::TYPE_DECIMAL);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Standard Delivery')
+            ->assertSee('₹50.00')
+            ->assertSee('₹750.00');
+    }
+
+    public function test_checkout_delivery_free_threshold_overrides_flat_charge(): void
+    {
+        $customer = $this->customerUser('delivery-free@example.test');
+        $fixture = $this->productFixture(price: 1200);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_flat_charge', 50, ShopSetting::TYPE_DECIMAL);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'free_delivery_above', 1000, ShopSetting::TYPE_DECIMAL);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('FREE')
+            ->assertSee('₹1,200.00');
+    }
+
+    public function test_checkout_delivery_zero_day_estimate_renders_as_same_day(): void
+    {
+        $customer = $this->customerUser('delivery-same-day@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_estimate_min_days', 0, ShopSetting::TYPE_INTEGER);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_estimate_max_days', 1, ShopSetting::TYPE_INTEGER);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Estimated delivery: Same day to 1 day')
+            ->assertDontSee('0-1 days');
+    }
+
+    public function test_checkout_pickup_details_render_as_separate_lines(): void
+    {
+        $customer = $this->customerUser('delivery-pickup-lines@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'pickup_instructions', 'Bring your order number.', ShopSetting::TYPE_STRING);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Collect from '.$fixture['shop']->name)
+            ->assertSee('Fixture Street')
+            ->assertSee('Bring your order number.')
+            ->assertSee('checkout-fulfillment-line--shop', false)
+            ->assertSee('checkout-fulfillment-line--address', false)
+            ->assertSee('checkout-fulfillment-line--instructions', false);
+    }
+
+    public function test_checkout_delivery_minimum_order_can_make_delivery_unavailable(): void
+    {
+        $customer = $this->customerUser('delivery-min@example.test');
+        $fixture = $this->productFixture(price: 400);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_min_order_amount', 500, ShopSetting::TYPE_DECIMAL);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Unavailable')
+            ->assertSee('Minimum order of ₹500.00 required for delivery.');
+    }
+
+    public function test_checkout_pin_restriction_blocks_delivery_but_not_pickup(): void
+    {
+        $customer = $this->customerUser('delivery-restricted@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->restriction('422009', $fixture['merchant']->getKey(), $fixture['shop']->getKey(), 'Delivery temporarily unavailable');
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Delivery temporarily unavailable')
+            ->assertSee('Pickup from Shop')
+            ->assertSee('FREE');
+    }
+
+    public function test_checkout_fulfillment_ajax_can_select_pickup_without_reload(): void
+    {
+        $customer = $this->customerUser('delivery-pickup-ajax@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_flat_charge', 50, ShopSetting::TYPE_DECIMAL);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->withHeaders([
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ])
+            ->postJson(route('storefront.checkout.fulfillment'), ['fulfillment' => 'pickup'])
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('selected_fulfillment', 'pickup')
+            ->assertJsonPath('shipping', '₹0.00')
+            ->assertJsonPath('total', '₹700.00');
+    }
+
+    public function test_checkout_multishop_delivery_sums_shop_charges_and_hides_pickup(): void
+    {
+        $customer = $this->customerUser('delivery-multishop@example.test');
+        $first = $this->productFixture(price: 600);
+        $second = $this->productFixture(price: 700);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $this->cartItem($cart, $first['variant']);
+        $this->cartItem($cart, $second['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $first['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($first['shop'], 'fulfillment', 'delivery_flat_charge', 50, ShopSetting::TYPE_DECIMAL);
+        $this->shopSetting($second['shop'], 'fulfillment', 'delivery_flat_charge', 40, ShopSetting::TYPE_DECIMAL);
+        $this->shopSetting($second['shop'], 'fulfillment', 'free_delivery_above', 500, ShopSetting::TYPE_DECIMAL);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('₹50.00')
+            ->assertSee('₹1,350.00')
+            ->assertDontSee('Pickup from Shop');
+    }
+
     public function test_shipping_disabled_pin_is_valid_but_not_shipping_enabled(): void
     {
         $customer = $this->customerUser('pin-disabled@example.test');
@@ -1208,6 +1398,11 @@ class StorefrontCheckoutGateTest extends TestCase
             'ends_at' => $endsAt,
             'status' => $status,
         ]);
+    }
+
+    private function shopSetting(Shop $shop, string $group, string $key, mixed $value, string $type): void
+    {
+        app(ShopSettingsService::class)->setTyped((int) $shop->getKey(), $group, $key, $value, $type);
     }
 
     private function guestCart(string $token): Cart

@@ -56,7 +56,7 @@ return new class extends Migration
             $table->string('shipping_state', 120)->nullable();
             $table->string('shipping_country', 120)->nullable();
             $table->string('shipping_postal_code', 20)->nullable();
-            $table->text('remarks')->nullable();
+            $table->text('remarks')->nullable()->comment('Order-level operational remarks; currently used to label exchange replacement orders. Refund/exchange form notes are stored in workflow metadata.');
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('completed_at')->nullable();
