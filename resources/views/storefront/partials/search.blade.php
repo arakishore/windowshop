@@ -223,7 +223,10 @@
             }
 
             if (payload.is_empty) {
-                filled?.setAttribute('hidden', '');
+                if (filled) {
+                    filled.setAttribute('hidden', '');
+                    filled.style.display = 'none';
+                }
                 if (itemsWrap) {
                     itemsWrap.innerHTML = `
                         <div class="box-text_empty type-shop_cart" data-mini-cart-empty>
@@ -244,12 +247,22 @@
                     itemsWrap.querySelector('.shop-empty_bot .tf-btn.btn-stroke').href = homeUrl;
                     empty = itemsWrap.querySelector('[data-mini-cart-empty]');
                 }
-                empty?.removeAttribute('hidden');
+                if (empty) {
+                    empty.removeAttribute('hidden');
+                    empty.style.display = '';
+                }
                 return;
             }
 
-            empty?.setAttribute('hidden', '');
-            filled?.removeAttribute('hidden');
+            if (empty) {
+                empty.setAttribute('hidden', '');
+                empty.style.display = 'none';
+            }
+
+            if (filled) {
+                filled.removeAttribute('hidden');
+                filled.style.display = '';
+            }
 
             if (itemsWrap) {
                 itemsWrap.replaceChildren();
