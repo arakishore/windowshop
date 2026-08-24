@@ -260,6 +260,7 @@
             'inventory' => ['Inventory', 'ph-stack'],
             'products' => ['Products', 'ph-package'],
             'payments' => ['Payments', 'ph-credit-card'],
+            'delivery' => ['Delivery', 'ph-truck'],
             'receipts' => ['Receipts', 'ph-printer'],
             'notifications' => ['Notifications', 'ph-bell'],
             'advanced' => ['Advanced', 'ph-sliders'],
@@ -514,82 +515,6 @@
                         </div>
                     </div>
 
-                    <div class="card merchant-settings-card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Storefront Fulfillment</h5>
-                            <div class="text-muted fs-sm mt-1">Delivery and pickup options for storefront checkout.</div>
-                        </div>
-                        <div class="card-body">
-                            @if ($activeShop)
-                                <div class="settings-shop-label rounded p-3 mb-3">
-                                    <div class="text-muted fs-sm">Storefront settings for:</div>
-                                    <div class="fw-semibold">{{ $activeShopLabel }}</div>
-                                </div>
-
-                                @php
-                                    $deliveryEnabled = $shopField('fulfillment', 'delivery_enabled');
-                                    $pickupEnabled = $shopField('fulfillment', 'pickup_enabled');
-                                    $pickupInstructions = $shopField('fulfillment', 'pickup_instructions');
-                                @endphp
-
-                                <div class="merchant-settings-grid">
-                                    <div>
-                                        <input type="hidden" name="{{ $deliveryEnabled['name'] }}" value="0">
-                                        <div class="form-check form-switch">
-                                            <input
-                                                type="checkbox"
-                                                class="form-check-input {{ $errors->has($deliveryEnabled['errorKey']) ? 'is-invalid' : '' }}"
-                                                id="{{ $deliveryEnabled['id'] }}"
-                                                name="{{ $deliveryEnabled['name'] }}"
-                                                value="1"
-                                                @checked((bool) $deliveryEnabled['value'])
-                                            >
-                                            <label class="form-check-label fw-semibold" for="{{ $deliveryEnabled['id'] }}">Enable Delivery</label>
-                                        </div>
-                                        <div class="text-muted fs-sm mt-1">Allow customers to have orders delivered to their selected address.</div>
-                                        @if ($errors->has($deliveryEnabled['errorKey']))
-                                            <div class="invalid-feedback d-block">{{ $errors->first($deliveryEnabled['errorKey']) }}</div>
-                                        @endif
-                                    </div>
-
-                                    <div>
-                                        <input type="hidden" name="{{ $pickupEnabled['name'] }}" value="0">
-                                        <div class="form-check form-switch">
-                                            <input
-                                                type="checkbox"
-                                                class="form-check-input js-storefront-pickup-toggle {{ $errors->has($pickupEnabled['errorKey']) ? 'is-invalid' : '' }}"
-                                                id="{{ $pickupEnabled['id'] }}"
-                                                name="{{ $pickupEnabled['name'] }}"
-                                                value="1"
-                                                @checked((bool) $pickupEnabled['value'])
-                                            >
-                                            <label class="form-check-label fw-semibold" for="{{ $pickupEnabled['id'] }}">Enable Pickup from Shop</label>
-                                        </div>
-                                        <div class="text-muted fs-sm mt-1">Allow customers to collect their order directly from this shop.</div>
-                                        @if ($errors->has($pickupEnabled['errorKey']))
-                                            <div class="invalid-feedback d-block">{{ $errors->first($pickupEnabled['errorKey']) }}</div>
-                                        @endif
-                                    </div>
-                                </div>
-
-                                <div class="mt-3 js-storefront-pickup-dependent">
-                                    <label for="{{ $pickupInstructions['id'] }}" class="form-label fw-semibold">Pickup Instructions</label>
-                                    <textarea
-                                        id="{{ $pickupInstructions['id'] }}"
-                                        name="{{ $pickupInstructions['name'] }}"
-                                        class="form-control {{ $errors->has($pickupInstructions['errorKey']) ? 'is-invalid' : '' }}"
-                                        rows="3"
-                                        placeholder="Please bring your order number when collecting your order."
-                                    >{{ $pickupInstructions['value'] }}</textarea>
-                                    @if ($errors->has($pickupInstructions['errorKey']))
-                                        <div class="invalid-feedback d-block">{{ $errors->first($pickupInstructions['errorKey']) }}</div>
-                                    @endif
-                                </div>
-                            @else
-                                <div class="text-muted">No active shop is available for storefront fulfillment settings.</div>
-                            @endif
-                        </div>
-                    </div>
                 </div>
 
                 <div class="{{ $tabPaneClass('inventory') }}" id="settings_inventory" role="tabpanel">
@@ -903,6 +828,185 @@
                     </div>
                 </div>
 
+                <div class="{{ $tabPaneClass('delivery') }}" id="settings_delivery" role="tabpanel">
+                    <div class="card merchant-settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Storefront Fulfillment</h5>
+                            <div class="text-muted fs-sm mt-1">Delivery and pickup options for storefront checkout.</div>
+                        </div>
+                        <div class="card-body">
+                            @if ($activeShop)
+                                <div class="settings-shop-label rounded p-3 mb-3">
+                                    <div class="text-muted fs-sm">Storefront settings for:</div>
+                                    <div class="fw-semibold">{{ $activeShopLabel }}</div>
+                                </div>
+
+                                @php
+                                    $deliveryEnabled = $shopField('fulfillment', 'delivery_enabled');
+                                    $deliveryMinOrder = $shopField('fulfillment', 'delivery_min_order_amount');
+                                    $deliveryFlatCharge = $shopField('fulfillment', 'delivery_flat_charge');
+                                    $freeDeliveryAbove = $shopField('fulfillment', 'free_delivery_above');
+                                    $deliveryEstimateMinDays = $shopField('fulfillment', 'delivery_estimate_min_days');
+                                    $deliveryEstimateMaxDays = $shopField('fulfillment', 'delivery_estimate_max_days');
+                                    $pickupEnabled = $shopField('fulfillment', 'pickup_enabled');
+                                    $pickupInstructions = $shopField('fulfillment', 'pickup_instructions');
+                                @endphp
+
+                                <div class="merchant-settings-grid">
+                                    <div>
+                                        <input type="hidden" name="{{ $deliveryEnabled['name'] }}" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                type="checkbox"
+                                                class="form-check-input js-storefront-delivery-toggle {{ $errors->has($deliveryEnabled['errorKey']) ? 'is-invalid' : '' }}"
+                                                id="{{ $deliveryEnabled['id'] }}"
+                                                name="{{ $deliveryEnabled['name'] }}"
+                                                value="1"
+                                                @checked((bool) $deliveryEnabled['value'])
+                                            >
+                                            <label class="form-check-label fw-semibold" for="{{ $deliveryEnabled['id'] }}">Enable Delivery</label>
+                                        </div>
+                                        <div class="text-muted fs-sm mt-1">Allow customers to have orders delivered to their selected address.</div>
+                                        @if ($errors->has($deliveryEnabled['errorKey']))
+                                            <div class="invalid-feedback d-block">{{ $errors->first($deliveryEnabled['errorKey']) }}</div>
+                                        @endif
+                                    </div>
+
+                                    <div>
+                                        <input type="hidden" name="{{ $pickupEnabled['name'] }}" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                type="checkbox"
+                                                class="form-check-input js-storefront-pickup-toggle {{ $errors->has($pickupEnabled['errorKey']) ? 'is-invalid' : '' }}"
+                                                id="{{ $pickupEnabled['id'] }}"
+                                                name="{{ $pickupEnabled['name'] }}"
+                                                value="1"
+                                                @checked((bool) $pickupEnabled['value'])
+                                            >
+                                            <label class="form-check-label fw-semibold" for="{{ $pickupEnabled['id'] }}">Enable Pickup from Shop</label>
+                                        </div>
+                                        <div class="text-muted fs-sm mt-1">Allow customers to collect their order directly from this shop.</div>
+                                        @if ($errors->has($pickupEnabled['errorKey']))
+                                            <div class="invalid-feedback d-block">{{ $errors->first($pickupEnabled['errorKey']) }}</div>
+                                        @endif
+                                    </div>
+                                </div>
+
+                                <div class="mt-3 js-storefront-delivery-dependent">
+                                    <div class="settings-section-title">Delivery Pricing</div>
+                                    <div class="merchant-settings-grid">
+                                        <div>
+                                            <label for="{{ $deliveryMinOrder['id'] }}" class="form-label fw-semibold">Minimum Delivery Order</label>
+                                            <input
+                                                id="{{ $deliveryMinOrder['id'] }}"
+                                                type="number"
+                                                name="{{ $deliveryMinOrder['name'] }}"
+                                                value="{{ $deliveryMinOrder['value'] }}"
+                                                class="form-control {{ $errors->has($deliveryMinOrder['errorKey']) ? 'is-invalid' : '' }}"
+                                                min="0"
+                                                step="0.01"
+                                                placeholder="No minimum"
+                                            >
+                                            <div class="form-text">Leave blank or enter 0 for no minimum order.</div>
+                                            @if ($errors->has($deliveryMinOrder['errorKey']))
+                                                <div class="invalid-feedback d-block">{{ $errors->first($deliveryMinOrder['errorKey']) }}</div>
+                                            @endif
+                                        </div>
+
+                                        <div>
+                                            <label for="{{ $deliveryFlatCharge['id'] }}" class="form-label fw-semibold">Flat Delivery Charge</label>
+                                            <input
+                                                id="{{ $deliveryFlatCharge['id'] }}"
+                                                type="number"
+                                                name="{{ $deliveryFlatCharge['name'] }}"
+                                                value="{{ $deliveryFlatCharge['value'] }}"
+                                                class="form-control {{ $errors->has($deliveryFlatCharge['errorKey']) ? 'is-invalid' : '' }}"
+                                                min="0"
+                                                step="0.01"
+                                                placeholder="0"
+                                            >
+                                            <div class="form-text">Standard delivery charge applied to eligible orders.</div>
+                                            @if ($errors->has($deliveryFlatCharge['errorKey']))
+                                                <div class="invalid-feedback d-block">{{ $errors->first($deliveryFlatCharge['errorKey']) }}</div>
+                                            @endif
+                                        </div>
+
+                                        <div>
+                                            <label for="{{ $freeDeliveryAbove['id'] }}" class="form-label fw-semibold">Free Delivery Above</label>
+                                            <input
+                                                id="{{ $freeDeliveryAbove['id'] }}"
+                                                type="number"
+                                                name="{{ $freeDeliveryAbove['name'] }}"
+                                                value="{{ $freeDeliveryAbove['value'] }}"
+                                                class="form-control {{ $errors->has($freeDeliveryAbove['errorKey']) ? 'is-invalid' : '' }}"
+                                                min="0"
+                                                step="0.01"
+                                                placeholder="No free-delivery threshold"
+                                            >
+                                            <div class="form-text">Orders at or above this amount receive free delivery. Leave blank or enter 0 to disable this rule.</div>
+                                            @if ($errors->has($freeDeliveryAbove['errorKey']))
+                                                <div class="invalid-feedback d-block">{{ $errors->first($freeDeliveryAbove['errorKey']) }}</div>
+                                            @endif
+                                        </div>
+                                    </div>
+
+                                    <div class="settings-section-title mt-3">Estimated Delivery</div>
+                                    <div class="merchant-settings-grid">
+                                        <div>
+                                            <label for="{{ $deliveryEstimateMinDays['id'] }}" class="form-label fw-semibold">Minimum days</label>
+                                            <input
+                                                id="{{ $deliveryEstimateMinDays['id'] }}"
+                                                type="number"
+                                                name="{{ $deliveryEstimateMinDays['name'] }}"
+                                                value="{{ $deliveryEstimateMinDays['value'] }}"
+                                                class="form-control {{ $errors->has($deliveryEstimateMinDays['errorKey']) ? 'is-invalid' : '' }}"
+                                                min="0"
+                                                step="1"
+                                            >
+                                            @if ($errors->has($deliveryEstimateMinDays['errorKey']))
+                                                <div class="invalid-feedback d-block">{{ $errors->first($deliveryEstimateMinDays['errorKey']) }}</div>
+                                            @endif
+                                        </div>
+
+                                        <div>
+                                            <label for="{{ $deliveryEstimateMaxDays['id'] }}" class="form-label fw-semibold">Maximum days</label>
+                                            <input
+                                                id="{{ $deliveryEstimateMaxDays['id'] }}"
+                                                type="number"
+                                                name="{{ $deliveryEstimateMaxDays['name'] }}"
+                                                value="{{ $deliveryEstimateMaxDays['value'] }}"
+                                                class="form-control {{ $errors->has($deliveryEstimateMaxDays['errorKey']) ? 'is-invalid' : '' }}"
+                                                min="0"
+                                                step="1"
+                                            >
+                                            @if ($errors->has($deliveryEstimateMaxDays['errorKey']))
+                                                <div class="invalid-feedback d-block">{{ $errors->first($deliveryEstimateMaxDays['errorKey']) }}</div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="form-text mt-2">Optional estimate shown to customers at checkout.</div>
+                                </div>
+
+                                <div class="mt-3 js-storefront-pickup-dependent">
+                                    <label for="{{ $pickupInstructions['id'] }}" class="form-label fw-semibold">Pickup Instructions</label>
+                                    <textarea
+                                        id="{{ $pickupInstructions['id'] }}"
+                                        name="{{ $pickupInstructions['name'] }}"
+                                        class="form-control {{ $errors->has($pickupInstructions['errorKey']) ? 'is-invalid' : '' }}"
+                                        rows="3"
+                                        placeholder="Please bring your order number when collecting your order."
+                                    >{{ $pickupInstructions['value'] }}</textarea>
+                                    @if ($errors->has($pickupInstructions['errorKey']))
+                                        <div class="invalid-feedback d-block">{{ $errors->first($pickupInstructions['errorKey']) }}</div>
+                                    @endif
+                                </div>
+                            @else
+                                <div class="text-muted">No active shop is available for storefront fulfillment settings.</div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
                 <div class="{{ $tabPaneClass('receipts') }}" id="settings_receipts" role="tabpanel">
                     <div class="receipt-settings-layout">
                         <div>
@@ -1103,6 +1207,7 @@
             };
             const footerInput = document.querySelector('textarea[name="settings[pos][receipt.footer]"]');
             const returnPolicyInput = document.querySelector('textarea[name="settings[pos][receipt.return_policy]"]');
+            const deliveryToggle = document.querySelector('.js-storefront-delivery-toggle');
             const pickupToggle = document.querySelector('.js-storefront-pickup-toggle');
             const codToggle = document.querySelector('.js-storefront-cod-toggle');
             const upiToggle = document.querySelector('.js-storefront-upi-toggle');
@@ -1183,7 +1288,9 @@
             returnPolicyInput?.addEventListener('input', renderReceiptPreview);
 
             const renderStorefrontDependencies = () => {
+                const deliveryEnabled = deliveryToggle?.checked ?? true;
                 toggleElements('.js-storefront-pickup-dependent', pickupToggle?.checked ?? true);
+                toggleElements('.js-storefront-delivery-dependent', deliveryEnabled);
                 toggleElements('.js-cash-at-shop-pickup-warning', !(pickupToggle?.checked ?? true));
                 toggleElements('.js-storefront-cod-dependent', codToggle?.checked ?? false);
                 toggleElements('.js-storefront-upi-dependent', upiToggle?.checked ?? false);
@@ -1214,6 +1321,7 @@
                 });
             };
 
+            deliveryToggle?.addEventListener('change', renderStorefrontDependencies);
             pickupToggle?.addEventListener('change', renderStorefrontDependencies);
             codToggle?.addEventListener('change', renderStorefrontDependencies);
             upiToggle?.addEventListener('change', renderStorefrontDependencies);

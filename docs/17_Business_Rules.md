@@ -53,10 +53,49 @@ This is the canonical register for approved WindowShop business behavior. Each r
 **Initial policy: Proposed**
 
 - Server-side prices, taxes, discounts, availability, and delivery charges are authoritative.
+- Detailed delivery-setting rules are maintained in `docs/Delivery_Settings.md`.
 - An order receives immutable identifying and pricing snapshots at placement.
 - Status transitions follow a defined workflow; arbitrary jumps are rejected.
 - Cancellation eligibility depends on current fulfillment and payment state.
 - Every material transition is auditable and idempotent.
+
+## Storefront Payment Settings
+
+**Initial policy: Proposed for storefront checkout V1**
+
+- Detailed payment-setting rules are maintained in `docs/Payment_Settings.md`.
+- Storefront payment settings are shop-level settings stored in `shop_settings`, not merchant-level POS settings.
+- Existing POS tender settings (`cash`, `card`, `upi`, `credit`, default method, active method) remain merchant-level settings stored in `merchant_settings` and apply only to POS checkout.
+- Storefront payment settings must be resolved by the involved `shop_id`.
+- A merchant may update storefront payment settings only for the currently resolved Active Shop owned by that merchant.
+- The settings form must not trust a submitted `shop_id`.
+- Storefront payment settings initially include:
+  - `payment.cod_enabled`
+  - `payment.cod_min_order_amount`
+  - `payment.cod_max_order_amount`
+  - `payment.cash_at_shop_enabled`
+  - `payment.merchant_upi_enabled`
+  - `payment.merchant_upi_id`
+  - `payment.merchant_upi_payee_name`
+  - `payment.merchant_upi_qr_path`
+  - `payment.online_payment_enabled`
+- Cash on Delivery can be offered only for delivery fulfillment.
+- Cash at Shop can be offered only for pickup fulfillment.
+- Direct Merchant UPI can be offered only when enabled and the shop has UPI ID, payee name, and QR code configured.
+- Direct Merchant UPI stores only a file path/reference for the QR code; binary or base64 QR data must not be stored in `shop_settings`.
+- Online Payment remains disabled until a gateway flow exists; gateway credentials must not be added to `shop_settings`.
+- COD minimum and maximum order amounts use `0` as "no limit":
+  - `Min blank or 0`, `Max blank or 0`: COD is available for any order amount.
+  - `Min 500`, `Max blank or 0`: COD is available for orders of `500` or more.
+  - `Min blank or 0`, `Max 5000`: COD is available for orders up to `5000`.
+  - `Min 500`, `Max 5000`: COD is available for orders from `500` through `5000`.
+- COD min/max validation should compare minimum to maximum only when both values are greater than `0`.
+- For V1 multi-shop checkout:
+  - COD is available only if all involved shops support COD and the order amount satisfies each applicable shop rule.
+  - Direct Merchant UPI is single-shop only.
+  - Cash at Shop is single-shop pickup only.
+- These settings do not create payment execution, payment verification, split-payment, or gateway behavior by themselves.
+- Checkout and order creation must read these settings server-side when storefront payment availability is implemented.
 
 ## POS Held Orders
 

@@ -116,6 +116,7 @@ class MerchantSettingsController extends Controller
             'inventory',
             'products',
             'payments',
+            'delivery',
             'receipts',
             'notifications',
             'advanced',
@@ -151,6 +152,7 @@ class MerchantSettingsController extends Controller
                 }
 
                 $value = $this->normalizeInputValue($rawValue, $definition['type'], true);
+                $value = $this->normalizeShopSettingValue($group, $key, $value);
 
                 try {
                     $this->shopSettings->setTyped($shopId, $group, $key, $value, $definition['type']);
@@ -171,6 +173,11 @@ class MerchantSettingsController extends Controller
     {
         $validated = $request->validate([
             'shop_settings.fulfillment.delivery_enabled' => ['nullable', 'boolean'],
+            'shop_settings.fulfillment.delivery_min_order_amount' => ['nullable', 'numeric', 'gte:0'],
+            'shop_settings.fulfillment.delivery_flat_charge' => ['nullable', 'numeric', 'gte:0'],
+            'shop_settings.fulfillment.free_delivery_above' => ['nullable', 'numeric', 'gte:0'],
+            'shop_settings.fulfillment.delivery_estimate_min_days' => ['nullable', 'integer', 'gte:0'],
+            'shop_settings.fulfillment.delivery_estimate_max_days' => ['nullable', 'integer', 'gte:0'],
             'shop_settings.fulfillment.pickup_enabled' => ['nullable', 'boolean'],
             'shop_settings.fulfillment.pickup_instructions' => ['nullable', 'string', 'max:1000'],
             'shop_settings.payment.cod_enabled' => ['nullable', 'boolean'],
@@ -198,6 +205,15 @@ class MerchantSettingsController extends Controller
             ]);
         }
 
+        $estimateMin = data_get($validated, 'shop_settings.fulfillment.delivery_estimate_min_days');
+        $estimateMax = data_get($validated, 'shop_settings.fulfillment.delivery_estimate_max_days');
+
+        if ($estimateMin !== null && $estimateMax !== null && (int) $estimateMax < (int) $estimateMin) {
+            throw ValidationException::withMessages([
+                'shop_settings.fulfillment.delivery_estimate_max_days' => 'The maximum delivery estimate must be greater than or equal to the minimum estimate.',
+            ]);
+        }
+
         $upiEnabled = (bool) data_get($validated, 'shop_settings.payment.merchant_upi_enabled', false);
         if (! $upiEnabled) {
             return;
@@ -221,6 +237,23 @@ class MerchantSettingsController extends Controller
         if ($messages !== []) {
             throw ValidationException::withMessages($messages);
         }
+    }
+
+    private function normalizeShopSettingValue(string $group, string $key, mixed $value): mixed
+    {
+        if ($group !== 'fulfillment') {
+            return $value;
+        }
+
+        if (in_array($key, ['delivery_min_order_amount', 'free_delivery_above'], true)) {
+            return $value === null || (float) $value <= 0 ? null : $value;
+        }
+
+        if ($key === 'delivery_flat_charge') {
+            return $value === null ? 0 : $value;
+        }
+
+        return $value;
     }
 
     private function normalizeInputValue(mixed $value, string $type, bool $emptyNumericAsNull = false): mixed

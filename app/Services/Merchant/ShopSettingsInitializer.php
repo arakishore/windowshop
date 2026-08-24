@@ -30,6 +30,11 @@ class ShopSettingsInitializer
             ],
             'fulfillment' => [
                 'delivery_enabled' => ['value' => true, 'type' => ShopSetting::TYPE_BOOLEAN],
+                'delivery_min_order_amount' => ['value' => null, 'type' => ShopSetting::TYPE_DECIMAL],
+                'delivery_flat_charge' => ['value' => 0, 'type' => ShopSetting::TYPE_DECIMAL],
+                'free_delivery_above' => ['value' => null, 'type' => ShopSetting::TYPE_DECIMAL],
+                'delivery_estimate_min_days' => ['value' => null, 'type' => ShopSetting::TYPE_INTEGER],
+                'delivery_estimate_max_days' => ['value' => null, 'type' => ShopSetting::TYPE_INTEGER],
                 'pickup_enabled' => ['value' => true, 'type' => ShopSetting::TYPE_BOOLEAN],
                 'pickup_instructions' => ['value' => null, 'type' => ShopSetting::TYPE_STRING],
             ],
