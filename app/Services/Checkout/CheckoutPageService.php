@@ -21,6 +21,7 @@ class CheckoutPageService
         private readonly CheckoutPostalCodeLookupService $postalLookup,
         private readonly CustomerLocationService $location,
         private readonly StorefrontDeliveryService $delivery,
+        private readonly StorefrontPaymentMethodService $payments,
     ) {
     }
 
@@ -43,6 +44,7 @@ class CheckoutPageService
         $cartData['shipping'] = $deliveryData['shipping'];
         $cartData['total_cents'] = $deliveryData['total_cents'];
         $cartData['total'] = $deliveryData['total'];
+        $paymentData = $this->payments->resolve($request, $cart, $cartData, $deliveryData['selected']);
 
         return [
             'cart' => $cart,
@@ -60,11 +62,14 @@ class CheckoutPageService
             'shippingOptions' => $deliveryData['options'],
             'selectedFulfillment' => $deliveryData['selected'],
             'shippingTotal' => $deliveryData['shipping'],
-            'paymentMethods' => $this->paymentMethods(),
+            'paymentMethods' => $paymentData['methods'],
+            'selectedPaymentMethod' => $paymentData['selected'],
+            'paymentUnavailableMessage' => $paymentData['message'],
             'canPlaceOrder' => $selectedAddress instanceof MerchantCustomerAddress
                 && $selectedBillingAddress instanceof MerchantCustomerAddress
                 && $selectedPostalCode !== null
                 && $deliveryData['selected'] !== null
+                && $paymentData['selected'] !== null
                 && ! (bool) $cartData['is_empty'],
         ];
     }
@@ -168,19 +173,4 @@ class CheckoutPageService
         return $item?->shop?->merchant_id !== null ? (int) $item->shop->merchant_id : null;
     }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function paymentMethods(): array
-    {
-        return [
-            [
-                'id' => 'cod',
-                'label' => 'Cash on Delivery',
-                'description' => 'Pay when the shop delivers or hands over the order.',
-                'enabled' => true,
-                'selected' => true,
-            ],
-        ];
-    }
 }

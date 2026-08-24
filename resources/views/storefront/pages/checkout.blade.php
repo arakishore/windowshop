@@ -504,16 +504,38 @@
                         <div class="checkout-section-title">
                             <h5 class="mb-0">Payment Method</h5>
                         </div>
-                        <div class="checkout-options">
-                            @foreach ($paymentMethods as $method)
-                                <label class="checkout-option {{ $method['selected'] ? 'is-selected' : '' }}">
-                                    <input type="radio" name="payment_method_visual" value="{{ $method['id'] }}" checked disabled>
+                        <div class="checkout-options" data-payment-options>
+                            @forelse ($paymentMethods as $method)
+                                <label
+                                    class="checkout-option {{ $method['selected'] ? 'is-selected' : '' }} {{ $method['available'] ? '' : 'is-disabled' }}"
+                                    data-payment-option="{{ $method['id'] }}"
+                                >
+                                    <input
+                                        type="radio"
+                                        name="payment_method_visual"
+                                        value="{{ $method['id'] }}"
+                                        data-payment-radio
+                                        @checked($method['selected'])
+                                        @disabled(! $method['available'])
+                                    >
                                     <span>
-                                        <strong>{{ $method['label'] }}</strong>
-                                        <span class="d-block cl-text-2">{{ $method['description'] }}</span>
+                                        <span class="d-flex justify-content-between gap-3">
+                                            <strong>{{ $method['label'] }}</strong>
+                                            @unless ($method['available'])
+                                                <strong class="text-danger" data-payment-status>Unavailable</strong>
+                                            @endunless
+                                        </span>
+                                        <span class="d-block cl-text-2" data-payment-description>{{ $method['description'] }}</span>
+                                        @if (! $method['available'] && $method['reason'])
+                                            <span class="d-block text-danger text-caption-01" data-payment-reason>{{ $method['reason'] }}</span>
+                                        @else
+                                            <span class="d-none text-danger text-caption-01" data-payment-reason></span>
+                                        @endif
                                     </span>
                                 </label>
-                            @endforeach
+                            @empty
+                                <div class="checkout-empty-panel" data-payment-empty>{{ $paymentUnavailableMessage }}</div>
+                            @endforelse
                         </div>
                     </div>
                 </div>
@@ -574,7 +596,7 @@
                         <input type="hidden" name="billing_same_as_delivery" value="{{ $billingSameForView ? 1 : 0 }}" data-billing-same-order-field>
                         <input type="hidden" name="billing_address_id" value="{{ $selectedBillingAddressIdForView }}">
                         <input type="hidden" name="shipping_method" value="{{ $selectedFulfillment ?: 'delivery' }}" data-selected-fulfillment-field>
-                        <input type="hidden" name="payment_method" value="cod">
+                        <input type="hidden" name="payment_method" value="{{ $selectedPaymentMethod }}" data-selected-payment-field>
                         <button type="submit" class="tf-btn animate-btn w-100" data-place-order-button {{ $canPlaceOrder ? '' : 'disabled' }}>
                             Place Order
                         </button>
@@ -601,6 +623,8 @@
             const shippingTotal = document.querySelector('[data-checkout-shipping-total]');
             const grandTotal = document.querySelector('[data-checkout-grand-total]');
             const placeOrderButton = document.querySelector('[data-place-order-button]');
+            const paymentOptions = document.querySelector('[data-payment-options]');
+            const selectedPaymentField = document.querySelector('[data-selected-payment-field]');
 
             if (!form || !toggle || !panel || !orderField) {
                 return;
@@ -725,6 +749,79 @@
                 });
             };
 
+            const paymentOptionTemplate = (method) => {
+                const label = document.createElement('label');
+                label.className = `checkout-option ${method.selected ? 'is-selected' : ''} ${method.available ? '' : 'is-disabled'}`;
+                label.dataset.paymentOption = method.id;
+
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'payment_method_visual';
+                radio.value = method.id;
+                radio.dataset.paymentRadio = '';
+                radio.checked = Boolean(method.selected);
+                radio.disabled = !method.available;
+                radio.addEventListener('change', () => {
+                    if (radio.checked && !radio.disabled && selectedPaymentField) {
+                        selectedPaymentField.value = radio.value;
+                    }
+                });
+
+                const content = document.createElement('span');
+                const header = document.createElement('span');
+                header.className = 'd-flex justify-content-between gap-3';
+                const title = document.createElement('strong');
+                title.textContent = method.label || '';
+                header.appendChild(title);
+
+                if (!method.available) {
+                    const status = document.createElement('strong');
+                    status.className = 'text-danger';
+                    status.dataset.paymentStatus = '';
+                    status.textContent = 'Unavailable';
+                    header.appendChild(status);
+                }
+
+                const description = document.createElement('span');
+                description.className = 'd-block cl-text-2';
+                description.dataset.paymentDescription = '';
+                description.textContent = method.description || '';
+                const reason = document.createElement('span');
+                reason.className = `text-danger text-caption-01 ${method.available || !method.reason ? 'd-none' : 'd-block'}`;
+                reason.dataset.paymentReason = '';
+                reason.textContent = method.reason || '';
+
+                content.append(header, description, reason);
+                label.append(radio, content);
+
+                return label;
+            };
+
+            const renderPaymentMethods = (methods, selected, message) => {
+                if (!paymentOptions || !Array.isArray(methods)) {
+                    return;
+                }
+
+                paymentOptions.innerHTML = '';
+
+                if (methods.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'checkout-empty-panel';
+                    empty.dataset.paymentEmpty = '';
+                    empty.textContent = message || 'No payment method is currently available.';
+                    paymentOptions.appendChild(empty);
+                } else {
+                    methods.forEach((method) => {
+                        method.selected = method.id === selected;
+                        paymentOptions.appendChild(paymentOptionTemplate(method));
+                    });
+                }
+
+                if (selectedPaymentField) {
+                    selectedPaymentField.value = selected || '';
+                }
+            };
+
             const syncFulfillment = async (fulfillment) => {
                 if (!fulfillmentSection || !window.fetch) {
                     return;
@@ -754,6 +851,11 @@
                     const selected = payload.selected_fulfillment || fulfillment;
 
                     renderFulfillmentOptions(payload.shipping_options, selected);
+                    renderPaymentMethods(
+                        payload.payment_methods || [],
+                        payload.selected_payment_method || '',
+                        payload.payment_unavailable_message || '',
+                    );
 
                     if (selectedFulfillmentField) {
                         selectedFulfillmentField.value = selected;
@@ -779,6 +881,14 @@
                 radio.addEventListener('change', () => {
                     if (radio.checked && !radio.disabled) {
                         syncFulfillment(radio.value);
+                    }
+                });
+            });
+
+            document.querySelectorAll('[data-payment-radio]').forEach((radio) => {
+                radio.addEventListener('change', () => {
+                    if (radio.checked && !radio.disabled && selectedPaymentField) {
+                        selectedPaymentField.value = radio.value;
                     }
                 });
             });

@@ -18,6 +18,8 @@ use App\Models\User;
 use App\Services\Cart\CartResolver;
 use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Checkout\CheckoutPageService;
+use App\Services\Checkout\StorefrontDeliveryService;
+use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\Storefront\StorefrontCountryResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -333,6 +335,7 @@ class StorefrontCheckoutGateTest extends TestCase
             'postal_code' => '422009',
             'is_default_shipping' => true,
         ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
@@ -501,7 +504,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->post(route('storefront.checkout.place-order'), [
                 'address_id' => $otherAddress->getKey(),
                 'shipping_method' => 'standard',
-                'payment_method' => 'cod',
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
                 'browser_total' => '1.00',
             ])
             ->assertNotFound();
@@ -517,6 +520,7 @@ class StorefrontCheckoutGateTest extends TestCase
             'postal_code' => '422009',
             'is_default_shipping' => true,
         ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
@@ -529,7 +533,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->post(route('storefront.checkout.place-order'), [
                 'address_id' => $address->getKey(),
                 'shipping_method' => 'standard',
-                'payment_method' => 'cod',
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
                 'browser_total' => '1.00',
             ])
             ->assertRedirect(route('storefront.checkout'))
@@ -548,6 +552,7 @@ class StorefrontCheckoutGateTest extends TestCase
             'postal_code' => '422009',
             'is_default_shipping' => true,
         ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
@@ -555,7 +560,7 @@ class StorefrontCheckoutGateTest extends TestCase
                 'address_id' => $address->getKey(),
                 'billing_same_as_delivery' => '1',
                 'shipping_method' => 'standard',
-                'payment_method' => 'cod',
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
             ])
             ->assertRedirect(route('storefront.checkout'))
             ->assertSessionHas(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, true);
@@ -740,6 +745,7 @@ class StorefrontCheckoutGateTest extends TestCase
             'postal_code' => '422009',
             'is_default_billing' => true,
         ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
@@ -748,7 +754,7 @@ class StorefrontCheckoutGateTest extends TestCase
                 'billing_same_as_delivery' => '0',
                 'billing_address_id' => $billing->getKey(),
                 'shipping_method' => 'standard',
-                'payment_method' => 'cod',
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
             ])
             ->assertRedirect(route('storefront.checkout'))
             ->assertSessionHas(CheckoutPageService::SELECTED_ADDRESS_SESSION_KEY, $delivery->getKey())
@@ -1028,6 +1034,231 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('₹50.00')
             ->assertSee('₹1,350.00')
             ->assertDontSee('Pickup from Shop');
+    }
+
+    public function test_checkout_delivery_shows_selected_cod_when_enabled_without_limits(): void
+    {
+        $customer = $this->customerUser('payment-cod-enabled@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Cash on Delivery')
+            ->assertSee('Pay when your order is delivered.')
+            ->assertSee('value="'.StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY.'"', false)
+            ->assertDontSee('No payment method is currently available for this delivery option.');
+    }
+
+    public function test_checkout_delivery_hides_cod_when_disabled(): void
+    {
+        $customer = $this->customerUser('payment-cod-disabled@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertDontSee('Cash on Delivery')
+            ->assertSee('No payment method is currently available for this delivery option.')
+            ->assertSee('data-place-order-button disabled', false);
+    }
+
+    public function test_checkout_delivery_cod_minimum_can_make_cod_unavailable(): void
+    {
+        $customer = $this->customerUser('payment-cod-min@example.test');
+        $fixture = $this->productFixture(price: 400);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_min_order_amount', 500, ShopSetting::TYPE_DECIMAL);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Cash on Delivery')
+            ->assertSee('Unavailable')
+            ->assertSee('Minimum order of ₹500.00 required for COD.')
+            ->assertSee('data-place-order-button disabled', false);
+    }
+
+    public function test_checkout_delivery_cod_maximum_can_make_cod_unavailable(): void
+    {
+        $customer = $this->customerUser('payment-cod-max@example.test');
+        $fixture = $this->productFixture(price: 6000);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_max_order_amount', 5000, ShopSetting::TYPE_DECIMAL);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Cash on Delivery')
+            ->assertSee('COD is available only up to ₹5,000.00.')
+            ->assertSee('data-place-order-button disabled', false);
+    }
+
+    public function test_checkout_pickup_shows_cash_at_shop_and_hides_cod(): void
+    {
+        $customer = $this->customerUser('payment-cash-shop@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            ])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Cash at Shop')
+            ->assertSee('Pay when you collect your order.')
+            ->assertSee('value="'.StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP.'"', false);
+    }
+
+    public function test_checkout_pickup_disables_place_order_when_cash_at_shop_is_disabled(): void
+    {
+        $customer = $this->customerUser('payment-cash-shop-disabled@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cash_at_shop_enabled', false, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            ])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertDontSee('Cash at Shop')
+            ->assertSee('No payment method is currently available for this pickup option.')
+            ->assertSee('data-place-order-button disabled', false);
+    }
+
+    public function test_checkout_fulfillment_ajax_replaces_cod_with_cash_at_shop(): void
+    {
+        $customer = $this->customerUser('payment-ajax-pickup@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->withHeaders([
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ])
+            ->postJson(route('storefront.checkout.fulfillment'), [
+                'fulfillment' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            ])
+            ->assertOk()
+            ->assertJsonPath('selected_payment_method', StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP)
+            ->assertJsonMissing(['id' => StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY])
+            ->assertJsonFragment(['id' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP]);
+    }
+
+    public function test_checkout_fulfillment_ajax_replaces_cash_at_shop_with_cod(): void
+    {
+        $customer = $this->customerUser('payment-ajax-delivery@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                StorefrontPaymentMethodService::SELECTED_PAYMENT_SESSION_KEY => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ])
+            ->withHeaders([
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ])
+            ->postJson(route('storefront.checkout.fulfillment'), [
+                'fulfillment' => StorefrontDeliveryService::FULFILLMENT_DELIVERY,
+            ])
+            ->assertOk()
+            ->assertJsonPath('selected_payment_method', StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY)
+            ->assertJsonMissing(['id' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP])
+            ->assertJsonFragment(['id' => StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY]);
+    }
+
+    public function test_checkout_rejects_tampered_pickup_with_cash_on_delivery(): void
+    {
+        $customer = $this->customerUser('payment-tamper@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
+            ])
+            ->assertSessionHasErrors('payment_method');
     }
 
     public function test_shipping_disabled_pin_is_valid_but_not_shipping_enabled(): void

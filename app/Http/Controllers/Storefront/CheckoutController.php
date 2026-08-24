@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Checkout\CheckoutPageService;
 use App\Services\Checkout\StorefrontDeliveryService;
+use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\StorefrontCustomerContext;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,7 @@ class CheckoutController extends Controller
         private readonly CheckoutFlowService $checkout,
         private readonly CheckoutPageService $checkoutPage,
         private readonly StorefrontDeliveryService $delivery,
+        private readonly StorefrontPaymentMethodService $payments,
         private readonly NavigationService $navigation,
         private readonly StorefrontCustomerContext $customerContext,
     ) {
@@ -105,6 +107,9 @@ class CheckoutController extends Controller
                 'shipping_options' => $pageData['shippingOptions'],
                 'shipping' => $pageData['shippingTotal'],
                 'total' => $pageData['cartData']['total'],
+                'payment_methods' => $pageData['paymentMethods'],
+                'selected_payment_method' => $pageData['selectedPaymentMethod'],
+                'payment_unavailable_message' => $pageData['paymentUnavailableMessage'],
                 'can_place_order' => $pageData['canPlaceOrder'],
             ]);
         }
@@ -132,7 +137,10 @@ class CheckoutController extends Controller
                 StorefrontDeliveryService::FULFILLMENT_PICKUP,
                 StorefrontDeliveryService::LEGACY_FULFILLMENT_STANDARD,
             ])],
-            'payment_method' => ['required', Rule::in(['cod'])],
+            'payment_method' => ['required', Rule::in([
+                StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
+                StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ])],
             'browser_total' => ['nullable'],
         ]);
 
@@ -141,6 +149,20 @@ class CheckoutController extends Controller
 
         $request->session()->put(CheckoutPageService::SELECTED_ADDRESS_SESSION_KEY, $address->getKey());
         $this->delivery->select($request, $data['shipping_method']);
+        $pageData = $this->checkoutPage->pageData($request, $customer);
+
+        if (! $this->payments->isAvailable(
+            $request,
+            $pageData['cart'],
+            $pageData['cartData'],
+            $pageData['selectedFulfillment'],
+            $data['payment_method'],
+        )) {
+            throw ValidationException::withMessages([
+                'payment_method' => 'Please select a valid payment method for this delivery option.',
+            ]);
+        }
+
         $billingSameAsDelivery = (bool) ($data['billing_same_as_delivery'] ?? $this->checkoutPage->billingSameAsDelivery($request));
 
         if ($billingSameAsDelivery) {
