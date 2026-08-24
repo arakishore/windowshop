@@ -127,8 +127,6 @@ class CheckoutPageService
         ?MerchantCustomerAddress $selectedDeliveryAddress = null,
     ): ?MerchantCustomerAddress {
         if ($this->billingSameAsDelivery($request)) {
-            $request->session()->forget(self::SELECTED_BILLING_ADDRESS_SESSION_KEY);
-
             return $selectedDeliveryAddress;
         }
 

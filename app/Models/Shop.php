@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Traits\HasUuid;
+use App\Services\Merchant\ShopSettingsInitializer;
+use App\Services\Merchant\ShopSettingsService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -50,9 +52,21 @@ class Shop extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::created(function (Shop $shop): void {
+            app(ShopSettingsInitializer::class)->initialize((int) $shop->getKey());
+        });
+    }
+
     public function getRouteKeyName(): string
     {
         return 'uuid';
+    }
+
+    public function setting(string $group, string $key, mixed $default = null): mixed
+    {
+        return app(ShopSettingsService::class)->get((int) $this->getKey(), $group, $key, $default);
     }
 
     public function merchant(): BelongsTo
@@ -79,6 +93,11 @@ class Shop extends Model
     public function banners(): HasMany
     {
         return $this->hasMany(Banner::class);
+    }
+
+    public function settings(): HasMany
+    {
+        return $this->hasMany(ShopSetting::class, 'shop_id');
     }
 
     public function createdBy(): BelongsTo

@@ -110,6 +110,18 @@ class CustomerAuthController extends Controller
         return redirect($this->redirectAfterAuth($request));
     }
 
+    public function logout(Request $request): RedirectResponse
+    {
+        Auth::logout();
+        $request->session()->forget(StorefrontCustomerContext::ACTIVE_ROLE_SESSION_KEY);
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()
+            ->route('storefront.home')
+            ->with('success', 'You have been logged out successfully.');
+    }
+
     private function redirectAfterAuth(Request $request): string
     {
         return $this->checkout->hasIntent($request)

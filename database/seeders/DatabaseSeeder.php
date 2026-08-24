@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
         // Uncomment to seed demo data in development only.
         $this->call(DemoSeeder::class);
         $this->call(MerchantSettingsSeeder::class);
+        $this->call(ShopSettingsSeeder::class);
         $this->call(ProductAvailabilityStatusSeeder::class);
         $this->call(MerchantCancellationReasonSeeder::class);
     }

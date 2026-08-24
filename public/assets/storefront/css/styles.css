@@ -3375,9 +3375,20 @@ header.header-sticky.tf-header-landing {
 .nav-account .dropdown-account .list-menu-item li:not(:last-child) a {
   border-bottom: 1px solid var(--line);
 }
-.nav-account .dropdown-account .list-menu-item a {
+.nav-account .dropdown-account .list-menu-item a,
+.nav-account .dropdown-account .list-menu-item button {
   padding: 8px 0px;
   display: block;
+}
+.nav-account .dropdown-account .list-menu-item li:not(:last-child) button {
+  border-bottom: 1px solid var(--line);
+}
+.nav-account .dropdown-account .list-menu-item button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
 }
 .nav-account:hover .dropdown-account {
   pointer-events: all;

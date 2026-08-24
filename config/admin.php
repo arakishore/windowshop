@@ -2,7 +2,7 @@
 
 return [
     'pagination' => [
-        'per_page' => (int) env('ADMIN_PAGINATION_PER_PAGE', 50),
+        'per_page' => (int) env('ADMIN_PAGINATION_PER_PAGE', 150),
     ],
 
     'shop' => [
@@ -44,6 +44,12 @@ return [
                 'label' => 'Inactive',
                 'badge_class' => 'bg-light text-body border',
             ],
+        ],
+        'trust_statuses' => [
+            'normal' => 'Normal',
+            'trusted' => 'Trusted',
+            'restricted' => 'Restricted',
+            'blocked' => 'Blocked',
         ],
     ],
 

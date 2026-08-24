@@ -31,6 +31,7 @@ class MerchantCustomer extends Model
         'company_name',
         'gst_number',
         'notes',
+        'trust_status',
         'status',
         'linked_at',
     ];

@@ -87,7 +87,7 @@ class CheckoutAddressController extends Controller
             ->with('success', 'Delivery address selected.');
     }
 
-    public function billingSame(Request $request): RedirectResponse
+    public function billingSame(Request $request): JsonResponse|RedirectResponse
     {
         $this->customerOrAbort($request);
         $data = $request->validate([
@@ -97,8 +97,11 @@ class CheckoutAddressController extends Controller
         $same = (bool) $data['billing_same_as_delivery'];
         $request->session()->put(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, $same);
 
-        if ($same) {
-            $request->session()->forget(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY);
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'billing_same_as_delivery' => $same,
+            ]);
         }
 
         return redirect()->route('storefront.checkout');

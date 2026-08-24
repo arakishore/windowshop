@@ -30,6 +30,7 @@ return new class extends Migration
             $table->string('company_name', 150)->nullable();
             $table->string('gst_number', 30)->nullable();
             $table->text('notes')->nullable();
+            $table->string('trust_status', 30)->default('normal')->index();
             $table->enum('status', ['active', 'inactive'])->default('active');
             $table->timestamp('linked_at')->nullable();
             $table->timestamps();

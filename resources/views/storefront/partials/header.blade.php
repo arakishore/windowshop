@@ -1,3 +1,7 @@
+@php
+    $storefrontCustomer = app(\App\Services\Storefront\StorefrontCustomerContext::class)->user(request());
+@endphp
+
 <header class="tf-header header-s7 scr-box-shadow">
     <div class="container-full">
         <div class="header-inner">
@@ -41,11 +45,57 @@
                             <span class="location-pin-icon" aria-hidden="true"></span>
                         </a>
                     </li>
-                    <li>
-                        <a href="{{ route('storefront.account') }}" class="nav-icon-item link">
-                            <i class="icon icon-User"></i>
-                        </a>
-                    </li>
+                    
+                    @if ($storefrontCustomer)
+                        <li class="nav-account">
+                            <a href="{{ route('storefront.account') }}" class="nav-icon-item link">
+                                <i class="icon icon-User"></i>
+                            </a>
+                            <div class="dropdown-account">
+                                <ul class="list-menu-item">
+                                    <li>
+                                        <a href="{{ route('storefront.account') }}" class="sub-menu_link type-pri">
+                                            <span class="cus-text">My Account</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="{{ route('storefront.account') }}#orders" class="sub-menu_link type-pri">
+                                            <span class="cus-text">Your Order</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="{{ route('storefront.account') }}#addresses" class="sub-menu_link type-pri">
+                                            <span class="cus-text">My Address</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="{{ route('storefront.account') }}#tracking" class="sub-menu_link type-pri">
+                                            <span class="cus-text">Tracking</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="{{ route('storefront.account') }}#settings" class="sub-menu_link type-pri">
+                                            <span class="cus-text">Setting</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <form method="POST" action="{{ route('storefront.logout') }}">
+                                            @csrf
+                                            <button type="submit" class="sub-menu_link type-pri storefront-account-logout">
+                                                <span class="cus-text">Logout</span>
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                    @else
+                        <li>
+                            <a href="{{ route('storefront.account') }}" class="nav-icon-item link">
+                                <i class="icon icon-User"></i>
+                            </a>
+                        </li>
+                    @endif
                     <li class="d-none d-sm-block">
                         <a href="#;" class="nav-icon-item link">
                             <i class="icon icon-HeartStraight"></i>

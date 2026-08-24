@@ -25,6 +25,9 @@
             ->filter()
             ->implode(', ');
     };
+
+    $billingSameForView = (bool) old('billing_same_as_delivery', $billingSameAsDelivery ? 1 : 0);
+    $selectedBillingAddressIdForView = (int) old('billing_address_id', $selectedBillingAddressId);
 @endphp
 
 @push('styles')
@@ -327,7 +330,7 @@
                             <h5 class="mb-0">Billing Address</h5>
                         </div>
 
-                        <form method="POST" action="{{ route('storefront.checkout.billing.same') }}" class="mb-0">
+                        <form method="POST" action="{{ route('storefront.checkout.billing.same') }}" class="mb-0" data-billing-same-form>
                             @csrf
                             <input type="hidden" name="billing_same_as_delivery" value="0">
                             <div class="checkbox-wrap">
@@ -337,76 +340,74 @@
                                     name="billing_same_as_delivery"
                                     value="1"
                                     class="tf-check style-2"
-                                    {{ $billingSameAsDelivery ? 'checked' : '' }}
-                                    onchange="this.form.submit()"
+                                    data-billing-same-toggle
+                                    {{ $billingSameForView ? 'checked' : '' }}
                                 >
                                 <label for="billing-same-as-delivery" class="fw-medium lh-24">Same as delivery address</label>
                             </div>
                         </form>
 
-                        @unless ($billingSameAsDelivery)
-                            <div class="mt-18">
-                                <div class="checkout-section-title">
-                                    <p class="fw-medium mb-0">Saved Billing Addresses</p>
-                                    <button class="tf-btn animate-btn small" type="button" data-bs-toggle="collapse" data-bs-target="#checkout-add-billing-address">
-                                        + Add New Billing Address
-                                    </button>
-                                </div>
-
-                                @if ($addresses->isEmpty())
-                                    <div class="checkout-empty-panel">No saved billing addresses yet.</div>
-                                @else
-                                    <div class="checkout-address-list">
-                                        @foreach ($addresses as $address)
-                                            @php($isBillingSelected = (int) $selectedBillingAddressId === (int) $address->getKey())
-                                            <div class="checkout-address-card {{ $isBillingSelected ? 'is-selected' : '' }}">
-                                                <form method="POST" action="{{ route('storefront.checkout.billing-addresses.select') }}">
-                                                    @csrf
-                                                    <input type="hidden" name="billing_address_id" value="{{ $address->getKey() }}">
-                                                    <input type="radio" name="selected_billing_address_visual" value="{{ $address->getKey() }}" {{ $isBillingSelected ? 'checked' : '' }} onchange="this.form.submit()">
-                                                </form>
-                                                <div>
-                                                    <div class="d-flex justify-content-between gap-3">
-                                                        <h6 class="mb-4">{{ $address->label }}</h6>
-                                                        @if ($address->is_default_billing)
-                                                            <span class="text-caption-01 cl-text-3">Default Billing</span>
-                                                        @endif
-                                                    </div>
-                                                    <p class="mb-4">{{ $address->recipient_name }}</p>
-                                                    <p class="cl-text-2 mb-4">
-                                                        {{ $address->address_line_1 }}
-                                                        @if ($address->address_line_2), {{ $address->address_line_2 }} @endif
-                                                        @if ($address->landmark), {{ $address->landmark }} @endif
-                                                    </p>
-                                                    <p class="cl-text-2 mb-4">
-                                                        {{ $addressLabel($address) ?: 'Location details pending' }}
-                                                        @if ($address->postal_code) - {{ $address->postal_code }} @endif
-                                                    </p>
-                                                    <p class="cl-text-2 mb-0">Phone: {{ $address->recipient_mobile }}</p>
-                                                </div>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                @endif
-
-                                <div class="collapse {{ $errors->any() && old('address_context') === 'billing' ? 'show' : '' }}" id="checkout-add-billing-address">
-                                    @include('storefront.pages.partials.checkout-address-form', [
-                                        'action' => route('storefront.checkout.billing-addresses.store'),
-                                        'method' => 'POST',
-                                        'addressForm' => [
-                                            ...$addressFormDefaults,
-                                            'is_default_shipping' => false,
-                                            'is_default_billing' => false,
-                                        ],
-                                        'submitLabel' => 'Add Billing Address',
-                                        'defaultCountry' => $defaultCountry,
-                                        'defaultCheckboxName' => 'is_default_billing',
-                                        'defaultCheckboxLabel' => 'Use as default billing address',
-                                        'addressContext' => 'billing',
-                                    ])
-                                </div>
+                        <div class="mt-18" data-billing-address-panel {{ $billingSameForView ? 'hidden' : '' }}>
+                            <div class="checkout-section-title">
+                                <p class="fw-medium mb-0">Saved Billing Addresses</p>
+                                <button class="tf-btn animate-btn small" type="button" data-bs-toggle="collapse" data-bs-target="#checkout-add-billing-address">
+                                    + Add New Billing Address
+                                </button>
                             </div>
-                        @endunless
+
+                            @if ($addresses->isEmpty())
+                                <div class="checkout-empty-panel">No saved billing addresses yet.</div>
+                            @else
+                                <div class="checkout-address-list">
+                                    @foreach ($addresses as $address)
+                                        @php($isBillingSelected = (int) $selectedBillingAddressIdForView === (int) $address->getKey())
+                                        <div class="checkout-address-card {{ $isBillingSelected ? 'is-selected' : '' }}">
+                                            <form method="POST" action="{{ route('storefront.checkout.billing-addresses.select') }}">
+                                                @csrf
+                                                <input type="hidden" name="billing_address_id" value="{{ $address->getKey() }}">
+                                                <input type="radio" name="selected_billing_address_visual" value="{{ $address->getKey() }}" {{ $isBillingSelected ? 'checked' : '' }} onchange="this.form.submit()">
+                                            </form>
+                                            <div>
+                                                <div class="d-flex justify-content-between gap-3">
+                                                    <h6 class="mb-4">{{ $address->label }}</h6>
+                                                    @if ($address->is_default_billing)
+                                                        <span class="text-caption-01 cl-text-3">Default Billing</span>
+                                                    @endif
+                                                </div>
+                                                <p class="mb-4">{{ $address->recipient_name }}</p>
+                                                <p class="cl-text-2 mb-4">
+                                                    {{ $address->address_line_1 }}
+                                                    @if ($address->address_line_2), {{ $address->address_line_2 }} @endif
+                                                    @if ($address->landmark), {{ $address->landmark }} @endif
+                                                </p>
+                                                <p class="cl-text-2 mb-4">
+                                                    {{ $addressLabel($address) ?: 'Location details pending' }}
+                                                    @if ($address->postal_code) - {{ $address->postal_code }} @endif
+                                                </p>
+                                                <p class="cl-text-2 mb-0">Phone: {{ $address->recipient_mobile }}</p>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            <div class="collapse {{ $errors->any() && old('address_context') === 'billing' ? 'show' : '' }}" id="checkout-add-billing-address">
+                                @include('storefront.pages.partials.checkout-address-form', [
+                                    'action' => route('storefront.checkout.billing-addresses.store'),
+                                    'method' => 'POST',
+                                    'addressForm' => [
+                                        ...$addressFormDefaults,
+                                        'is_default_shipping' => false,
+                                        'is_default_billing' => false,
+                                    ],
+                                    'submitLabel' => 'Add Billing Address',
+                                    'defaultCountry' => $defaultCountry,
+                                    'defaultCheckboxName' => 'is_default_billing',
+                                    'defaultCheckboxLabel' => 'Use as default billing address',
+                                    'addressContext' => 'billing',
+                                ])
+                            </div>
+                        </div>
                     </div>
 
                     <div class="checkout-section">
@@ -505,8 +506,8 @@
                     <form method="POST" action="{{ route('storefront.checkout.place-order') }}" class="mt-20">
                         @csrf
                         <input type="hidden" name="address_id" value="{{ $selectedAddressId }}">
-                        <input type="hidden" name="billing_same_as_delivery" value="{{ $billingSameAsDelivery ? 1 : 0 }}">
-                        <input type="hidden" name="billing_address_id" value="{{ $selectedBillingAddressId }}">
+                        <input type="hidden" name="billing_same_as_delivery" value="{{ $billingSameForView ? 1 : 0 }}" data-billing-same-order-field>
+                        <input type="hidden" name="billing_address_id" value="{{ $selectedBillingAddressIdForView }}">
                         <input type="hidden" name="shipping_method" value="standard">
                         <input type="hidden" name="payment_method" value="cod">
                         <button type="submit" class="tf-btn animate-btn w-100" {{ $canPlaceOrder ? '' : 'disabled' }}>
@@ -521,3 +522,73 @@
         </div>
     </section>
 @endsection
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.querySelector('[data-billing-same-form]');
+            const toggle = document.querySelector('[data-billing-same-toggle]');
+            const panel = document.querySelector('[data-billing-address-panel]');
+            const orderField = document.querySelector('[data-billing-same-order-field]');
+
+            if (!form || !toggle || !panel || !orderField) {
+                return;
+            }
+
+            const csrfToken = () => {
+                const metaToken = document.querySelector('meta[name="csrf-token"]');
+
+                return metaToken ? metaToken.getAttribute('content') : '';
+            };
+
+            const applyBillingSameState = () => {
+                const sameAsDelivery = toggle.checked;
+
+                panel.hidden = sameAsDelivery;
+                orderField.value = sameAsDelivery ? '1' : '0';
+
+                return sameAsDelivery;
+            };
+
+            const syncBillingSameState = async (sameAsDelivery) => {
+                if (!window.fetch) {
+                    return;
+                }
+
+                const body = new URLSearchParams();
+                body.set('billing_same_as_delivery', sameAsDelivery ? '1' : '0');
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': csrfToken(),
+                        },
+                        body,
+                        credentials: 'same-origin',
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Billing preference sync failed.');
+                    }
+                } catch (error) {
+                    console.warn(error.message);
+                }
+            };
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                syncBillingSameState(applyBillingSameState());
+            });
+
+            toggle.addEventListener('change', () => {
+                syncBillingSameState(applyBillingSameState());
+            });
+
+            applyBillingSameState();
+        });
+    </script>
+@endpush

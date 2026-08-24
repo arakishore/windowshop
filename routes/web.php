@@ -52,6 +52,7 @@ Route::get('/shipping', [StorefrontController::class, 'shipping'])->name('storef
 Route::get('/contact-us', [StorefrontController::class, 'contact'])->name('storefront.contact');
 Route::get('/login', [StorefrontController::class, 'login'])->name('storefront.login');
 Route::post('/login', [CustomerAuthController::class, 'login'])->name('storefront.login.store');
+Route::post('/logout', [CustomerAuthController::class, 'logout'])->name('storefront.logout');
 Route::get('/register', [StorefrontController::class, 'register'])->name('storefront.register');
 Route::post('/register', [CustomerAuthController::class, 'register'])->name('storefront.register.store');
 Route::get('/account', [CustomerAccountController::class, 'show'])->name('storefront.account');
