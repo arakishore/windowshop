@@ -73,6 +73,24 @@
             color: var(--gray-600, #6c757d);
         }
 
+        .settings-shop-label {
+            border-left: 3px solid var(--primary);
+            background: rgba(var(--primary-rgb, 13, 110, 253), .06);
+        }
+
+        .storefront-settings-section + .storefront-settings-section {
+            border-top: 1px solid var(--border-color, #ddd);
+            margin-top: 1rem;
+            padding-top: 1rem;
+        }
+
+        .settings-qr-preview {
+            width: 112px;
+            height: 112px;
+            object-fit: contain;
+            background: #fff;
+        }
+
         .pos-tile-size-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -234,6 +252,21 @@
 @section('content')
     @php
         $oldSettings = old('settings', []);
+        $oldShopSettings = old('shop_settings', []);
+        $settingsTabs = [
+            'general' => ['General', 'ph-gear'],
+            'pos' => ['POS', 'ph-desktop'],
+            'orders' => ['Orders', 'ph-receipt'],
+            'inventory' => ['Inventory', 'ph-stack'],
+            'products' => ['Products', 'ph-package'],
+            'payments' => ['Payments', 'ph-credit-card'],
+            'receipts' => ['Receipts', 'ph-printer'],
+            'notifications' => ['Notifications', 'ph-bell'],
+            'advanced' => ['Advanced', 'ph-sliders'],
+        ];
+        $activeSettingsTab = old('active_tab', session('active_settings_tab', 'pos'));
+        $activeSettingsTab = array_key_exists($activeSettingsTab, $settingsTabs) ? $activeSettingsTab : 'pos';
+        $tabPaneClass = fn (string $tab) => 'tab-pane fade'.($activeSettingsTab === $tab ? ' show active' : '');
         $selectOptions = [
             'pos.cash_rounding.method' => ['nearest' => 'Nearest', 'up' => 'Up', 'down' => 'Down'],
             'pos.exchange.replacement_selector' => ['both' => 'Search / Scan + Dropdown', 'search' => 'Search / Scan only', 'dropdown' => 'Dropdown only'],
@@ -246,6 +279,16 @@
                 'value' => $oldSettings[$group][$key] ?? $settings["{$group}.{$key}"] ?? $defaults[$group][$key]['value'] ?? null,
                 'type' => $defaults[$group][$key]['type'] ?? \App\Models\MerchantSetting::TYPE_STRING,
                 'errorKey' => "settings.{$group}.{$key}",
+            ];
+        };
+        $shopField = function (string $group, string $key) use ($shopSettings, $shopSettingsDefaults, $oldShopSettings) {
+            return [
+                'fullKey' => "{$group}.{$key}",
+                'name' => "shop_settings[{$group}][{$key}]",
+                'id' => 'shop_setting_'.Str::slug($group.'_'.$key, '_'),
+                'value' => $oldShopSettings[$group][$key] ?? $shopSettings["{$group}.{$key}"] ?? $shopSettingsDefaults[$group][$key]['value'] ?? null,
+                'type' => $shopSettingsDefaults[$group][$key]['type'] ?? \App\Models\ShopSetting::TYPE_STRING,
+                'errorKey' => "shop_settings.{$group}.{$key}",
             ];
         };
     @endphp
@@ -262,31 +305,23 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ route('merchant.settings.update') }}">
+    <form method="POST" action="{{ route('merchant.settings.update') }}" enctype="multipart/form-data">
         @csrf
         @method('PUT')
+        <input type="hidden" name="active_tab" class="js-active-settings-tab" value="{{ $activeSettingsTab }}">
 
         <div class="merchant-settings-layout">
             <div class="merchant-settings-tabs">
                 <div class="card">
                     <div class="card-body p-2">
                         <div class="nav nav-pills flex-column" role="tablist">
-                            @foreach ([
-                                'general' => ['General', 'ph-gear'],
-                                'pos' => ['POS', 'ph-desktop'],
-                                'orders' => ['Orders', 'ph-receipt'],
-                                'inventory' => ['Inventory', 'ph-stack'],
-                                'products' => ['Products', 'ph-package'],
-                                'payments' => ['Payments', 'ph-credit-card'],
-                                'receipts' => ['Receipts', 'ph-printer'],
-                                'notifications' => ['Notifications', 'ph-bell'],
-                                'advanced' => ['Advanced', 'ph-sliders'],
-                            ] as $tab => [$label, $icon])
+                            @foreach ($settingsTabs as $tab => [$label, $icon])
                                 <button
                                     type="button"
-                                    class="nav-link d-flex align-items-center {{ $tab === 'pos' ? 'active' : '' }}"
+                                    class="nav-link d-flex align-items-center {{ $activeSettingsTab === $tab ? 'active' : '' }}"
                                     data-bs-toggle="tab"
                                     data-bs-target="#settings_{{ $tab }}"
+                                    data-settings-tab="{{ $tab }}"
                                     role="tab"
                                 >
                                     <i class="{{ $icon }}"></i>
@@ -299,7 +334,7 @@
             </div>
 
             <div class="tab-content">
-                <div class="tab-pane fade" id="settings_general" role="tabpanel">
+                <div class="{{ $tabPaneClass('general') }}" id="settings_general" role="tabpanel">
                     <div class="card merchant-settings-card">
                         <div class="card-header">
                             <h5 class="mb-0">General Settings</h5>
@@ -310,7 +345,7 @@
                     </div>
                 </div>
 
-                <div class="tab-pane fade show active" id="settings_pos" role="tabpanel">
+                <div class="{{ $tabPaneClass('pos') }}" id="settings_pos" role="tabpanel">
                     <div class="card merchant-settings-card">
                         <div class="card-header">
                             <h5 class="mb-0">Cash Rounding</h5>
@@ -469,7 +504,7 @@
                     ])
                 </div>
 
-                <div class="tab-pane fade" id="settings_orders" role="tabpanel">
+                <div class="{{ $tabPaneClass('orders') }}" id="settings_orders" role="tabpanel">
                     <div class="card merchant-settings-card">
                         <div class="card-header">
                             <h5 class="mb-0">Orders</h5>
@@ -478,9 +513,86 @@
                             Online order preferences will appear here later.
                         </div>
                     </div>
+
+                    <div class="card merchant-settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Storefront Fulfillment</h5>
+                            <div class="text-muted fs-sm mt-1">Delivery and pickup options for storefront checkout.</div>
+                        </div>
+                        <div class="card-body">
+                            @if ($activeShop)
+                                <div class="settings-shop-label rounded p-3 mb-3">
+                                    <div class="text-muted fs-sm">Storefront settings for:</div>
+                                    <div class="fw-semibold">{{ $activeShopLabel }}</div>
+                                </div>
+
+                                @php
+                                    $deliveryEnabled = $shopField('fulfillment', 'delivery_enabled');
+                                    $pickupEnabled = $shopField('fulfillment', 'pickup_enabled');
+                                    $pickupInstructions = $shopField('fulfillment', 'pickup_instructions');
+                                @endphp
+
+                                <div class="merchant-settings-grid">
+                                    <div>
+                                        <input type="hidden" name="{{ $deliveryEnabled['name'] }}" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                type="checkbox"
+                                                class="form-check-input {{ $errors->has($deliveryEnabled['errorKey']) ? 'is-invalid' : '' }}"
+                                                id="{{ $deliveryEnabled['id'] }}"
+                                                name="{{ $deliveryEnabled['name'] }}"
+                                                value="1"
+                                                @checked((bool) $deliveryEnabled['value'])
+                                            >
+                                            <label class="form-check-label fw-semibold" for="{{ $deliveryEnabled['id'] }}">Enable Delivery</label>
+                                        </div>
+                                        <div class="text-muted fs-sm mt-1">Allow customers to have orders delivered to their selected address.</div>
+                                        @if ($errors->has($deliveryEnabled['errorKey']))
+                                            <div class="invalid-feedback d-block">{{ $errors->first($deliveryEnabled['errorKey']) }}</div>
+                                        @endif
+                                    </div>
+
+                                    <div>
+                                        <input type="hidden" name="{{ $pickupEnabled['name'] }}" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                type="checkbox"
+                                                class="form-check-input js-storefront-pickup-toggle {{ $errors->has($pickupEnabled['errorKey']) ? 'is-invalid' : '' }}"
+                                                id="{{ $pickupEnabled['id'] }}"
+                                                name="{{ $pickupEnabled['name'] }}"
+                                                value="1"
+                                                @checked((bool) $pickupEnabled['value'])
+                                            >
+                                            <label class="form-check-label fw-semibold" for="{{ $pickupEnabled['id'] }}">Enable Pickup from Shop</label>
+                                        </div>
+                                        <div class="text-muted fs-sm mt-1">Allow customers to collect their order directly from this shop.</div>
+                                        @if ($errors->has($pickupEnabled['errorKey']))
+                                            <div class="invalid-feedback d-block">{{ $errors->first($pickupEnabled['errorKey']) }}</div>
+                                        @endif
+                                    </div>
+                                </div>
+
+                                <div class="mt-3 js-storefront-pickup-dependent">
+                                    <label for="{{ $pickupInstructions['id'] }}" class="form-label fw-semibold">Pickup Instructions</label>
+                                    <textarea
+                                        id="{{ $pickupInstructions['id'] }}"
+                                        name="{{ $pickupInstructions['name'] }}"
+                                        class="form-control {{ $errors->has($pickupInstructions['errorKey']) ? 'is-invalid' : '' }}"
+                                        rows="3"
+                                        placeholder="Please bring your order number when collecting your order."
+                                    >{{ $pickupInstructions['value'] }}</textarea>
+                                    @if ($errors->has($pickupInstructions['errorKey']))
+                                        <div class="invalid-feedback d-block">{{ $errors->first($pickupInstructions['errorKey']) }}</div>
+                                    @endif
+                                </div>
+                            @else
+                                <div class="text-muted">No active shop is available for storefront fulfillment settings.</div>
+                            @endif
+                        </div>
+                    </div>
                 </div>
 
-                <div class="tab-pane fade" id="settings_inventory" role="tabpanel">
+                <div class="{{ $tabPaneClass('inventory') }}" id="settings_inventory" role="tabpanel">
                     @include('merchant.settings.partials.setting-card', [
                         'title' => 'Inventory',
                         'description' => 'Keep stock control predictable during checkout.',
@@ -494,7 +606,7 @@
                     ])
                 </div>
 
-                <div class="tab-pane fade" id="settings_products" role="tabpanel">
+                <div class="{{ $tabPaneClass('products') }}" id="settings_products" role="tabpanel">
                     @include('merchant.settings.partials.setting-card', [
                         'title' => 'Barcode',
                         'description' => 'Default barcode behaviour for products.',
@@ -506,7 +618,7 @@
                     ])
                 </div>
 
-                <div class="tab-pane fade" id="settings_payments" role="tabpanel">
+                <div class="{{ $tabPaneClass('payments') }}" id="settings_payments" role="tabpanel">
                     @php
                         $paymentDefault = $field('payment', 'default_payment_method');
                         $paymentMethods = [
@@ -519,7 +631,7 @@
 
                     <div class="card merchant-settings-card">
                         <div class="card-header">
-                            <h5 class="mb-0">Payment Methods</h5>
+                            <h5 class="mb-0">POS Payment Methods</h5>
                             <div class="text-muted fs-sm mt-1">Turn manual tender types on or off for POS checkout.</div>
                         </div>
                         <div class="table-responsive">
@@ -586,9 +698,212 @@
                             @endif
                         </div>
                     </div>
+
+                    <div class="card merchant-settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Storefront Payment Methods</h5>
+                            <div class="text-muted fs-sm mt-1">Payment options for storefront checkout.</div>
+                        </div>
+                        <div class="card-body">
+                            @if ($activeShop)
+                                @php
+                                    $pickupEnabled = $shopField('fulfillment', 'pickup_enabled');
+                                    $codEnabled = $shopField('payment', 'cod_enabled');
+                                    $codMin = $shopField('payment', 'cod_min_order_amount');
+                                    $codMax = $shopField('payment', 'cod_max_order_amount');
+                                    $cashAtShopEnabled = $shopField('payment', 'cash_at_shop_enabled');
+                                    $merchantUpiEnabled = $shopField('payment', 'merchant_upi_enabled');
+                                    $merchantUpiId = $shopField('payment', 'merchant_upi_id');
+                                    $merchantUpiPayee = $shopField('payment', 'merchant_upi_payee_name');
+                                    $merchantUpiQrPath = $shopField('payment', 'merchant_upi_qr_path');
+                                    $onlinePaymentEnabled = $shopField('payment', 'online_payment_enabled');
+                                    $qrPath = is_string($merchantUpiQrPath['value']) ? $merchantUpiQrPath['value'] : null;
+                                @endphp
+
+                                <div class="settings-shop-label rounded p-3 mb-3">
+                                    <div class="text-muted fs-sm">These settings apply to:</div>
+                                    <div class="fw-semibold">{{ $activeShopLabel }}</div>
+                                </div>
+
+                                <div class="storefront-settings-section">
+                                    <input type="hidden" name="{{ $codEnabled['name'] }}" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            type="checkbox"
+                                            class="form-check-input js-storefront-cod-toggle {{ $errors->has($codEnabled['errorKey']) ? 'is-invalid' : '' }}"
+                                            id="{{ $codEnabled['id'] }}"
+                                            name="{{ $codEnabled['name'] }}"
+                                            value="1"
+                                            @checked((bool) $codEnabled['value'])
+                                        >
+                                        <label class="form-check-label fw-semibold" for="{{ $codEnabled['id'] }}">Cash on Delivery</label>
+                                    </div>
+                                    <div class="text-muted fs-sm mt-1">Allow customers to pay when their order is delivered.</div>
+                                    @if ($errors->has($codEnabled['errorKey']))
+                                        <div class="invalid-feedback d-block">{{ $errors->first($codEnabled['errorKey']) }}</div>
+                                    @endif
+
+                                    <div class="merchant-settings-grid mt-3 js-storefront-cod-dependent">
+                                        <div>
+                                            <label for="{{ $codMin['id'] }}" class="form-label fw-semibold">Minimum Order Amount</label>
+                                            <input
+                                                id="{{ $codMin['id'] }}"
+                                                type="number"
+                                                name="{{ $codMin['name'] }}"
+                                                value="{{ $codMin['value'] }}"
+                                                class="form-control {{ $errors->has($codMin['errorKey']) ? 'is-invalid' : '' }}"
+                                                min="0"
+                                                step="0.01"
+                                                placeholder="No minimum"
+                                            >
+                                            <div class="form-text">Blank or 0 means no minimum.</div>
+                                            @if ($errors->has($codMin['errorKey']))
+                                                <div class="invalid-feedback d-block">{{ $errors->first($codMin['errorKey']) }}</div>
+                                            @endif
+                                        </div>
+                                        <div>
+                                            <label for="{{ $codMax['id'] }}" class="form-label fw-semibold">Maximum Order Amount</label>
+                                            <input
+                                                id="{{ $codMax['id'] }}"
+                                                type="number"
+                                                name="{{ $codMax['name'] }}"
+                                                value="{{ $codMax['value'] }}"
+                                                class="form-control {{ $errors->has($codMax['errorKey']) ? 'is-invalid' : '' }}"
+                                                min="0"
+                                                step="0.01"
+                                                placeholder="No maximum"
+                                            >
+                                            <div class="form-text">Blank or 0 means no maximum.</div>
+                                            @if ($errors->has($codMax['errorKey']))
+                                                <div class="invalid-feedback d-block">{{ $errors->first($codMax['errorKey']) }}</div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="storefront-settings-section">
+                                    <input type="hidden" name="{{ $cashAtShopEnabled['name'] }}" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            type="checkbox"
+                                            class="form-check-input {{ $errors->has($cashAtShopEnabled['errorKey']) ? 'is-invalid' : '' }}"
+                                            id="{{ $cashAtShopEnabled['id'] }}"
+                                            name="{{ $cashAtShopEnabled['name'] }}"
+                                            value="1"
+                                            @checked((bool) $cashAtShopEnabled['value'])
+                                        >
+                                        <label class="form-check-label fw-semibold" for="{{ $cashAtShopEnabled['id'] }}">Cash at Shop</label>
+                                    </div>
+                                    <div class="text-muted fs-sm mt-1">Allow customers to pay at the shop when collecting their order.</div>
+                                    <div class="alert alert-warning mt-2 mb-0 js-cash-at-shop-pickup-warning">
+                                        Pickup from Shop must be enabled for this payment method to be offered at checkout.
+                                    </div>
+                                    @if ($errors->has($cashAtShopEnabled['errorKey']))
+                                        <div class="invalid-feedback d-block">{{ $errors->first($cashAtShopEnabled['errorKey']) }}</div>
+                                    @endif
+                                </div>
+
+                                <div class="storefront-settings-section">
+                                    <input type="hidden" name="{{ $merchantUpiEnabled['name'] }}" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            type="checkbox"
+                                            class="form-check-input js-storefront-upi-toggle {{ $errors->has($merchantUpiEnabled['errorKey']) ? 'is-invalid' : '' }}"
+                                            id="{{ $merchantUpiEnabled['id'] }}"
+                                            name="{{ $merchantUpiEnabled['name'] }}"
+                                            value="1"
+                                            @checked((bool) $merchantUpiEnabled['value'])
+                                        >
+                                        <label class="form-check-label fw-semibold" for="{{ $merchantUpiEnabled['id'] }}">Direct Merchant UPI</label>
+                                    </div>
+                                    <div class="text-muted fs-sm mt-1">Allow customers to pay directly to this shop's UPI account.</div>
+                                    @if ($errors->has($merchantUpiEnabled['errorKey']))
+                                        <div class="invalid-feedback d-block">{{ $errors->first($merchantUpiEnabled['errorKey']) }}</div>
+                                    @endif
+
+                                    <div class="merchant-settings-grid mt-3 js-storefront-upi-dependent">
+                                        <div>
+                                            <label for="{{ $merchantUpiId['id'] }}" class="form-label fw-semibold">UPI ID</label>
+                                            <input
+                                                id="{{ $merchantUpiId['id'] }}"
+                                                type="text"
+                                                name="{{ $merchantUpiId['name'] }}"
+                                                value="{{ $merchantUpiId['value'] }}"
+                                                class="form-control {{ $errors->has($merchantUpiId['errorKey']) ? 'is-invalid' : '' }}"
+                                            >
+                                            @if ($errors->has($merchantUpiId['errorKey']))
+                                                <div class="invalid-feedback d-block">{{ $errors->first($merchantUpiId['errorKey']) }}</div>
+                                            @endif
+                                        </div>
+                                        <div>
+                                            <label for="{{ $merchantUpiPayee['id'] }}" class="form-label fw-semibold">Payee Name</label>
+                                            <input
+                                                id="{{ $merchantUpiPayee['id'] }}"
+                                                type="text"
+                                                name="{{ $merchantUpiPayee['name'] }}"
+                                                value="{{ $merchantUpiPayee['value'] }}"
+                                                class="form-control {{ $errors->has($merchantUpiPayee['errorKey']) ? 'is-invalid' : '' }}"
+                                            >
+                                            @if ($errors->has($merchantUpiPayee['errorKey']))
+                                                <div class="invalid-feedback d-block">{{ $errors->first($merchantUpiPayee['errorKey']) }}</div>
+                                            @endif
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-3 js-storefront-upi-dependent">
+                                        <label class="form-label fw-semibold d-block">UPI QR Code</label>
+                                        <div class="card border-dashed p-3 mb-0">
+                                            <div class="d-flex flex-column flex-sm-row align-items-start gap-3">
+                                                <div class="rounded overflow-hidden bg-light border d-flex align-items-center justify-content-center" style="width: 180px; height: 120px;">
+                                                    <img
+                                                        id="merchant_upi_qr_preview"
+                                                        src="{{ $qrPath ? asset('storage/'.$qrPath) : '' }}"
+                                                        alt="UPI QR code"
+                                                        class="img-fluid {{ $qrPath ? '' : 'd-none' }}"
+                                                        style="width: 100%; height: 100%; object-fit: contain;"
+                                                    >
+                                                    <div id="merchant_upi_qr_placeholder" class="text-muted {{ $qrPath ? 'd-none' : '' }}">QR Code</div>
+                                                </div>
+                                                <div class="flex-fill">
+                                                    <label for="merchant_upi_qr" class="btn btn-outline-primary btn-sm">
+                                                        <i class="ph-upload me-1"></i>
+                                                        Choose image
+                                                    </label>
+                                                    <input
+                                                        id="merchant_upi_qr"
+                                                        type="file"
+                                                        name="merchant_upi_qr"
+                                                        class="d-none {{ $errors->has('merchant_upi_qr') ? 'is-invalid' : '' }}"
+                                                        accept=".jpg,.jpeg,.png,.webp"
+                                                    >
+                                                    <p class="text-muted mb-1 mt-2">{{ $qrPath ? 'Choose a new image to replace the current QR code.' : 'JPG, JPEG, PNG or WEBP. Max 2MB.' }}</p>
+                                                    @if ($errors->has('merchant_upi_qr'))
+                                                        <div class="text-danger small">{{ $errors->first('merchant_upi_qr') }}</div>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="storefront-settings-section">
+                                    <input type="hidden" name="{{ $onlinePaymentEnabled['name'] }}" value="0">
+                                    <div class="d-flex align-items-center justify-content-between gap-3">
+                                        <div>
+                                            <div class="fw-semibold">Online Payment</div>
+                                            <div class="text-muted fs-sm">Payment gateway setup will be added later.</div>
+                                        </div>
+                                        <span class="badge bg-light text-muted border">Coming Soon</span>
+                                    </div>
+                                </div>
+                            @else
+                                <div class="text-muted">No active shop is available for storefront payment settings.</div>
+                            @endif
+                        </div>
+                    </div>
                 </div>
 
-                <div class="tab-pane fade" id="settings_receipts" role="tabpanel">
+                <div class="{{ $tabPaneClass('receipts') }}" id="settings_receipts" role="tabpanel">
                     <div class="receipt-settings-layout">
                         <div>
                             @include('merchant.settings.partials.setting-card', [
@@ -729,7 +1044,7 @@
                     </div>
                 </div>
 
-                <div class="tab-pane fade" id="settings_notifications" role="tabpanel">
+                <div class="{{ $tabPaneClass('notifications') }}" id="settings_notifications" role="tabpanel">
                     <div class="card merchant-settings-card">
                         <div class="card-header">
                             <h5 class="mb-0">Notifications</h5>
@@ -740,7 +1055,7 @@
                     </div>
                 </div>
 
-                <div class="tab-pane fade" id="settings_advanced" role="tabpanel">
+                <div class="{{ $tabPaneClass('advanced') }}" id="settings_advanced" role="tabpanel">
                     <div class="card merchant-settings-card">
                         <div class="card-header">
                             <h5 class="mb-0">Advanced</h5>
@@ -788,8 +1103,17 @@
             };
             const footerInput = document.querySelector('textarea[name="settings[pos][receipt.footer]"]');
             const returnPolicyInput = document.querySelector('textarea[name="settings[pos][receipt.return_policy]"]');
+            const pickupToggle = document.querySelector('.js-storefront-pickup-toggle');
+            const codToggle = document.querySelector('.js-storefront-cod-toggle');
+            const upiToggle = document.querySelector('.js-storefront-upi-toggle');
+            const activeTabInput = document.querySelector('.js-active-settings-tab');
             const exampleAmount = 1043.28;
             const formatMoney = (value) => `Rs ${Number(value || 0).toFixed(2)}`;
+            const toggleElements = (selector, visible) => {
+                document.querySelectorAll(selector).forEach((element) => {
+                    element.classList.toggle('d-none', !visible);
+                });
+            };
             const selectedMethod = () => methodInputs.find((input) => input.checked)?.value || 'nearest';
             const roundedAmount = (amount, method) => {
                 if (method === 'up') {
@@ -857,9 +1181,54 @@
             });
             footerInput?.addEventListener('input', renderReceiptPreview);
             returnPolicyInput?.addEventListener('input', renderReceiptPreview);
+
+            const renderStorefrontDependencies = () => {
+                toggleElements('.js-storefront-pickup-dependent', pickupToggle?.checked ?? true);
+                toggleElements('.js-cash-at-shop-pickup-warning', !(pickupToggle?.checked ?? true));
+                toggleElements('.js-storefront-cod-dependent', codToggle?.checked ?? false);
+                toggleElements('.js-storefront-upi-dependent', upiToggle?.checked ?? false);
+            };
+
+            const setupImagePreview = (inputId, previewId, placeholderId) => {
+                const input = document.getElementById(inputId);
+                const preview = document.getElementById(previewId);
+                const placeholder = document.getElementById(placeholderId);
+
+                if (!input || !preview) {
+                    return;
+                }
+
+                input.addEventListener('change', () => {
+                    const file = input.files && input.files[0];
+
+                    if (!file || !/^image\/(jpeg|jpg|png|webp)$/i.test(file.type)) {
+                        return;
+                    }
+
+                    preview.src = URL.createObjectURL(file);
+                    preview.classList.remove('d-none');
+
+                    if (placeholder) {
+                        placeholder.classList.add('d-none');
+                    }
+                });
+            };
+
+            pickupToggle?.addEventListener('change', renderStorefrontDependencies);
+            codToggle?.addEventListener('change', renderStorefrontDependencies);
+            upiToggle?.addEventListener('change', renderStorefrontDependencies);
+            document.querySelectorAll('[data-settings-tab]').forEach((button) => {
+                button.addEventListener('shown.bs.tab', () => {
+                    if (activeTabInput) {
+                        activeTabInput.value = button.dataset.settingsTab || 'pos';
+                    }
+                });
+            });
+            setupImagePreview('merchant_upi_qr', 'merchant_upi_qr_preview', 'merchant_upi_qr_placeholder');
             syncApplyValue();
             renderPreview();
             renderReceiptPreview();
+            renderStorefrontDependencies();
         });
     </script>
 @endpush

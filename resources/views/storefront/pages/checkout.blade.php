@@ -391,7 +391,7 @@
                                 </div>
                             @endif
 
-                            <div class="collapse {{ $errors->any() && old('address_context') === 'billing' ? 'show' : '' }}" id="checkout-add-billing-address">
+                            <div class="collapse {{ ($errors->any() && old('address_context') === 'billing') || (! $billingSameForView && ! $selectedBillingAddress) ? 'show' : '' }}" id="checkout-add-billing-address">
                                 @include('storefront.pages.partials.checkout-address-form', [
                                     'action' => route('storefront.checkout.billing-addresses.store'),
                                     'method' => 'POST',
@@ -530,6 +530,7 @@
             const toggle = document.querySelector('[data-billing-same-toggle]');
             const panel = document.querySelector('[data-billing-address-panel]');
             const orderField = document.querySelector('[data-billing-same-order-field]');
+            const billingAddressCollapse = document.getElementById('checkout-add-billing-address');
 
             if (!form || !toggle || !panel || !orderField) {
                 return;
@@ -546,6 +547,10 @@
 
                 panel.hidden = sameAsDelivery;
                 orderField.value = sameAsDelivery ? '1' : '0';
+
+                if (!sameAsDelivery && billingAddressCollapse && window.bootstrap?.Collapse) {
+                    window.bootstrap.Collapse.getOrCreateInstance(billingAddressCollapse, { toggle: false }).show();
+                }
 
                 return sameAsDelivery;
             };
