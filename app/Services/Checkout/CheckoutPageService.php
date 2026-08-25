@@ -45,6 +45,10 @@ class CheckoutPageService
         $cartData['total_cents'] = $deliveryData['total_cents'];
         $cartData['total'] = $deliveryData['total'];
         $paymentData = $this->payments->resolve($request, $cart, $cartData, $deliveryData['selected']);
+        $hasFulfillmentAddress = $deliveryData['selected'] !== StorefrontDeliveryService::FULFILLMENT_DELIVERY
+            || $selectedAddress instanceof MerchantCustomerAddress;
+        $hasFulfillmentPostalCode = $deliveryData['selected'] !== StorefrontDeliveryService::FULFILLMENT_DELIVERY
+            || $selectedPostalCode !== null;
 
         return [
             'cart' => $cart,
@@ -65,9 +69,9 @@ class CheckoutPageService
             'paymentMethods' => $paymentData['methods'],
             'selectedPaymentMethod' => $paymentData['selected'],
             'paymentUnavailableMessage' => $paymentData['message'],
-            'canPlaceOrder' => $selectedAddress instanceof MerchantCustomerAddress
+            'canPlaceOrder' => $hasFulfillmentAddress
                 && $selectedBillingAddress instanceof MerchantCustomerAddress
-                && $selectedPostalCode !== null
+                && $hasFulfillmentPostalCode
                 && $deliveryData['selected'] !== null
                 && $paymentData['selected'] !== null
                 && ! (bool) $cartData['is_empty'],

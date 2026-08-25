@@ -242,6 +242,9 @@
                 @if (session('info'))
                     <div class="alert alert-info">{{ session('info') }}</div>
                 @endif
+                @if (session('error'))
+                    <div class="alert alert-danger">{{ session('error') }}</div>
+                @endif
             </div>
 
             <div class="checkout-grid">
@@ -590,7 +593,7 @@
                         <strong data-checkout-grand-total>{{ $cartData['total'] }}</strong>
                     </div>
 
-                    <form method="POST" action="{{ route('storefront.checkout.place-order') }}" class="mt-20">
+                    <form method="POST" action="{{ route('storefront.checkout.place-order') }}" class="mt-20" data-place-order-form>
                         @csrf
                         <input type="hidden" name="address_id" value="{{ $selectedAddressId }}">
                         <input type="hidden" name="billing_same_as_delivery" value="{{ $billingSameForView ? 1 : 0 }}" data-billing-same-order-field>
@@ -601,9 +604,6 @@
                             Place Order
                         </button>
                     </form>
-                    <p class="text-caption-01 cl-text-3 mt-12 mb-0">
-                        Final order creation, shipping charge, tax resolution, and payment capture are intentionally deferred.
-                    </p>
                 </aside>
             </div>
         </div>
@@ -623,6 +623,7 @@
             const shippingTotal = document.querySelector('[data-checkout-shipping-total]');
             const grandTotal = document.querySelector('[data-checkout-grand-total]');
             const placeOrderButton = document.querySelector('[data-place-order-button]');
+            const placeOrderForm = document.querySelector('[data-place-order-form]');
             const paymentOptions = document.querySelector('[data-payment-options]');
             const selectedPaymentField = document.querySelector('[data-selected-payment-field]');
 
@@ -892,6 +893,17 @@
                     }
                 });
             });
+
+            if (placeOrderForm && placeOrderButton) {
+                placeOrderForm.addEventListener('submit', () => {
+                    if (placeOrderButton.disabled) {
+                        return;
+                    }
+
+                    placeOrderButton.disabled = true;
+                    placeOrderButton.textContent = 'Placing Order...';
+                });
+            }
 
             applyBillingSameState();
         });

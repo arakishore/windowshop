@@ -40,6 +40,7 @@ class OrderCreationService
      *     shop_id: int,
      *     customer_id?: int|null,
      *     shipping_address_id?: int|null,
+     *     billing_address_id?: int|null,
      *     created_source?: string,
      *     fulfilment_type?: string,
      *     order_status?: string,
@@ -56,6 +57,7 @@ class OrderCreationService
      *     customer_mobile?: string|null,
      *     customer_email?: string|null,
      *     remarks?: string|null,
+     *     status_note?: string|null,
      *     items: array<int, array{product_variant_id: int, quantity: int}>,
      *     totals?: array<int, array<string, mixed>>
      * } $data
@@ -74,6 +76,7 @@ class OrderCreationService
             $paymentStatus = $requestedPaymentStatus ?? Order::PAYMENT_UNPAID;
             $customerSnapshot = $this->customerSnapshot($shop, $data);
             $shippingSnapshot = $this->shippingSnapshot($shop, $data, $customerSnapshot['customer_id']);
+            $billingSnapshot = $this->billingSnapshot($shop, $data, $customerSnapshot['customer_id']);
             $orderDiscount = $this->orderDiscount($items, $data['order_discount'] ?? []);
 
             $order = Order::query()->create([
@@ -82,6 +85,7 @@ class OrderCreationService
                 'shop_id' => $shop->getKey(),
                 'customer_id' => $customerSnapshot['customer_id'],
                 'shipping_address_id' => $shippingSnapshot['shipping_address_id'],
+                'billing_address_id' => $billingSnapshot['billing_address_id'],
                 'created_source' => $data['created_source'] ?? Order::SOURCE_POS,
                 'fulfilment_type' => $data['fulfilment_type'] ?? Order::FULFILMENT_COUNTER,
                 'order_status' => $orderStatus,
@@ -105,6 +109,16 @@ class OrderCreationService
                 'shipping_state' => $shippingSnapshot['shipping_state'],
                 'shipping_country' => $shippingSnapshot['shipping_country'],
                 'shipping_postal_code' => $shippingSnapshot['shipping_postal_code'],
+                'billing_recipient_name' => $billingSnapshot['billing_recipient_name'],
+                'billing_mobile_country_code' => $billingSnapshot['billing_mobile_country_code'],
+                'billing_mobile' => $billingSnapshot['billing_mobile'],
+                'billing_address_line_1' => $billingSnapshot['billing_address_line_1'],
+                'billing_address_line_2' => $billingSnapshot['billing_address_line_2'],
+                'billing_landmark' => $billingSnapshot['billing_landmark'],
+                'billing_city' => $billingSnapshot['billing_city'],
+                'billing_state' => $billingSnapshot['billing_state'],
+                'billing_country' => $billingSnapshot['billing_country'],
+                'billing_postal_code' => $billingSnapshot['billing_postal_code'],
                 'order_discount_type' => $orderDiscount['type'],
                 'order_discount_value' => $orderDiscount['value'],
                 'order_discount_amount' => $orderDiscount['amount'],
@@ -136,7 +150,7 @@ class OrderCreationService
             $order->forceFill(['payment_status' => $paymentStatus]);
 
             $this->orderTotalsService->save($order, $calculated['summary'], $calculated['rows']);
-            $this->orderStatusService->recordInitial($order, $orderStatus, $actor, 'POS cash sale completed');
+            $this->orderStatusService->recordInitial($order, $orderStatus, $actor, $data['status_note'] ?? 'POS cash sale completed');
             $this->deductStock($variants, $rows);
 
             return $order->load(['items', 'totals', 'statusHistories']);
@@ -167,6 +181,10 @@ class OrderCreationService
             return $requestedStatus;
         }
 
+        if ($requestedStatus === Order::PAYMENT_PENDING) {
+            return Order::PAYMENT_PENDING;
+        }
+
         if ($grandTotal <= 0 || $amountPaid >= $grandTotal) {
             return Order::PAYMENT_PAID;
         }
@@ -185,6 +203,7 @@ class OrderCreationService
     {
         return [
             Order::PAYMENT_UNPAID,
+            Order::PAYMENT_PENDING,
             Order::PAYMENT_PARTIALLY_PAID,
             Order::PAYMENT_PAID,
             Order::PAYMENT_REFUNDED,
@@ -292,6 +311,73 @@ class OrderCreationService
             'shipping_state' => $address->state?->name,
             'shipping_country' => $address->country?->name,
             'shipping_postal_code' => $address->postal_code,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array{
+     *     billing_address_id: int|null,
+     *     billing_recipient_name: string|null,
+     *     billing_mobile_country_code: string|null,
+     *     billing_mobile: string|null,
+     *     billing_address_line_1: string|null,
+     *     billing_address_line_2: string|null,
+     *     billing_landmark: string|null,
+     *     billing_city: string|null,
+     *     billing_state: string|null,
+     *     billing_country: string|null,
+     *     billing_postal_code: string|null
+     * }
+     */
+    private function billingSnapshot(Shop $shop, array $data, ?int $customerId): array
+    {
+        $empty = [
+            'billing_address_id' => null,
+            'billing_recipient_name' => null,
+            'billing_mobile_country_code' => null,
+            'billing_mobile' => null,
+            'billing_address_line_1' => null,
+            'billing_address_line_2' => null,
+            'billing_landmark' => null,
+            'billing_city' => null,
+            'billing_state' => null,
+            'billing_country' => null,
+            'billing_postal_code' => null,
+        ];
+
+        $addressId = (int) ($data['billing_address_id'] ?? 0);
+        if ($addressId < 1) {
+            return $empty;
+        }
+
+        if ($customerId === null) {
+            throw ValidationException::withMessages([
+                'customer_id' => 'Please select a customer for billing address snapshots.',
+            ]);
+        }
+
+        $address = MerchantCustomerAddress::query()
+            ->with(['customer', 'city', 'state', 'country'])
+            ->whereKey($addressId)
+            ->where('merchant_customer_id', $customerId)
+            ->where('status', MerchantCustomerAddress::STATUS_ACTIVE)
+            ->firstOrFail();
+
+        abort_unless((int) $address->customer?->merchant_id === (int) $shop->merchant_id, 404);
+
+        return [
+            'billing_address_id' => $address->getKey(),
+            'billing_recipient_name' => $address->recipient_name,
+            'billing_mobile_country_code' => $address->recipient_mobile_country_code,
+            'billing_mobile' => $address->recipient_mobile,
+            'billing_address_line_1' => $address->address_line_1,
+            'billing_address_line_2' => $address->address_line_2,
+            'billing_landmark' => $address->landmark,
+            'billing_city' => $address->city?->name,
+            'billing_state' => $address->state?->name,
+            'billing_country' => $address->country?->name,
+            'billing_postal_code' => $address->postal_code,
         ];
     }
 

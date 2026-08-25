@@ -14,6 +14,7 @@ class Order extends Model
 
     public const SOURCE_POS = 'pos';
     public const SOURCE_EXCHANGE_REPLACEMENT = 'exchange_replacement';
+    public const SOURCE_STOREFRONT = 'storefront';
     public const SOURCE_CUSTOMER_APP = 'customer_app';
     public const SOURCE_ADMIN = 'admin';
     public const SOURCE_API = 'api';
@@ -36,6 +37,7 @@ class Order extends Model
     public const PAYMENT_METHOD_WALLET = 'wallet';
     public const PAYMENT_METHOD_OTHER = 'other';
 
+    public const PAYMENT_PENDING = 'pending';
     public const PAYMENT_UNPAID = 'unpaid';
     public const PAYMENT_PARTIALLY_PAID = 'partially_paid';
     public const PAYMENT_PAID = 'paid';
@@ -52,6 +54,7 @@ class Order extends Model
         'shop_id',
         'customer_id',
         'shipping_address_id',
+        'billing_address_id',
         'created_source',
         'fulfilment_type',
         'order_status',
@@ -88,6 +91,16 @@ class Order extends Model
         'shipping_state',
         'shipping_country',
         'shipping_postal_code',
+        'billing_recipient_name',
+        'billing_mobile_country_code',
+        'billing_mobile',
+        'billing_address_line_1',
+        'billing_address_line_2',
+        'billing_landmark',
+        'billing_city',
+        'billing_state',
+        'billing_country',
+        'billing_postal_code',
         'remarks',
         'created_by',
         'updated_by',
@@ -138,6 +151,11 @@ class Order extends Model
     public function shippingAddress(): BelongsTo
     {
         return $this->belongsTo(MerchantCustomerAddress::class, 'shipping_address_id')->withTrashed();
+    }
+
+    public function billingAddress(): BelongsTo
+    {
+        return $this->belongsTo(MerchantCustomerAddress::class, 'billing_address_id')->withTrashed();
     }
 
     public function items(): HasMany

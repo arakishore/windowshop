@@ -132,6 +132,7 @@ class CartPageService
             'id' => $item->getKey(),
             'shop_id' => $item->shop?->getKey() ?? 0,
             'shop_name' => $item->shop?->name ?: 'Unavailable Shop',
+            'product_variant_id' => $variant?->getKey(),
             'product_name' => $product?->product_name ?: 'Unavailable Product',
             'product_url' => $product?->slug ? route('storefront.product.show', $product->slug) : '#',
             'image' => $this->imageUrl($item),

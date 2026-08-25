@@ -79,6 +79,7 @@ Route::post('/checkout/billing-address/select', [CheckoutAddressController::clas
 Route::post('/checkout/billing-addresses', [CheckoutAddressController::class, 'storeBilling'])->name('storefront.checkout.billing-addresses.store');
 Route::post('/checkout/fulfillment', [CheckoutController::class, 'fulfillment'])->name('storefront.checkout.fulfillment');
 Route::post('/checkout/place-order', [CheckoutController::class, 'placeOrder'])->name('storefront.checkout.place-order');
+Route::get('/checkout/order/{order}', [CheckoutController::class, 'success'])->name('storefront.checkout.success');
 Route::get('/category/{parentSlug}/{slug}', [StorefrontController::class, 'categoryWithParent'])->name('storefront.category.child.show');
 Route::get('/category/{slug}', [StorefrontController::class, 'category'])->name('storefront.category.show');
 Route::get('/store/{slug}', [StorefrontController::class, 'store'])->name('storefront.store.show');

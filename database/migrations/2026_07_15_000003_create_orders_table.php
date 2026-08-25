@@ -20,6 +20,7 @@ return new class extends Migration
             $table->foreignId('shop_id')->constrained('shops')->restrictOnDelete();
             $table->foreignId('customer_id')->nullable()->constrained('merchant_customers')->nullOnDelete();
             $table->foreignId('shipping_address_id')->nullable()->constrained('merchant_customer_addresses')->nullOnDelete();
+            $table->foreignId('billing_address_id')->nullable()->constrained('merchant_customer_addresses')->nullOnDelete();
             $table->string('created_source', 30)->default('pos')->index();
             $table->string('fulfilment_type', 30)->default('counter');
             $table->string('order_status', 30)->default('pending')->index();
@@ -56,6 +57,16 @@ return new class extends Migration
             $table->string('shipping_state', 120)->nullable();
             $table->string('shipping_country', 120)->nullable();
             $table->string('shipping_postal_code', 20)->nullable();
+            $table->string('billing_recipient_name', 150)->nullable();
+            $table->string('billing_mobile_country_code', 10)->nullable();
+            $table->string('billing_mobile', 30)->nullable();
+            $table->string('billing_address_line_1', 190)->nullable();
+            $table->string('billing_address_line_2', 190)->nullable();
+            $table->string('billing_landmark', 150)->nullable();
+            $table->string('billing_city', 120)->nullable();
+            $table->string('billing_state', 120)->nullable();
+            $table->string('billing_country', 120)->nullable();
+            $table->string('billing_postal_code', 20)->nullable();
             $table->text('remarks')->nullable()->comment('Order-level operational remarks; currently used to label exchange replacement orders. Refund/exchange form notes are stored in workflow metadata.');
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
@@ -70,6 +81,7 @@ return new class extends Migration
             $table->index(['shop_id', 'payment_status'], 'orders_shop_payment_status_idx');
             $table->index('customer_id', 'orders_customer_idx');
             $table->index('shipping_address_id', 'orders_shipping_address_idx');
+            $table->index('billing_address_id', 'orders_billing_address_idx');
             $table->index('deleted_at', 'orders_deleted_at_idx');
         });
     }
