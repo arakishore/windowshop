@@ -44,6 +44,7 @@ class MerchantOrdersReadOnlyTest extends TestCase
             'grand_total' => 1998,
         ]);
         $this->orderItem($order->getKey(), 'Maroon Comfort Soft Fleece', 'FLEECE-MAROON', 1998);
+        $this->statusHistory($order->getKey(), null, Order::STATUS_PENDING, 'Storefront order placed');
 
         $list = $this
             ->actingAs($user)
@@ -68,15 +69,54 @@ class MerchantOrdersReadOnlyTest extends TestCase
         $detail->assertOk();
         $detail->assertSee('Order');
         $detail->assertSee('ORD-20260825-000001');
-        $detail->assertSee('Source');
         $detail->assertSee('Storefront');
-        $detail->assertSee('Customer Information');
+        $detail->assertSee('Order Progress');
+        $detail->assertSee('Customer');
         $detail->assertSee('Maroon Comfort Soft Fleece');
-        $detail->assertSee('Order Totals');
+        $detail->assertSee('Order Summary');
         $detail->assertSee('Pickup Information');
-        $detail->assertSee('Payment Information');
+        $detail->assertSee('Payment');
+        $detail->assertSee('Order Activity');
+        $detail->assertSee('Storefront order placed');
         $detail->assertDontSee('Confirm Order');
         $detail->assertDontSee('Cancel Order');
+    }
+
+    public function test_delivery_cod_order_detail_uses_delivery_workspace_sections(): void
+    {
+        [$user, $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId, [
+            'order_number' => 'ORD-DELIVERY-COD',
+            'created_source' => Order::SOURCE_STOREFRONT,
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+            'payment_method' => 'cash_on_delivery',
+            'shipping_total' => 50,
+            'grand_total' => 2048,
+            'shipping_recipient_name' => 'Kishore Mishra',
+            'shipping_mobile_country_code' => '+91',
+            'shipping_mobile' => '9422945125',
+            'shipping_address_line_1' => 'Flat 08, Laxmi Govind',
+            'shipping_landmark' => 'Indira Nagar',
+            'shipping_city' => 'Nashik',
+            'shipping_state' => 'Maharashtra',
+            'shipping_country' => 'India',
+            'shipping_postal_code' => '422009',
+        ]);
+        $this->orderItem($order->getKey(), 'Delivery Shirt', 'DEL-SHIRT', 1998);
+
+        $response = $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order));
+
+        $response->assertOk();
+        $response->assertSee('Delivery Information');
+        $response->assertSee('Cash on Delivery');
+        $response->assertSee('Packed');
+        $response->assertSee('Shipped');
+        $response->assertSee('Out for Delivery');
+        $response->assertSee('Delivered');
+        $response->assertDontSee('Pickup Information');
     }
 
     public function test_orders_source_filter_supports_storefront_and_customer_app_only(): void
@@ -311,6 +351,17 @@ class MerchantOrdersReadOnlyTest extends TestCase
             'line_total' => $total,
             'created_at' => now(),
             'updated_at' => now(),
+        ]);
+    }
+
+    private function statusHistory(int $orderId, ?string $fromStatus, string $toStatus, string $notes): void
+    {
+        DB::table('order_status_histories')->insert([
+            'order_id' => $orderId,
+            'from_status' => $fromStatus,
+            'to_status' => $toStatus,
+            'notes' => $notes,
+            'created_at' => now(),
         ]);
     }
 }

@@ -1,4 +1,4 @@
-{{-- Purpose: Read-only merchant order detail view for storefront orders. --}}
+{{-- Purpose: Read-only merchant order-processing workspace for operational orders. --}}
 @extends('layouts.merchant')
 
 @section('breadcrumb')
@@ -7,6 +7,190 @@
         :breadcrumbs="['Merchant' => route('merchant.dashboard'), 'Orders' => route('merchant.orders.index'), $order->order_number => null]"
     />
 @endsection
+
+@push('styles')
+    <style>
+        .order-workspace-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 2.15fr) minmax(300px, .85fr);
+            gap: 1rem;
+            align-items: start;
+        }
+
+        .order-hero {
+            display: flex;
+            justify-content: space-between;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        .order-action-slot {
+            min-width: 220px;
+            min-height: 36px;
+        }
+
+        .order-meta-line {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .35rem .65rem;
+            align-items: center;
+        }
+
+        .order-progress {
+            display: grid;
+            grid-template-columns: repeat(var(--progress-count), minmax(110px, 1fr));
+            gap: .5rem;
+            overflow-x: auto;
+            padding-bottom: .25rem;
+        }
+
+        .order-progress-step {
+            position: relative;
+            min-width: 110px;
+            padding-top: 1.8rem;
+            color: var(--bs-secondary-color);
+        }
+
+        .order-progress-step::before {
+            content: "";
+            position: absolute;
+            top: .55rem;
+            left: 1rem;
+            right: -1.5rem;
+            height: 2px;
+            background: var(--bs-border-color);
+        }
+
+        .order-progress-step:last-child::before {
+            display: none;
+        }
+
+        .order-progress-dot {
+            position: absolute;
+            top: .2rem;
+            left: .35rem;
+            width: .85rem;
+            height: .85rem;
+            border-radius: 50%;
+            border: 2px solid var(--bs-border-color);
+            background: var(--bs-body-bg);
+            z-index: 1;
+        }
+
+        .order-progress-step.is-complete,
+        .order-progress-step.is-current {
+            color: var(--bs-body-color);
+        }
+
+        .order-progress-step.is-complete::before {
+            background: var(--bs-success);
+        }
+
+        .order-progress-step.is-complete .order-progress-dot {
+            border-color: var(--bs-success);
+            background: var(--bs-success);
+        }
+
+        .order-progress-step.is-current .order-progress-dot {
+            border-color: var(--bs-primary);
+            background: var(--bs-primary);
+            box-shadow: 0 0 0 .25rem rgba(var(--bs-primary-rgb), .14);
+        }
+
+        .order-info-list {
+            display: grid;
+            gap: .7rem;
+        }
+
+        .order-money-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: .55rem;
+        }
+
+        .order-activity {
+            display: grid;
+            gap: 0;
+        }
+
+        .order-activity-item {
+            position: relative;
+            padding-left: 1.75rem;
+            padding-bottom: 1.2rem;
+        }
+
+        .order-activity-item::before {
+            content: "";
+            position: absolute;
+            left: .42rem;
+            top: .95rem;
+            bottom: 0;
+            width: 1px;
+            background: var(--bs-border-color);
+        }
+
+        .order-activity-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .order-activity-item:last-child::before {
+            display: none;
+        }
+
+        .order-activity-dot {
+            position: absolute;
+            left: 0;
+            top: .2rem;
+            width: .85rem;
+            height: .85rem;
+            border-radius: 50%;
+            background: var(--bs-primary);
+        }
+
+        @media (max-width: 1199.98px) {
+            .order-workspace-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .order-action-slot {
+                display: none;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .order-hero {
+                display: block;
+            }
+
+            .order-progress {
+                grid-template-columns: 1fr;
+                overflow: visible;
+            }
+
+            .order-progress-step {
+                min-width: 0;
+                padding-top: 0;
+                padding-left: 1.75rem;
+                padding-bottom: 1rem;
+            }
+
+            .order-progress-step::before {
+                left: .75rem;
+                top: 1rem;
+                bottom: -.25rem;
+                right: auto;
+                width: 2px;
+                height: auto;
+            }
+
+            .order-progress-dot {
+                top: .25rem;
+                left: .35rem;
+            }
+        }
+    </style>
+@endpush
 
 @section('content')
     @php
@@ -24,13 +208,16 @@
         $formatAddress = static function (array $parts): array {
             return collect($parts)->filter(fn ($value) => filled($value))->values()->all();
         };
+        $compactLocation = static function (array $parts): string {
+            return collect($parts)->filter(fn ($value) => filled($value))->implode(', ');
+        };
         $shippingLines = $formatAddress([
             $order->shipping_recipient_name,
             trim((string) $order->shipping_mobile_country_code.' '.(string) $order->shipping_mobile),
             $order->shipping_address_line_1,
             $order->shipping_address_line_2,
             $order->shipping_landmark,
-            collect([$order->shipping_city, $order->shipping_state, $order->shipping_country, $order->shipping_postal_code])->filter()->implode(', '),
+            $compactLocation([$order->shipping_city, $order->shipping_state, $order->shipping_country, $order->shipping_postal_code]),
         ]);
         $billingLines = $formatAddress([
             $order->billing_recipient_name,
@@ -38,7 +225,7 @@
             $order->billing_address_line_1,
             $order->billing_address_line_2,
             $order->billing_landmark,
-            collect([$order->billing_city, $order->billing_state, $order->billing_country, $order->billing_postal_code])->filter()->implode(', '),
+            $compactLocation([$order->billing_city, $order->billing_state, $order->billing_country, $order->billing_postal_code]),
         ]);
         $billingSameAsShipping = $order->fulfilment_type === \App\Models\Order::FULFILMENT_DELIVERY && $shippingLines === $billingLines && count($billingLines) > 0;
         $shopAddressLines = $formatAddress([
@@ -46,51 +233,89 @@
             $activeShop->address_line_1,
             $activeShop->address_line_2,
             $activeShop->landmark,
-            collect([$activeShop->city?->name, $activeShop->state?->name, $activeShop->country?->name, $activeShop->pincode])->filter()->implode(', '),
+            $compactLocation([$activeShop->city?->name, $activeShop->state?->name, $activeShop->country?->name, $activeShop->pincode]),
         ]);
         $pickupInstructions = (string) $activeShop->setting('fulfillment', 'pickup_instructions', '');
+        $deliveryEstimateMin = (int) $activeShop->setting('fulfillment', 'delivery_estimate_min_days', 0);
+        $deliveryEstimateMax = (int) $activeShop->setting('fulfillment', 'delivery_estimate_max_days', 0);
+        $deliveryEstimate = null;
+        if ($deliveryEstimateMin > 0 || $deliveryEstimateMax > 0) {
+            $minLabel = $deliveryEstimateMin <= 0 ? 'Same day' : $deliveryEstimateMin.' '.Str::plural('day', $deliveryEstimateMin);
+            $maxLabel = $deliveryEstimateMax <= 0 ? null : $deliveryEstimateMax.' '.Str::plural('day', $deliveryEstimateMax);
+            $deliveryEstimate = $maxLabel && $maxLabel !== $minLabel ? $minLabel.' to '.$maxLabel : $minLabel;
+        }
+        $progressSteps = $order->fulfilment_type === \App\Models\Order::FULFILMENT_DELIVERY
+            ? [
+                \App\Models\Order::STATUS_PENDING => 'Order Placed',
+                \App\Models\Order::STATUS_CONFIRMED => 'Confirmed',
+                \App\Models\Order::STATUS_PROCESSING => 'Processing',
+                \App\Models\OrderStatus::CODE_PACKED => 'Packed',
+                \App\Models\OrderStatus::CODE_SHIPPED => 'Shipped',
+                \App\Models\OrderStatus::CODE_OUT_FOR_DELIVERY => 'Out for Delivery',
+                \App\Models\OrderStatus::CODE_DELIVERED => 'Delivered',
+                \App\Models\Order::STATUS_COMPLETED => 'Completed',
+            ]
+            : [
+                \App\Models\Order::STATUS_PENDING => 'Order Placed',
+                \App\Models\Order::STATUS_CONFIRMED => 'Confirmed',
+                \App\Models\Order::STATUS_PROCESSING => 'Processing',
+                \App\Models\Order::STATUS_READY_FOR_PICKUP => 'Ready for Pickup',
+                \App\Models\Order::STATUS_COMPLETED => 'Completed',
+            ];
+        $progressCodes = array_keys($progressSteps);
+        $currentStepIndex = array_search($order->order_status, $progressCodes, true);
+        $activityItems = $order->statusHistories->sortBy('created_at')->values();
     @endphp
 
-    <div class="row g-3">
-        <div class="col-xl-8">
-            <div class="card">
-                <div class="card-header d-flex align-items-center justify-content-between gap-3">
-                    <div>
-                        <div class="text-muted fs-sm">Order</div>
-                        <h4 class="mb-0">{{ $order->order_number }}</h4>
+    <div class="card">
+        <div class="card-body">
+            <div class="order-hero">
+                <div>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <h3 class="mb-0">{{ $order->order_number }}</h3>
+                        <span class="badge {{ $statusClass($order->order_status) }} bg-opacity-10 text-body">{{ $statusLabel($order->order_status) }}</span>
                     </div>
-                    <span class="badge {{ $statusClass($order->order_status) }} bg-opacity-10 text-body">{{ $statusLabel($order->order_status) }}</span>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <div class="text-muted fs-sm">Order Date</div>
-                            <div class="fw-semibold">{{ app_datetime($order->created_at) }}</div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="text-muted fs-sm">Source</div>
-                            <div class="fw-semibold">{{ $label($sourceLabels, $order->created_source) }}</div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="text-muted fs-sm">Fulfillment</div>
-                            <div class="fw-semibold">{{ $label($fulfillmentTypes, $order->fulfilment_type) }}</div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="text-muted fs-sm">Payment Method</div>
-                            <div class="fw-semibold">{{ $label($paymentMethods, $order->payment_method) }}</div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="text-muted fs-sm">Payment Status</div>
-                            <span class="badge {{ $paymentStatusClass($order->payment_status) }} bg-opacity-10 text-body">{{ $paymentStatusLabel($order->payment_status) }}</span>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="text-muted fs-sm">Active Shop</div>
-                            <div class="fw-semibold">{{ $activeShop->name }}</div>
-                        </div>
+                    <div class="text-muted mb-2">Placed {{ app_datetime($order->created_at) }}</div>
+                    <div class="order-meta-line fw-semibold">
+                        <span>{{ $label($sourceLabels, $order->created_source) }}</span>
+                        <span class="text-muted">/</span>
+                        <span>{{ $label($fulfillmentTypes, $order->fulfilment_type) }}</span>
+                        <span class="text-muted">/</span>
+                        <span>{{ $label($paymentMethods, $order->payment_method) }}</span>
                     </div>
                 </div>
+                <div class="order-action-slot"></div>
             </div>
+        </div>
+    </div>
 
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Order Progress</h5>
+        </div>
+        <div class="card-body">
+            <div class="order-progress" style="--progress-count: {{ count($progressSteps) }}">
+                @foreach($progressSteps as $code => $stepLabel)
+                    @php
+                        $stepIndex = array_search($code, $progressCodes, true);
+                        $stepClass = $currentStepIndex === false
+                            ? ''
+                            : ($stepIndex < $currentStepIndex ? 'is-complete' : ($stepIndex === $currentStepIndex ? 'is-current' : ''));
+                    @endphp
+                    <div class="order-progress-step {{ $stepClass }}">
+                        <span class="order-progress-dot"></span>
+                        <div class="fw-semibold">{{ $stepLabel }}</div>
+                    </div>
+                @endforeach
+            </div>
+            @if($currentStepIndex === false)
+                <div class="text-muted fs-sm mt-2">This status is outside the standard {{ $label($fulfillmentTypes, $order->fulfilment_type) }} progress path.</div>
+            @endif
+        </div>
+    </div>
+
+    <div class="order-workspace-grid">
+        <div>
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">Order Items</h5>
@@ -137,76 +362,63 @@
 
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Status History</h5>
+                    <h5 class="mb-0">Order Activity</h5>
                 </div>
-                @if($order->statusHistories->isEmpty())
-                    <div class="card-body text-muted">No status history recorded yet.</div>
-                @else
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Date</th>
-                                    <th>From</th>
-                                    <th>To</th>
-                                    <th>Changed By</th>
-                                    <th>Notes</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($order->statusHistories as $history)
-                                    <tr>
-                                        <td>{{ app_datetime($history->created_at) }}</td>
-                                        <td>{{ $history->from_status ? $statusLabel($history->from_status) : '-' }}</td>
-                                        <td>{{ $statusLabel($history->to_status) }}</td>
-                                        <td>{{ $history->changedBy?->name ?? 'System' }}</td>
-                                        <td>{{ $history->notes ?: '-' }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                @endif
+                <div class="card-body">
+                    @if($activityItems->isEmpty())
+                        <div class="text-muted">No activity recorded yet.</div>
+                    @else
+                        <div class="order-activity">
+                            @foreach($activityItems as $history)
+                                <div class="order-activity-item">
+                                    <span class="order-activity-dot"></span>
+                                    <div class="fw-semibold">{{ $history->from_status ? $statusLabel($history->to_status) : 'Order Placed' }}</div>
+                                    <div class="text-muted fs-sm">{{ app_datetime($history->created_at) }}</div>
+                                    @if($history->notes)
+                                        <div class="mt-1">{{ $history->notes }}</div>
+                                    @endif
+                                    <div class="text-muted fs-sm mt-1">{{ $history->changedBy?->name ? 'Updated by '.$history->changedBy->name : 'System' }}</div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Order Notes / Comments</h5>
+                </div>
+                <div class="card-body text-muted">
+                    Internal and customer-visible notes will be managed here in a later workflow step.
+                </div>
             </div>
         </div>
 
-        <div class="col-xl-4">
+        <aside>
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Customer Information</h5>
+                    <h5 class="mb-0">Customer</h5>
                 </div>
-                <div class="card-body">
-                    <dl class="row mb-0">
-                        <dt class="col-sm-4">Name</dt>
-                        <dd class="col-sm-8">{{ $order->customer_name ?: 'Customer' }}</dd>
-                        <dt class="col-sm-4">Mobile</dt>
-                        <dd class="col-sm-8">{{ $order->customer_mobile ?: '-' }}</dd>
-                        <dt class="col-sm-4">Email</dt>
-                        <dd class="col-sm-8">{{ $order->customer_email ?: '-' }}</dd>
-                    </dl>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Order Totals</h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between mb-2"><span>Subtotal</span><span>{{ $money($order->subtotal) }}</span></div>
-                    <div class="d-flex justify-content-between mb-2"><span>Discount</span><span>{{ $money($order->discount_total) }}</span></div>
-                    <div class="d-flex justify-content-between mb-2"><span>Shipping</span><span>{{ (float) $order->shipping_total > 0 ? $money($order->shipping_total) : 'FREE' }}</span></div>
-                    <div class="d-flex justify-content-between mb-2"><span>Tax</span><span>{{ $money($order->tax_total) }}</span></div>
-                    <hr>
-                    <div class="d-flex justify-content-between fw-bold fs-5 mb-2"><span>Grand Total</span><span>{{ $money($order->grand_total) }}</span></div>
-                    <div class="d-flex justify-content-between mb-2"><span>Amount Paid</span><span>{{ $money($order->amount_paid) }}</span></div>
-                    <div class="d-flex justify-content-between"><span>Balance</span><span>{{ $money($balance) }}</span></div>
+                <div class="card-body order-info-list">
+                    <div>
+                        <div class="fw-semibold">{{ $order->customer_name ?: 'Customer' }}</div>
+                    </div>
+                    <div>
+                        <div class="text-muted fs-sm">Mobile</div>
+                        <div>{{ $order->customer_mobile ?: '-' }}</div>
+                    </div>
+                    <div>
+                        <div class="text-muted fs-sm">Email</div>
+                        <div>{{ $order->customer_email ?: '-' }}</div>
+                    </div>
                 </div>
             </div>
 
             @if($order->fulfilment_type === \App\Models\Order::FULFILMENT_DELIVERY)
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">Delivery Address</h5>
+                        <h5 class="mb-0">Delivery Information</h5>
                     </div>
                     <div class="card-body">
                         @forelse($shippingLines as $line)
@@ -214,6 +426,10 @@
                         @empty
                             <div class="text-muted">No delivery address snapshot stored.</div>
                         @endforelse
+                        @if($deliveryEstimate)
+                            <div class="text-muted fs-sm mt-3">Estimated Delivery</div>
+                            <div>{{ $deliveryEstimate }}</div>
+                        @endif
                     </div>
                 </div>
             @elseif($order->fulfilment_type === \App\Models\Order::FULFILMENT_PICKUP)
@@ -226,11 +442,41 @@
                             <div>{{ $line }}</div>
                         @endforeach
                         @if($pickupInstructions !== '')
-                            <div class="text-muted fs-sm mt-2">{{ $pickupInstructions }}</div>
+                            <div class="text-muted fs-sm mt-3">Pickup Instructions</div>
+                            <div>{{ $pickupInstructions }}</div>
                         @endif
                     </div>
                 </div>
             @endif
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Payment</h5>
+                </div>
+                <div class="card-body">
+                    <div class="fw-semibold mb-2">{{ $label($paymentMethods, $order->payment_method) }}</div>
+                    <div class="mb-3">
+                        <span class="badge {{ $paymentStatusClass($order->payment_status) }} bg-opacity-10 text-body">{{ $paymentStatusLabel($order->payment_status) }}</span>
+                    </div>
+                    <div class="order-money-row"><span>Order Total</span><span class="fw-semibold">{{ $money($order->grand_total) }}</span></div>
+                    <div class="order-money-row"><span>Amount Paid</span><span>{{ $money($order->amount_paid) }}</span></div>
+                    <div class="order-money-row mb-0"><span>Balance</span><span class="fw-semibold">{{ $money($balance) }}</span></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Order Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="order-money-row"><span>Subtotal</span><span>{{ $money($order->subtotal) }}</span></div>
+                    <div class="order-money-row"><span>Discount</span><span>{{ $money($order->discount_total) }}</span></div>
+                    <div class="order-money-row"><span>Shipping</span><span>{{ (float) $order->shipping_total > 0 ? $money($order->shipping_total) : 'FREE' }}</span></div>
+                    <div class="order-money-row"><span>Tax</span><span>{{ $money($order->tax_total) }}</span></div>
+                    <hr>
+                    <div class="order-money-row mb-0 fs-5 fw-bold"><span>Grand Total</span><span>{{ $money($order->grand_total) }}</span></div>
+                </div>
+            </div>
 
             <div class="card">
                 <div class="card-header">
@@ -248,22 +494,6 @@
                     @endif
                 </div>
             </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Payment Information</h5>
-                </div>
-                <div class="card-body">
-                    <dl class="row mb-0">
-                        <dt class="col-sm-5">Method</dt>
-                        <dd class="col-sm-7">{{ $label($paymentMethods, $order->payment_method) }}</dd>
-                        <dt class="col-sm-5">Status</dt>
-                        <dd class="col-sm-7">{{ $paymentStatusLabel($order->payment_status) }}</dd>
-                        <dt class="col-sm-5">Amount Paid</dt>
-                        <dd class="col-sm-7">{{ $money($order->amount_paid) }}</dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
+        </aside>
     </div>
 @endsection

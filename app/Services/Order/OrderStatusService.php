@@ -9,18 +9,6 @@ use Illuminate\Validation\ValidationException;
 
 class OrderStatusService
 {
-    /**
-     * @var array<string, array<int, string>>
-     */
-    private array $allowedTransitions = [
-        Order::STATUS_PENDING => [Order::STATUS_CONFIRMED, Order::STATUS_PROCESSING, Order::STATUS_COMPLETED, Order::STATUS_CANCELLED],
-        Order::STATUS_CONFIRMED => [Order::STATUS_PROCESSING, Order::STATUS_READY_FOR_PICKUP, Order::STATUS_COMPLETED, Order::STATUS_CANCELLED],
-        Order::STATUS_PROCESSING => [Order::STATUS_READY_FOR_PICKUP, Order::STATUS_COMPLETED, Order::STATUS_CANCELLED],
-        Order::STATUS_READY_FOR_PICKUP => [Order::STATUS_COMPLETED, Order::STATUS_CANCELLED],
-        Order::STATUS_COMPLETED => [Order::STATUS_CANCELLED],
-        Order::STATUS_CANCELLED => [],
-    ];
-
     public function recordInitial(Order $order, string $status, ?User $actor = null, ?string $notes = null, ?array $metadata = null): void
     {
         $order->statusHistories()->create([
@@ -36,7 +24,7 @@ class OrderStatusService
     {
         return DB::transaction(function () use ($order, $toStatus, $actor, $notes, $metadata): Order {
             $fromStatus = $order->order_status;
-            $this->assertTransitionAllowed($fromStatus, $toStatus);
+            $this->assertCanTransition($order, $toStatus);
 
             $changes = [
                 'order_status' => $toStatus,
@@ -64,16 +52,35 @@ class OrderStatusService
         });
     }
 
-    private function assertTransitionAllowed(string $fromStatus, string $toStatus): void
+    /**
+     * @return array<int, string>
+     */
+    public function allowedNextStatuses(Order $order): array
     {
-        if ($fromStatus === $toStatus) {
-            return;
-        }
+        $flow = $this->fulfillmentStatusFlow();
 
-        if (! in_array($toStatus, $this->allowedTransitions[$fromStatus] ?? [], true)) {
+        return $flow[$order->fulfilment_type][$order->order_status] ?? [];
+    }
+
+    public function canTransition(Order $order, string $toStatus): bool
+    {
+        return in_array($toStatus, $this->allowedNextStatuses($order), true);
+    }
+
+    public function assertCanTransition(Order $order, string $toStatus): void
+    {
+        if (! $this->canTransition($order, $toStatus)) {
             throw ValidationException::withMessages([
-                'order_status' => "Cannot change order status from {$fromStatus} to {$toStatus}.",
+                'order_status' => "Cannot change order status from {$order->order_status} to {$toStatus}.",
             ]);
         }
+    }
+
+    /**
+     * @return array<string, array<string, array<int, string>>>
+     */
+    private function fulfillmentStatusFlow(): array
+    {
+        return (array) config('order_workflow.fulfillment_status_flow', []);
     }
 }

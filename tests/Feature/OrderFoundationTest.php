@@ -140,7 +140,8 @@ class OrderFoundationTest extends TestCase
         [$user, $shop, $variant] = $this->orderFixture();
         $order = app(OrderCreationService::class)->create([
             'shop_id' => $shop->getKey(),
-            'order_status' => Order::STATUS_PENDING,
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+            'order_status' => Order::STATUS_READY_FOR_PICKUP,
             'payment_status' => Order::PAYMENT_UNPAID,
             'amount_paid' => 0,
             'items' => [
@@ -156,15 +157,26 @@ class OrderFoundationTest extends TestCase
         $this->assertNotNull($order->completed_at);
         $this->assertSame(2, $order->statusHistories()->count());
 
-        $service->transition($order, Order::STATUS_CANCELLED, $user, 'Sale cancelled by merchant');
-        $order->refresh();
+        $cancellableOrder = app(OrderCreationService::class)->create([
+            'shop_id' => $shop->getKey(),
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+            'order_status' => Order::STATUS_PROCESSING,
+            'payment_status' => Order::PAYMENT_UNPAID,
+            'amount_paid' => 0,
+            'items' => [
+                ['product_variant_id' => $variant->getKey(), 'quantity' => 1],
+            ],
+        ], $user);
 
-        $this->assertSame(Order::STATUS_CANCELLED, $order->order_status);
-        $this->assertNotNull($order->cancelled_at);
-        $this->assertSame(3, $order->statusHistories()->count());
+        $service->transition($cancellableOrder, Order::STATUS_CANCELLED, $user, 'Sale cancelled by merchant');
+        $cancellableOrder->refresh();
+
+        $this->assertSame(Order::STATUS_CANCELLED, $cancellableOrder->order_status);
+        $this->assertNotNull($cancellableOrder->cancelled_at);
+        $this->assertSame(2, $cancellableOrder->statusHistories()->count());
         $this->assertDatabaseHas('order_status_histories', [
-            'order_id' => $order->getKey(),
-            'from_status' => Order::STATUS_COMPLETED,
+            'order_id' => $cancellableOrder->getKey(),
+            'from_status' => Order::STATUS_PROCESSING,
             'to_status' => Order::STATUS_CANCELLED,
             'notes' => 'Sale cancelled by merchant',
         ]);
