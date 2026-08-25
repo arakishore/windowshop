@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Concerns;
 
 use App\Models\PostalCodeRestriction;
+use App\Services\DateTime\BusinessTimeService;
 use Illuminate\Validation\Rule;
 
 trait ValidatesPostalCodeRestrictionRequest
@@ -32,8 +33,8 @@ trait ValidatesPostalCodeRestrictionRequest
         return [
             'postal_code' => trim((string) $data['postal_code']),
             'reason' => $reason === '' ? null : $reason,
-            'starts_at' => $data['starts_at'] ?? null,
-            'ends_at' => $data['ends_at'] ?? null,
+            'starts_at' => app(BusinessTimeService::class)->toUtcFromLocalInput($data['starts_at'] ?? null),
+            'ends_at' => app(BusinessTimeService::class)->toUtcFromLocalInput($data['ends_at'] ?? null),
             'status' => $data['status'],
         ];
     }

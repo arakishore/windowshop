@@ -4,11 +4,16 @@ namespace App\Services\Merchant;
 
 use App\Models\Order;
 use App\Models\MerchantProfile;
+use App\Services\DateTime\BusinessTimeService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class MerchantDashboardService
 {
+    public function __construct(private readonly BusinessTimeService $businessTime)
+    {
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -80,7 +85,8 @@ class MerchantDashboardService
         $this->originalPosSalesOnly($query);
 
         if (Schema::hasColumn('orders', 'created_at')) {
-            $query->whereDate('created_at', today());
+            [$start, $end] = $this->businessTime->dateRangeToUtc(null, null);
+            $query->where('created_at', '>=', $start)->where('created_at', '<', $end);
         }
 
         return $query->count();
@@ -106,7 +112,8 @@ class MerchantDashboardService
         $this->originalPosSalesOnly($query);
 
         if (Schema::hasColumn('orders', 'created_at')) {
-            $query->whereDate('created_at', today());
+            [$start, $end] = $this->businessTime->dateRangeToUtc(null, null);
+            $query->where('created_at', '>=', $start)->where('created_at', '<', $end);
         }
 
         return (float) $query->sum($column);

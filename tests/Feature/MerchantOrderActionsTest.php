@@ -106,6 +106,42 @@ class MerchantOrderActionsTest extends TestCase
         $this->assertSame('2026-08-25 13:12:00', Carbon::parse($history->created_at)->format('Y-m-d H:i:s'));
     }
 
+    public function test_delivery_completion_status_histories_use_explicit_laravel_timestamp(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId, [
+            'order_status' => OrderStatus::CODE_OUT_FOR_DELIVERY,
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+            'payment_method' => 'cash_on_delivery',
+            'payment_status' => PaymentStatus::CODE_PENDING,
+            'grand_total' => 1998,
+            'amount_paid' => 0,
+        ]);
+        $frozen = Carbon::parse('2026-08-25 13:20:00', 'UTC');
+
+        Carbon::setTestNow($frozen);
+        try {
+            $this
+                ->actingAs($user)
+                ->withSession(['active_shop_id' => $shopId])
+                ->post(route('merchant.orders.deliver', $order), [
+                    'payment_received' => '1',
+                ])
+                ->assertRedirect(route('merchant.orders.show', $order));
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $histories = DB::table('order_status_histories')
+            ->where('order_id', $order->getKey())
+            ->pluck('created_at')
+            ->map(fn ($createdAt): string => Carbon::parse($createdAt)->format('Y-m-d H:i:s'))
+            ->all();
+
+        $this->assertNotEmpty($histories);
+        $this->assertSame(['2026-08-25 13:20:00'], array_values(array_unique($histories)));
+    }
+
     public function test_pending_customer_app_order_can_be_accepted(): void
     {
         [$user, , $shopId] = $this->merchantShopFixture();

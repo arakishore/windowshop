@@ -176,6 +176,7 @@ class OrderExchangeService
                     'settlement_type' => $settlement['settlement_type'],
                     'notes' => $this->nullableString($data['notes'] ?? null),
                 ],
+                'created_at' => now(),
             ]);
 
             return $exchange->load(['items.orderItem', 'replacementOrder.items', 'originalOrder']);

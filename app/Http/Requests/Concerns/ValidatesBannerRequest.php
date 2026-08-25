@@ -10,6 +10,7 @@ use App\Models\BannerTemplate;
 use App\Models\Shop;
 use App\Services\Banner\BannerTemplateLibraryService;
 use App\Services\Banner\BannerLinkResolver;
+use App\Services\DateTime\BusinessTimeService;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -103,7 +104,7 @@ trait ValidatesBannerRequest
             ->where('position', $position->value)
             ->where('status', Banner::STATUS_ACTIVE)
             ->where(function ($query): void {
-                $query->whereNull('ends_at')->orWhere('ends_at', '>=', now(config('app.timezone')));
+                $query->whereNull('ends_at')->orWhere('ends_at', '>=', now());
             })
             ->when($merchantId === null, fn ($query) => $query->whereNull('merchant_id'), fn ($query) => $query->where('merchant_id', $merchantId))
             ->when($shopId === null, fn ($query) => $query->whereNull('shop_id'), fn ($query) => $query->where('shop_id', $shopId))
@@ -131,8 +132,8 @@ trait ValidatesBannerRequest
             'open_in_new_tab' => $linkType === BannerLinkType::CUSTOM_URL->value && (bool) ($data['open_in_new_tab'] ?? false),
             'button_text' => $this->nullableString($data['button_text'] ?? null),
             'sort_order' => (int) ($data['sort_order'] ?? 0),
-            'starts_at' => $data['starts_at'] ?? null,
-            'ends_at' => $data['ends_at'] ?? null,
+            'starts_at' => app(BusinessTimeService::class)->toUtcFromLocalInput($data['starts_at'] ?? null),
+            'ends_at' => app(BusinessTimeService::class)->toUtcFromLocalInput($data['ends_at'] ?? null),
             'status' => $data['status'],
         ];
     }

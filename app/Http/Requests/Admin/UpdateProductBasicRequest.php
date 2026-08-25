@@ -7,6 +7,7 @@ use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
 use App\Models\Shop;
 use App\Models\TaxClass;
+use App\Services\DateTime\BusinessTimeService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -166,8 +167,8 @@ class UpdateProductBasicRequest extends FormRequest
         return [
             'sort_order' => $this->integer('sort_order'),
             'is_featured' => $this->boolean('is_featured'),
-            'featured_from' => $this->input('featured_from') ?: null,
-            'featured_until' => $this->input('featured_until') ?: null,
+            'featured_from' => app(BusinessTimeService::class)->toUtcFromLocalInput($this->input('featured_from')),
+            'featured_until' => app(BusinessTimeService::class)->toUtcFromLocalInput($this->input('featured_until')),
         ];
     }
 }

@@ -86,7 +86,7 @@
                                     <td>INR {{ number_format((float) ($order->grand_total ?? 0)) }}</td>
                                     <td>{{ $formatElapsed((int) ($order->elapsed_seconds ?? 0)) }}</td>
                                     <td><span class="badge bg-info bg-opacity-10 text-info">{{ Str::headline($order->order_status ?? 'new') }}</span></td>
-                                    <td class="text-end text-muted">{{ isset($order->created_at) ? \Illuminate\Support\Carbon::parse($order->created_at)->diffForHumans() : '-' }}</td>
+                                    <td class="text-end text-muted">{{ $order->created_at ? \Illuminate\Support\Carbon::parse($order->created_at, 'UTC')->diffForHumans(now()) : '-' }}</td>
                                 </tr>
                             @empty
                                 <tr>

@@ -53,6 +53,7 @@ class DeliveryCompletionService
                         'payment_collected' => true,
                         'amount_collected' => (string) $order->grand_total,
                     ],
+                    'created_at' => now(),
                 ]);
 
                 $order = $order->refresh();

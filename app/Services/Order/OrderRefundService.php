@@ -117,6 +117,7 @@ class OrderRefundService
                     'refund_total' => $refundTotal,
                     'notes' => $this->nullableString($data['notes'] ?? null),
                 ],
+                'created_at' => now(),
             ]);
 
             return $refund->load(['items.orderItem']);

@@ -8,6 +8,7 @@ use App\Models\OrderExchange;
 use App\Models\ReturnReason;
 use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
+use App\Services\DateTime\BusinessTimeService;
 use App\Services\Merchant\MerchantSettingsService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Order\OrderExchangeService;
@@ -25,6 +26,7 @@ class SalesHistoryController extends Controller
         private readonly MerchantSettingsService $settings,
         private readonly OrderRefundService $refundService,
         private readonly OrderExchangeService $exchangeService,
+        private readonly BusinessTimeService $businessTime,
     ) {
     }
 
@@ -50,8 +52,14 @@ class SalesHistoryController extends Controller
             ->where('orders.order_status', Order::STATUS_COMPLETED)
             ->when($filters['payment_method'] !== '', fn ($query) => $query->where('orders.payment_method', $filters['payment_method']))
             ->when($filters['customer'] !== '', fn ($query) => $query->where('orders.customer_id', $filters['customer']))
-            ->when($filters['from'] !== '', fn ($query) => $query->whereDate('orders.created_at', '>=', $filters['from']))
-            ->when($filters['to'] !== '', fn ($query) => $query->whereDate('orders.created_at', '<=', $filters['to']))
+            ->when($filters['from'] !== '' || $filters['to'] !== '', function ($query) use ($filters): void {
+                [$start, $end] = $this->businessTime->dateRangeToUtc(
+                    $filters['from'] !== '' ? $filters['from'] : null,
+                    $filters['to'] !== '' ? $filters['to'] : null,
+                );
+                $query->where('orders.created_at', '>=', $start)
+                    ->where('orders.created_at', '<', $end);
+            })
             ->when($filters['status'] === 'refunded', fn ($query) => $query->where('orders.payment_status', Order::PAYMENT_REFUNDED))
             ->when($filters['status'] === 'partially_refunded', fn ($query) => $query->where('orders.payment_status', Order::PAYMENT_PARTIALLY_REFUNDED))
             ->when($filters['status'] === 'completed', fn ($query) => $query->whereNotIn('orders.payment_status', [Order::PAYMENT_REFUNDED, Order::PAYMENT_PARTIALLY_REFUNDED]))

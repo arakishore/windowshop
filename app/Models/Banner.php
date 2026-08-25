@@ -114,7 +114,7 @@ class Banner extends Model
 
     public function scopeCurrentlyVisible(Builder $query, ?CarbonInterface $effectiveAt = null): Builder
     {
-        $effectiveAt = $effectiveAt ?: now(config('app.timezone'));
+        $effectiveAt = $effectiveAt ?: now();
 
         return $query
             ->active()
@@ -156,7 +156,7 @@ class Banner extends Model
     public function isActiveOrScheduled(): bool
     {
         return $this->status === self::STATUS_ACTIVE
-            && ($this->ends_at === null || $this->ends_at->gte(now(config('app.timezone'))));
+            && ($this->ends_at === null || $this->ends_at->gte(now()));
     }
 
     public function usesTemplate(): bool

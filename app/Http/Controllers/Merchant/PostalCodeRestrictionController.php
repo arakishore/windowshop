@@ -171,12 +171,15 @@ class PostalCodeRestrictionController extends Controller
     private function requestRestrictionIsCurrent(mixed $startsAt, mixed $endsAt): bool
     {
         $now = now();
+        $businessTime = app(\App\Services\DateTime\BusinessTimeService::class);
+        $startsAt = $businessTime->toUtcFromLocalInput($startsAt);
+        $endsAt = $businessTime->toUtcFromLocalInput($endsAt);
 
-        if ($startsAt && \Illuminate\Support\Carbon::parse($startsAt)->greaterThan($now)) {
+        if ($startsAt && $startsAt->greaterThan($now)) {
             return false;
         }
 
-        if ($endsAt && \Illuminate\Support\Carbon::parse($endsAt)->lessThan($now)) {
+        if ($endsAt && $endsAt->lessThan($now)) {
             return false;
         }
 

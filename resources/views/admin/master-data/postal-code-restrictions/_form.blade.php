@@ -26,12 +26,12 @@
             </div>
             <div class="col-md-3">
                 <label for="starts_at" class="form-label">Starts At</label>
-                <input id="starts_at" name="starts_at" type="datetime-local" value="{{ old('starts_at', $restriction?->starts_at?->format('Y-m-d\TH:i')) }}" class="form-control @error('starts_at') is-invalid @enderror">
+                <input id="starts_at" name="starts_at" type="datetime-local" value="{{ old('starts_at', app_datetime_local($restriction?->starts_at)) }}" class="form-control @error('starts_at') is-invalid @enderror">
                 @error('starts_at')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
             <div class="col-md-3">
                 <label for="ends_at" class="form-label">Ends At</label>
-                <input id="ends_at" name="ends_at" type="datetime-local" value="{{ old('ends_at', $restriction?->ends_at?->format('Y-m-d\TH:i')) }}" class="form-control @error('ends_at') is-invalid @enderror">
+                <input id="ends_at" name="ends_at" type="datetime-local" value="{{ old('ends_at', app_datetime_local($restriction?->ends_at)) }}" class="form-control @error('ends_at') is-invalid @enderror">
                 @error('ends_at')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
             <div class="col-md-3">

@@ -88,7 +88,7 @@ class ProductMerchandisingTest extends TestCase
         $product->refresh();
         $this->assertSame(7, $product->sort_order);
         $this->assertTrue($product->is_featured);
-        $this->assertSame('2026-08-01 09:00:00', $product->featured_from->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-01 03:30:00', $product->featured_from->format('Y-m-d H:i:s'));
 
         $this->actingAs($fixture['merchantUser'])
             ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
@@ -102,8 +102,8 @@ class ProductMerchandisingTest extends TestCase
 
         $product->refresh();
         $this->assertFalse($product->is_featured);
-        $this->assertSame('2026-08-01 09:00:00', $product->featured_from->format('Y-m-d H:i:s'));
-        $this->assertSame('2026-08-31 21:00:00', $product->featured_until->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-01 03:30:00', $product->featured_from->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-31 15:30:00', $product->featured_until->format('Y-m-d H:i:s'));
     }
 
     public function test_featured_filters_and_bulk_actions_preserve_dates(): void
@@ -126,14 +126,14 @@ class ProductMerchandisingTest extends TestCase
             ->get(route('merchant.products.index', ['featured' => 'scheduled']))
             ->assertOk()
             ->assertSee('Featured Scheduled')
-            ->assertSee('From 01-09-2026 10:00 AM')
+            ->assertSee('From 01-09-2026 03:30 PM')
             ->assertDontSee('Featured Current');
 
         $this->actingAs($fixture['admin'])
             ->get(route('admin.products.index', ['featured' => 'scheduled']))
             ->assertOk()
             ->assertSee('Featured Scheduled')
-            ->assertSee('From 01-09-2026 10:00 AM')
+            ->assertSee('From 01-09-2026 03:30 PM')
             ->assertDontSee('Featured Current');
 
         $this->actingAs($fixture['admin'])
@@ -153,7 +153,7 @@ class ProductMerchandisingTest extends TestCase
             ->assertOk()
             ->assertSee('Disabled Saved Schedule')
             ->assertSee('Saved schedule')
-            ->assertSee('From 20-09-2026 10:00 AM');
+            ->assertSee('From 20-09-2026 03:30 PM');
 
         $this->actingAs($fixture['merchantUser'])
             ->withSession(['active_shop_id' => $fixture['shop']->getKey()])

@@ -22,8 +22,8 @@
         default => 'Will be resolved during checkout',
     };
     $merchantTaxEnabled = (bool) ($merchantTaxEnabled ?? false);
-    $featuredFromValue = old('featured_from', $product?->featured_from?->format('Y-m-d\TH:i'));
-    $featuredUntilValue = old('featured_until', $product?->featured_until?->format('Y-m-d\TH:i'));
+    $featuredFromValue = old('featured_from', app_datetime_local($product?->featured_from));
+    $featuredUntilValue = old('featured_until', app_datetime_local($product?->featured_until));
     $selectedIsFeatured = (bool) old('is_featured', $product?->is_featured ?? false);
     $featuredStatus = $product ? $product->featuredStatus() : ($selectedIsFeatured ? 'current' : 'disabled');
     $featuredStatusClasses = [

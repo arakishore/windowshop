@@ -10,6 +10,7 @@ use App\Models\BannerTemplate;
 use App\Models\MerchantProfile;
 use App\Models\Shop;
 use App\Models\User;
+use App\Services\DateTime\BusinessTimeService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -197,14 +198,15 @@ class BannerTemplateActivationService
             return null;
         }
 
-        $year = (int) now(config('app.timezone'))->format('Y');
+        $timezone = app(BusinessTimeService::class)->timezoneName();
+        $year = (int) now($timezone)->format('Y');
 
         return match ($eventCode) {
-            'new_year' => CarbonImmutable::create($year, 1, 1, 0, 0, 0, config('app.timezone')),
-            'republic_day' => CarbonImmutable::create($year, 1, 26, 0, 0, 0, config('app.timezone')),
-            'valentines_day' => CarbonImmutable::create($year, 2, 14, 0, 0, 0, config('app.timezone')),
-            'independence_day' => CarbonImmutable::create($year, 8, 15, 0, 0, 0, config('app.timezone')),
-            'christmas' => CarbonImmutable::create($year, 12, 25, 0, 0, 0, config('app.timezone')),
+            'new_year' => CarbonImmutable::create($year, 1, 1, 0, 0, 0, $timezone),
+            'republic_day' => CarbonImmutable::create($year, 1, 26, 0, 0, 0, $timezone),
+            'valentines_day' => CarbonImmutable::create($year, 2, 14, 0, 0, 0, $timezone),
+            'independence_day' => CarbonImmutable::create($year, 8, 15, 0, 0, 0, $timezone),
+            'christmas' => CarbonImmutable::create($year, 12, 25, 0, 0, 0, $timezone),
             default => null,
         };
     }

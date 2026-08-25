@@ -84,7 +84,7 @@ class DateDisplayService
 
     private function timezone(): DateTimeZone
     {
-        $timezone = $this->regional()['timezone'];
+        $timezone = (string) ($this->regional()['timezone'] ?: 'Asia/Kolkata');
 
         if (! in_array($timezone, DateTimeZone::listIdentifiers(), true)) {
             $timezone = 'UTC';
@@ -119,7 +119,7 @@ class DateDisplayService
         $settings = $this->settings->all('regional');
 
         return $this->regionalSettings = [
-            'timezone' => (string) ($settings->get('timezone') ?: 'UTC'),
+            'timezone' => (string) ($settings->get('timezone') ?: 'Asia/Kolkata'),
             'date_format' => (string) ($settings->get('date_format') ?: 'd-m-Y'),
             'time_format' => (string) ($settings->get('time_format') ?: 'h:i A'),
         ];
