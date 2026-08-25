@@ -50,12 +50,15 @@
                     </a>
                 </li>
 
-                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.sales.*') || request()->routeIs('merchant.return-reasons.*') || request()->routeIs('merchant.cancellation-reasons.*') ? 'nav-item-expanded nav-item-open' : '' }}">
-                    <a href="#" class="nav-link {{ request()->routeIs('merchant.sales.*') || request()->routeIs('merchant.return-reasons.*') || request()->routeIs('merchant.cancellation-reasons.*') ? 'active' : '' }}">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.orders.*') || request()->routeIs('merchant.sales.*') || request()->routeIs('merchant.return-reasons.*') || request()->routeIs('merchant.cancellation-reasons.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.orders.*') || request()->routeIs('merchant.sales.*') || request()->routeIs('merchant.return-reasons.*') || request()->routeIs('merchant.cancellation-reasons.*') ? 'active' : '' }}">
                         <i class="ph-receipt"></i>
                         <span>Sales</span>
                     </a>
-                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.sales.*') || request()->routeIs('merchant.return-reasons.*') || request()->routeIs('merchant.cancellation-reasons.*') ? 'show' : '' }}">
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.orders.*') || request()->routeIs('merchant.sales.*') || request()->routeIs('merchant.return-reasons.*') || request()->routeIs('merchant.cancellation-reasons.*') ? 'show' : '' }}">
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.orders.index') }}" class="nav-link {{ request()->routeIs('merchant.orders.*') ? 'active' : '' }}">Orders</a>
+                        </li>
                         <li class="nav-item">
                             <a href="{{ route('merchant.sales.index') }}" class="nav-link {{ request()->routeIs('merchant.sales.*') ? 'active' : '' }}">Sales History</a>
                         </li>

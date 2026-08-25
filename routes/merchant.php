@@ -16,6 +16,7 @@ use App\Http\Controllers\Merchant\MerchantSettingsController;
 use App\Http\Controllers\Merchant\MerchantShopContextController;
 use App\Http\Controllers\Merchant\MerchantShopController;
 use App\Http\Controllers\Merchant\MerchantTaxSettingController;
+use App\Http\Controllers\Merchant\OrderController;
 use App\Http\Controllers\Merchant\PosController;
 use App\Http\Controllers\Merchant\PostalCodeRestrictionController;
 use App\Http\Controllers\Merchant\ProductController;
@@ -69,6 +70,8 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::get('/pos/orders/{order}/receipt', [PosController::class, 'receipt'])->name('pos.receipt');
         Route::get('/catalogue/masters', [CatalogueMasterController::class, 'index'])->name('catalogue-masters.index');
         Route::post('/catalogue/masters/requests', [CatalogueMasterController::class, 'store'])->name('catalogue-masters.requests.store');
+        Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+        Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
         Route::get('/sales', [SalesHistoryController::class, 'index'])->name('sales.index');
         Route::get('/sales/{order}', [SalesHistoryController::class, 'show'])->name('sales.show');
         Route::get('/sales/{order}/refund', [SalesHistoryController::class, 'refund'])->name('sales.refund');

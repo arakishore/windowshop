@@ -18,6 +18,10 @@ class Order extends Model
     public const SOURCE_CUSTOMER_APP = 'customer_app';
     public const SOURCE_ADMIN = 'admin';
     public const SOURCE_API = 'api';
+    public const MERCHANT_OPERATIONAL_SOURCES = [
+        self::SOURCE_STOREFRONT,
+        self::SOURCE_CUSTOMER_APP,
+    ];
 
     public const FULFILMENT_COUNTER = 'counter';
     public const FULFILMENT_PICKUP = 'pickup';
@@ -107,6 +111,14 @@ class Order extends Model
         'completed_at',
         'cancelled_at',
     ];
+
+    /**
+     * @return array<int, string>
+     */
+    public static function merchantOperationalSources(): array
+    {
+        return self::MERCHANT_OPERATIONAL_SOURCES;
+    }
 
     protected function casts(): array
     {
