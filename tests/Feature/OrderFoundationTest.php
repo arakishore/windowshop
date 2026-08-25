@@ -135,13 +135,13 @@ class OrderFoundationTest extends TestCase
         $this->assertSame('50.00', $totals->firstWhere('code', OrderTotal::CODE_SHIPPING)->amount);
     }
 
-    public function test_status_transition_creates_history_and_sets_timestamps(): void
+    public function test_status_transition_creates_history_and_sets_cancelled_timestamp(): void
     {
         [$user, $shop, $variant] = $this->orderFixture();
         $order = app(OrderCreationService::class)->create([
             'shop_id' => $shop->getKey(),
             'fulfilment_type' => Order::FULFILMENT_PICKUP,
-            'order_status' => Order::STATUS_READY_FOR_PICKUP,
+            'order_status' => Order::STATUS_PROCESSING,
             'payment_status' => Order::PAYMENT_UNPAID,
             'amount_paid' => 0,
             'items' => [
@@ -150,11 +150,11 @@ class OrderFoundationTest extends TestCase
         ], $user);
 
         $service = app(OrderStatusService::class);
-        $service->transition($order, Order::STATUS_COMPLETED, $user, 'POS cash sale completed');
+        $service->transition($order, Order::STATUS_READY_FOR_PICKUP, $user, 'Pickup order prepared');
         $order->refresh();
 
-        $this->assertSame(Order::STATUS_COMPLETED, $order->order_status);
-        $this->assertNotNull($order->completed_at);
+        $this->assertSame(Order::STATUS_READY_FOR_PICKUP, $order->order_status);
+        $this->assertNull($order->completed_at);
         $this->assertSame(2, $order->statusHistories()->count());
 
         $cancellableOrder = app(OrderCreationService::class)->create([

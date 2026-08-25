@@ -3,20 +3,33 @@
 namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Controller;
+use App\Models\MerchantCancellationReason;
 use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
 use App\Services\Merchant\MerchantShopContextService;
+use App\Services\Order\DeliveryCompletionService;
+use App\Services\Order\OrderInventoryService;
+use App\Services\Order\OrderStatusService;
+use App\Services\Order\PickupCompletionService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
     public function __construct(
         private readonly MerchantShopContextService $shopContextService,
         private readonly AdminSettingsService $adminSettings,
+        private readonly OrderStatusService $orderStatusService,
+        private readonly OrderInventoryService $orderInventoryService,
+        private readonly PickupCompletionService $pickupCompletionService,
+        private readonly DeliveryCompletionService $deliveryCompletionService,
     ) {
     }
 
@@ -73,15 +86,21 @@ class OrderController extends Controller
     public function show(Request $request, Order $order): View
     {
         $shop = $this->authorizeOrder($request, $order)->loadMissing(['city', 'state', 'country']);
+        $order = $order->load([
+            'items.product',
+            'items.taxComponents',
+            'totals',
+            'customer',
+            'statusHistories.changedBy',
+        ]);
+        $allowedNextStatuses = $this->orderStatusService->allowedNextStatuses($order);
 
         return view('merchant.orders.show', [
             'activeShop' => $shop,
-            'order' => $order->load([
-                'items.taxComponents',
-                'totals',
-                'customer',
-                'statusHistories.changedBy',
-            ]),
+            'order' => $order,
+            'allowedNextStatuses' => $allowedNextStatuses,
+            'statusActionLabels' => (array) config('order_workflow.status_action_labels', []),
+            'cancellationReasons' => $this->cancellationReasons((int) $shop->merchant_id, $allowedNextStatuses),
             'orderStatuses' => $this->orderStatuses(),
             'paymentStatuses' => $this->paymentStatuses(),
             'paymentMethods' => $this->paymentMethods(),
@@ -89,6 +108,220 @@ class OrderController extends Controller
             'sourceLabels' => $this->sourceLabels(),
             'posCurrency' => $this->adminSettings->currencyConfig(),
         ]);
+    }
+
+    public function accept(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->orderStatusService->transition(
+                $order,
+                Order::STATUS_CONFIRMED,
+                $request->user(),
+                'Order accepted by merchant.',
+                ['action' => 'merchant_accept'],
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order accepted successfully.');
+    }
+
+    public function startProcessing(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->orderStatusService->transition(
+                $order,
+                Order::STATUS_PROCESSING,
+                $request->user(),
+                'Order processing started.',
+                ['action' => 'merchant_start_processing'],
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order processing started successfully.');
+    }
+
+    public function markReadyForPickup(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->orderStatusService->transition(
+                $order,
+                Order::STATUS_READY_FOR_PICKUP,
+                $request->user(),
+                'Order is ready for customer pickup.',
+                ['action' => 'merchant_mark_ready_for_pickup'],
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order marked ready for pickup successfully.');
+    }
+
+    public function completePickup(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->pickupCompletionService->complete(
+                $order,
+                $request->user(),
+                $request->boolean('payment_received'),
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Pickup completed successfully.');
+    }
+
+    public function markPacked(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->orderStatusService->transition(
+                $order,
+                OrderStatus::CODE_PACKED,
+                $request->user(),
+                'Order packed and ready for delivery.',
+                ['action' => 'merchant_mark_packed'],
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order marked packed successfully.');
+    }
+
+    public function markShipped(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->orderStatusService->transition(
+                $order,
+                OrderStatus::CODE_SHIPPED,
+                $request->user(),
+                'Order handed over for delivery.',
+                ['action' => 'merchant_mark_shipped'],
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order marked shipped successfully.');
+    }
+
+    public function markOutForDelivery(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->orderStatusService->transition(
+                $order,
+                OrderStatus::CODE_OUT_FOR_DELIVERY,
+                $request->user(),
+                'Order is out for delivery.',
+                ['action' => 'merchant_mark_out_for_delivery'],
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order marked out for delivery successfully.');
+    }
+
+    public function markDelivered(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->deliveryCompletionService->markDelivered(
+                $order,
+                $request->user(),
+                $request->boolean('payment_received'),
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order delivered and completed successfully.');
+    }
+
+    public function cancel(Request $request, Order $order): RedirectResponse
+    {
+        $shop = $this->authorizeOrder($request, $order);
+
+        try {
+            $data = $request->validate([
+                'cancellation_reason_id' => ['required', 'integer'],
+                'cancellation_note' => ['nullable', 'string', 'max:1000'],
+            ]);
+            $reason = $this->validatedCancellationReason((int) $shop->merchant_id, (int) $data['cancellation_reason_id']);
+            $note = trim((string) ($data['cancellation_note'] ?? ''));
+
+            if ($reason->requires_comment && $note === '') {
+                throw ValidationException::withMessages([
+                    'cancellation_note' => 'A cancellation note is required for this reason.',
+                ]);
+            }
+
+            $historyNote = 'Cancelled by merchant. Reason: '.$reason->name.'.';
+            if ($note !== '') {
+                $historyNote .= ' Note: '.$note;
+            }
+
+            DB::transaction(function () use ($order, $request, $historyNote, $reason, $note): void {
+                $restored = $this->orderInventoryService->restoreForCancellation($order);
+
+                $this->orderStatusService->transition(
+                    $order,
+                    Order::STATUS_CANCELLED,
+                    $request->user(),
+                    $historyNote,
+                    [
+                        'action' => 'merchant_cancel',
+                        'reason_id' => $reason->getKey(),
+                        'reason_code' => $reason->code,
+                        'reason_name' => $reason->name,
+                        'note' => $note !== '' ? $note : null,
+                        'stock_restored' => $restored,
+                    ],
+                );
+            });
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order cancelled successfully.');
     }
 
     private function authorizeOrder(Request $request, Order $order): Shop
@@ -99,6 +332,52 @@ class OrderController extends Controller
         abort_unless(in_array($order->created_source, Order::merchantOperationalSources(), true), 404);
 
         return $shop;
+    }
+
+    /**
+     * @param array<int, string> $allowedNextStatuses
+     * @return \Illuminate\Support\Collection<int, MerchantCancellationReason>
+     */
+    private function cancellationReasons(int $merchantId, array $allowedNextStatuses)
+    {
+        if (! in_array(Order::STATUS_CANCELLED, $allowedNextStatuses, true)) {
+            return collect();
+        }
+
+        return MerchantCancellationReason::query()
+            ->forMerchant($merchantId)
+            ->active()
+            ->where('merchant_selectable', true)
+            ->ordered()
+            ->get();
+    }
+
+    private function validatedCancellationReason(int $merchantId, int $reasonId): MerchantCancellationReason
+    {
+        $reason = MerchantCancellationReason::query()
+            ->forMerchant($merchantId)
+            ->active()
+            ->where('merchant_selectable', true)
+            ->whereKey($reasonId)
+            ->first();
+
+        if (! $reason instanceof MerchantCancellationReason) {
+            throw ValidationException::withMessages([
+                'cancellation_reason_id' => 'Please select a valid cancellation reason.',
+            ]);
+        }
+
+        return $reason;
+    }
+
+    private function transitionFailed(ValidationException $exception): RedirectResponse
+    {
+        $message = Arr::first(Arr::flatten($exception->errors())) ?: 'Order status could not be updated.';
+
+        return back()
+            ->withInput()
+            ->withErrors($exception->errors())
+            ->with('error', $message);
     }
 
     private function activeShop(Request $request): Shop

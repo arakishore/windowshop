@@ -71,6 +71,15 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::get('/catalogue/masters', [CatalogueMasterController::class, 'index'])->name('catalogue-masters.index');
         Route::post('/catalogue/masters/requests', [CatalogueMasterController::class, 'store'])->name('catalogue-masters.requests.store');
         Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+        Route::post('/orders/{order}/accept', [OrderController::class, 'accept'])->name('orders.accept');
+        Route::post('/orders/{order}/processing', [OrderController::class, 'startProcessing'])->name('orders.processing');
+        Route::post('/orders/{order}/ready-for-pickup', [OrderController::class, 'markReadyForPickup'])->name('orders.ready-for-pickup');
+        Route::post('/orders/{order}/complete-pickup', [OrderController::class, 'completePickup'])->name('orders.complete-pickup');
+        Route::post('/orders/{order}/packed', [OrderController::class, 'markPacked'])->name('orders.packed');
+        Route::post('/orders/{order}/ship', [OrderController::class, 'markShipped'])->name('orders.ship');
+        Route::post('/orders/{order}/out-for-delivery', [OrderController::class, 'markOutForDelivery'])->name('orders.out-for-delivery');
+        Route::post('/orders/{order}/deliver', [OrderController::class, 'markDelivered'])->name('orders.deliver');
+        Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
         Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
         Route::get('/sales', [SalesHistoryController::class, 'index'])->name('sales.index');
         Route::get('/sales/{order}', [SalesHistoryController::class, 'show'])->name('sales.show');

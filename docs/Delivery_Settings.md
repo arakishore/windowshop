@@ -4,6 +4,8 @@
 
 This document defines the V1 shop-level delivery configuration used by storefront checkout. It intentionally keeps delivery pricing simple while leaving room for future shipping engines.
 
+For the separation between order status and future delivery/logistics status, see `docs/Order_Flow.md`.
+
 ## Storage Ownership
 
 Delivery settings are shop-level settings stored in `shop_settings` under the `fulfillment` group.

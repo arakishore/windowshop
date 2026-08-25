@@ -1299,10 +1299,14 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertSame(StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY, $order->payment_method);
         $this->assertSame(Order::PAYMENT_PENDING, $order->payment_status);
         $this->assertSame(Order::STATUS_PENDING, $order->order_status);
+        $this->assertSame('0.00', $order->amount_paid);
         $this->assertSame('100.00', $order->shipping_total);
         $this->assertSame('800.00', $order->grand_total);
         $this->assertSame($address->getKey(), $order->shipping_address_id);
         $this->assertSame($address->getKey(), $order->billing_address_id);
+        $this->assertSame('Checkout Customer', $order->shipping_recipient_name);
+        $this->assertSame('Main Road', $order->shipping_address_line_1);
+        $this->assertSame('422009', $order->shipping_postal_code);
         $this->assertSame('Main Road', $order->billing_address_line_1);
         $this->assertDatabaseHas('order_totals', [
             'order_id' => $order->getKey(),

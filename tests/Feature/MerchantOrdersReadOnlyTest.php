@@ -43,7 +43,8 @@ class MerchantOrdersReadOnlyTest extends TestCase
             'payment_method' => 'cash_at_shop',
             'grand_total' => 1998,
         ]);
-        $this->orderItem($order->getKey(), 'Maroon Comfort Soft Fleece', 'FLEECE-MAROON', 1998);
+        $productId = $this->productForShop($shopId, 'Maroon Comfort Soft Fleece');
+        $this->orderItem($order->getKey(), 'Maroon Comfort Soft Fleece', 'FLEECE-MAROON', 1998, $productId);
         $this->statusHistory($order->getKey(), null, Order::STATUS_PENDING, 'Storefront order placed');
 
         $list = $this
@@ -73,13 +74,19 @@ class MerchantOrdersReadOnlyTest extends TestCase
         $detail->assertSee('Order Progress');
         $detail->assertSee('Customer');
         $detail->assertSee('Maroon Comfort Soft Fleece');
+        $detail->assertSee(route('merchant.products.edit', DB::table('products')->where('id', $productId)->value('uuid')), false);
+        $detail->assertSee('target="_blank"', false);
         $detail->assertSee('Order Summary');
         $detail->assertSee('Pickup Information');
         $detail->assertSee('Payment');
         $detail->assertSee('Order Activity');
+        $detail->assertSee('list-feed', false);
+        $detail->assertSee('list-feed-item border-warning', false);
         $detail->assertSee('Storefront order placed');
         $detail->assertDontSee('Confirm Order');
-        $detail->assertDontSee('Cancel Order');
+        $detail->assertSee('Accept Order');
+        $detail->assertSee('Cancel Order');
+        $detail->assertDontSee('Start Processing');
     }
 
     public function test_delivery_cod_order_detail_uses_delivery_workspace_sections(): void
@@ -111,11 +118,19 @@ class MerchantOrdersReadOnlyTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Delivery Information');
+        $response->assertSee('Delivery Address');
+        $response->assertSee('PIN');
+        $response->assertSee('422009');
+        $response->assertSee('Delivery Charge');
         $response->assertSee('Cash on Delivery');
+        $response->assertSee('Payment');
+        $response->assertSee('Pending');
+        $response->assertSee('Amount Paid');
         $response->assertSee('Packed');
         $response->assertSee('Shipped');
         $response->assertSee('Out for Delivery');
         $response->assertSee('Delivered');
+        $response->assertSee('Completed');
         $response->assertDontSee('Pickup Information');
     }
 
@@ -334,10 +349,29 @@ class MerchantOrdersReadOnlyTest extends TestCase
         ], $overrides));
     }
 
-    private function orderItem(int $orderId, string $productName, string $sku, float $total): void
+    private function productForShop(int $shopId, string $name): int
+    {
+        $shop = DB::table('shops')->where('id', $shopId)->first();
+
+        return (int) DB::table('products')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'merchant_id' => $shop->merchant_id,
+            'shop_id' => $shopId,
+            'root_product_category_id' => $shop->root_product_category_id,
+            'product_category_id' => $shop->root_product_category_id,
+            'product_name' => $name,
+            'slug' => Str::slug($name).'-'.Str::random(6),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function orderItem(int $orderId, string $productName, string $sku, float $total, ?int $productId = null): void
     {
         DB::table('order_items')->insert([
             'order_id' => $orderId,
+            'product_id' => $productId,
             'product_name' => $productName,
             'variant_name' => 'Default',
             'sku' => $sku,
