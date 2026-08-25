@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Merchant;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantCancellationReason;
 use App\Models\Order;
+use App\Models\OrderComment;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\Shop;
@@ -18,8 +19,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\View\View;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class OrderController extends Controller
 {
@@ -92,6 +94,7 @@ class OrderController extends Controller
             'totals',
             'customer',
             'statusHistories.changedBy',
+            'comments.createdBy',
         ]);
         $allowedNextStatuses = $this->orderStatusService->allowedNextStatuses($order);
 
@@ -322,6 +325,54 @@ class OrderController extends Controller
         return redirect()
             ->route('merchant.orders.show', $order)
             ->with('success', 'Order cancelled successfully.');
+    }
+
+    public function storeComment(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        $data = $request->validate([
+            'comment' => ['required', 'string', 'max:1000'],
+            'visibility' => ['required', Rule::in(OrderComment::visibilityOptions())],
+            'notify_customer' => ['nullable', 'boolean'],
+            'notify_email' => ['nullable', 'boolean'],
+            'notify_sms' => ['nullable', 'boolean'],
+            'notify_whatsapp' => ['nullable', 'boolean'],
+        ]);
+
+        $comment = trim((string) $data['comment']);
+        if ($comment === '') {
+            throw ValidationException::withMessages([
+                'comment' => 'Please enter a comment.',
+            ]);
+        }
+
+        $visibility = (string) $data['visibility'];
+        $notifyCustomer = $visibility === OrderComment::VISIBILITY_CUSTOMER && (bool) ($data['notify_customer'] ?? false);
+        $notifyEmail = $notifyCustomer && (bool) ($data['notify_email'] ?? false);
+        $notifySms = $notifyCustomer && (bool) ($data['notify_sms'] ?? false);
+        $notifyWhatsapp = $notifyCustomer && (bool) ($data['notify_whatsapp'] ?? false);
+
+        if ($notifyCustomer && ! ($notifyEmail || $notifySms || $notifyWhatsapp)) {
+            throw ValidationException::withMessages([
+                'notify_channels' => 'Select at least one notification channel.',
+            ]);
+        }
+
+        $order->comments()->create([
+            'author_type' => OrderComment::AUTHOR_MERCHANT,
+            'comment' => $comment,
+            'visibility' => $visibility,
+            'notify_customer' => $notifyCustomer,
+            'notify_email' => $notifyEmail,
+            'notify_sms' => $notifySms,
+            'notify_whatsapp' => $notifyWhatsapp,
+            'created_by' => $request->user()?->getKey(),
+        ]);
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Comment added successfully.');
     }
 
     private function authorizeOrder(Request $request, Order $order): Shop

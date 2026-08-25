@@ -36,9 +36,10 @@ class StorefrontCheckoutOrderService
         string $fulfillment,
         string $paymentMethod,
         MerchantCustomerAddress $billingAddress,
+        ?string $customerOrderNote = null,
     ): Order
     {
-        return DB::transaction(function () use ($request, $customer, $fulfillment, $paymentMethod, $billingAddress): Order {
+        return DB::transaction(function () use ($request, $customer, $fulfillment, $paymentMethod, $billingAddress, $customerOrderNote): Order {
             $cart = $this->lockedCart($request);
             $cartData = $this->cartPage->pageData($request);
 
@@ -113,6 +114,7 @@ class StorefrontCheckoutOrderService
                 'currency_code' => $this->adminSettings->currencyConfig()['currency'] ?? 'INR',
                 'cash_rounding' => ['method' => 'none', 'applyTo' => []],
                 'amount_paid' => 0,
+                'customer_order_note' => $this->nullableString($customerOrderNote),
                 'status_note' => 'Storefront order placed',
                 'items' => $this->orderItems($group['items'] ?? []),
                 'totals' => $this->totalsRows((int) $deliveryData['shipping_cents'], $deliveryData),
@@ -260,5 +262,12 @@ class StorefrontCheckoutOrderService
             StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY,
             StorefrontPaymentMethodService::SELECTED_PAYMENT_SESSION_KEY,
         ]);
+    }
+
+    private function nullableString(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 }

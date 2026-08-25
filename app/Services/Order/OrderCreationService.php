@@ -57,6 +57,7 @@ class OrderCreationService
      *     customer_mobile?: string|null,
      *     customer_email?: string|null,
      *     remarks?: string|null,
+     *     customer_order_note?: string|null,
      *     status_note?: string|null,
      *     items: array<int, array{product_variant_id: int, quantity: int}>,
      *     totals?: array<int, array<string, mixed>>
@@ -125,6 +126,7 @@ class OrderCreationService
                 'order_discount_reason' => $orderDiscount['reason'],
                 'order_discount_note' => $orderDiscount['note'],
                 'remarks' => $data['remarks'] ?? null,
+                'customer_order_note' => $this->nullableString($data['customer_order_note'] ?? null),
                 'created_by' => $actor->getKey(),
                 'updated_by' => $actor->getKey(),
                 'completed_at' => $orderStatus === Order::STATUS_COMPLETED ? $effectiveAt : null,
@@ -632,6 +634,13 @@ class OrderCreationService
             (string) ($data['payment_method'] ?? Order::PAYMENT_METHOD_CASH),
             (array) ($data['cash_rounding'] ?? ['method' => 'nearest', 'applyTo' => []]),
         );
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     private function money(float|string|int $value): string

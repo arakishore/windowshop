@@ -138,6 +138,16 @@
             margin-bottom: .55rem;
         }
 
+        .order-note-box {
+            white-space: pre-line;
+            color: var(--bs-body-color);
+        }
+
+        .order-comment-options {
+            display: grid;
+            gap: .75rem;
+        }
+
         @media (max-width: 1199.98px) {
             .order-workspace-grid {
                 grid-template-columns: 1fr;
@@ -261,11 +271,37 @@
             ];
         $progressCodes = array_keys($progressSteps);
         $currentStepIndex = array_search($order->order_status, $progressCodes, true);
-        $activityItems = $order->statusHistories->sortBy('created_at')->values();
-        $historyByStatus = $activityItems
+        $statusActivityItems = $order->statusHistories
+            ->map(fn ($history) => ['type' => 'status', 'created_at' => $history->created_at, 'record' => $history]);
+        $commentActivityItems = $order->comments
+            ->map(fn ($comment) => ['type' => 'comment', 'created_at' => $comment->created_at, 'record' => $comment]);
+        $activityItems = $statusActivityItems
+            ->merge($commentActivityItems)
+            ->sortBy('created_at')
+            ->values();
+        $historyByStatus = $order->statusHistories
+            ->sortBy('created_at')
+            ->values()
             ->filter(fn ($history) => in_array($history->to_status, $progressCodes, true))
             ->reject(fn ($history) => ($history->metadata['action'] ?? null) === 'merchant_cod_payment_received')
             ->keyBy('to_status');
+        $commentVisibilityLabels = (array) config('order_comments.visibilities', []);
+        $commentVisibilityLabel = static fn (string|null $visibility): string => $visibility ? ($commentVisibilityLabels[$visibility] ?? Str::headline($visibility)) : '-';
+        $commentChannels = static function (\App\Models\OrderComment $comment): array {
+            $channels = [];
+            if ($comment->notify_email) {
+                $channels[] = 'Email';
+            }
+            if ($comment->notify_sms) {
+                $channels[] = 'SMS';
+            }
+            if ($comment->notify_whatsapp) {
+                $channels[] = 'WhatsApp';
+            }
+
+            return $channels;
+        };
+        $oldVisibility = old('visibility', \App\Models\OrderComment::VISIBILITY_MERCHANT_ONLY);
         $canAcceptOrder = in_array(\App\Models\Order::STATUS_CONFIRMED, $allowedNextStatuses, true);
         $canStartProcessing = in_array(\App\Models\Order::STATUS_PROCESSING, $allowedNextStatuses, true);
         $canMarkReadyForPickup = in_array(\App\Models\Order::STATUS_READY_FOR_PICKUP, $allowedNextStatuses, true);
@@ -586,6 +622,18 @@
                 </div>
             </div>
 
+            @if(filled($order->customer_order_note))
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Customer Order Note</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-muted fs-sm mb-1">Submitted during checkout</div>
+                        <div class="order-note-box">{{ $order->customer_order_note }}</div>
+                    </div>
+                </div>
+            @endif
+
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">Order Activity</h5>
@@ -595,19 +643,38 @@
                         <div class="text-muted">No activity recorded yet.</div>
                     @else
                         <div class="list-feed">
-                            @foreach($activityItems as $history)
+                            @foreach($activityItems as $activityItem)
+                                @php
+                                    $isCommentActivity = $activityItem['type'] === 'comment';
+                                    $activity = $activityItem['record'];
+                                @endphp
                                 <div class="list-feed-item border-warning">
-                                    @php
-                                        $activityLabel = ($history->metadata['action'] ?? null) === 'merchant_cod_payment_received'
-                                            ? 'Payment Received'
-                                            : ($history->from_status ? $statusLabel($history->to_status) : 'Order Placed');
-                                    @endphp
-                                    <div class="text-muted fs-sm mb-1">{{ app_datetime($history->created_at) }}</div>
-                                    <div class="fw-semibold mb-1">{{ $activityLabel }}</div>
-                                    @if($history->notes)
-                                        <div class="mt-1">{{ $history->notes }}</div>
+                                    <div class="text-muted fs-sm mb-1">{{ app_datetime($activity->created_at) }}</div>
+                                    @if($isCommentActivity)
+                                        @php
+                                            $channels = $commentChannels($activity);
+                                        @endphp
+                                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                            <div class="fw-semibold">{{ $activity->visibility === \App\Models\OrderComment::VISIBILITY_CUSTOMER ? 'Customer Comment' : 'Internal Note' }}</div>
+                                            <span class="badge bg-light text-body">{{ $commentVisibilityLabel($activity->visibility) }}</span>
+                                            @if($activity->notify_customer)
+                                                <span class="badge bg-info bg-opacity-10 text-body">Notify via {{ implode(', ', $channels) }}</span>
+                                            @endif
+                                        </div>
+                                        <div class="order-note-box mt-1">{{ $activity->comment }}</div>
+                                        <div class="text-muted fs-sm mt-1">{{ $activity->createdBy?->name ? 'Added by '.$activity->createdBy->name : 'Added by system' }}</div>
+                                    @else
+                                        @php
+                                            $activityLabel = ($activity->metadata['action'] ?? null) === 'merchant_cod_payment_received'
+                                                ? 'Payment Received'
+                                                : ($activity->from_status ? $statusLabel($activity->to_status) : 'Order Placed');
+                                        @endphp
+                                        <div class="fw-semibold mb-1">{{ $activityLabel }}</div>
+                                        @if($activity->notes)
+                                            <div class="mt-1">{{ $activity->notes }}</div>
+                                        @endif
+                                        <div class="text-muted fs-sm mt-1">{{ $activity->changedBy?->name ? 'Updated by '.$activity->changedBy->name : 'System' }}</div>
                                     @endif
-                                    <div class="text-muted fs-sm mt-1">{{ $history->changedBy?->name ? 'Updated by '.$history->changedBy->name : 'System' }}</div>
                                 </div>
                             @endforeach
                         </div>
@@ -619,8 +686,60 @@
                 <div class="card-header">
                     <h5 class="mb-0">Order Notes / Comments</h5>
                 </div>
-                <div class="card-body text-muted">
-                    Internal and customer-visible notes will be managed here in a later workflow step.
+                <div class="card-body">
+                    <form method="POST" action="{{ route('merchant.orders.comments.store', $order) }}" data-submit-once data-order-comment-form>
+                        @csrf
+                        <div class="mb-3">
+                            <label for="comment" class="form-label">Comment <span class="text-danger">*</span></label>
+                            <textarea id="comment" name="comment" rows="4" maxlength="1000" class="form-control @error('comment') is-invalid @enderror" required>{{ old('comment') }}</textarea>
+                            @error('comment')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="order-comment-options">
+                            <div>
+                                <div class="form-label mb-2">Visibility</div>
+                                <div class="d-flex flex-wrap gap-3">
+                                    <div class="form-check">
+                                        <input id="visibility_merchant_only" name="visibility" type="radio" value="{{ \App\Models\OrderComment::VISIBILITY_MERCHANT_ONLY }}" class="form-check-input" @checked($oldVisibility === \App\Models\OrderComment::VISIBILITY_MERCHANT_ONLY)>
+                                        <label for="visibility_merchant_only" class="form-check-label">Merchant Only</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input id="visibility_customer" name="visibility" type="radio" value="{{ \App\Models\OrderComment::VISIBILITY_CUSTOMER }}" class="form-check-input" @checked($oldVisibility === \App\Models\OrderComment::VISIBILITY_CUSTOMER)>
+                                        <label for="visibility_customer" class="form-check-label">Customer Visible</label>
+                                    </div>
+                                </div>
+                                @error('visibility')<div class="text-danger fs-sm mt-1">{{ $message }}</div>@enderror
+                            </div>
+
+                            <div class="form-check" data-notify-customer-wrap>
+                                <input id="notify_customer" name="notify_customer" type="checkbox" value="1" class="form-check-input" data-notify-customer-toggle @checked(old('notify_customer'))>
+                                <label for="notify_customer" class="form-check-label">Notify customer</label>
+                            </div>
+
+                            <div data-notify-channels-wrap>
+                                <div class="form-label mb-2">Notification Channels</div>
+                                <div class="d-flex flex-wrap gap-3">
+                                    <div class="form-check">
+                                        <input id="notify_email" name="notify_email" type="checkbox" value="1" class="form-check-input" @checked(old('notify_email'))>
+                                        <label for="notify_email" class="form-check-label">Email</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input id="notify_sms" name="notify_sms" type="checkbox" value="1" class="form-check-input" @checked(old('notify_sms'))>
+                                        <label for="notify_sms" class="form-check-label">SMS</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input id="notify_whatsapp" name="notify_whatsapp" type="checkbox" value="1" class="form-check-input" @checked(old('notify_whatsapp'))>
+                                        <label for="notify_whatsapp" class="form-check-label">WhatsApp</label>
+                                    </div>
+                                </div>
+                                @error('notify_channels')<div class="text-danger fs-sm mt-1">{{ $message }}</div>@enderror
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-primary">Add Comment</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -758,6 +877,44 @@
 
         cancellationReason?.addEventListener('change', applyCancellationRequirement);
         applyCancellationRequirement();
+
+        const commentForm = document.querySelector('[data-order-comment-form]');
+        if (commentForm) {
+            const visibilityInputs = commentForm.querySelectorAll('input[name="visibility"]');
+            const notifyWrap = commentForm.querySelector('[data-notify-customer-wrap]');
+            const notifyToggle = commentForm.querySelector('[data-notify-customer-toggle]');
+            const channelsWrap = commentForm.querySelector('[data-notify-channels-wrap]');
+            const channelInputs = channelsWrap ? channelsWrap.querySelectorAll('input[type="checkbox"]') : [];
+
+            const applyCommentControls = () => {
+                const selectedVisibility = commentForm.querySelector('input[name="visibility"]:checked')?.value || '{{ \App\Models\OrderComment::VISIBILITY_MERCHANT_ONLY }}';
+                const customerVisible = selectedVisibility === '{{ \App\Models\OrderComment::VISIBILITY_CUSTOMER }}';
+
+                if (notifyWrap && notifyToggle) {
+                    notifyWrap.hidden = !customerVisible;
+                    notifyToggle.disabled = !customerVisible;
+                    if (!customerVisible) {
+                        notifyToggle.checked = false;
+                    }
+                }
+
+                const shouldShowChannels = customerVisible && Boolean(notifyToggle?.checked);
+                if (channelsWrap) {
+                    channelsWrap.hidden = !shouldShowChannels;
+                }
+
+                channelInputs.forEach((input) => {
+                    input.disabled = !shouldShowChannels;
+                    if (!shouldShowChannels) {
+                        input.checked = false;
+                    }
+                });
+            };
+
+            visibilityInputs.forEach((input) => input.addEventListener('change', applyCommentControls));
+            notifyToggle?.addEventListener('change', applyCommentControls);
+            applyCommentControls();
+        }
 
         @if($errors->has('cancellation_reason_id') || $errors->has('cancellation_note'))
             const cancelOrderModal = document.getElementById('cancelOrderModal');

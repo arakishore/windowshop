@@ -600,6 +600,11 @@
                         <input type="hidden" name="billing_address_id" value="{{ $selectedBillingAddressIdForView }}">
                         <input type="hidden" name="shipping_method" value="{{ $selectedFulfillment ?: 'delivery' }}" data-selected-fulfillment-field>
                         <input type="hidden" name="payment_method" value="{{ $selectedPaymentMethod }}" data-selected-payment-field>
+                        <div class="mb-3">
+                            <label for="customer_order_note" class="form-label">Order Note <span class="text-muted">(Optional)</span></label>
+                            <textarea id="customer_order_note" name="customer_order_note" rows="3" maxlength="1000" class="form-control @error('customer_order_note') is-invalid @enderror" placeholder="Add delivery or order instructions">{{ old('customer_order_note') }}</textarea>
+                            @error('customer_order_note')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
                         <button type="submit" class="tf-btn animate-btn w-100" data-place-order-button {{ $canPlaceOrder ? '' : 'disabled' }}>
                             Place Order
                         </button>

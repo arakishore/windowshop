@@ -80,6 +80,7 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::post('/orders/{order}/out-for-delivery', [OrderController::class, 'markOutForDelivery'])->name('orders.out-for-delivery');
         Route::post('/orders/{order}/deliver', [OrderController::class, 'markDelivered'])->name('orders.deliver');
         Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
+        Route::post('/orders/{order}/comments', [OrderController::class, 'storeComment'])->name('orders.comments.store');
         Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
         Route::get('/sales', [SalesHistoryController::class, 'index'])->name('sales.index');
         Route::get('/sales/{order}', [SalesHistoryController::class, 'show'])->name('sales.show');

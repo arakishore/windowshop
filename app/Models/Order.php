@@ -106,6 +106,7 @@ class Order extends Model
         'billing_country',
         'billing_postal_code',
         'remarks',
+        'customer_order_note',
         'created_by',
         'updated_by',
         'completed_at',
@@ -185,6 +186,11 @@ class Order extends Model
     public function statusHistories(): HasMany
     {
         return $this->hasMany(OrderStatusHistory::class);
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(OrderComment::class);
     }
 
     public function refunds(): HasMany

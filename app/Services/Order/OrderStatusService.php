@@ -17,6 +17,7 @@ class OrderStatusService
             'notes' => $notes,
             'changed_by' => $actor?->getKey(),
             'metadata' => $metadata,
+            'created_at' => now(),
         ]);
     }
 
@@ -46,6 +47,7 @@ class OrderStatusService
                 'notes' => $notes,
                 'changed_by' => $actor?->getKey(),
                 'metadata' => $metadata,
+                'created_at' => now(),
             ]);
 
             return $order->refresh();

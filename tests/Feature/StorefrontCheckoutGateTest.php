@@ -537,11 +537,13 @@ class StorefrontCheckoutGateTest extends TestCase
                 'shipping_method' => 'standard',
                 'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
                 'browser_total' => '1.00',
+                'customer_order_note' => '  Please call before delivery.  ',
             ])
             ->assertRedirect();
 
         $order = Order::query()->firstOrFail();
         $this->assertSame('500.00', $order->subtotal);
+        $this->assertSame('Please call before delivery.', $order->customer_order_note);
     }
 
     public function test_billing_same_as_delivery_resolves_to_selected_delivery_address(): void
@@ -566,7 +568,9 @@ class StorefrontCheckoutGateTest extends TestCase
             ])
             ->assertRedirect();
 
-        $this->assertSame($address->getKey(), Order::query()->firstOrFail()->shipping_address_id);
+        $order = Order::query()->firstOrFail();
+        $this->assertSame($address->getKey(), $order->shipping_address_id);
+        $this->assertNull($order->customer_order_note);
         $this->assertFalse(session()->has(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY));
     }
 

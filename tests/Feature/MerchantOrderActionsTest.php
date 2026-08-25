@@ -4,10 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\MerchantCancellationReason;
 use App\Models\Order;
+use App\Models\OrderComment;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\User;
+use App\Services\Order\OrderStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -58,6 +61,49 @@ class MerchantOrderActionsTest extends TestCase
             'changed_by' => $user->getKey(),
             'notes' => 'Order accepted by merchant.',
         ]);
+    }
+
+    public function test_initial_status_history_uses_explicit_laravel_timestamp(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId);
+        $frozen = Carbon::parse('2026-08-25 13:10:00', 'UTC');
+
+        Carbon::setTestNow($frozen);
+        try {
+            app(OrderStatusService::class)->recordInitial($order, Order::STATUS_PENDING, $user, 'Order placed');
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $history = DB::table('order_status_histories')->where('order_id', $order->getKey())->first();
+
+        $this->assertSame('2026-08-25 13:10:00', Carbon::parse($history->created_at)->format('Y-m-d H:i:s'));
+    }
+
+    public function test_transition_status_history_uses_explicit_laravel_timestamp(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId);
+        $frozen = Carbon::parse('2026-08-25 13:12:00', 'UTC');
+
+        Carbon::setTestNow($frozen);
+        try {
+            $this
+                ->actingAs($user)
+                ->withSession(['active_shop_id' => $shopId])
+                ->post(route('merchant.orders.accept', $order))
+                ->assertRedirect(route('merchant.orders.show', $order));
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $history = DB::table('order_status_histories')
+            ->where('order_id', $order->getKey())
+            ->where('to_status', Order::STATUS_CONFIRMED)
+            ->first();
+
+        $this->assertSame('2026-08-25 13:12:00', Carbon::parse($history->created_at)->format('Y-m-d H:i:s'));
     }
 
     public function test_pending_customer_app_order_can_be_accepted(): void
@@ -1321,6 +1367,202 @@ class MerchantOrderActionsTest extends TestCase
             ->assertDontSee('Complete Order')
             ->assertSee('Cash on Delivery')
             ->assertSee('Pending');
+    }
+
+    public function test_merchant_only_comment_is_created_without_notification_intent_and_no_workflow_changes(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId, [
+            'order_status' => Order::STATUS_PENDING,
+            'payment_status' => PaymentStatus::CODE_PENDING,
+            'amount_paid' => 0,
+        ]);
+        $variantId = $this->variantForShop($shopId, 8);
+        $this->orderItem($order, $variantId, 2);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.comments.store', $order), [
+                'comment' => '  Customer asked for gift packing.  ',
+                'visibility' => OrderComment::VISIBILITY_MERCHANT_ONLY,
+                'notify_customer' => '1',
+                'notify_email' => '1',
+                'notify_sms' => '1',
+                'notify_whatsapp' => '1',
+            ])
+            ->assertRedirect(route('merchant.orders.show', $order))
+            ->assertSessionHas('success', 'Comment added successfully.');
+
+        $this->assertDatabaseHas('order_comments', [
+            'order_id' => $order->getKey(),
+            'author_type' => OrderComment::AUTHOR_MERCHANT,
+            'comment' => 'Customer asked for gift packing.',
+            'visibility' => OrderComment::VISIBILITY_MERCHANT_ONLY,
+            'notify_customer' => 0,
+            'notify_email' => 0,
+            'notify_sms' => 0,
+            'notify_whatsapp' => 0,
+            'created_by' => $user->getKey(),
+        ]);
+        $this->assertSame(Order::STATUS_PENDING, $order->fresh()->order_status);
+        $this->assertSame(PaymentStatus::CODE_PENDING, $order->fresh()->payment_status);
+        $this->assertSame('0.00', $order->fresh()->amount_paid);
+        $this->assertSame(8, (int) DB::table('product_variants')->where('id', $variantId)->value('stock_quantity'));
+        $this->assertSame(0, DB::table('order_status_histories')->where('order_id', $order->getKey())->count());
+    }
+
+    public function test_customer_visible_comment_can_be_saved_without_notification(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.comments.store', $order), [
+                'comment' => 'Customer can see this note.',
+                'visibility' => OrderComment::VISIBILITY_CUSTOMER,
+                'notify_customer' => '0',
+            ])
+            ->assertRedirect(route('merchant.orders.show', $order));
+
+        $this->assertDatabaseHas('order_comments', [
+            'order_id' => $order->getKey(),
+            'visibility' => OrderComment::VISIBILITY_CUSTOMER,
+            'notify_customer' => 0,
+            'notify_email' => 0,
+            'notify_sms' => 0,
+            'notify_whatsapp' => 0,
+        ]);
+    }
+
+    public function test_customer_visible_comment_can_store_notification_intent_channels(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.comments.store', $order), [
+                'comment' => 'Pickup is ready.',
+                'visibility' => OrderComment::VISIBILITY_CUSTOMER,
+                'notify_customer' => '1',
+                'notify_email' => '1',
+                'notify_whatsapp' => '1',
+            ])
+            ->assertRedirect(route('merchant.orders.show', $order));
+
+        $this->assertDatabaseHas('order_comments', [
+            'order_id' => $order->getKey(),
+            'visibility' => OrderComment::VISIBILITY_CUSTOMER,
+            'notify_customer' => 1,
+            'notify_email' => 1,
+            'notify_sms' => 0,
+            'notify_whatsapp' => 1,
+        ]);
+    }
+
+    public function test_customer_visible_notification_requires_at_least_one_channel(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->from(route('merchant.orders.show', $order))
+            ->post(route('merchant.orders.comments.store', $order), [
+                'comment' => 'Notify without channel.',
+                'visibility' => OrderComment::VISIBILITY_CUSTOMER,
+                'notify_customer' => '1',
+            ])
+            ->assertRedirect(route('merchant.orders.show', $order))
+            ->assertSessionHasErrors('notify_channels');
+
+        $this->assertDatabaseCount('order_comments', 0);
+    }
+
+    public function test_order_comment_wrong_shop_is_blocked(): void
+    {
+        [$user, $merchantId, $shopId] = $this->merchantShopFixture();
+        $otherShopId = $this->shopForMerchant($merchantId, 'Other Action Shop');
+        $order = $this->operationalOrder($shopId);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $otherShopId])
+            ->post(route('merchant.orders.comments.store', $order), [
+                'comment' => 'Wrong shop comment.',
+                'visibility' => OrderComment::VISIBILITY_MERCHANT_ONLY,
+            ])
+            ->assertNotFound();
+
+        $this->assertDatabaseCount('order_comments', 0);
+    }
+
+    public function test_pos_order_cannot_receive_merchant_operational_comment(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId, [
+            'created_source' => Order::SOURCE_POS,
+            'order_status' => Order::STATUS_COMPLETED,
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+            'payment_status' => PaymentStatus::CODE_PAID,
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.comments.store', $order), [
+                'comment' => 'POS comment.',
+                'visibility' => OrderComment::VISIBILITY_MERCHANT_ONLY,
+            ])
+            ->assertNotFound();
+
+        $this->assertDatabaseCount('order_comments', 0);
+    }
+
+    public function test_order_comments_appear_in_order_activity(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId, [
+            'customer_order_note' => 'Please call before dispatch.',
+        ]);
+        $this->statusHistory($order, null, Order::STATUS_PENDING, 'Storefront order placed');
+        $order->comments()->create([
+            'author_type' => OrderComment::AUTHOR_MERCHANT,
+            'comment' => 'Internal packing note.',
+            'visibility' => OrderComment::VISIBILITY_MERCHANT_ONLY,
+            'created_by' => $user->getKey(),
+        ]);
+        $order->comments()->create([
+            'author_type' => OrderComment::AUTHOR_MERCHANT,
+            'comment' => 'Customer visible update.',
+            'visibility' => OrderComment::VISIBILITY_CUSTOMER,
+            'notify_customer' => true,
+            'notify_email' => true,
+            'notify_whatsapp' => true,
+            'created_by' => $user->getKey(),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Customer Order Note')
+            ->assertSee('Please call before dispatch.')
+            ->assertSee('Storefront order placed')
+            ->assertSee('Internal Note')
+            ->assertSee('Internal packing note.')
+            ->assertSee('Merchant Only')
+            ->assertSee('Customer Comment')
+            ->assertSee('Customer visible update.')
+            ->assertSee('Customer Visible')
+            ->assertSee('Notify via Email, WhatsApp')
+            ->assertSee('Added by '.$user->name);
     }
 
     /**

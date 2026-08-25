@@ -147,6 +147,7 @@ class CheckoutController extends Controller
                 StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
                 StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
             ])],
+            'customer_order_note' => ['nullable', 'string', 'max:1000'],
             'browser_total' => ['nullable'],
         ]);
 
@@ -181,7 +182,14 @@ class CheckoutController extends Controller
         }
 
         try {
-            $order = $this->checkoutOrders->place($request, $customer, $selectedFulfillment, $data['payment_method'], $billingAddress);
+            $order = $this->checkoutOrders->place(
+                $request,
+                $customer,
+                $selectedFulfillment,
+                $data['payment_method'],
+                $billingAddress,
+                $data['customer_order_note'] ?? null,
+            );
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
