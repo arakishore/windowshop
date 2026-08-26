@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class MerchantCustomerAddress extends Model
+class CustomerAddress extends Model
 {
     use HasUuid, SoftDeletes;
 
@@ -15,7 +15,7 @@ class MerchantCustomerAddress extends Model
     public const STATUS_INACTIVE = 'inactive';
 
     protected $fillable = [
-        'merchant_customer_id',
+        'customer_id',
         'label',
         'recipient_name',
         'recipient_mobile_country_code',
@@ -49,7 +49,7 @@ class MerchantCustomerAddress extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(MerchantCustomer::class, 'merchant_customer_id');
+        return $this->belongsTo(Customer::class);
     }
 
     public function country(): BelongsTo

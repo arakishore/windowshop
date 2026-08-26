@@ -107,7 +107,12 @@ class StorefrontCustomerAuthPagesTest extends TestCase
             ->get(route('storefront.account'))
             ->assertOk()
             ->assertSee('My Account')
-            ->assertSee('Welcome, '.$customer->name);
+            ->assertSee('Welcome back, '.$customer->name)
+            ->assertSee('Dashboard')
+            ->assertSee('Profile')
+            ->assertSee('Addresses')
+            ->assertSee('My Orders')
+            ->assertSee('Wishlist');
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $roleId])

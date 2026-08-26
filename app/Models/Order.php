@@ -57,8 +57,6 @@ class Order extends Model
         'merchant_id',
         'shop_id',
         'customer_id',
-        'shipping_address_id',
-        'billing_address_id',
         'created_source',
         'fulfilment_type',
         'order_status',
@@ -158,17 +156,7 @@ class Order extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(MerchantCustomer::class, 'customer_id')->withTrashed();
-    }
-
-    public function shippingAddress(): BelongsTo
-    {
-        return $this->belongsTo(MerchantCustomerAddress::class, 'shipping_address_id')->withTrashed();
-    }
-
-    public function billingAddress(): BelongsTo
-    {
-        return $this->belongsTo(MerchantCustomerAddress::class, 'billing_address_id')->withTrashed();
+        return $this->belongsTo(Customer::class, 'customer_id')->withTrashed();
     }
 
     public function items(): HasMany

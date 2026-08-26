@@ -62,7 +62,7 @@
                                     <li><a href="{{ route('storefront.register') }}" class="cl-text-3 link">Sign
                                             up</a></li>
                                     <li><a href="{{ route('storefront.account') }}" class="cl-text-3 link">My Account</a></li>
-                                    <li><a href="wishlist.html" class="cl-text-3 link">Wish List</a></li>
+                                    <li><a href="{{ route('storefront.account.wishlist') }}" class="cl-text-3 link">Wish List</a></li>
                                 </ul>
                             </div>
                         </div>

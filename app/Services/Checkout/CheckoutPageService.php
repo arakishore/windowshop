@@ -3,7 +3,8 @@
 namespace App\Services\Checkout;
 
 use App\Models\Cart;
-use App\Models\MerchantCustomerAddress;
+use App\Models\Customer;
+use App\Models\CustomerAddress;
 use App\Models\User;
 use App\Services\Cart\CartPageService;
 use App\Services\Storefront\CustomerLocationService;
@@ -36,7 +37,7 @@ class CheckoutPageService
         $selectedAddress = $this->selectedAddress($request, $addresses);
         $billingSameAsDelivery = $this->billingSameAsDelivery($request);
         $selectedBillingAddress = $this->selectedBillingAddress($request, $addresses, $selectedAddress);
-        $selectedPostalCode = $selectedAddress instanceof MerchantCustomerAddress
+        $selectedPostalCode = $selectedAddress instanceof CustomerAddress
             ? $this->location->normalize($selectedAddress->postal_code)
             : null;
         $deliveryData = $this->delivery->resolve($request, $cart, $cartData, $selectedAddress);
@@ -46,7 +47,7 @@ class CheckoutPageService
         $cartData['total'] = $deliveryData['total'];
         $paymentData = $this->payments->resolve($request, $cart, $cartData, $deliveryData['selected']);
         $hasFulfillmentAddress = $deliveryData['selected'] !== StorefrontDeliveryService::FULFILLMENT_DELIVERY
-            || $selectedAddress instanceof MerchantCustomerAddress;
+            || $selectedAddress instanceof CustomerAddress;
         $hasFulfillmentPostalCode = $deliveryData['selected'] !== StorefrontDeliveryService::FULFILLMENT_DELIVERY
             || $selectedPostalCode !== null;
 
@@ -70,7 +71,7 @@ class CheckoutPageService
             'selectedPaymentMethod' => $paymentData['selected'],
             'paymentUnavailableMessage' => $paymentData['message'],
             'canPlaceOrder' => $hasFulfillmentAddress
-                && $selectedBillingAddress instanceof MerchantCustomerAddress
+                && $selectedBillingAddress instanceof CustomerAddress
                 && $hasFulfillmentPostalCode
                 && $deliveryData['selected'] !== null
                 && $paymentData['selected'] !== null
@@ -83,45 +84,48 @@ class CheckoutPageService
         return (bool) $request->session()->get(self::BILLING_SAME_AS_DELIVERY_SESSION_KEY, true);
     }
 
-    public function addressBelongsToCustomer(MerchantCustomerAddress $address, User $customer): bool
+    public function addressBelongsToCustomer(CustomerAddress $address, Customer $customer): bool
     {
-        $address->loadMissing('customer');
-
-        return (int) $address->customer?->user_id === (int) $customer->getKey()
-            && $address->status === MerchantCustomerAddress::STATUS_ACTIVE;
+        return (int) $address->customer_id === (int) $customer->getKey()
+            && $address->status === CustomerAddress::STATUS_ACTIVE;
     }
 
     /**
-     * @return Collection<int, MerchantCustomerAddress>
+     * @return Collection<int, CustomerAddress>
      */
-    public function addressesFor(User $customer): Collection
+    public function addressesFor(User|Customer $customer): Collection
     {
-        return MerchantCustomerAddress::query()
-            ->with(['customer.merchant', 'country', 'state', 'city'])
-            ->where('status', MerchantCustomerAddress::STATUS_ACTIVE)
-            ->whereHas('customer', function ($query) use ($customer): void {
-                $query->where('user_id', $customer->getKey())
-                    ->where('status', 'active');
-            })
+        $customerId = $customer instanceof Customer
+            ? $customer->getKey()
+            : $customer->customer?->getKey();
+
+        if ($customerId === null) {
+            return collect();
+        }
+
+        return CustomerAddress::query()
+            ->with(['country', 'state', 'city'])
+            ->where('customer_id', $customerId)
+            ->where('status', CustomerAddress::STATUS_ACTIVE)
             ->orderByDesc('is_default_shipping')
             ->orderByDesc('id')
             ->get();
     }
 
-    public function selectedAddress(Request $request, Collection $addresses): ?MerchantCustomerAddress
+    public function selectedAddress(Request $request, Collection $addresses): ?CustomerAddress
     {
         $selectedId = (int) $request->session()->get(self::SELECTED_ADDRESS_SESSION_KEY, 0);
         $selected = $selectedId > 0
-            ? $addresses->first(fn (MerchantCustomerAddress $address): bool => (int) $address->getKey() === $selectedId)
+            ? $addresses->first(fn (CustomerAddress $address): bool => (int) $address->getKey() === $selectedId)
             : null;
 
-        if ($selected instanceof MerchantCustomerAddress) {
+        if ($selected instanceof CustomerAddress) {
             return $selected;
         }
 
-        $default = $addresses->first(fn (MerchantCustomerAddress $address): bool => (bool) $address->is_default_shipping);
+        $default = $addresses->first(fn (CustomerAddress $address): bool => (bool) $address->is_default_shipping);
 
-        if ($default instanceof MerchantCustomerAddress) {
+        if ($default instanceof CustomerAddress) {
             $request->session()->put(self::SELECTED_ADDRESS_SESSION_KEY, $default->getKey());
 
             return $default;
@@ -142,24 +146,24 @@ class CheckoutPageService
     public function selectedBillingAddress(
         Request $request,
         Collection $addresses,
-        ?MerchantCustomerAddress $selectedDeliveryAddress = null,
-    ): ?MerchantCustomerAddress {
+        ?CustomerAddress $selectedDeliveryAddress = null,
+    ): ?CustomerAddress {
         if ($this->billingSameAsDelivery($request)) {
             return $selectedDeliveryAddress;
         }
 
         $selectedId = (int) $request->session()->get(self::SELECTED_BILLING_ADDRESS_SESSION_KEY, 0);
         $selected = $selectedId > 0
-            ? $addresses->first(fn (MerchantCustomerAddress $address): bool => (int) $address->getKey() === $selectedId)
+            ? $addresses->first(fn (CustomerAddress $address): bool => (int) $address->getKey() === $selectedId)
             : null;
 
-        if ($selected instanceof MerchantCustomerAddress) {
+        if ($selected instanceof CustomerAddress) {
             return $selected;
         }
 
-        $default = $addresses->first(fn (MerchantCustomerAddress $address): bool => (bool) $address->is_default_billing);
+        $default = $addresses->first(fn (CustomerAddress $address): bool => (bool) $address->is_default_billing);
 
-        if ($default instanceof MerchantCustomerAddress) {
+        if ($default instanceof CustomerAddress) {
             $request->session()->put(self::SELECTED_BILLING_ADDRESS_SESSION_KEY, $default->getKey());
 
             return $default;

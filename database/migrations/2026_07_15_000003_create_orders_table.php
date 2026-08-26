@@ -18,9 +18,7 @@ return new class extends Migration
             $table->string('order_number')->unique();
             $table->foreignId('merchant_id')->constrained('merchant_profiles')->restrictOnDelete();
             $table->foreignId('shop_id')->constrained('shops')->restrictOnDelete();
-            $table->foreignId('customer_id')->nullable()->constrained('merchant_customers')->nullOnDelete();
-            $table->foreignId('shipping_address_id')->nullable()->constrained('merchant_customer_addresses')->nullOnDelete();
-            $table->foreignId('billing_address_id')->nullable()->constrained('merchant_customer_addresses')->nullOnDelete();
+            $table->foreignId('customer_id')->nullable()->constrained('customers')->nullOnDelete();
             $table->string('created_source', 30)->default('pos')->index();
             $table->string('fulfilment_type', 30)->default('counter');
             $table->string('order_status', 30)->default('pending')->index();
@@ -80,8 +78,6 @@ return new class extends Migration
             $table->index(['shop_id', 'order_status'], 'orders_shop_status_idx');
             $table->index(['shop_id', 'payment_status'], 'orders_shop_payment_status_idx');
             $table->index('customer_id', 'orders_customer_idx');
-            $table->index('shipping_address_id', 'orders_shipping_address_idx');
-            $table->index('billing_address_id', 'orders_billing_address_idx');
             $table->index('deleted_at', 'orders_deleted_at_idx');
         });
     }

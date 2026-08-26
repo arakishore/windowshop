@@ -25,11 +25,17 @@ class MerchantCustomerService
     {
         return $this->retryOnDuplicate(function () use ($merchant, $data): MerchantCustomer {
             return DB::transaction(function () use ($merchant, $data): MerchantCustomer {
-                $payload = $this->payload($data);
+                $customer = $this->customerIdentityResolver->resolveOrCreate($data);
+                $payload = $this->relationshipPayload($data);
                 $payload['merchant_id'] = $merchant->getKey();
+                $payload['customer_id'] = $customer->getKey();
                 $payload['customer_code'] = $data['customer_code'] ?? $this->customerCodeGenerator->generate($merchant);
+                $payload['linked_at'] = $data['linked_at'] ?? now();
 
-                return MerchantCustomer::query()->create($payload);
+                return MerchantCustomer::query()->firstOrCreate([
+                    'merchant_id' => $merchant->getKey(),
+                    'customer_id' => $customer->getKey(),
+                ], $payload)->loadMissing('customer');
             });
         });
     }
@@ -41,15 +47,18 @@ class MerchantCustomerService
     {
         return $this->retryOnDuplicate(function () use ($merchant, $data): MerchantCustomer {
             return DB::transaction(function () use ($merchant, $data): MerchantCustomer {
-                $payload = $this->payload($data);
-                $user = $this->customerIdentityResolver->resolveOrCreateForPos($payload);
+                $customer = $this->customerIdentityResolver->resolveOrCreateForPos($data);
+                $payload = $this->relationshipPayload($data);
 
                 $payload['merchant_id'] = $merchant->getKey();
+                $payload['customer_id'] = $customer->getKey();
                 $payload['customer_code'] = $data['customer_code'] ?? $this->customerCodeGenerator->generate($merchant);
-                $payload['user_id'] = $user->getKey();
-                $payload['linked_at'] = now();
+                $payload['linked_at'] = $data['linked_at'] ?? now();
 
-                return MerchantCustomer::query()->create($payload);
+                return MerchantCustomer::query()->firstOrCreate([
+                    'merchant_id' => $merchant->getKey(),
+                    'customer_id' => $customer->getKey(),
+                ], $payload)->loadMissing('customer');
             });
         });
     }
@@ -60,9 +69,11 @@ class MerchantCustomerService
     public function update(MerchantCustomer $customer, array $data): MerchantCustomer
     {
         return DB::transaction(function () use ($customer, $data): MerchantCustomer {
-            $customer->fill($this->payload($data, false))->save();
+            $customer->loadMissing('customer');
+            $customer->customer?->fill($this->customerPayload($data))->save();
+            $customer->fill($this->relationshipPayload($data, false))->save();
 
-            return $customer->refresh();
+            return $customer->refresh()->loadMissing('customer');
         });
     }
 
@@ -70,19 +81,12 @@ class MerchantCustomerService
      * @param array<string, mixed> $data
      * @return array<string, mixed>
      */
-    private function payload(array $data, bool $creating = true): array
+    private function relationshipPayload(array $data, bool $creating = true): array
     {
         $fields = [
-            'name',
-            'email',
-            'date_of_birth',
-            'gender',
-            'is_business_customer',
-            'company_name',
-            'gst_number',
             'notes',
+            'trust_status',
             'status',
-            'user_id',
             'linked_at',
         ];
 
@@ -98,22 +102,52 @@ class MerchantCustomerService
             $payload['status'] = MerchantCustomer::STATUS_ACTIVE;
         }
 
-        $payload['is_business_customer'] = (bool) ($payload['is_business_customer'] ?? false);
-
-        if (! $payload['is_business_customer']) {
-            $payload['company_name'] = null;
-            $payload['gst_number'] = null;
+        if ($creating && ! isset($payload['trust_status'])) {
+            $payload['trust_status'] = 'normal';
         }
 
-        if ($creating || array_key_exists('mobile', $data) || array_key_exists('mobile_country_code', $data)) {
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function customerPayload(array $data): array
+    {
+        $payload = [];
+        foreach ([
+            'name',
+            'email',
+            'date_of_birth',
+            'gender',
+            'is_business_customer',
+            'company_name',
+            'gst_number',
+        ] as $field) {
+            if (array_key_exists($field, $data)) {
+                $payload[$field] = $data[$field];
+            }
+        }
+
+        if (array_key_exists('is_business_customer', $payload)) {
+            $payload['is_business_customer'] = (bool) $payload['is_business_customer'];
+
+            if (! $payload['is_business_customer']) {
+                $payload['company_name'] = null;
+                $payload['gst_number'] = null;
+            }
+        }
+
+        if (array_key_exists('mobile', $data) || array_key_exists('mobile_country_code', $data)) {
             $mobile = $this->mobileNumberNormalizer->normalize(
                 (string) ($data['mobile'] ?? ''),
                 isset($data['mobile_country_code']) ? (string) $data['mobile_country_code'] : null,
             );
 
-            $payload['mobile_country_code'] = $mobile['country_code'];
-            $payload['mobile'] = $mobile['mobile'];
-            $payload['mobile_normalized'] = $mobile['mobile_normalized'];
+            $payload['mobile_country_code'] = $mobile['mobile_normalized'] !== '' ? $mobile['country_code'] : null;
+            $payload['mobile'] = $mobile['mobile'] !== '' ? $mobile['mobile'] : null;
+            $payload['mobile_normalized'] = $mobile['mobile_normalized'] !== '' ? $mobile['mobile_normalized'] : null;
         }
 
         return $payload;

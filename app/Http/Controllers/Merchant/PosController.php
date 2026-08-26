@@ -3,15 +3,15 @@
 namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Controller;
+use App\Models\CustomerAddress;
 use App\Models\MerchantCustomer;
-use App\Models\MerchantCustomerAddress;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
-use App\Services\Merchant\MerchantCustomerAddressService;
+use App\Services\Customer\CustomerAddressService;
 use App\Services\Merchant\MerchantCustomerService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Merchant\MerchantSettingsService;
@@ -37,7 +37,7 @@ class PosController extends Controller
         private readonly ProductImageService $productImageService,
         private readonly OrderCreationService $orderCreationService,
         private readonly PosProductSearchService $posProductSearchService,
-        private readonly MerchantCustomerAddressService $customerAddressService,
+        private readonly CustomerAddressService $customerAddressService,
         private readonly MerchantCustomerService $customerService,
         private readonly MerchantSettingsService $settings,
         private readonly AdminSettingsService $adminSettings,
@@ -121,6 +121,7 @@ class PosController extends Controller
         $posSettings = $this->posSettings((int) $shop->merchant_id);
 
         $this->ensurePosDiscountsAllowed($data, $posSettings);
+        $this->ensureCustomerBelongsToMerchant($shop, (int) ($data['customer_id'] ?? 0));
 
         $currencyConfig = $this->adminSettings->currencyConfig();
 
@@ -292,15 +293,19 @@ class PosController extends Controller
 
         $customers = MerchantCustomer::query()
             ->where('merchant_id', $shop->merchant_id)
+            ->whereHas('customer')
+            ->with('customer')
             ->where(function ($builder) use ($query): void {
-                $builder->where('name', 'like', "%{$query}%")
-                    ->orWhere('mobile', 'like', "%{$query}%")
-                    ->orWhere('mobile_normalized', 'like', "%{$query}%")
-                    ->orWhere('email', 'like', "%{$query}%")
-                    ->orWhere('customer_code', 'like', "%{$query}%");
+                $builder->where('customer_code', 'like', "%{$query}%")
+                    ->orWhereHas('customer', function ($queryBuilder) use ($query): void {
+                        $queryBuilder->where('name', 'like', "%{$query}%")
+                            ->orWhere('mobile', 'like', "%{$query}%")
+                            ->orWhere('mobile_normalized', 'like', "%{$query}%")
+                            ->orWhere('email', 'like', "%{$query}%");
+                    });
             })
-            ->withCount(['addresses' => fn ($builder) => $builder->where('status', MerchantCustomerAddress::STATUS_ACTIVE)])
-            ->orderBy('name')
+            ->withCount(['addresses' => fn ($builder) => $builder->where('status', CustomerAddress::STATUS_ACTIVE)])
+            ->latest()
             ->limit(10)
             ->get()
             ->map(fn (MerchantCustomer $customer): array => [
@@ -328,7 +333,7 @@ class PosController extends Controller
 
         $customer = MerchantCustomer::query()
             ->where('merchant_id', $shop->merchant_id)
-            ->where('mobile_normalized', $mobile['mobile_normalized'])
+            ->whereHas('customer', fn ($query) => $query->where('mobile_normalized', $mobile['mobile_normalized']))
             ->first();
         $created = false;
 
@@ -358,11 +363,11 @@ class PosController extends Controller
         return response()->json([
             'addresses' => $customer->addresses()
                 ->with(['city', 'state', 'country'])
-                ->where('status', MerchantCustomerAddress::STATUS_ACTIVE)
+                ->where('status', CustomerAddress::STATUS_ACTIVE)
                 ->orderByDesc('is_default_shipping')
                 ->orderBy('label')
                 ->get()
-                ->map(fn (MerchantCustomerAddress $address): array => $this->addressPayload($address))
+                ->map(fn (CustomerAddress $address): array => $this->addressPayload($address))
                 ->values(),
         ]);
     }
@@ -382,10 +387,11 @@ class PosController extends Controller
             'is_default_shipping' => ['nullable', 'boolean'],
         ]);
 
-        $address = $this->customerAddressService->create($customer, [
+        $customer->loadMissing('customer');
+        $address = $this->customerAddressService->create($customer->customer, [
             ...$data,
             'is_default_billing' => false,
-            'status' => MerchantCustomerAddress::STATUS_ACTIVE,
+            'status' => CustomerAddress::STATUS_ACTIVE,
         ]);
 
         return response()->json([
@@ -500,22 +506,44 @@ class PosController extends Controller
     }
 
     /**
-     * @return array{id: int, route_key: string, name: string, customer_code: string|null, mobile: string|null, mobile_country_code: string|null, email: string|null}
+     * @return array{merchant_customer_id: int, customer_id: int, route_key: string, name: string, customer_code: string|null, trust_status: string|null, mobile: string|null, mobile_country_code: string|null, email: string|null}
      */
     private function customerPayload(MerchantCustomer $customer): array
     {
+        $customer->loadMissing('customer');
+
         return [
-            'id' => $customer->getKey(),
+            'merchant_customer_id' => $customer->getKey(),
+            'customer_id' => (int) $customer->customer_id,
             'route_key' => $customer->getRouteKey(),
             'name' => $customer->name,
             'customer_code' => $customer->customer_code,
+            'trust_status' => $customer->trust_status,
             'mobile' => $customer->mobile,
             'mobile_country_code' => $customer->mobile_country_code,
             'email' => $customer->email,
         ];
     }
 
-    private function addressPayload(MerchantCustomerAddress $address): array
+    private function ensureCustomerBelongsToMerchant(Shop $shop, int $customerId): void
+    {
+        if ($customerId < 1) {
+            return;
+        }
+
+        $exists = MerchantCustomer::query()
+            ->where('merchant_id', $shop->merchant_id)
+            ->where('customer_id', $customerId)
+            ->exists();
+
+        if (! $exists) {
+            throw ValidationException::withMessages([
+                'customer_id' => 'The selected customer is not available for this merchant.',
+            ]);
+        }
+    }
+
+    private function addressPayload(CustomerAddress $address): array
     {
         return [
             'id' => $address->getKey(),

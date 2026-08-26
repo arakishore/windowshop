@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Cart;
 use App\Models\CartItem;
-use App\Models\MerchantCustomer;
-use App\Models\MerchantCustomerAddress;
+use App\Models\Customer;
+use App\Models\CustomerAddress;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderTotal;
@@ -393,9 +393,10 @@ class StorefrontCheckoutGateTest extends TestCase
             ])
             ->assertRedirect(route('storefront.checkout'));
 
-        $address = MerchantCustomerAddress::query()->where('recipient_name', 'Address Customer')->firstOrFail();
-        $this->assertDatabaseHas('merchant_customer_addresses', [
+        $address = CustomerAddress::query()->where('recipient_name', 'Address Customer')->firstOrFail();
+        $this->assertDatabaseHas('customer_addresses', [
             'id' => $address->getKey(),
+            'customer_id' => $this->globalCustomer($customer)->getKey(),
             'postal_code' => '422009',
             'is_default_shipping' => true,
         ]);
@@ -444,7 +445,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertJsonPath('ok', true)
             ->assertJsonPath('message', 'Delivery address added.');
 
-        $address = MerchantCustomerAddress::query()->where('recipient_name', 'Ajax Address Customer')->firstOrFail();
+        $address = CustomerAddress::query()->where('recipient_name', 'Ajax Address Customer')->firstOrFail();
         $this->assertSame($address->getKey(), session(CheckoutPageService::SELECTED_ADDRESS_SESSION_KEY));
     }
 
@@ -476,7 +477,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertJsonPath('ok', true)
             ->assertJsonPath('message', 'Delivery address updated.');
 
-        $this->assertDatabaseHas('merchant_customer_addresses', [
+        $this->assertDatabaseHas('customer_addresses', [
             'id' => $address->getKey(),
             'recipient_name' => 'Ajax Updated Customer',
             'address_line_1' => 'Ajax Updated Road',
@@ -569,7 +570,9 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertRedirect();
 
         $order = Order::query()->firstOrFail();
-        $this->assertSame($address->getKey(), $order->shipping_address_id);
+        $this->assertSame('Checkout Customer', $order->shipping_recipient_name);
+        $this->assertSame('Main Road', $order->shipping_address_line_1);
+        $this->assertSame('Main Road', $order->billing_address_line_1);
         $this->assertNull($order->customer_order_note);
         $this->assertFalse(session()->has(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY));
     }
@@ -651,10 +654,11 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertRedirect(route('storefront.checkout'))
             ->assertSessionHas(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, false);
 
-        $address = MerchantCustomerAddress::query()->where('recipient_name', 'Billing Customer')->firstOrFail();
+        $address = CustomerAddress::query()->where('recipient_name', 'Billing Customer')->firstOrFail();
         $this->assertSame($address->getKey(), session(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY));
-        $this->assertDatabaseHas('merchant_customer_addresses', [
+        $this->assertDatabaseHas('customer_addresses', [
             'id' => $address->getKey(),
+            'customer_id' => $this->globalCustomer($customer)->getKey(),
             'country_id' => $locations['country_id'],
             'state_id' => $locations['state_id'],
             'city_id' => $locations['city_id'],
@@ -692,7 +696,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertJsonPath('ok', true)
             ->assertJsonPath('message', 'Billing address added.');
 
-        $address = MerchantCustomerAddress::query()->where('recipient_name', 'Ajax Billing Customer')->firstOrFail();
+        $address = CustomerAddress::query()->where('recipient_name', 'Ajax Billing Customer')->firstOrFail();
         $this->assertSame($address->getKey(), session(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY));
     }
 
@@ -765,9 +769,9 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertRedirect();
 
         $order = Order::query()->firstOrFail();
-        $this->assertSame($delivery->getKey(), $order->shipping_address_id);
-        $this->assertSame($billing->getKey(), $order->billing_address_id);
-        $this->assertSame('Office', $order->billingAddress?->label);
+        $this->assertSame('Main Road', $order->shipping_address_line_1);
+        $this->assertSame('Main Road', $order->billing_address_line_1);
+        $this->assertSame('Checkout Customer', $order->billing_recipient_name);
     }
 
     public function test_backend_default_country_requires_india_pin_and_ignores_tampered_country_id(): void
@@ -804,7 +808,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ])
             ->assertRedirect(route('storefront.checkout'));
 
-        $this->assertDatabaseHas('merchant_customer_addresses', [
+        $this->assertDatabaseHas('customer_addresses', [
             'recipient_name' => 'Non India Customer',
             'country_id' => $india['country_id'],
             'state_id' => $india['state_id'],
@@ -1306,8 +1310,16 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertSame('0.00', $order->amount_paid);
         $this->assertSame('100.00', $order->shipping_total);
         $this->assertSame('800.00', $order->grand_total);
-        $this->assertSame($address->getKey(), $order->shipping_address_id);
-        $this->assertSame($address->getKey(), $order->billing_address_id);
+        $this->assertSame('Checkout Customer', $order->shipping_recipient_name);
+        $this->assertSame('Main Road', $order->shipping_address_line_1);
+        $this->assertSame('422009', $order->shipping_postal_code);
+        $this->assertSame('Main Road', $order->billing_address_line_1);
+        $address->forceFill([
+            'recipient_name' => 'Changed Customer',
+            'address_line_1' => 'Changed Road',
+            'postal_code' => '422010',
+        ])->save();
+        $order->refresh();
         $this->assertSame('Checkout Customer', $order->shipping_recipient_name);
         $this->assertSame('Main Road', $order->shipping_address_line_1);
         $this->assertSame('422009', $order->shipping_postal_code);
@@ -1358,8 +1370,7 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertSame(StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP, $order->payment_method);
         $this->assertSame(Order::PAYMENT_PENDING, $order->payment_status);
         $this->assertSame('0.00', $order->shipping_total);
-        $this->assertNull($order->shipping_address_id);
-        $this->assertSame($address->getKey(), $order->billing_address_id);
+        $this->assertSame('Main Road', $order->billing_address_line_1);
         $this->assertSame($fixture['shop']->getKey(), $order->shop_id);
         $this->assertDatabaseMissing('cart_items', ['id' => $item->getKey()]);
 
@@ -1370,6 +1381,88 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Cash at Shop')
             ->assertSee('Pay when you collect your order.')
             ->assertSee($fixture['shop']->name);
+    }
+
+    public function test_checkout_place_order_uses_product_variant_id_not_cart_item_id(): void
+    {
+        $customer = $this->customerUser('place-variant-id@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $item = $this->cartItem($cart, $fixture['variant']);
+        $item->forceFill(['id' => $fixture['variant']->getKey() + 1000])->save();
+        $item->refresh();
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+
+        $this->assertNotSame((int) $fixture['variant']->getKey(), (int) $item->getKey());
+
+        $response = $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ]);
+
+        $order = Order::query()->with('items')->firstOrFail();
+        $response->assertRedirect(route('storefront.checkout.success', $order));
+        $this->assertSame($fixture['variant']->getKey(), $order->items->first()->product_variant_id);
+        $this->assertDatabaseMissing('cart_items', ['id' => $item->getKey()]);
+    }
+
+    public function test_checkout_pickup_order_reuses_global_customer_address_across_merchants_without_copies(): void
+    {
+        $customer = $this->customerUser('place-cross-merchant-address@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $otherFixture = $this->productFixture(price: 300);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $this->cartItem($cart, $fixture['variant']);
+        $globalAddress = $this->customerAddress($customer, $otherFixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+            'address_line_1' => 'Global Saved Address',
+        ]);
+
+        $response = $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $globalAddress->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ]);
+
+        $order = Order::query()->firstOrFail();
+        $response->assertRedirect(route('storefront.checkout.success', $order));
+        $order->refresh();
+
+        $this->assertSame($fixture['shop']->getKey(), $order->shop_id);
+        $this->assertDatabaseHas('customer_addresses', [
+            'id' => $globalAddress->getKey(),
+            'address_line_1' => 'Global Saved Address',
+        ]);
+        $this->assertSame('Global Saved Address', $order->billing_address_line_1);
+
+        $this->cartItem($cart, $otherFixture['variant']);
+
+        $secondResponse = $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $globalAddress->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ]);
+
+        $secondOrder = Order::query()->whereKeyNot($order->getKey())->firstOrFail();
+        $secondResponse->assertRedirect(route('storefront.checkout.success', $secondOrder));
+
+        $this->assertSame($otherFixture['shop']->getKey(), $secondOrder->shop_id);
+        $this->assertSame('Global Saved Address', $secondOrder->billing_address_line_1);
+        $this->assertDatabaseCount('customer_addresses', 1);
     }
 
     public function test_checkout_place_order_revalidates_cod_minimum(): void
@@ -1560,7 +1653,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ])
             ->assertRedirect(route('storefront.checkout'));
 
-        $this->assertDatabaseHas('merchant_customer_addresses', [
+        $this->assertDatabaseHas('customer_addresses', [
             'recipient_name' => 'Spoof Customer',
             'country_id' => $india['country_id'],
             'state_id' => $india['state_id'],
@@ -1589,7 +1682,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ])
             ->assertRedirect(route('storefront.checkout'));
 
-        $this->assertDatabaseHas('merchant_customer_addresses', [
+        $this->assertDatabaseHas('customer_addresses', [
             'recipient_name' => 'Missing City Customer',
             'country_id' => $india['country_id'],
             'state_id' => $india['state_id'],
@@ -1702,29 +1795,12 @@ class StorefrontCheckoutGateTest extends TestCase
         ]);
     }
 
-    private function customerAddress(User $user, MerchantProfile $merchant, array $overrides = []): MerchantCustomerAddress
+    private function customerAddress(User $user, MerchantProfile $merchant, array $overrides = []): CustomerAddress
     {
-        $merchantCustomer = MerchantCustomer::query()
-            ->where('merchant_id', $merchant->getKey())
-            ->where('user_id', $user->getKey())
-            ->first();
+        $customer = $this->globalCustomer($user);
 
-        if (! $merchantCustomer instanceof MerchantCustomer) {
-            $merchantCustomer = MerchantCustomer::query()->create([
-                'merchant_id' => $merchant->getKey(),
-                'user_id' => $user->getKey(),
-                'customer_code' => 'CUS-'.Str::upper(Str::random(8)),
-                'name' => $user->name,
-                'mobile' => $user->mobile ?: '9876543210',
-                'mobile_normalized' => $user->mobile ?: '9876543210',
-                'email' => $user->email,
-                'status' => MerchantCustomer::STATUS_ACTIVE,
-                'linked_at' => now(),
-            ]);
-        }
-
-        return MerchantCustomerAddress::query()->create([
-            'merchant_customer_id' => $merchantCustomer->getKey(),
+        return CustomerAddress::query()->create([
+            'customer_id' => $customer->getKey(),
             'label' => $overrides['label'] ?? 'Home',
             'recipient_name' => $overrides['recipient_name'] ?? $user->name,
             'recipient_mobile' => $overrides['recipient_mobile'] ?? '9876543210',
@@ -1738,7 +1814,21 @@ class StorefrontCheckoutGateTest extends TestCase
             'postal_code' => $overrides['postal_code'] ?? null,
             'is_default_shipping' => (bool) ($overrides['is_default_shipping'] ?? false),
             'is_default_billing' => (bool) ($overrides['is_default_billing'] ?? false),
-            'status' => MerchantCustomerAddress::STATUS_ACTIVE,
+            'status' => CustomerAddress::STATUS_ACTIVE,
+        ]);
+    }
+
+    private function globalCustomer(User $user): Customer
+    {
+        return Customer::query()->firstOrCreate([
+            'user_id' => $user->getKey(),
+        ], [
+            'name' => $user->name,
+            'mobile_country_code' => '+91',
+            'mobile' => $user->mobile ?: '9876543210',
+            'mobile_normalized' => $user->mobile ?: '9876543210',
+            'email' => $user->email,
+            'status' => Customer::STATUS_ACTIVE,
         ]);
     }
 

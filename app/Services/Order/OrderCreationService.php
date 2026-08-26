@@ -2,8 +2,8 @@
 
 namespace App\Services\Order;
 
-use App\Models\MerchantCustomer;
-use App\Models\MerchantCustomerAddress;
+use App\Models\Customer;
+use App\Models\CustomerAddress;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -39,8 +39,6 @@ class OrderCreationService
      * @param array{
      *     shop_id: int,
      *     customer_id?: int|null,
-     *     shipping_address_id?: int|null,
-     *     billing_address_id?: int|null,
      *     created_source?: string,
      *     fulfilment_type?: string,
      *     order_status?: string,
@@ -56,6 +54,8 @@ class OrderCreationService
      *     customer_name?: string|null,
      *     customer_mobile?: string|null,
      *     customer_email?: string|null,
+     *     shipping_address_snapshot?: array<string, mixed>|null,
+     *     billing_address_snapshot?: array<string, mixed>|null,
      *     remarks?: string|null,
      *     customer_order_note?: string|null,
      *     status_note?: string|null,
@@ -85,8 +85,6 @@ class OrderCreationService
                 'merchant_id' => $shop->merchant_id,
                 'shop_id' => $shop->getKey(),
                 'customer_id' => $customerSnapshot['customer_id'],
-                'shipping_address_id' => $shippingSnapshot['shipping_address_id'],
-                'billing_address_id' => $billingSnapshot['billing_address_id'],
                 'created_source' => $data['created_source'] ?? Order::SOURCE_POS,
                 'fulfilment_type' => $data['fulfilment_type'] ?? Order::FULFILMENT_COUNTER,
                 'order_status' => $orderStatus,
@@ -230,9 +228,8 @@ class OrderCreationService
             ];
         }
 
-        $customer = MerchantCustomer::query()
+        $customer = Customer::query()
             ->whereKey($customerId)
-            ->where('merchant_id', $shop->merchant_id)
             ->firstOrFail();
 
         return [
@@ -246,7 +243,6 @@ class OrderCreationService
     /**
      * @param array<string, mixed> $data
      * @return array{
-     *     shipping_address_id: int|null,
      *     shipping_recipient_name: string|null,
      *     shipping_mobile_country_code: string|null,
      *     shipping_mobile: string|null,
@@ -262,7 +258,6 @@ class OrderCreationService
     private function shippingSnapshot(Shop $shop, array $data, ?int $customerId): array
     {
         $empty = [
-            'shipping_address_id' => null,
             'shipping_recipient_name' => null,
             'shipping_mobile_country_code' => null,
             'shipping_mobile' => null,
@@ -279,6 +274,10 @@ class OrderCreationService
             return $empty;
         }
 
+        if (isset($data['shipping_address_snapshot']) && is_array($data['shipping_address_snapshot'])) {
+            return $this->addressSnapshotFromData($data['shipping_address_snapshot'], 'shipping');
+        }
+
         if ($customerId === null) {
             throw ValidationException::withMessages([
                 'customer_id' => 'Please select a customer for delivery orders.',
@@ -292,17 +291,14 @@ class OrderCreationService
             ]);
         }
 
-        $address = MerchantCustomerAddress::query()
+        $address = CustomerAddress::query()
             ->with(['customer', 'city', 'state', 'country'])
             ->whereKey($addressId)
-            ->where('merchant_customer_id', $customerId)
-            ->where('status', MerchantCustomerAddress::STATUS_ACTIVE)
+            ->where('customer_id', $customerId)
+            ->where('status', CustomerAddress::STATUS_ACTIVE)
             ->firstOrFail();
 
-        abort_unless((int) $address->customer?->merchant_id === (int) $shop->merchant_id, 404);
-
         return [
-            'shipping_address_id' => $address->getKey(),
             'shipping_recipient_name' => $address->recipient_name,
             'shipping_mobile_country_code' => $address->recipient_mobile_country_code,
             'shipping_mobile' => $address->recipient_mobile,
@@ -319,7 +315,6 @@ class OrderCreationService
     /**
      * @param array<string, mixed> $data
      * @return array{
-     *     billing_address_id: int|null,
      *     billing_recipient_name: string|null,
      *     billing_mobile_country_code: string|null,
      *     billing_mobile: string|null,
@@ -335,7 +330,6 @@ class OrderCreationService
     private function billingSnapshot(Shop $shop, array $data, ?int $customerId): array
     {
         $empty = [
-            'billing_address_id' => null,
             'billing_recipient_name' => null,
             'billing_mobile_country_code' => null,
             'billing_mobile' => null,
@@ -349,6 +343,10 @@ class OrderCreationService
         ];
 
         $addressId = (int) ($data['billing_address_id'] ?? 0);
+        if (isset($data['billing_address_snapshot']) && is_array($data['billing_address_snapshot'])) {
+            return $this->addressSnapshotFromData($data['billing_address_snapshot'], 'billing');
+        }
+
         if ($addressId < 1) {
             return $empty;
         }
@@ -359,17 +357,14 @@ class OrderCreationService
             ]);
         }
 
-        $address = MerchantCustomerAddress::query()
+        $address = CustomerAddress::query()
             ->with(['customer', 'city', 'state', 'country'])
             ->whereKey($addressId)
-            ->where('merchant_customer_id', $customerId)
-            ->where('status', MerchantCustomerAddress::STATUS_ACTIVE)
+            ->where('customer_id', $customerId)
+            ->where('status', CustomerAddress::STATUS_ACTIVE)
             ->firstOrFail();
 
-        abort_unless((int) $address->customer?->merchant_id === (int) $shop->merchant_id, 404);
-
         return [
-            'billing_address_id' => $address->getKey(),
             'billing_recipient_name' => $address->recipient_name,
             'billing_mobile_country_code' => $address->recipient_mobile_country_code,
             'billing_mobile' => $address->recipient_mobile,
@@ -380,6 +375,26 @@ class OrderCreationService
             'billing_state' => $address->state?->name,
             'billing_country' => $address->country?->name,
             'billing_postal_code' => $address->postal_code,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $snapshot
+     * @return array<string, mixed>
+     */
+    private function addressSnapshotFromData(array $snapshot, string $prefix): array
+    {
+        return [
+            "{$prefix}_recipient_name" => $this->nullableString($snapshot['recipient_name'] ?? null),
+            "{$prefix}_mobile_country_code" => $this->nullableString($snapshot['mobile_country_code'] ?? null),
+            "{$prefix}_mobile" => $this->nullableString($snapshot['mobile'] ?? null),
+            "{$prefix}_address_line_1" => $this->nullableString($snapshot['address_line_1'] ?? null),
+            "{$prefix}_address_line_2" => $this->nullableString($snapshot['address_line_2'] ?? null),
+            "{$prefix}_landmark" => $this->nullableString($snapshot['landmark'] ?? null),
+            "{$prefix}_city" => $this->nullableString($snapshot['city'] ?? null),
+            "{$prefix}_state" => $this->nullableString($snapshot['state'] ?? null),
+            "{$prefix}_country" => $this->nullableString($snapshot['country'] ?? null),
+            "{$prefix}_postal_code" => $this->nullableString($snapshot['postal_code'] ?? null),
         ];
     }
 

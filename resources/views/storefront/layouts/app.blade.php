@@ -69,6 +69,21 @@
             position: relative;
         }
 
+        .storefront-account-initials {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border: 1px solid currentColor;
+            border-radius: 50%;
+            font-size: 12px;
+            line-height: 1;
+            font-weight: 700;
+            letter-spacing: 0;
+            text-transform: uppercase;
+        }
+
         .customer-location-trigger .location-pin-icon {
             position: relative;
             width: 18px;
@@ -385,7 +400,7 @@
             </a>
         </div>
         <div class="toolbar-item">
-            <a href="wishlist.html">
+            <a href="{{ route('storefront.account.wishlist') }}">
                 <span class="toolbar-icon">
                     <i class="icon icon-HeartStraight"></i>
                 </span>

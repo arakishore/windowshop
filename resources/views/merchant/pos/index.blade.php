@@ -663,6 +663,7 @@
             let timerInterval = null;
             let selectedCustomer = null;
             let customerAddresses = [];
+            let customerSearchResults = [];
             let addSoundContext = null;
             let orderDiscount = null;
             let pricingPayload = null;
@@ -1123,7 +1124,7 @@
                 paymentMethodInput.value = Object.prototype.hasOwnProperty.call(paymentMethodLabels, snapshot.paymentMethod)
                     ? snapshot.paymentMethod
                     : (posSettings.defaultPaymentMethod || Object.keys(paymentMethodLabels)[0] || 'cash');
-                selectedCustomer = snapshot.customer || null;
+                selectedCustomer = normalizeCustomerPayload(snapshot.customer || null);
                 orderDiscount = allowOrderDiscount ? (snapshot.orderDiscount || null) : null;
                 setFulfilment(snapshot.fulfilmentType || 'counter');
                 renderSelectedCustomer();
@@ -1149,11 +1150,25 @@
 
             const customerAddressUrl = (customer, store = false) => {
                 const routeKey = typeof customer === 'object'
-                    ? (customer.route_key || customer.uuid || customer.id)
+                    ? (customer.route_key || customer.uuid || customer.merchant_customer_id)
                     : customer;
 
                 return (store ? root.dataset.customerAddressStoreUrlTemplate : root.dataset.customerAddressesUrlTemplate)
                     .replace('__CUSTOMER__', encodeURIComponent(routeKey));
+            };
+            const normalizeCustomerPayload = (customer) => {
+                if (!customer || typeof customer !== 'object') {
+                    return null;
+                }
+
+                const merchantCustomerId = Number(customer.merchant_customer_id || 0);
+                const globalCustomerId = Number(customer.customer_id || 0);
+
+                return {
+                    ...customer,
+                    merchant_customer_id: merchantCustomerId > 0 ? merchantCustomerId : null,
+                    customer_id: globalCustomerId > 0 ? globalCustomerId : null,
+                };
             };
             const renderSelectedCustomer = () => {
                 const customerName = selectedCustomer?.name || 'Walk-in Customer';
@@ -1241,7 +1256,7 @@
                 }
             };
             const selectCustomer = (customer) => {
-                selectedCustomer = customer;
+                selectedCustomer = normalizeCustomerPayload(customer);
                 customerSearchInput.value = '';
                 customerResultsEl.classList.add('d-none');
                 customerResultsEl.innerHTML = '';
@@ -2402,7 +2417,10 @@
                     return;
                 }
 
-                selectCustomer(JSON.parse(button.dataset.customer || '{}'));
+                const customer = customerSearchResults[Number(button.dataset.customerIndex || -1)] || null;
+                if (customer) {
+                    selectCustomer(customer);
+                }
             });
             let customerSearchTimeout = null;
             customerSearchInput?.addEventListener('input', () => {
@@ -2417,6 +2435,7 @@
                 }
 
                 if (query.length < 2) {
+                    customerSearchResults = [];
                     customerResultsEl.classList.add('d-none');
                     customerResultsEl.innerHTML = '';
                     return;
@@ -2427,24 +2446,33 @@
                         const response = await fetch(`${root.dataset.customerSearchUrl}?q=${encodeURIComponent(query)}`, {
                             headers: { 'Accept': 'application/json' },
                         });
-                        const payload = await response.json();
+                        const responseText = await response.text();
+                        let payload = null;
+
+                        try {
+                            payload = JSON.parse(responseText);
+                        } catch (parseError) {
+                            console.error('Invalid POS customer search response:', responseText);
+                            throw new Error('Customer search returned an invalid server response. Please refresh POS and try again.');
+                        }
 
                         if (!response.ok) {
                             throw new Error(payload?.message || 'Unable to search customers.');
                         }
 
                         const customers = payload.customers || [];
-                        if (customers.length === 0 && digits.length >= 6 && quickCustomerMobileInput) {
+                        customerSearchResults = customers.map((customer) => normalizeCustomerPayload(customer)).filter(Boolean);
+                        if (customerSearchResults.length === 0 && digits.length >= 6 && quickCustomerMobileInput) {
                             quickCustomerMobileInput.value = query;
                             quickCustomerMobileFromSearch = query;
                         }
                         customerResultsEl.classList.remove('d-none');
-                        customerResultsEl.innerHTML = customers.length === 0 ? `
+                        customerResultsEl.innerHTML = customerSearchResults.length === 0 ? `
                             <div class="list-group-item text-muted">
                                 No customer found for "${escapeHtml(query)}".
                             </div>
-                        ` : customers.map((customer) => `
-                            <button type="button" class="list-group-item list-group-item-action py-2 js-pos-select-customer" data-customer="${escapeHtml(JSON.stringify(customer))}" data-bs-popup="tooltip" title="Use this customer for the sale">
+                        ` : customerSearchResults.map((customer, index) => `
+                            <button type="button" class="list-group-item list-group-item-action py-2 js-pos-select-customer" data-customer-index="${index}" data-bs-popup="tooltip" title="Use this customer for the sale">
                                 <div class="fw-semibold">${escapeHtml(customer.name)}</div>
                                 <div class="text-muted fs-sm">${escapeHtml([customer.customer_code, customer.mobile, customer.email].filter(Boolean).join(' | '))}</div>
                             </button>
@@ -2558,7 +2586,7 @@
                             amount_paid: cash,
                             elapsed_seconds: elapsedSeconds(),
                             fulfilment_type: selectedFulfilment(),
-                            customer_id: selectedCustomer?.id || null,
+                            customer_id: selectedCustomer?.customer_id || null,
                             shipping_address_id: selectedFulfilment() === 'delivery' ? (shippingAddressSelect?.value || null) : null,
                             order_discount: allowOrderDiscount && orderDiscount ? {
                                 type: orderDiscount.type,

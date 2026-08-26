@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Services\Merchant;
+namespace App\Services\Customer;
 
-use App\Models\MerchantCustomer;
-use App\Models\MerchantCustomerAddress;
+use App\Models\CustomerAddress;
+use App\Models\Customer;
 use App\Services\Shared\MobileNumberNormalizer;
 use Illuminate\Support\Facades\DB;
 
-class MerchantCustomerAddressService
+class CustomerAddressService
 {
     public function __construct(
         private readonly MobileNumberNormalizer $mobileNumberNormalizer,
@@ -17,9 +17,9 @@ class MerchantCustomerAddressService
     /**
      * @param array<string, mixed> $data
      */
-    public function create(MerchantCustomer $customer, array $data): MerchantCustomerAddress
+    public function create(Customer $customer, array $data): CustomerAddress
     {
-        return DB::transaction(function () use ($customer, $data): MerchantCustomerAddress {
+        return DB::transaction(function () use ($customer, $data): CustomerAddress {
             $address = $customer->addresses()->create($this->payload($data));
             $this->syncDefaults($address);
 
@@ -30,9 +30,9 @@ class MerchantCustomerAddressService
     /**
      * @param array<string, mixed> $data
      */
-    public function update(MerchantCustomerAddress $address, array $data): MerchantCustomerAddress
+    public function update(CustomerAddress $address, array $data): CustomerAddress
     {
-        return DB::transaction(function () use ($address, $data): MerchantCustomerAddress {
+        return DB::transaction(function () use ($address, $data): CustomerAddress {
             $address->fill($this->payload($data))->save();
             $this->syncDefaults($address);
 
@@ -66,22 +66,22 @@ class MerchantCustomerAddressService
             'postal_code' => $data['postal_code'] ?? null,
             'is_default_shipping' => (bool) ($data['is_default_shipping'] ?? false),
             'is_default_billing' => (bool) ($data['is_default_billing'] ?? false),
-            'status' => $data['status'] ?? MerchantCustomerAddress::STATUS_ACTIVE,
+            'status' => $data['status'] ?? CustomerAddress::STATUS_ACTIVE,
         ];
     }
 
-    private function syncDefaults(MerchantCustomerAddress $address): void
+    private function syncDefaults(CustomerAddress $address): void
     {
         if ($address->is_default_shipping) {
-            MerchantCustomerAddress::query()
-                ->where('merchant_customer_id', $address->merchant_customer_id)
+            CustomerAddress::query()
+                ->where('customer_id', $address->customer_id)
                 ->whereKeyNot($address->getKey())
                 ->update(['is_default_shipping' => false]);
         }
 
         if ($address->is_default_billing) {
-            MerchantCustomerAddress::query()
-                ->where('merchant_customer_id', $address->merchant_customer_id)
+            CustomerAddress::query()
+                ->where('customer_id', $address->customer_id)
                 ->whereKeyNot($address->getKey())
                 ->update(['is_default_billing' => false]);
         }

@@ -11,7 +11,6 @@ use App\Models\User;
 use App\Services\Merchant\MerchantCustomerService;
 use App\Services\Product\ProductVariantManagementService;
 use Database\Seeders\MasterData\LocationSeeder;
-use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -1346,7 +1345,8 @@ class MerchantPosTest extends TestCase
             ->withSession(['active_shop_id' => $shopId])
             ->getJson(route('merchant.pos.customers', ['q' => '9876543210']))
             ->assertOk()
-            ->assertJsonPath('customers.0.id', $customerId)
+            ->assertJsonPath('customers.0.merchant_customer_id', $customerId)
+            ->assertJsonPath('customers.0.customer_id', (int) DB::table('merchant_customers')->where('id', $customerId)->value('customer_id'))
             ->assertJsonPath('customers.0.route_key', $customerUuid)
             ->assertJsonPath('customers.0.name', 'Delivery Buyer');
 
@@ -1397,26 +1397,21 @@ class MerchantPosTest extends TestCase
             ->assertJsonPath('customer.name', 'Walk-in Customer - 9876543210')
             ->assertJsonPath('customer.mobile', '9876543210');
 
-        $customerId = (int) $response->json('customer.id');
+        $customerId = (int) $response->json('customer.merchant_customer_id');
+        $globalCustomerId = (int) $response->json('customer.customer_id');
         $this->assertDatabaseHas('merchant_customers', [
             'id' => $customerId,
             'merchant_id' => $merchantId,
-            'mobile_normalized' => '919876543210',
             'status' => 'active',
         ]);
-        $linkedUserId = (int) DB::table('merchant_customers')->where('id', $customerId)->value('user_id');
-        $this->assertGreaterThan(0, $linkedUserId);
-        $this->assertDatabaseHas('users', [
-            'id' => $linkedUserId,
+        $this->assertSame($globalCustomerId, (int) DB::table('merchant_customers')->where('id', $customerId)->value('customer_id'));
+        $this->assertGreaterThan(0, $globalCustomerId);
+        $this->assertDatabaseHas('customers', [
+            'id' => $globalCustomerId,
             'email' => null,
             'mobile' => '9876543210',
-            'registration_source' => UserRegistrationSource::POS->value,
             'status' => 'active',
         ]);
-        $this->assertNotSame(
-            'password',
-            DB::table('users')->where('id', $linkedUserId)->value('password'),
-        );
 
         $this
             ->actingAs(User::query()->findOrFail($userId))
@@ -1428,14 +1423,15 @@ class MerchantPosTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('created', false)
-            ->assertJsonPath('customer.id', $customerId);
+            ->assertJsonPath('customer.merchant_customer_id', $customerId)
+            ->assertJsonPath('customer.customer_id', $globalCustomerId);
 
         $this->assertSame(1, DB::table('merchant_customers')
             ->where('merchant_id', $merchantId)
-            ->where('mobile_normalized', '919876543210')
+            ->where('customer_id', $globalCustomerId)
             ->count());
-        $this->assertSame(1, DB::table('users')
-            ->where('mobile', '9876543210')
+        $this->assertSame(1, DB::table('customers')
+            ->where('mobile_normalized', '919876543210')
             ->count());
     }
 
@@ -1454,12 +1450,12 @@ class MerchantPosTest extends TestCase
             ]);
 
         $first->assertCreated();
-        $globalUserId = (int) DB::table('merchant_customers')->where('id', $first->json('customer.id'))->value('user_id');
-        $this->assertDatabaseHas('users', [
-            'id' => $globalUserId,
+        $globalCustomerId = (int) $first->json('customer.customer_id');
+        $this->assertSame($globalCustomerId, (int) DB::table('merchant_customers')->where('id', $first->json('customer.merchant_customer_id'))->value('customer_id'));
+        $this->assertDatabaseHas('customers', [
+            'id' => $globalCustomerId,
             'email' => 'emailbuyer@example.test',
             'mobile' => '9876543210',
-            'registration_source' => UserRegistrationSource::POS->value,
         ]);
 
         $second = $this
@@ -1472,8 +1468,9 @@ class MerchantPosTest extends TestCase
             ]);
 
         $second->assertCreated();
-        $this->assertSame($globalUserId, (int) DB::table('merchant_customers')->where('id', $second->json('customer.id'))->value('user_id'));
-        $this->assertSame(1, DB::table('users')->where('email', 'emailbuyer@example.test')->count());
+        $this->assertSame($globalCustomerId, (int) $second->json('customer.customer_id'));
+        $this->assertSame($globalCustomerId, (int) DB::table('merchant_customers')->where('id', $second->json('customer.merchant_customer_id'))->value('customer_id'));
+        $this->assertSame(1, DB::table('customers')->where('email', 'emailbuyer@example.test')->count());
     }
 
     public function test_two_pos_customers_without_email_can_create_two_null_email_users(): void
@@ -1491,8 +1488,7 @@ class MerchantPosTest extends TestCase
                 ->assertCreated();
         }
 
-        $this->assertSame(2, DB::table('users')
-            ->where('registration_source', UserRegistrationSource::POS->value)
+        $this->assertSame(2, DB::table('customers')
             ->whereNull('email')
             ->count());
     }
@@ -1522,14 +1518,15 @@ class MerchantPosTest extends TestCase
             ]);
 
         $response->assertCreated()->assertJsonPath('created', true);
-        $customerId = (int) $response->json('customer.id');
+        $customerId = (int) $response->json('customer.merchant_customer_id');
+        $globalCustomerId = (int) $response->json('customer.customer_id');
 
         $this->assertDatabaseHas('merchant_customers', [
             'id' => $customerId,
             'merchant_id' => $merchantId,
-            'user_id' => $webUserId,
-            'mobile_normalized' => '919422945125',
         ]);
+        $this->assertSame($globalCustomerId, (int) DB::table('merchant_customers')->where('id', $customerId)->value('customer_id'));
+        $this->assertSame($webUserId, (int) DB::table('customers')->where('id', $globalCustomerId)->value('user_id'));
         $this->assertSame(UserRegistrationSource::WEB->value, DB::table('users')->where('id', $webUserId)->value('registration_source'));
         $this->assertSame(1, DB::table('users')->where('mobile', '9422945125')->count());
     }
@@ -1547,7 +1544,7 @@ class MerchantPosTest extends TestCase
                 'mobile' => '9422945125',
             ]);
         $first->assertCreated();
-        $globalUserId = (int) DB::table('merchant_customers')->where('id', $first->json('customer.id'))->value('user_id');
+        $globalCustomerId = (int) $first->json('customer.customer_id');
 
         $second = $this
             ->actingAs(User::query()->findOrFail($secondUserId))
@@ -1558,40 +1555,220 @@ class MerchantPosTest extends TestCase
             ]);
 
         $second->assertCreated();
-        $this->assertSame($globalUserId, (int) DB::table('merchant_customers')->where('id', $second->json('customer.id'))->value('user_id'));
-        $this->assertNotSame($first->json('customer.id'), $second->json('customer.id'));
-        $this->assertSame(2, DB::table('merchant_customers')->where('user_id', $globalUserId)->count());
-        $this->assertSame(1, DB::table('users')->where('mobile', '9422945125')->count());
+        $this->assertSame($globalCustomerId, (int) $second->json('customer.customer_id'));
+        $this->assertSame($globalCustomerId, (int) DB::table('merchant_customers')->where('id', $second->json('customer.merchant_customer_id'))->value('customer_id'));
+        $this->assertNotSame($first->json('customer.merchant_customer_id'), $second->json('customer.merchant_customer_id'));
+        $this->assertSame(2, DB::table('merchant_customers')->where('customer_id', $globalCustomerId)->count());
+        $this->assertSame(1, DB::table('customers')->where('mobile_normalized', '919422945125')->count());
     }
 
-    public function test_pos_identity_creation_rolls_back_when_merchant_customer_create_fails(): void
+    public function test_pos_identity_creation_reuses_existing_merchant_customer_relation(): void
     {
         [, $shopId] = $this->merchantShopFixture();
         $merchant = MerchantProfile::query()->findOrFail($this->merchantIdForShop($shopId));
         $this->createCustomer($shopId, 'Existing Duplicate', '9422945125', 'existing-duplicate@example.test');
 
-        try {
-            app(MerchantCustomerService::class)->createFromPos($merchant, [
-                'name' => 'Duplicate POS Buyer',
-                'mobile' => '+91 9422945125',
-                'status' => 'active',
-            ]);
-            $this->fail('Expected duplicate merchant customer creation to fail.');
-        } catch (QueryException) {
-            $this->assertSame(0, DB::table('users')->where('mobile', '9422945125')->count());
-            $this->assertSame(1, DB::table('merchant_customers')
-                ->where('merchant_id', $merchant->getKey())
-                ->where('mobile_normalized', '919422945125')
-                ->count());
+        $relation = app(MerchantCustomerService::class)->createFromPos($merchant, [
+            'name' => 'Duplicate POS Buyer',
+            'mobile' => '+91 9422945125',
+            'status' => 'active',
+        ]);
+
+        $this->assertSame(1, DB::table('customers')->where('mobile_normalized', '919422945125')->count());
+        $this->assertSame(1, DB::table('merchant_customers')
+            ->join('customers', 'customers.id', '=', 'merchant_customers.customer_id')
+            ->where('merchant_id', $merchant->getKey())
+            ->where('customers.mobile_normalized', '919422945125')
+            ->count());
+        $this->assertSame('Existing Duplicate', $relation->name);
+    }
+
+    public function test_pos_checkout_uses_global_customer_id_from_search_payload_when_ids_differ(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Mismatch Shirt', 'Blue / M', 'MIS-M-BLU', 'MISBAR001');
+        $this->createGlobalCustomer('Unlinked Customer', '9000000001', 'unlinked@example.test');
+        $globalCustomerId = $this->createGlobalCustomer('Mismatch Buyer', '9422945125', 'mismatch@example.test');
+        $merchantCustomerId = $this->createMerchantCustomerRelation($shopId, $globalCustomerId, 'CUS-MISMATCH');
+
+        $this->assertNotSame($globalCustomerId, $merchantCustomerId);
+
+        $search = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->getJson(route('merchant.pos.customers', ['q' => '9422945125']));
+
+        $search
+            ->assertOk()
+            ->assertJsonPath('customers.0.merchant_customer_id', $merchantCustomerId)
+            ->assertJsonPath('customers.0.customer_id', $globalCustomerId)
+            ->assertJsonPath('customers.0.customer_code', 'CUS-MISMATCH')
+            ->assertJsonMissingPath('customers.0.id');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'customer_id' => $search->json('customers.0.customer_id'),
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('order.customer_name', 'Mismatch Buyer');
+
+        $this->assertDatabaseHas('orders', [
+            'shop_id' => $shopId,
+            'customer_id' => $globalCustomerId,
+            'customer_name' => 'Mismatch Buyer',
+        ]);
+        $this->assertDatabaseMissing('orders', [
+            'shop_id' => $shopId,
+            'customer_id' => $merchantCustomerId,
+        ]);
+    }
+
+    public function test_pos_same_global_customer_payload_is_explicit_for_two_merchants(): void
+    {
+        [$firstUserId, $firstShopId] = $this->merchantShopFixture();
+        [$secondUserId, $secondShopId] = $this->merchantShopFixture();
+        $firstFixture = $this->createPosProduct($firstShopId, 'First Merchant Shirt', 'Black / M', 'FST-M-BLK', 'FSTBAR001');
+        $secondFixture = $this->createPosProduct($secondShopId, 'Second Merchant Shirt', 'White / M', 'SND-M-WHT', 'SNDBAR001');
+        $this->createGlobalCustomer('Padding Customer A', '9000000001', 'padding-a@example.test');
+        $this->createGlobalCustomer('Padding Customer B', '9000000002', 'padding-b@example.test');
+        $globalCustomerId = $this->createGlobalCustomer('Shared Global Buyer', '9422945124', 'shared-global@example.test');
+        $firstMerchantCustomerId = $this->createMerchantCustomerRelation($firstShopId, $globalCustomerId, 'CUS-SHARED-A');
+        $secondMerchantCustomerId = $this->createMerchantCustomerRelation($secondShopId, $globalCustomerId, 'CUS-SHARED-B');
+
+        $this->assertNotSame($globalCustomerId, $firstMerchantCustomerId);
+        $this->assertNotSame($globalCustomerId, $secondMerchantCustomerId);
+
+        $firstSearch = $this
+            ->actingAs(User::query()->findOrFail($firstUserId))
+            ->withSession(['active_shop_id' => $firstShopId])
+            ->getJson(route('merchant.pos.customers', ['q' => '9422945124']));
+
+        $firstSearch
+            ->assertOk()
+            ->assertJsonPath('customers.0.customer_id', $globalCustomerId)
+            ->assertJsonPath('customers.0.merchant_customer_id', $firstMerchantCustomerId);
+
+        $secondSearch = $this
+            ->actingAs(User::query()->findOrFail($secondUserId))
+            ->withSession(['active_shop_id' => $secondShopId])
+            ->getJson(route('merchant.pos.customers', ['q' => '9422945124']));
+
+        $secondSearch
+            ->assertOk()
+            ->assertJsonPath('customers.0.customer_id', $globalCustomerId)
+            ->assertJsonPath('customers.0.merchant_customer_id', $secondMerchantCustomerId);
+
+        foreach ([[$firstUserId, $firstShopId, $firstFixture], [$secondUserId, $secondShopId, $secondFixture]] as [$userId, $shopId, $fixture]) {
+            $this
+                ->actingAs(User::query()->findOrFail($userId))
+                ->withSession(['active_shop_id' => $shopId])
+                ->postJson(route('merchant.pos.checkout'), [
+                    'amount_paid' => 999,
+                    'fulfilment_type' => 'counter',
+                    'customer_id' => $globalCustomerId,
+                    'payment_method' => 'cash',
+                    'items' => [
+                        ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                    ],
+                ])
+                ->assertOk();
         }
+
+        $this->assertSame(2, Order::query()->where('customer_id', $globalCustomerId)->count());
+        $this->assertSame(1, DB::table('customers')->where('mobile_normalized', '919422945124')->count());
+    }
+
+    public function test_pos_quick_create_payload_uses_global_customer_id_for_immediate_checkout(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Created Buyer Shirt', 'Green / M', 'CRT-M-GRN', 'CRTBAR001');
+        $this->createGlobalCustomer('Existing Global Only', '9000000001', 'existing-global@example.test');
+
+        $customerResponse = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.customers.store'), [
+                'name' => 'Created Checkout Buyer',
+                'mobile' => '9422945123',
+                'email' => 'created-checkout@example.test',
+            ]);
+
+        $customerResponse
+            ->assertCreated()
+            ->assertJsonPath('created', true)
+            ->assertJsonPath('customer.name', 'Created Checkout Buyer')
+            ->assertJsonMissingPath('customer.id');
+
+        $merchantCustomerId = (int) $customerResponse->json('customer.merchant_customer_id');
+        $globalCustomerId = (int) $customerResponse->json('customer.customer_id');
+        $this->assertGreaterThan(0, $merchantCustomerId);
+        $this->assertGreaterThan(0, $globalCustomerId);
+        $this->assertNotSame($merchantCustomerId, $globalCustomerId);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'customer_id' => $globalCustomerId,
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('order.customer_name', 'Created Checkout Buyer');
+
+        $this->assertDatabaseHas('orders', [
+            'shop_id' => $shopId,
+            'customer_id' => $globalCustomerId,
+            'customer_email' => 'created-checkout@example.test',
+        ]);
+    }
+
+    public function test_pos_checkout_rejects_customer_without_active_merchant_relationship(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Foreign Buyer Shirt', 'Grey / M', 'FRN-M-GRY', 'FRNBAR001');
+        $globalCustomerId = $this->createGlobalCustomer('Foreign Buyer', '9422945122', 'foreign@example.test');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'customer_id' => $globalCustomerId,
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('customer_id');
+
+        $this->assertDatabaseMissing('orders', [
+            'shop_id' => $shopId,
+            'customer_id' => $globalCustomerId,
+        ]);
     }
 
     public function test_pos_delivery_checkout_requires_address_and_stores_snapshots(): void
     {
         [$userId, $shopId] = $this->merchantShopFixture();
         $fixture = $this->createPosProduct($shopId, 'Delivery Shirt', 'White / M', 'DEL-M-WHT', 'DELBAR001');
-        $customerId = $this->createCustomer($shopId, 'Snapshot Buyer', '9876543210', 'snapshot@example.test');
-        $addressId = $this->createCustomerAddress($customerId, 'Snapshot Line One');
+        $merchantCustomerId = $this->createCustomer($shopId, 'Snapshot Buyer', '9876543210', 'snapshot@example.test');
+        $customerId = (int) DB::table('merchant_customers')->where('id', $merchantCustomerId)->value('customer_id');
+        $addressId = $this->createCustomerAddress($merchantCustomerId, 'Snapshot Line One');
 
         $this
             ->actingAs(User::query()->findOrFail($userId))
@@ -1631,7 +1808,6 @@ class MerchantPosTest extends TestCase
         $this->assertDatabaseHas('orders', [
             'shop_id' => $shopId,
             'customer_id' => $customerId,
-            'shipping_address_id' => $addressId,
             'fulfilment_type' => 'delivery',
             'customer_name' => 'Snapshot Buyer',
             'customer_mobile' => '9876543210',
@@ -2973,17 +3149,36 @@ class MerchantPosTest extends TestCase
 
     private function createCustomer(int $shopId, string $name, string $mobile, string $email): int
     {
-        $merchantId = (int) DB::table('shops')->where('id', $shopId)->value('merchant_id');
+        $customerId = $this->createGlobalCustomer($name, $mobile, $email);
 
-        return (int) DB::table('merchant_customers')->insertGetId([
+        return $this->createMerchantCustomerRelation($shopId, $customerId);
+    }
+
+    private function createGlobalCustomer(string $name, string $mobile, ?string $email = null): int
+    {
+        return (int) DB::table('customers')->insertGetId([
             'uuid' => (string) Str::uuid(),
-            'merchant_id' => $merchantId,
-            'customer_code' => 'CUS-'.Str::upper(Str::random(6)),
             'name' => $name,
             'mobile_country_code' => '+91',
             'mobile' => $mobile,
             'mobile_normalized' => '91'.$mobile,
             'email' => $email,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function createMerchantCustomerRelation(int $shopId, int $customerId, ?string $customerCode = null): int
+    {
+        $merchantId = (int) DB::table('shops')->where('id', $shopId)->value('merchant_id');
+
+        return (int) DB::table('merchant_customers')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'merchant_id' => $merchantId,
+            'customer_id' => $customerId,
+            'customer_code' => $customerCode ?? 'CUS-'.Str::upper(Str::random(6)),
+            'trust_status' => 'normal',
             'status' => 'active',
             'linked_at' => now(),
             'created_at' => now(),
@@ -3221,9 +3416,11 @@ class MerchantPosTest extends TestCase
 
     private function createCustomerAddress(int $customerId, string $lineOne): int
     {
-        return (int) DB::table('merchant_customer_addresses')->insertGetId([
+        $globalCustomerId = (int) DB::table('merchant_customers')->where('id', $customerId)->value('customer_id');
+
+        return (int) DB::table('customer_addresses')->insertGetId([
             'uuid' => (string) Str::uuid(),
-            'merchant_customer_id' => $customerId,
+            'customer_id' => $globalCustomerId,
             'label' => 'Home',
             'recipient_name' => 'Snapshot Buyer',
             'recipient_mobile_country_code' => '+91',

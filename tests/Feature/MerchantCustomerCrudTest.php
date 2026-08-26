@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantCustomer;
+use App\Models\Customer;
+use App\Models\CustomerAddress;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\ProductCategory;
@@ -203,7 +205,7 @@ class MerchantCustomerCrudTest extends TestCase
                 'postal_code' => '422001',
                 'is_default_shipping' => 1,
                 'is_default_billing' => 1,
-                'status' => \App\Models\MerchantCustomerAddress::STATUS_ACTIVE,
+                'status' => CustomerAddress::STATUS_ACTIVE,
             ])
             ->assertRedirect(route('merchant.customers.show', ['customer' => $customer, 'tab' => 'addresses']));
 
@@ -227,7 +229,7 @@ class MerchantCustomerCrudTest extends TestCase
                 'city_id' => $cityId,
                 'postal_code' => '422002',
                 'is_default_shipping' => 1,
-                'status' => \App\Models\MerchantCustomerAddress::STATUS_ACTIVE,
+                'status' => CustomerAddress::STATUS_ACTIVE,
             ])
             ->assertRedirect(route('merchant.customers.show', ['customer' => $customer, 'tab' => 'addresses']));
 
@@ -259,7 +261,7 @@ class MerchantCustomerCrudTest extends TestCase
                 'city_id' => $cityId,
                 'postal_code' => '422003',
                 'is_default_billing' => 1,
-                'status' => \App\Models\MerchantCustomerAddress::STATUS_INACTIVE,
+                'status' => CustomerAddress::STATUS_INACTIVE,
             ])
             ->assertRedirect(route('merchant.customers.show', ['customer' => $customer, 'tab' => 'addresses']));
 
@@ -273,7 +275,7 @@ class MerchantCustomerCrudTest extends TestCase
             ->delete(route('merchant.customers.addresses.destroy', [$customer, $office]))
             ->assertRedirect(route('merchant.customers.show', ['customer' => $customer, 'tab' => 'addresses']));
 
-        $this->assertSoftDeleted('merchant_customer_addresses', ['id' => $office->getKey()]);
+        $this->assertSoftDeleted('customer_addresses', ['id' => $office->getKey()]);
     }
 
     public function test_merchant_cannot_manage_another_customers_address(): void
@@ -288,7 +290,7 @@ class MerchantCustomerCrudTest extends TestCase
             'recipient_mobile' => '9876543210',
             'recipient_mobile_normalized' => '919876543210',
             'address_line_1' => 'Private Line',
-            'status' => \App\Models\MerchantCustomerAddress::STATUS_ACTIVE,
+            'status' => CustomerAddress::STATUS_ACTIVE,
         ]);
 
         $this
@@ -421,14 +423,19 @@ class MerchantCustomerCrudTest extends TestCase
         string $email,
         string $status = MerchantCustomer::STATUS_ACTIVE,
     ): MerchantCustomer {
-        return MerchantCustomer::query()->create([
-            'merchant_id' => $merchant->getKey(),
-            'customer_code' => 'CUS-'.Str::upper(Str::random(6)),
+        $customer = Customer::query()->create([
             'name' => $name,
             'mobile_country_code' => '+91',
             'mobile' => $mobile,
             'mobile_normalized' => '91'.$mobile,
             'email' => $email,
+            'status' => Customer::STATUS_ACTIVE,
+        ]);
+
+        return MerchantCustomer::query()->create([
+            'merchant_id' => $merchant->getKey(),
+            'customer_id' => $customer->getKey(),
+            'customer_code' => 'CUS-'.Str::upper(Str::random(6)),
             'status' => $status,
         ]);
     }
@@ -439,7 +446,7 @@ class MerchantCustomerCrudTest extends TestCase
             'order_number' => $number,
             'merchant_id' => $merchant->getKey(),
             'shop_id' => $shop->getKey(),
-            'customer_id' => $customer->getKey(),
+            'customer_id' => $customer->customer_id,
             'created_source' => Order::SOURCE_POS,
             'fulfilment_type' => Order::FULFILMENT_COUNTER,
             'order_status' => Order::STATUS_COMPLETED,

@@ -3,8 +3,9 @@
 namespace App\Services\Checkout;
 
 use App\Models\Cart;
+use App\Models\Customer;
+use App\Models\CustomerAddress;
 use App\Models\MerchantCustomer;
-use App\Models\MerchantCustomerAddress;
 use App\Models\Order;
 use App\Models\OrderTotal;
 use App\Models\Shop;
@@ -32,14 +33,15 @@ class StorefrontCheckoutOrderService
 
     public function place(
         Request $request,
-        User $customer,
+        User $actor,
+        Customer $customer,
         string $fulfillment,
         string $paymentMethod,
-        MerchantCustomerAddress $billingAddress,
+        CustomerAddress $billingAddress,
         ?string $customerOrderNote = null,
     ): Order
     {
-        return DB::transaction(function () use ($request, $customer, $fulfillment, $paymentMethod, $billingAddress, $customerOrderNote): Order {
+        return DB::transaction(function () use ($request, $actor, $customer, $fulfillment, $paymentMethod, $billingAddress, $customerOrderNote): Order {
             $cart = $this->lockedCart($request);
             $cartData = $this->cartPage->pageData($request);
 
@@ -98,14 +100,14 @@ class StorefrontCheckoutOrderService
                 ]);
             }
 
-            $merchantCustomer = $this->merchantCustomer($shop, $customer, $shippingAddress);
+            $merchantCustomer = $this->merchantCustomer($shop, $customer);
             $order = $this->orders->create([
                 'shop_id' => $shop->getKey(),
-                'customer_id' => $merchantCustomer->getKey(),
-                'shipping_address_id' => $fulfillment === StorefrontDeliveryService::FULFILLMENT_DELIVERY
-                    ? $shippingAddress?->getKey()
+                'customer_id' => $customer->getKey(),
+                'shipping_address_snapshot' => $fulfillment === StorefrontDeliveryService::FULFILLMENT_DELIVERY && $shippingAddress instanceof CustomerAddress
+                    ? $this->addressSnapshot($shippingAddress)
                     : null,
-                'billing_address_id' => $billingAddress->getKey(),
+                'billing_address_snapshot' => $this->addressSnapshot($billingAddress),
                 'created_source' => Order::SOURCE_STOREFRONT,
                 'fulfilment_type' => $fulfillment,
                 'order_status' => Order::STATUS_PENDING,
@@ -118,7 +120,7 @@ class StorefrontCheckoutOrderService
                 'status_note' => 'Storefront order placed',
                 'items' => $this->orderItems($group['items'] ?? []),
                 'totals' => $this->totalsRows((int) $deliveryData['shipping_cents'], $deliveryData),
-            ], $customer);
+            ], $actor);
 
             $cart->items()->delete();
             $this->clearCheckoutState($request);
@@ -155,7 +157,7 @@ class StorefrontCheckoutOrderService
         return $locked;
     }
 
-    private function selectedShippingAddress(Request $request, User $customer, string $fulfillment): ?MerchantCustomerAddress
+    private function selectedShippingAddress(Request $request, Customer $customer, string $fulfillment): ?CustomerAddress
     {
         if ($fulfillment !== StorefrontDeliveryService::FULFILLMENT_DELIVERY) {
             return null;
@@ -164,7 +166,7 @@ class StorefrontCheckoutOrderService
         $addresses = $this->checkoutPage->addressesFor($customer);
         $address = $this->checkoutPage->selectedAddress($request, $addresses);
 
-        if (! $address instanceof MerchantCustomerAddress) {
+        if (! $address instanceof CustomerAddress) {
             throw ValidationException::withMessages([
                 'address_id' => 'Please select a delivery address.',
             ]);
@@ -173,22 +175,11 @@ class StorefrontCheckoutOrderService
         return $address;
     }
 
-    private function merchantCustomer(Shop $shop, User $customer, ?MerchantCustomerAddress $shippingAddress): MerchantCustomer
+    private function merchantCustomer(Shop $shop, Customer $customer): MerchantCustomer
     {
-        if ($shippingAddress instanceof MerchantCustomerAddress) {
-            $shippingAddress->loadMissing('customer');
-            if ((int) $shippingAddress->customer?->merchant_id !== (int) $shop->merchant_id) {
-                throw ValidationException::withMessages([
-                    'address_id' => 'Please select a delivery address for this shop.',
-                ]);
-            }
-
-            return $shippingAddress->customer;
-        }
-
         $existing = MerchantCustomer::query()
             ->where('merchant_id', $shop->merchant_id)
-            ->where('user_id', $customer->getKey())
+            ->where('customer_id', $customer->getKey())
             ->where('status', MerchantCustomer::STATUS_ACTIVE)
             ->first();
 
@@ -197,14 +188,34 @@ class StorefrontCheckoutOrderService
         }
 
         return $this->merchantCustomers->create($shop->merchant, [
-            'user_id' => $customer->getKey(),
-            'linked_at' => now(),
             'name' => $customer->name,
-            'mobile' => $customer->mobile,
             'mobile_country_code' => $customer->mobile_country_code,
+            'mobile' => $customer->mobile,
             'email' => $customer->email,
+            'linked_at' => now(),
             'status' => MerchantCustomer::STATUS_ACTIVE,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function addressSnapshot(CustomerAddress $address): array
+    {
+        $address->loadMissing(['city', 'state', 'country']);
+
+        return [
+            'recipient_name' => $address->recipient_name,
+            'mobile_country_code' => $address->recipient_mobile_country_code,
+            'mobile' => $address->recipient_mobile,
+            'address_line_1' => $address->address_line_1,
+            'address_line_2' => $address->address_line_2,
+            'landmark' => $address->landmark,
+            'city' => $address->city?->name,
+            'state' => $address->state?->name,
+            'country' => $address->country?->name,
+            'postal_code' => $address->postal_code,
+        ];
     }
 
     /**
@@ -215,7 +226,7 @@ class StorefrontCheckoutOrderService
     {
         $rows = collect($items)
             ->map(fn (array $item): array => [
-                'product_variant_id' => (int) ($item['id'] ?? $item['product_variant_id'] ?? 0),
+                'product_variant_id' => (int) ($item['product_variant_id'] ?? $item['id'] ?? 0),
                 'quantity' => (int) ($item['quantity_value'] ?? $item['quantity'] ?? 0),
             ])
             ->filter(fn (array $row): bool => $row['product_variant_id'] > 0 && $row['quantity'] > 0)

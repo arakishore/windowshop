@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
-use App\Models\MerchantCustomer;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderTotal;
 use App\Models\Product;
@@ -203,15 +203,13 @@ class OrderFoundationTest extends TestCase
     public function test_order_creation_copies_customer_snapshot_from_database(): void
     {
         [$user, $shop, $variant] = $this->orderFixture();
-        $customer = MerchantCustomer::query()->create([
-            'merchant_id' => $shop->merchant_id,
-            'customer_code' => 'CUS-000001',
+        $customer = Customer::query()->create([
             'name' => 'Database Customer',
             'mobile_country_code' => '+91',
             'mobile' => '9876543210',
             'mobile_normalized' => '919876543210',
             'email' => 'database-customer@example.test',
-            'status' => MerchantCustomer::STATUS_ACTIVE,
+            'status' => Customer::STATUS_ACTIVE,
         ]);
 
         $order = app(OrderCreationService::class)->create([

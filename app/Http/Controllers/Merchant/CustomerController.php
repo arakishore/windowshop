@@ -7,8 +7,8 @@ use App\Http\Requests\Merchant\StoreMerchantCustomerRequest;
 use App\Http\Requests\Merchant\UpdateMerchantCustomerRequest;
 use App\Models\LocCountry;
 use App\Models\Order;
+use App\Models\CustomerAddress;
 use App\Models\MerchantCustomer;
-use App\Models\MerchantCustomerAddress;
 use App\Models\MerchantProfile;
 use App\Models\Shop;
 use App\Services\Merchant\MerchantCustomerService;
@@ -42,15 +42,19 @@ class CustomerController extends Controller
 
         $customers = MerchantCustomer::query()
             ->where('merchant_id', $merchant->getKey())
-            ->withCount('orders')
+            ->with('customer')
+            ->withCount(['orders' => fn ($query) => $query->where('merchant_id', $merchant->getKey())])
             ->when($filters['search'] !== '', function ($query) use ($filters): void {
                 $search = $filters['search'];
 
                 $query->where(function ($query) use ($search): void {
-                    $query->where('name', 'like', "%{$search}%")
-                        ->orWhere('mobile', 'like', "%{$search}%")
-                        ->orWhere('mobile_normalized', 'like', "%{$search}%")
-                        ->orWhere('customer_code', 'like', "%{$search}%");
+                    $query->where('customer_code', 'like', "%{$search}%")
+                        ->orWhereHas('customer', function ($customerQuery) use ($search): void {
+                            $customerQuery->where('name', 'like', "%{$search}%")
+                                ->orWhere('mobile', 'like', "%{$search}%")
+                                ->orWhere('mobile_normalized', 'like', "%{$search}%")
+                                ->orWhere('email', 'like', "%{$search}%");
+                        });
                 });
             })
             ->when($sort === 'orders_desc', fn ($query) => $query->orderByDesc('orders_count'))
@@ -105,7 +109,7 @@ class CustomerController extends Controller
     public function show(Request $request, MerchantCustomer $customer): View
     {
         $this->authorizeCustomer($request, $customer);
-        $customer->load(['user']);
+        $customer->load(['customer.user']);
         $activeTab = in_array($request->query('tab'), ['details', 'addresses', 'orders'], true)
             ? (string) $request->query('tab')
             : 'details';
@@ -113,6 +117,7 @@ class CustomerController extends Controller
         $orders = $customer->orders()
             // Exchange replacement orders are operational records and their amount_paid
             // is not newly collected money. Customer spend/history counts original POS sales.
+            ->where('merchant_id', $customer->merchant_id)
             ->where('created_source', Order::SOURCE_POS)
             ->latest()
             ->paginate(10, ['*'], 'orders_page')
@@ -123,10 +128,10 @@ class CustomerController extends Controller
             ->get();
 
         $summary = [
-            'orders_count' => $customer->orders()->where('created_source', Order::SOURCE_POS)->count(),
-            'total_spent' => (float) $customer->orders()->where('created_source', Order::SOURCE_POS)->sum('grand_total'),
+            'orders_count' => $customer->orders()->where('merchant_id', $customer->merchant_id)->where('created_source', Order::SOURCE_POS)->count(),
+            'total_spent' => (float) $customer->orders()->where('merchant_id', $customer->merchant_id)->where('created_source', Order::SOURCE_POS)->sum('grand_total'),
             'addresses_count' => $addresses->count(),
-            'last_order_at' => $customer->orders()->where('created_source', Order::SOURCE_POS)->latest()->value('created_at'),
+            'last_order_at' => $customer->orders()->where('merchant_id', $customer->merchant_id)->where('created_source', Order::SOURCE_POS)->latest()->value('created_at'),
         ];
 
         return view('merchant.customers.show', [
@@ -167,7 +172,7 @@ class CustomerController extends Controller
 
         $customer = MerchantCustomer::query()
             ->where('merchant_id', $merchant->getKey())
-            ->where('mobile_normalized', $mobile['mobile_normalized'])
+            ->whereHas('customer', fn ($query) => $query->where('mobile_normalized', $mobile['mobile_normalized']))
             ->when(isset($data['ignore']), fn ($query) => $query->whereKeyNot((int) $data['ignore']))
             ->first();
 
@@ -292,8 +297,8 @@ class CustomerController extends Controller
     private function addressStatuses(): array
     {
         return config('admin.customer_address.statuses', [
-            MerchantCustomerAddress::STATUS_ACTIVE => ['label' => 'Active', 'badge_class' => 'bg-success'],
-            MerchantCustomerAddress::STATUS_INACTIVE => ['label' => 'Inactive', 'badge_class' => 'bg-light text-body border'],
+            CustomerAddress::STATUS_ACTIVE => ['label' => 'Active', 'badge_class' => 'bg-success'],
+            CustomerAddress::STATUS_INACTIVE => ['label' => 'Inactive', 'badge_class' => 'bg-light text-body border'],
         ]);
     }
 

@@ -1,5 +1,15 @@
 @php
     $storefrontCustomer = app(\App\Services\Storefront\StorefrontCustomerContext::class)->user(request());
+    $storefrontCustomerInitials = '';
+
+    if ($storefrontCustomer) {
+        $nameParts = collect(preg_split('/\s+/', trim((string) $storefrontCustomer->name)) ?: [])
+            ->filter()
+            ->values();
+        $firstInitial = $nameParts->first() ? mb_substr((string) $nameParts->first(), 0, 1) : '';
+        $lastInitial = $nameParts->count() > 1 ? mb_substr((string) $nameParts->last(), 0, 1) : '';
+        $storefrontCustomerInitials = mb_strtoupper($firstInitial.$lastInitial);
+    }
 @endphp
 
 <header class="tf-header header-s7 scr-box-shadow">
@@ -49,7 +59,11 @@
                     @if ($storefrontCustomer)
                         <li class="nav-account">
                             <a href="{{ route('storefront.account') }}" class="nav-icon-item link">
-                                <i class="icon icon-User"></i>
+                                @if ($storefrontCustomerInitials !== '')
+                                    <span class="storefront-account-initials" aria-label="Account">{{ $storefrontCustomerInitials }}</span>
+                                @else
+                                    <i class="icon icon-User"></i>
+                                @endif
                             </a>
                             <div class="dropdown-account">
                                 <ul class="list-menu-item">
@@ -59,23 +73,18 @@
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="{{ route('storefront.account') }}#orders" class="sub-menu_link type-pri">
-                                            <span class="cus-text">Your Order</span>
+                                        <a href="{{ route('storefront.account.profile') }}" class="sub-menu_link type-pri">
+                                            <span class="cus-text">Profile</span>
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="{{ route('storefront.account') }}#addresses" class="sub-menu_link type-pri">
-                                            <span class="cus-text">My Address</span>
+                                        <a href="{{ route('storefront.account.addresses') }}" class="sub-menu_link type-pri">
+                                            <span class="cus-text">Addresses</span>
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="{{ route('storefront.account') }}#tracking" class="sub-menu_link type-pri">
-                                            <span class="cus-text">Tracking</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="{{ route('storefront.account') }}#settings" class="sub-menu_link type-pri">
-                                            <span class="cus-text">Setting</span>
+                                        <a href="{{ route('storefront.account.orders') }}" class="sub-menu_link type-pri">
+                                            <span class="cus-text">My Orders</span>
                                         </a>
                                     </li>
                                     <li>
@@ -97,7 +106,7 @@
                         </li>
                     @endif
                     <li class="d-none d-sm-block">
-                        <a href="#;" class="nav-icon-item link">
+                        <a href="{{ route('storefront.account.wishlist') }}" class="nav-icon-item link">
                             <i class="icon icon-HeartStraight"></i>
                         </a>
                     </li>

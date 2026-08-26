@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Cart\CartMergeService;
 use App\Services\Cart\CartResolver;
 use App\Services\Checkout\CheckoutFlowService;
+use App\Services\Customer\CustomerIdentityResolver;
 use App\Services\Storefront\StorefrontCustomerContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class CustomerAuthController extends Controller
     public function __construct(
         private readonly CartMergeService $cartMerge,
         private readonly CheckoutFlowService $checkout,
+        private readonly CustomerIdentityResolver $customers,
     ) {
     }
 
@@ -50,6 +52,7 @@ class CustomerAuthController extends Controller
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
         $this->activateCustomerRole($request, $user);
+        $this->customers->resolveOrCreateForUser($user);
         $this->cartMerge->mergeGuestTokenIntoCustomer(is_string($guestToken) ? $guestToken : null, $user);
         $request->session()->forget(CartResolver::SESSION_TOKEN_KEY);
         $user->forceFill([
@@ -91,6 +94,7 @@ class CustomerAuthController extends Controller
                 'status' => 'active',
             ])->save();
             $this->assignCustomerRole($user);
+            $this->customers->resolveOrCreateForUser($user);
 
             return $user->refresh();
         });

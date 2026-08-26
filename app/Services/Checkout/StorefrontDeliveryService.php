@@ -3,7 +3,7 @@
 namespace App\Services\Checkout;
 
 use App\Models\Cart;
-use App\Models\MerchantCustomerAddress;
+use App\Models\CustomerAddress;
 use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
 use App\Services\Merchant\ShopSettingsInitializer;
@@ -31,7 +31,7 @@ class StorefrontDeliveryService
      * @param array<string, mixed> $cartData
      * @return array{options: array<int, array<string, mixed>>, selected: ?string, shipping_cents: int, shipping: string, total_cents: int, total: string}
      */
-    public function resolve(Request $request, ?Cart $cart, array $cartData, ?MerchantCustomerAddress $selectedAddress): array
+    public function resolve(Request $request, ?Cart $cart, array $cartData, ?CustomerAddress $selectedAddress): array
     {
         $groups = collect($cartData['shop_groups'] ?? []);
         $shops = $this->shopsById($cart);
@@ -107,7 +107,7 @@ class StorefrontDeliveryService
      * @param Collection<int, Shop> $shops
      * @return array<string, mixed>|null
      */
-    private function deliveryOption(Collection $groups, Collection $shops, ?MerchantCustomerAddress $selectedAddress, ?string $postalCode): ?array
+    private function deliveryOption(Collection $groups, Collection $shops, ?CustomerAddress $selectedAddress, ?string $postalCode): ?array
     {
         if ($groups->isEmpty()) {
             return null;
@@ -146,7 +146,7 @@ class StorefrontDeliveryService
             : 0;
         $estimate = $this->estimateText(collect($quotes)->pluck('quote')->all());
 
-        $description = $selectedAddress instanceof MerchantCustomerAddress
+        $description = $selectedAddress instanceof CustomerAddress
             ? $this->deliveryAddressText($selectedAddress)
             : 'Select a delivery address to calculate availability.';
 
@@ -240,7 +240,7 @@ class StorefrontDeliveryService
             ?? $available->first()['id'];
     }
 
-    private function deliveryAddressText(MerchantCustomerAddress $address): string
+    private function deliveryAddressText(CustomerAddress $address): string
     {
         return collect([
             'Deliver to '.$address->label,

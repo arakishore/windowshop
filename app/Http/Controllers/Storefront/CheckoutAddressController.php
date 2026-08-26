@@ -3,15 +3,13 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
-use App\Models\MerchantCustomer;
-use App\Models\MerchantCustomerAddress;
-use App\Models\MerchantProfile;
+use App\Models\Customer;
+use App\Models\CustomerAddress;
 use App\Models\User;
 use App\Services\Cart\CartPageService;
 use App\Services\Checkout\CheckoutPageService;
 use App\Services\Checkout\CheckoutPostalCodeLookupService;
-use App\Services\Merchant\MerchantCustomerAddressService;
-use App\Services\Merchant\MerchantCustomerService;
+use App\Services\Customer\CustomerAddressService;
 use App\Services\Storefront\StorefrontCustomerContext;
 use App\Services\Storefront\StorefrontCountryResolver;
 use Illuminate\Http\JsonResponse;
@@ -27,8 +25,7 @@ class CheckoutAddressController extends Controller
         private readonly CartPageService $cartPage,
         private readonly CheckoutPageService $checkoutPage,
         private readonly CheckoutPostalCodeLookupService $postalLookup,
-        private readonly MerchantCustomerAddressService $addresses,
-        private readonly MerchantCustomerService $customers,
+        private readonly CustomerAddressService $addresses,
         private readonly StorefrontCustomerContext $customerContext,
         private readonly StorefrontCountryResolver $countries,
     ) {
@@ -36,10 +33,9 @@ class CheckoutAddressController extends Controller
 
     public function store(Request $request): JsonResponse|RedirectResponse
     {
-        $customer = $this->customerOrAbort($request);
+        $customer = $this->globalCustomerOrAbort($request);
         $data = $this->validatedAddress($request);
-        $merchantCustomer = $this->merchantCustomerForCheckout($request, $customer, $data);
-        $address = $this->addresses->create($merchantCustomer, $data);
+        $address = $this->addresses->create($customer, $data);
 
         $request->session()->put(CheckoutPageService::SELECTED_ADDRESS_SESSION_KEY, $address->getKey());
 
@@ -48,11 +44,10 @@ class CheckoutAddressController extends Controller
 
     public function storeBilling(Request $request): JsonResponse|RedirectResponse
     {
-        $customer = $this->customerOrAbort($request);
+        $customer = $this->globalCustomerOrAbort($request);
         $data = $this->validatedAddress($request);
         $data['is_default_shipping'] = (bool) ($data['is_default_shipping'] ?? false);
-        $merchantCustomer = $this->merchantCustomerForCheckout($request, $customer, $data);
-        $address = $this->addresses->create($merchantCustomer, $data);
+        $address = $this->addresses->create($customer, $data);
 
         $request->session()->put(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, false);
         $request->session()->put(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY, $address->getKey());
@@ -60,10 +55,10 @@ class CheckoutAddressController extends Controller
         return $this->checkoutResponse($request, 'Billing address added.');
     }
 
-    public function update(Request $request, MerchantCustomerAddress $address): JsonResponse|RedirectResponse
+    public function update(Request $request, CustomerAddress $address): JsonResponse|RedirectResponse
     {
-        $customer = $this->customerOrAbort($request);
-        abort_unless($this->checkoutPage->addressBelongsToCustomer($address, $customer), 404);
+        $globalCustomer = $this->globalCustomerOrAbort($request);
+        abort_unless($this->checkoutPage->addressBelongsToCustomer($address, $globalCustomer), 404);
 
         $address = $this->addresses->update($address, $this->validatedAddress($request));
         $request->session()->put(CheckoutPageService::SELECTED_ADDRESS_SESSION_KEY, $address->getKey());
@@ -73,11 +68,11 @@ class CheckoutAddressController extends Controller
 
     public function select(Request $request): RedirectResponse
     {
-        $customer = $this->customerOrAbort($request);
+        $customer = $this->globalCustomerOrAbort($request);
         $data = $request->validate([
-            'address_id' => ['required', 'integer', 'exists:merchant_customer_addresses,id'],
+            'address_id' => ['required', 'integer', 'exists:customer_addresses,id'],
         ]);
-        $address = MerchantCustomerAddress::query()->findOrFail($data['address_id']);
+        $address = CustomerAddress::query()->findOrFail($data['address_id']);
 
         abort_unless($this->checkoutPage->addressBelongsToCustomer($address, $customer), 404);
         $request->session()->put(CheckoutPageService::SELECTED_ADDRESS_SESSION_KEY, $address->getKey());
@@ -109,11 +104,11 @@ class CheckoutAddressController extends Controller
 
     public function selectBilling(Request $request): RedirectResponse
     {
-        $customer = $this->customerOrAbort($request);
+        $customer = $this->globalCustomerOrAbort($request);
         $data = $request->validate([
-            'billing_address_id' => ['required', 'integer', 'exists:merchant_customer_addresses,id'],
+            'billing_address_id' => ['required', 'integer', 'exists:customer_addresses,id'],
         ]);
-        $address = MerchantCustomerAddress::query()->findOrFail($data['billing_address_id']);
+        $address = CustomerAddress::query()->findOrFail($data['billing_address_id']);
 
         abort_unless($this->checkoutPage->addressBelongsToCustomer($address, $customer), 404);
         $request->session()->put(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, false);
@@ -141,6 +136,14 @@ class CheckoutAddressController extends Controller
         return $customer;
     }
 
+    private function globalCustomerOrAbort(Request $request): Customer
+    {
+        $customer = $this->customerContext->customer($request);
+        abort_unless($customer instanceof Customer, 403);
+
+        return $customer;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -159,9 +162,9 @@ class CheckoutAddressController extends Controller
             'postal_code' => ['nullable', 'string', 'max:20'],
             'is_default_shipping' => ['nullable', 'boolean'],
             'is_default_billing' => ['nullable', 'boolean'],
-            'status' => ['nullable', Rule::in([MerchantCustomerAddress::STATUS_ACTIVE])],
+            'status' => ['nullable', Rule::in([CustomerAddress::STATUS_ACTIVE])],
         ]) + [
-            'status' => MerchantCustomerAddress::STATUS_ACTIVE,
+            'status' => CustomerAddress::STATUS_ACTIVE,
         ];
         $country = $this->countries->defaultCountry();
         $data['country_id'] = $country->getKey();
@@ -215,43 +218,6 @@ class CheckoutAddressController extends Controller
         }
 
         return $data;
-    }
-
-    private function merchantCustomerForCheckout(Request $request, User $customer, array $addressData): MerchantCustomer
-    {
-        $merchant = $this->primaryMerchant($request);
-
-        $existing = MerchantCustomer::query()
-            ->where('merchant_id', $merchant->getKey())
-            ->where('user_id', $customer->getKey())
-            ->where('status', MerchantCustomer::STATUS_ACTIVE)
-            ->first();
-
-        if ($existing instanceof MerchantCustomer) {
-            return $existing;
-        }
-
-        return DB::transaction(function () use ($merchant, $customer, $addressData): MerchantCustomer {
-            return $this->customers->create($merchant, [
-                'user_id' => $customer->getKey(),
-                'linked_at' => now(),
-                'name' => $customer->name ?: $addressData['recipient_name'],
-                'mobile' => $customer->mobile ?: $addressData['recipient_mobile'],
-                'mobile_country_code' => $customer->mobile_country_code ?? ($addressData['recipient_mobile_country_code'] ?? null),
-                'email' => $customer->email,
-                'status' => MerchantCustomer::STATUS_ACTIVE,
-            ]);
-        });
-    }
-
-    private function primaryMerchant(Request $request): MerchantProfile
-    {
-        $cart = $this->cartPage->currentCart($request);
-        $merchant = $cart?->items->first()?->shop?->merchant;
-
-        abort_unless($merchant instanceof MerchantProfile, 422, 'Checkout needs at least one available shop.');
-
-        return $merchant;
     }
 
     private function checkoutResponse(Request $request, string $message): JsonResponse|RedirectResponse

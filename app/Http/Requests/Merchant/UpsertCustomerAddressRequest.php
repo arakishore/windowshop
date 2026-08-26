@@ -2,12 +2,12 @@
 
 namespace App\Http\Requests\Merchant;
 
-use App\Models\MerchantCustomerAddress;
+use App\Models\CustomerAddress;
 use App\Services\Shared\MobileNumberNormalizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class UpsertMerchantCustomerAddressRequest extends FormRequest
+class UpsertCustomerAddressRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -50,7 +50,7 @@ class UpsertMerchantCustomerAddressRequest extends FormRequest
             'postal_code' => ['nullable', 'string', 'max:20'],
             'is_default_shipping' => ['boolean'],
             'is_default_billing' => ['boolean'],
-            'status' => ['required', Rule::in([MerchantCustomerAddress::STATUS_ACTIVE, MerchantCustomerAddress::STATUS_INACTIVE])],
+            'status' => ['required', Rule::in([CustomerAddress::STATUS_ACTIVE, CustomerAddress::STATUS_INACTIVE])],
         ];
     }
 }

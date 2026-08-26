@@ -55,7 +55,11 @@ Route::post('/login', [CustomerAuthController::class, 'login'])->name('storefron
 Route::post('/logout', [CustomerAuthController::class, 'logout'])->name('storefront.logout');
 Route::get('/register', [StorefrontController::class, 'register'])->name('storefront.register');
 Route::post('/register', [CustomerAuthController::class, 'register'])->name('storefront.register.store');
-Route::get('/account', [CustomerAccountController::class, 'show'])->name('storefront.account');
+Route::get('/account', [CustomerAccountController::class, 'dashboard'])->name('storefront.account');
+Route::get('/account/profile', [CustomerAccountController::class, 'profile'])->name('storefront.account.profile');
+Route::get('/account/addresses', [CustomerAccountController::class, 'addresses'])->name('storefront.account.addresses');
+Route::get('/account/orders', [CustomerAccountController::class, 'orders'])->name('storefront.account.orders');
+Route::get('/account/wishlist', [CustomerAccountController::class, 'wishlist'])->name('storefront.account.wishlist');
 Route::get('/forgot-password', [StorefrontController::class, 'forgotPassword'])->name('storefront.forgot-password');
 Route::view('/demo/shopping-bag-box', 'storefront.pages.demo-shopping-bag-box')->name('storefront.demo.shopping-bag-box');
 Route::get('/products', [StorefrontController::class, 'products'])->name('storefront.products');

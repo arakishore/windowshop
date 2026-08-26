@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Merchant\UpsertMerchantCustomerAddressRequest;
+use App\Http\Requests\Merchant\UpsertCustomerAddressRequest;
+use App\Models\CustomerAddress;
 use App\Models\MerchantCustomer;
-use App\Models\MerchantCustomerAddress;
 use App\Models\MerchantProfile;
-use App\Services\Merchant\MerchantCustomerAddressService;
+use App\Services\Customer\CustomerAddressService;
 use App\Services\Merchant\MerchantService;
 use App\Services\Merchant\MerchantShopContextService;
 use Illuminate\Http\JsonResponse;
@@ -19,7 +19,7 @@ class CustomerAddressController extends Controller
 {
     public function __construct(
         private readonly MerchantShopContextService $shopContextService,
-        private readonly MerchantCustomerAddressService $addressService,
+        private readonly CustomerAddressService $addressService,
         private readonly MerchantService $merchantService,
     ) {
     }
@@ -27,11 +27,11 @@ class CustomerAddressController extends Controller
     public function create(Request $request, MerchantCustomer $customer): View
     {
         $this->authorizeCustomer($request, $customer);
-        $address = new MerchantCustomerAddress([
+        $address = new CustomerAddress([
             'recipient_name' => $customer->name,
             'recipient_mobile_country_code' => $customer->mobile_country_code,
             'recipient_mobile' => $customer->mobile,
-            'status' => MerchantCustomerAddress::STATUS_ACTIVE,
+            'status' => CustomerAddress::STATUS_ACTIVE,
         ]);
 
         return view('merchant.customers.addresses.create', [
@@ -41,17 +41,18 @@ class CustomerAddressController extends Controller
         ]);
     }
 
-    public function store(UpsertMerchantCustomerAddressRequest $request, MerchantCustomer $customer): RedirectResponse
+    public function store(UpsertCustomerAddressRequest $request, MerchantCustomer $customer): RedirectResponse
     {
         $this->authorizeCustomer($request, $customer);
-        $this->addressService->create($customer, $request->validated());
+        $customer->loadMissing('customer');
+        $this->addressService->create($customer->customer, $request->validated());
 
         return redirect()
             ->route('merchant.customers.show', ['customer' => $customer, 'tab' => 'addresses'])
             ->with('success', 'Customer address created successfully.');
     }
 
-    public function edit(Request $request, MerchantCustomer $customer, MerchantCustomerAddress $address): View
+    public function edit(Request $request, MerchantCustomer $customer, CustomerAddress $address): View
     {
         $this->authorizeAddress($request, $customer, $address);
 
@@ -62,7 +63,7 @@ class CustomerAddressController extends Controller
         ]);
     }
 
-    public function update(UpsertMerchantCustomerAddressRequest $request, MerchantCustomer $customer, MerchantCustomerAddress $address): RedirectResponse
+    public function update(UpsertCustomerAddressRequest $request, MerchantCustomer $customer, CustomerAddress $address): RedirectResponse
     {
         $this->authorizeAddress($request, $customer, $address);
         $this->addressService->update($address, $request->validated());
@@ -72,7 +73,7 @@ class CustomerAddressController extends Controller
             ->with('success', 'Customer address updated successfully.');
     }
 
-    public function destroy(Request $request, MerchantCustomer $customer, MerchantCustomerAddress $address): RedirectResponse
+    public function destroy(Request $request, MerchantCustomer $customer, CustomerAddress $address): RedirectResponse
     {
         $this->authorizeAddress($request, $customer, $address);
         $address->delete();
@@ -106,10 +107,10 @@ class CustomerAddressController extends Controller
         return $merchant;
     }
 
-    private function authorizeAddress(Request $request, MerchantCustomer $customer, MerchantCustomerAddress $address): MerchantProfile
+    private function authorizeAddress(Request $request, MerchantCustomer $customer, CustomerAddress $address): MerchantProfile
     {
         $merchant = $this->authorizeCustomer($request, $customer);
-        abort_unless((int) $address->merchant_customer_id === (int) $customer->getKey(), 404);
+        abort_unless((int) $address->customer_id === (int) $customer->customer_id, 404);
 
         return $merchant;
     }
@@ -117,7 +118,7 @@ class CustomerAddressController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function formData(Request $request, MerchantCustomerAddress $address): array
+    private function formData(Request $request, CustomerAddress $address): array
     {
         $defaultLocation = $this->merchantService->defaultBusinessLocation();
         $countryId = (int) old('country_id', $address->country_id ?? $defaultLocation['country_id']);
@@ -142,8 +143,8 @@ class CustomerAddressController extends Controller
     private function statuses(): array
     {
         return config('admin.customer_address.statuses', [
-            MerchantCustomerAddress::STATUS_ACTIVE => ['label' => 'Active', 'badge_class' => 'bg-success'],
-            MerchantCustomerAddress::STATUS_INACTIVE => ['label' => 'Inactive', 'badge_class' => 'bg-light text-body border'],
+            CustomerAddress::STATUS_ACTIVE => ['label' => 'Active', 'badge_class' => 'bg-success'],
+            CustomerAddress::STATUS_INACTIVE => ['label' => 'Inactive', 'badge_class' => 'bg-light text-body border'],
         ]);
     }
 }

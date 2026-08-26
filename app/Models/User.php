@@ -7,6 +7,7 @@ use App\Models\Traits\HasUuid;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -58,9 +59,19 @@ class User extends Authenticatable
         return $this->hasOne(MerchantProfile::class);
     }
 
-    public function merchantCustomerProfiles(): HasMany
+    public function merchantCustomerProfiles(): HasManyThrough
     {
-        return $this->hasMany(MerchantCustomer::class, 'user_id');
+        return $this->hasManyThrough(MerchantCustomer::class, Customer::class);
+    }
+
+    public function customerAddresses(): HasManyThrough
+    {
+        return $this->hasManyThrough(CustomerAddress::class, Customer::class);
+    }
+
+    public function customer(): HasOne
+    {
+        return $this->hasOne(Customer::class, 'user_id');
     }
 
     public function carts(): HasMany

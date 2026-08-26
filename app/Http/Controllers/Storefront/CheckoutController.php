@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
+use App\Models\CustomerAddress;
+use App\Models\Order;
 use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Checkout\StorefrontCheckoutOrderService;
 use App\Services\Checkout\CheckoutPageService;
@@ -18,8 +21,6 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Throwable;
-use App\Models\Order;
-use App\Models\MerchantCustomerAddress;
 
 class CheckoutController extends Controller
 {
@@ -88,6 +89,8 @@ class CheckoutController extends Controller
     {
         $customer = $this->customerContext->user($request);
         abort_unless($customer !== null, 403);
+        $globalCustomer = $this->customerContext->customer($request);
+        abort_unless($globalCustomer instanceof Customer, 403);
 
         if (! $this->checkout->hasCartItems($request)) {
             return response()->json([
@@ -127,6 +130,8 @@ class CheckoutController extends Controller
     {
         $customer = $this->customerContext->user($request);
         abort_unless($customer !== null, 403);
+        $globalCustomer = $this->customerContext->customer($request);
+        abort_unless($globalCustomer instanceof Customer, 403);
 
         if (! $this->checkout->hasCartItems($request)) {
             return redirect()
@@ -135,9 +140,9 @@ class CheckoutController extends Controller
         }
 
         $data = $request->validate([
-            'address_id' => ['nullable', 'integer', 'exists:merchant_customer_addresses,id'],
+            'address_id' => ['nullable', 'integer', 'exists:customer_addresses,id'],
             'billing_same_as_delivery' => ['nullable', 'boolean'],
-            'billing_address_id' => ['nullable', 'integer', 'exists:merchant_customer_addresses,id'],
+            'billing_address_id' => ['nullable', 'integer', 'exists:customer_addresses,id'],
             'shipping_method' => ['required', Rule::in([
                 StorefrontDeliveryService::FULFILLMENT_DELIVERY,
                 StorefrontDeliveryService::FULFILLMENT_PICKUP,
@@ -153,8 +158,8 @@ class CheckoutController extends Controller
 
         $address = null;
         if (! empty($data['address_id'])) {
-            $address = MerchantCustomerAddress::query()->findOrFail($data['address_id']);
-            abort_unless($this->checkoutPage->addressBelongsToCustomer($address, $customer), 404);
+            $address = CustomerAddress::query()->findOrFail($data['address_id']);
+            abort_unless($this->checkoutPage->addressBelongsToCustomer($address, $globalCustomer), 404);
             $request->session()->put(CheckoutPageService::SELECTED_ADDRESS_SESSION_KEY, $address->getKey());
         }
 
@@ -162,7 +167,7 @@ class CheckoutController extends Controller
 
         $billingSameAsDelivery = (bool) ($data['billing_same_as_delivery'] ?? $this->checkoutPage->billingSameAsDelivery($request));
 
-        if ($billingSameAsDelivery && $address instanceof MerchantCustomerAddress) {
+        if ($billingSameAsDelivery && $address instanceof CustomerAddress) {
             $billingAddress = $address;
             $request->session()->put(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, true);
             $request->session()->forget(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY);
@@ -175,8 +180,8 @@ class CheckoutController extends Controller
                 ]);
             }
 
-            $billingAddress = \App\Models\MerchantCustomerAddress::query()->findOrFail($billingAddressId);
-            abort_unless($this->checkoutPage->addressBelongsToCustomer($billingAddress, $customer), 404);
+            $billingAddress = CustomerAddress::query()->findOrFail($billingAddressId);
+            abort_unless($this->checkoutPage->addressBelongsToCustomer($billingAddress, $globalCustomer), 404);
             $request->session()->put(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, false);
             $request->session()->put(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY, $billingAddress->getKey());
         }
@@ -185,6 +190,7 @@ class CheckoutController extends Controller
             $order = $this->checkoutOrders->place(
                 $request,
                 $customer,
+                $globalCustomer,
                 $selectedFulfillment,
                 $data['payment_method'],
                 $billingAddress,

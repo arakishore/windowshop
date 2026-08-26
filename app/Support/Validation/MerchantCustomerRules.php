@@ -24,14 +24,7 @@ class MerchantCustomerRules
             'gst_number' => ['nullable', 'required_if:is_business_customer,1', 'string', 'max:30'],
             'notes' => ['nullable', 'string'],
             'status' => ['required', Rule::in([MerchantCustomer::STATUS_ACTIVE, MerchantCustomer::STATUS_INACTIVE])],
-            'mobile_normalized' => [
-                'required',
-                'string',
-                'max:30',
-                Rule::unique('merchant_customers', 'mobile_normalized')
-                    ->where('merchant_id', $merchantId)
-                    ->ignore($ignoreCustomerId),
-            ],
+            'mobile_normalized' => ['required', 'string', 'max:30'],
         ];
     }
 }

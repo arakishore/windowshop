@@ -2,7 +2,9 @@
 
 namespace App\Services\Storefront;
 
+use App\Models\Customer;
 use App\Models\User;
+use App\Services\Customer\CustomerIdentityResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -11,6 +13,11 @@ class StorefrontCustomerContext
     public const ACTIVE_ROLE_SESSION_KEY = 'active_role_id';
     private const CUSTOMER_ROLE_SLUG = 'customer';
     private const BACKOFFICE_ROLE_SLUGS = ['super_admin', 'admin', 'merchant'];
+
+    public function __construct(
+        private readonly CustomerIdentityResolver $customerIdentityResolver,
+    ) {
+    }
 
     public function user(Request $request): ?User
     {
@@ -35,6 +42,15 @@ class StorefrontCustomerContext
     public function userId(Request $request): ?int
     {
         return $this->user($request)?->getKey();
+    }
+
+    public function customer(Request $request): ?Customer
+    {
+        $user = $this->user($request);
+
+        return $user instanceof User
+            ? $this->customerIdentityResolver->resolveOrCreateForUser($user)
+            : null;
     }
 
     private function activeRoleSlug(int $roleId): ?string

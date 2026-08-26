@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class MerchantCustomer extends Model
@@ -18,18 +19,8 @@ class MerchantCustomer extends Model
 
     protected $fillable = [
         'merchant_id',
-        'user_id',
+        'customer_id',
         'customer_code',
-        'name',
-        'mobile_country_code',
-        'mobile',
-        'mobile_normalized',
-        'email',
-        'date_of_birth',
-        'gender',
-        'is_business_customer',
-        'company_name',
-        'gst_number',
         'notes',
         'trust_status',
         'status',
@@ -39,18 +30,9 @@ class MerchantCustomer extends Model
     protected function casts(): array
     {
         return [
-            'date_of_birth' => 'date',
-            'is_business_customer' => 'boolean',
             'linked_at' => 'datetime',
             'deleted_at' => 'datetime',
         ];
-    }
-
-    protected static function booted(): void
-    {
-        static::deleting(function (MerchantCustomer $customer): void {
-            $customer->orders()->update(['customer_id' => null]);
-        });
     }
 
     public function getRouteKeyName(): string
@@ -63,18 +45,73 @@ class MerchantCustomer extends Model
         return $this->belongsTo(MerchantProfile::class, 'merchant_id');
     }
 
-    public function user(): BelongsTo
+    public function user(): HasOneThrough
     {
-        return $this->belongsTo(User::class);
+        return $this->hasOneThrough(User::class, Customer::class, 'id', 'id', 'customer_id', 'user_id');
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class)->withTrashed();
     }
 
     public function orders(): HasMany
     {
-        return $this->hasMany(Order::class, 'customer_id');
+        return $this->hasMany(Order::class, 'customer_id', 'customer_id');
     }
 
     public function addresses(): HasMany
     {
-        return $this->hasMany(MerchantCustomerAddress::class, 'merchant_customer_id');
+        return $this->hasMany(CustomerAddress::class, 'customer_id', 'customer_id');
+    }
+
+    public function getNameAttribute(): ?string
+    {
+        return $this->customer?->name;
+    }
+
+    public function getMobileCountryCodeAttribute(): ?string
+    {
+        return $this->customer?->mobile_country_code;
+    }
+
+    public function getMobileAttribute(): ?string
+    {
+        return $this->customer?->mobile;
+    }
+
+    public function getMobileNormalizedAttribute(): ?string
+    {
+        return $this->customer?->mobile_normalized;
+    }
+
+    public function getEmailAttribute(): ?string
+    {
+        return $this->customer?->email;
+    }
+
+    public function getDateOfBirthAttribute(): mixed
+    {
+        return $this->customer?->date_of_birth;
+    }
+
+    public function getGenderAttribute(): ?string
+    {
+        return $this->customer?->gender;
+    }
+
+    public function getIsBusinessCustomerAttribute(): bool
+    {
+        return (bool) $this->customer?->is_business_customer;
+    }
+
+    public function getCompanyNameAttribute(): ?string
+    {
+        return $this->customer?->company_name;
+    }
+
+    public function getGstNumberAttribute(): ?string
+    {
+        return $this->customer?->gst_number;
     }
 }
