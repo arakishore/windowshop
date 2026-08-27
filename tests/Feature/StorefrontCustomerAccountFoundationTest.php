@@ -71,13 +71,16 @@ class StorefrontCustomerAccountFoundationTest extends TestCase
             ->assertSee('Kishore Kumar')
             ->assertSee('9876543210')
             ->assertSee('kishore@example.test')
-            ->assertSee('Profile editing will be added separately');
+            ->assertSee('Mobile and email changes will be handled through verification later')
+            ->assertSee('name="name"', false)
+            ->assertSee('readonly', false);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $roleId])
             ->get(route('storefront.account.orders'))
             ->assertOk()
-            ->assertSee('My Orders will be available here.')
+            ->assertSee("You haven&#039;t placed any orders yet.", false)
+            ->assertSee('Continue Shopping')
             ->assertDontSee('Cancel Order')
             ->assertDontSee('Request Return')
             ->assertDontSee('Request Exchange');
@@ -86,8 +89,8 @@ class StorefrontCustomerAccountFoundationTest extends TestCase
             ->withSession(['active_role_id' => $roleId])
             ->get(route('storefront.account.wishlist'))
             ->assertOk()
-            ->assertSee('Wishlist will be available here.')
-            ->assertSee('Saved favourite products will appear here')
+            ->assertSee('Your wishlist is empty.')
+            ->assertSee('Continue Shopping')
             ->assertDontSee('Request Return')
             ->assertDontSee('Request Exchange');
     }
@@ -436,6 +439,121 @@ class StorefrontCustomerAccountFoundationTest extends TestCase
             ->assertSee('One Global Road');
 
         $this->assertSame(1, CustomerAddress::query()->where('customer_id', $this->globalCustomer($customer)->getKey())->count());
+    }
+
+    public function test_customer_can_update_only_own_profile_name_and_session_remains_valid(): void
+    {
+        $customer = $this->customerUser('profile-name@example.test', 'Original Name', '9876500071');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->put(route('storefront.account.profile.update'), [
+                'name' => '  Updated Name  ',
+                'mobile' => '9000000000',
+                'email' => 'changed@example.test',
+            ])
+            ->assertRedirect(route('storefront.account.profile'));
+
+        $this->assertAuthenticatedAs($customer);
+        $this->assertSame('Updated Name', $globalCustomer->refresh()->name);
+        $this->assertSame('Updated Name', $customer->refresh()->name);
+        $this->assertSame('9876500071', $globalCustomer->mobile);
+        $this->assertSame('profile-name@example.test', $globalCustomer->email);
+        $this->assertSame('9876500071', $customer->mobile);
+        $this->assertSame('profile-name@example.test', $customer->email);
+
+        $this->actingAs($customer->refresh())
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account'))
+            ->assertOk()
+            ->assertSee('Welcome back, Updated Name');
+    }
+
+    public function test_profile_name_update_rejects_empty_or_too_long_name(): void
+    {
+        $customer = $this->customerUser('profile-invalid@example.test', 'Valid Name', '9876500072');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->from(route('storefront.account.profile'))
+            ->put(route('storefront.account.profile.update'), ['name' => '   '])
+            ->assertRedirect(route('storefront.account.profile'))
+            ->assertSessionHasErrors('name');
+
+        $this->assertSame('Valid Name', $globalCustomer->refresh()->name);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->from(route('storefront.account.profile'))
+            ->put(route('storefront.account.profile.update'), ['name' => str_repeat('A', 151)])
+            ->assertRedirect(route('storefront.account.profile'))
+            ->assertSessionHasErrors('name');
+
+        $this->assertSame('Valid Name', $globalCustomer->refresh()->name);
+    }
+
+    public function test_profile_name_update_cannot_update_another_customer_and_leaves_related_data_unchanged(): void
+    {
+        [$countryId, $stateId, $cityId] = $this->locationFixture();
+        [$merchant, , $shop] = $this->merchantFixture('Profile Merchant');
+        $customer = $this->customerUser('profile-owner@example.test', 'Profile Owner', '9876500073');
+        $otherCustomer = $this->customerUser('profile-other@example.test', 'Other Profile', '9876500074');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $otherGlobalCustomer = $this->globalCustomer($otherCustomer);
+        $merchantCustomer = $this->merchantCustomer($merchant, $customer, 'Profile Owner', '9876500073');
+        $merchantSnapshot = $merchantCustomer->refresh()->only(['id', 'merchant_id', 'customer_id', 'customer_code', 'trust_status', 'status']);
+        $address = $this->address($customer, [
+            'recipient_name' => 'Address Recipient',
+            'address_line_1' => 'Profile Address Road',
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $addressSnapshot = $address->only([
+            'label',
+            'recipient_name',
+            'recipient_mobile',
+            'address_line_1',
+            'postal_code',
+            'is_default_shipping',
+            'is_default_billing',
+        ]);
+        $order = $this->createOrder($merchant, $shop, $merchantCustomer, 'ORD-PROFILE-SNAPSHOT', [
+            'customer_name' => 'Historical Customer Name',
+            'shipping_recipient_name' => 'Historical Ship Name',
+            'billing_recipient_name' => 'Historical Bill Name',
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->put(route('storefront.account.profile.update'), [
+                'name' => 'New Profile Owner',
+                'customer_id' => $otherGlobalCustomer->getKey(),
+            ])
+            ->assertRedirect(route('storefront.account.profile'));
+
+        $this->assertSame('New Profile Owner', $globalCustomer->refresh()->name);
+        $this->assertSame('Other Profile', $otherGlobalCustomer->refresh()->name);
+        $this->assertSame($merchantSnapshot, $merchantCustomer->refresh()->only(['id', 'merchant_id', 'customer_id', 'customer_code', 'trust_status', 'status']));
+        $this->assertSame($addressSnapshot, $address->refresh()->only([
+            'label',
+            'recipient_name',
+            'recipient_mobile',
+            'address_line_1',
+            'postal_code',
+            'is_default_shipping',
+            'is_default_billing',
+        ]));
+        $this->assertSame('Historical Customer Name', $order->refresh()->customer_name);
+        $this->assertSame('Historical Ship Name', $order->shipping_recipient_name);
+        $this->assertSame('Historical Bill Name', $order->billing_recipient_name);
     }
 
     public function test_backoffice_user_with_non_customer_active_role_cannot_use_customer_account(): void

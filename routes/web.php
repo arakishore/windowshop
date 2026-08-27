@@ -33,6 +33,7 @@ use App\Http\Controllers\Storefront\CheckoutController;
 use App\Http\Controllers\Storefront\CustomerAccountController;
 use App\Http\Controllers\Storefront\CustomerLocationController;
 use App\Http\Controllers\Storefront\StorefrontController;
+use App\Http\Controllers\Storefront\WishlistController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -58,6 +59,7 @@ Route::get('/register', [StorefrontController::class, 'register'])->name('storef
 Route::post('/register', [CustomerAuthController::class, 'register'])->name('storefront.register.store');
 Route::get('/account', [CustomerAccountController::class, 'dashboard'])->name('storefront.account');
 Route::get('/account/profile', [CustomerAccountController::class, 'profile'])->name('storefront.account.profile');
+Route::put('/account/profile', [CustomerAccountController::class, 'updateProfile'])->name('storefront.account.profile.update');
 Route::get('/account/addresses', [AccountAddressController::class, 'index'])->name('storefront.account.addresses');
 Route::get('/account/addresses/create', [AccountAddressController::class, 'create'])->name('storefront.account.addresses.create');
 Route::post('/account/addresses', [AccountAddressController::class, 'store'])->name('storefront.account.addresses.store');
@@ -69,10 +71,13 @@ Route::delete('/account/addresses/{address}', [AccountAddressController::class, 
 Route::post('/account/addresses/{address}/default-delivery', [AccountAddressController::class, 'defaultDelivery'])->name('storefront.account.addresses.default-delivery');
 Route::post('/account/addresses/{address}/default-billing', [AccountAddressController::class, 'defaultBilling'])->name('storefront.account.addresses.default-billing');
 Route::get('/account/orders', [CustomerAccountController::class, 'orders'])->name('storefront.account.orders');
+Route::get('/account/orders/{order}', [CustomerAccountController::class, 'orderDetail'])->name('storefront.account.orders.show');
 Route::get('/account/wishlist', [CustomerAccountController::class, 'wishlist'])->name('storefront.account.wishlist');
 Route::get('/forgot-password', [StorefrontController::class, 'forgotPassword'])->name('storefront.forgot-password');
 Route::view('/demo/shopping-bag-box', 'storefront.pages.demo-shopping-bag-box')->name('storefront.demo.shopping-bag-box');
 Route::get('/products', [StorefrontController::class, 'products'])->name('storefront.products');
+Route::post('/wishlist/products/{product}', [WishlistController::class, 'store'])->name('storefront.wishlist.products.store');
+Route::delete('/wishlist/products/{product}', [WishlistController::class, 'destroy'])->name('storefront.wishlist.products.destroy');
 Route::post('/cart/items', [CartItemController::class, 'store'])->name('storefront.cart.items.store');
 Route::patch('/cart/items/{cartItem}', [CartItemController::class, 'update'])->name('storefront.cart.items.update');
 Route::delete('/cart/items/{cartItem}', [CartItemController::class, 'destroy'])->name('storefront.cart.items.destroy');

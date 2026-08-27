@@ -216,6 +216,11 @@ class Product extends Model
             ->orderBy('id');
     }
 
+    public function wishlistItems(): HasMany
+    {
+        return $this->hasMany(WishlistItem::class);
+    }
+
     public function deletedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'deleted_by')->withTrashed();

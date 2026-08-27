@@ -107,9 +107,13 @@
                                 <p class="product-infor-cate text-caption-01 mb-4">{{ $product['availability'] }}</p>
                                 <div class="product-heading-row mb-12">
                                     <h1 class="product-infor-name mb-0">{{ $product['name'] }}</h1>
-                                    <a href="#;" class="box-icon product-wishlist-btn" title="Add to Wishlist" aria-label="Add to Wishlist">
-                                        <span class="icon icon-heart"></span>
-                                    </a>
+                                    @include('storefront.components.wishlist-button', [
+                                        'product' => $product,
+                                        'wishlistedProductIds' => $wishlistedProductIds ?? [],
+                                        'tooltipClass' => '',
+                                        'extraClass' => 'product-wishlist-btn',
+                                        'showTooltip' => false,
+                                    ])
                                 </div>
 
                                 <div class="product-infor-meta mb-16">
@@ -701,10 +705,7 @@
                             </a>
                             <ul class="product-action_list">
                                 <li class="wishlist">
-                                    <a href="#;" class="hover-tooltip tooltip-left box-icon">
-                                        <span class="icon icon-heart"></span>
-                                        <span class="tooltip">Add to Wishlist</span>
-                                    </a>
+                                    @include('storefront.components.wishlist-button', ['product' => $relatedProduct, 'wishlistedProductIds' => $wishlistedProductIds ?? []])
                                 </li>
                                 <li>
                                     <a href="#;" class="hover-tooltip tooltip-left box-icon">

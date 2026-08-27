@@ -20,6 +20,10 @@
                 <p class="text-caption-01 cl-text-3 mb-6">Saved Addresses</p>
                 <h4 class="mb-0">{{ $addressCount }}</h4>
             </div>
+            <div class="account-stat-card">
+                <p class="text-caption-01 cl-text-3 mb-6">Wishlist</p>
+                <h4 class="mb-0">{{ $wishlistCount }}</h4>
+            </div>
         </div>
 
         <div class="account-card-grid">
@@ -41,7 +45,7 @@
             <a href="{{ route('storefront.account.wishlist') }}" class="account-action-card">
                 <span class="account-card-icon"><i class="icon icon-HeartStraight"></i></span>
                 <h6 class="mb-6">Wishlist</h6>
-                <p class="cl-text-2 mb-0">Saved favourites will appear here.</p>
+                <p class="cl-text-2 mb-0">View saved favourite products.</p>
             </a>
         </div>
     @endcomponent

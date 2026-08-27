@@ -63,4 +63,9 @@ class Customer extends Model
     {
         return $this->hasMany(Order::class);
     }
+
+    public function wishlistItems(): HasMany
+    {
+        return $this->hasMany(WishlistItem::class);
+    }
 }

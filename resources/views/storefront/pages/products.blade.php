@@ -119,10 +119,11 @@
                                         </a>
                                     </li>
                                     <li class="wishlist">
-                                        <a href="#;" class="hover-tooltip box-icon">
-                                            <span class="icon icon-heart"></span>
-                                            <span class="tooltip">Add to Wishlist</span>
-                                        </a>
+                                        @include('storefront.components.wishlist-button', [
+                                            'product' => $product,
+                                            'wishlistedProductIds' => $wishlistedProductIds ?? [],
+                                            'tooltipClass' => '',
+                                        ])
                                     </li>
                                     <li>
                                         <a href="#;" class="hover-tooltip box-icon">
@@ -154,10 +155,7 @@
                                 </a>
                                 <ul class="product-action_list">
                                     <li class="wishlist">
-                                        <a href="#;" class="hover-tooltip tooltip-left box-icon">
-                                            <span class="icon icon-heart"></span>
-                                            <span class="tooltip">Add to Wishlist</span>
-                                        </a>
+                                        @include('storefront.components.wishlist-button', ['product' => $product, 'wishlistedProductIds' => $wishlistedProductIds ?? []])
                                     </li>
                                     <li>
                                         <a href="#;" class="hover-tooltip tooltip-left box-icon">

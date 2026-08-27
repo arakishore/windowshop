@@ -7,6 +7,7 @@ use App\Models\PostalCode;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Shop;
+use App\Models\WishlistItem;
 use App\Services\PostalCodeServiceabilityService;
 use App\Services\Banner\BannerService;
 use App\Services\Cart\CartPageService;
@@ -29,6 +30,7 @@ class StorefrontController extends Controller
         private readonly NavigationService $navigation,
         private readonly BannerService $banners,
         private readonly ProductListingService $productListings,
+        private readonly StorefrontCustomerContext $customerContext,
     ) {}
 
     public function home(): View
@@ -240,23 +242,31 @@ class StorefrontController extends Controller
         ]);
     }
 
-    public function products(): View
+    public function products(Request $request): View
     {
+        $products = $this->productListings->marketplaceProducts();
+
         return view('storefront.pages.products', [
-            'products' => $this->productListings->marketplaceProducts(),
+            'products' => $products,
+            'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
 
-    public function productDetail(?string $slug = null): View
+    public function productDetail(Request $request, ?string $slug = null): View
     {
         $detail = $this->productListings->productDetail($slug);
 
         abort_if($detail === null, 404);
 
+        $wishlistProducts = collect([$detail['product']])
+            ->merge($detail['relatedProducts'])
+            ->all();
+
         return view('storefront.pages.product-detail', [
             'product' => $detail['product'],
             'relatedProducts' => $detail['relatedProducts'],
+            'wishlistedProductIds' => $this->wishlistedProductIds($request, $wishlistProducts),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
@@ -413,7 +423,8 @@ class StorefrontController extends Controller
             'category' => $category,
             'childCategories' => $category->children,
             'breadcrumbCategories' => $this->breadcrumbCategories($category),
-            'products' => $this->productListings->categoryProducts($category, $selectedFilters),
+            'products' => $products = $this->productListings->categoryProducts($category, $selectedFilters),
+            'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
             'attributeFilters' => $this->productListings->categoryAttributeFilters($category),
             'selectedFilters' => $selectedFilters,
             'selectedAttributeFilters' => $selectedFilters['attributes'],
@@ -447,6 +458,37 @@ class StorefrontController extends Controller
         }
 
         return $items->values();
+    }
+
+    /**
+     * @param iterable<int, array<string, mixed>> $products
+     * @return array<int, int>
+     */
+    private function wishlistedProductIds(Request $request, iterable $products): array
+    {
+        $customer = $this->customerContext->customer($request);
+
+        if ($customer === null) {
+            return [];
+        }
+
+        $productIds = collect($products)
+            ->pluck('product_id')
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($productIds->isEmpty()) {
+            return [];
+        }
+
+        return WishlistItem::query()
+            ->where('customer_id', $customer->getKey())
+            ->whereIn('product_id', $productIds->all())
+            ->pluck('product_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 
     public function store(string $slug): View

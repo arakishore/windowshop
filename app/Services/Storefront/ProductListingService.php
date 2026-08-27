@@ -115,6 +115,7 @@ class ProductListingService
             })
             ->with([
                 'brand:id,name',
+                'shop:id,merchant_id,name,slug,status',
                 'primaryImage' => fn ($query) => $query
                     ->where('status', 'active')
                     ->select('id', 'product_id', 'image_path', 'thumbnail_path', 'alt_text', 'status'),
@@ -324,7 +325,7 @@ class ProductListingService
     /**
      * @return array<string, mixed>
      */
-    private function cardData(Product $product): array
+    public function cardData(Product $product): array
     {
         $variant = $product->storefrontCardVariant;
         $sellingPrice = (float) $variant->selling_price;
@@ -334,9 +335,13 @@ class ProductListingService
         $image = $this->imageUrl($product);
 
         return [
+            'product_id' => (int) $product->getKey(),
             'name' => $product->product_name,
             'brand' => $product->brand?->name,
+            'store' => $product->shop?->name ?? 'Local Store',
             'url' => route('storefront.product.show', $product->slug),
+            'wishlist_store_url' => route('storefront.wishlist.products.store', $product),
+            'wishlist_destroy_url' => route('storefront.wishlist.products.destroy', $product),
             'image' => $image,
             'hover_image' => $image,
             'price' => $this->money($sellingPrice),
@@ -366,8 +371,11 @@ class ProductListingService
         $description = $product->description ?: ($product->short_description ?: 'A local shop product listing with clean catalogue-ready details.');
 
         return [
+            'product_id' => (int) $product->getKey(),
             'name' => $product->product_name,
             'slug' => $product->slug,
+            'wishlist_store_url' => route('storefront.wishlist.products.store', $product),
+            'wishlist_destroy_url' => route('storefront.wishlist.products.destroy', $product),
             'delivery_check_url' => route('storefront.product.delivery-check', $product->slug),
             'category' => $product->category?->name ?? $product->rootProductCategory?->name ?? 'Products',
             'category_url' => $product->category
