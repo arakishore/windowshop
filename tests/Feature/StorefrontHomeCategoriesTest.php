@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ProductCategory;
 use App\Services\Storefront\NavigationService;
+use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -35,7 +36,7 @@ class StorefrontHomeCategoriesTest extends TestCase
 
         $this->assertStringContainsString('Shop By Categories', $section);
         $this->assertStringContainsString('Local Fashion', $section);
-        $this->assertStringContainsString(route('storefront.category.show', $category->slug), $section);
+        $this->assertStringContainsString($this->categoryUrl($category), $section);
         $this->assertStringContainsString('/storage/product-categories/local-fashion/web.webp', $section);
         $this->assertStringNotContainsString('Outerwear', $section);
     }
@@ -117,5 +118,10 @@ class StorefrontHomeCategoriesTest extends TestCase
         $this->assertIsInt($end);
 
         return substr($content, $start, $end - $start);
+    }
+
+    private function categoryUrl(ProductCategory $category): string
+    {
+        return app(StorefrontUrlService::class)->category($category);
     }
 }

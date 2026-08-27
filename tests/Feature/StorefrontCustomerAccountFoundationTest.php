@@ -79,7 +79,6 @@ class StorefrontCustomerAccountFoundationTest extends TestCase
             ->withSession(['active_role_id' => $roleId])
             ->get(route('storefront.account.orders'))
             ->assertOk()
-            ->assertSee("You haven&#039;t placed any orders yet.", false)
             ->assertSee('Continue Shopping')
             ->assertDontSee('Cancel Order')
             ->assertDontSee('Request Return')

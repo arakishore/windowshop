@@ -8,6 +8,7 @@ use App\Models\ProductCategory;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\Storefront\NavigationService;
+use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -62,15 +63,15 @@ class StorefrontNavigationTest extends TestCase
             ->assertSee('Z Fashion')
             ->assertSee('Mobiles')
             ->assertSee('Shirts')
-            ->assertSee(route('storefront.category.child.show', [$zRoot->slug, $shirts->slug]), false)
+            ->assertSee($this->categoryUrl($shirts), false)
             ->assertSee('mega-menu-drill-trigger', false)
-            ->assertSee(route('storefront.category.child.show', [$aRoot->slug, $mobiles->slug]), false)
+            ->assertSee($this->categoryUrl($mobiles), false)
             ->assertSee('data-drill-target="mega-category-'.$mobiles->getKey().'"', false)
             ->assertSee('mega-menu-subcategory-grid', false)
             ->assertDontSee('sub-menu_list mega-menu-drill-list', false)
             ->assertSee('Back')
             ->assertSee('Android Phones')
-            ->assertSee(route('storefront.category.child.show', [$mobiles->slug, $android->slug]), false)
+            ->assertSee($this->categoryUrl($android), false)
             ->assertDontSee('View All')
             ->assertDontSee('Inactive Root')
             ->assertDontSee('Deleted Root')
@@ -160,9 +161,8 @@ class StorefrontNavigationTest extends TestCase
         $this->product($shop, $root, $child, 'Active Shirt', 'active');
 
         $this->get(route('storefront.category.show', $child->slug))
-            ->assertOk()
-            ->assertSee('Men')
-            ->assertSee('No products found.');
+            ->assertMovedPermanently()
+            ->assertRedirect($this->categoryUrl($child));
 
         $this->get(route('storefront.store.category.show', [$shop->slug, $child->slug]))
             ->assertOk()
@@ -209,6 +209,11 @@ class StorefrontNavigationTest extends TestCase
             'sort_order' => $sortOrder,
             'status' => $status,
         ]);
+    }
+
+    private function categoryUrl(ProductCategory $category): string
+    {
+        return app(StorefrontUrlService::class)->category($category);
     }
 
     private function shop(ProductCategory $root, string $name = 'Demo Fashion Shop'): Shop

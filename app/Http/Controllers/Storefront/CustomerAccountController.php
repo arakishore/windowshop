@@ -125,6 +125,7 @@ class CustomerAccountController extends Controller
                 'shop:id,name,slug',
                 'items' => fn ($query) => $query->orderBy('id'),
                 'items.product.primaryImage',
+                'items.product.category.parent.parent',
             ])
             ->where('customer_id', $globalCustomer->getKey())
             ->latest()
@@ -154,6 +155,7 @@ class CustomerAccountController extends Controller
             'shop.state',
             'shop.city',
             'items.product.primaryImage',
+            'items.product.category.parent.parent',
             'items.taxComponents',
             'totals',
             'statusHistories',
@@ -257,6 +259,9 @@ class CustomerAccountController extends Controller
                 ->selectSub($defaultVariantId, 'storefront_variant_id')
                 ->with([
                     'brand:id,name',
+                    'category:id,parent_id,name,slug',
+                    'category.parent:id,parent_id,name,slug',
+                    'category.parent.parent:id,parent_id,name,slug',
                     'shop:id,merchant_id,name,slug,status',
                     'primaryImage' => fn ($query) => $query
                         ->where('status', 'active')

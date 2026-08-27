@@ -12,7 +12,7 @@
             $billingLines = $presenter->billingLines($order);
             $pickupLines = $presenter->pickupLines($order);
             $showBilling = $billingLines !== [] && ! $presenter->billingSameAsShipping($order);
-            $comments = $presenter->customerVisibleComments($order);
+            $activityItems = $presenter->activity($order);
             $cancelledHistory = $order->statusHistories
                 ->where('to_status', \App\Models\Order::STATUS_CANCELLED)
                 ->sortByDesc('created_at')
@@ -92,14 +92,20 @@
                     </div>
                 </section>
 
-                @if ($comments->isNotEmpty())
+                @if ($activityItems->isNotEmpty())
                     <section class="account-order-section">
-                        <h6 class="mb-16">Order Updates / Messages</h6>
-                        <div class="account-message-list">
-                            @foreach ($comments as $comment)
-                                <div class="account-message">
-                                    <p class="text-caption-01 cl-text-3 mb-4">{{ app_datetime($comment->created_at) }}</p>
-                                    <p class="mb-0">{{ $comment->comment }}</p>
+                        <h6 class="mb-16">Order Activity</h6>
+                        <div class="account-activity-list">
+                            @foreach ($activityItems as $activity)
+                                <div class="account-activity-item is-{{ $activity['type'] }} is-{{ $activity['tone'] }}">
+                                    <span class="account-activity-dot"></span>
+                                    <div>
+                                        <p class="text-caption-01 cl-text-3 mb-4">{{ $activity['display_time'] }}</p>
+                                        <p class="fw-semibold mb-4">{{ $activity['title'] }}</p>
+                                        @if (filled($activity['description']))
+                                            <p class="mb-0">{{ $activity['description'] }}</p>
+                                        @endif
+                                    </div>
                                 </div>
                             @endforeach
                         </div>
@@ -328,7 +334,7 @@
         }
 
         .account-order-items,
-        .account-message-list,
+        .account-activity-list,
         .account-total-list,
         .account-info-list,
         .account-address-snapshot {
@@ -395,14 +401,56 @@
             display: block;
         }
 
-        .account-message {
-            padding-bottom: 12px;
-            border-bottom: 1px solid #eef0f3;
+        .account-activity-list {
+            position: relative;
+            gap: 0;
         }
 
-        .account-message:last-child {
+        .account-activity-item {
+            position: relative;
+            display: grid;
+            grid-template-columns: 18px minmax(0, 1fr);
+            gap: 12px;
+            padding-bottom: 16px;
+        }
+
+        .account-activity-item::before {
+            content: "";
+            position: absolute;
+            top: 18px;
+            bottom: -2px;
+            left: 8px;
+            width: 2px;
+            background: #eef0f3;
+        }
+
+        .account-activity-item:last-child {
             padding-bottom: 0;
-            border-bottom: 0;
+        }
+
+        .account-activity-item:last-child::before {
+            display: none;
+        }
+
+        .account-activity-dot {
+            position: relative;
+            z-index: 1;
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            background: #64748b;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, .08);
+        }
+
+        .account-activity-item.is-message .account-activity-dot,
+        .account-activity-item.is-success .account-activity-dot {
+            background: #198754;
+        }
+
+        .account-activity-item.is-danger .account-activity-dot {
+            background: #dc3545;
         }
 
         @media (max-width: 991px) {

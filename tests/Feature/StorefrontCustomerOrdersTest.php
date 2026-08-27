@@ -164,19 +164,29 @@ class StorefrontCustomerOrdersTest extends TestCase
         $this->total($order, OrderTotal::CODE_SHIPPING, 'Delivery', 50, 30);
         $this->total($order, OrderTotal::CODE_TAX, 'Tax', 20, 40);
         $this->total($order, OrderTotal::CODE_GRAND_TOTAL, 'Grand Total', 1968, 100);
-        $this->history($order, null, Order::STATUS_PENDING, now()->subHours(5));
-        $this->history($order, Order::STATUS_PENDING, Order::STATUS_CONFIRMED, now()->subHours(4));
-        $this->history($order, Order::STATUS_CONFIRMED, Order::STATUS_PROCESSING, now()->subHours(3));
-        $this->history($order, Order::STATUS_PROCESSING, OrderStatus::CODE_PACKED, now()->subHours(2));
-        $this->history($order, OrderStatus::CODE_PACKED, OrderStatus::CODE_SHIPPED, now()->subHour());
-        $this->history($order, OrderStatus::CODE_SHIPPED, OrderStatus::CODE_OUT_FOR_DELIVERY, now()->subMinutes(30));
-        $this->comment($order, 'Customer visible update', OrderComment::VISIBILITY_CUSTOMER);
-        $this->comment($order, 'Merchant only internal note', OrderComment::VISIBILITY_MERCHANT_ONLY);
+        $placedAt = now()->subHours(5);
+        $confirmedAt = now()->subHours(4);
+        $processingAt = now()->subHours(3);
+        $commentAt = now()->subHours(2)->subMinutes(30);
+        $packedAt = now()->subHours(2);
+        $shippedAt = now()->subHour();
+        $outForDeliveryAt = now()->subMinutes(30);
+        $this->history($order, null, Order::STATUS_PENDING, $placedAt);
+        $this->history($order, Order::STATUS_PENDING, Order::STATUS_CONFIRMED, $confirmedAt);
+        $this->history($order, Order::STATUS_CONFIRMED, Order::STATUS_PROCESSING, $processingAt);
+        $this->history($order, Order::STATUS_PROCESSING, OrderStatus::CODE_PACKED, $packedAt);
+        $this->history($order, OrderStatus::CODE_PACKED, OrderStatus::CODE_SHIPPED, $shippedAt);
+        $this->history($order, OrderStatus::CODE_SHIPPED, OrderStatus::CODE_OUT_FOR_DELIVERY, $outForDeliveryAt);
+        $this->comment($order, 'Customer visible update', OrderComment::VISIBILITY_CUSTOMER, $commentAt);
+        $this->comment($order, 'Merchant only internal note', OrderComment::VISIBILITY_MERCHANT_ONLY, $commentAt);
+        $otherOrder = $this->order($globalCustomer, $fixture, ['order_number' => 'ORD-OTHER-COMMENTS']);
+        $this->comment($otherOrder, 'Other order customer visible update', OrderComment::VISIBILITY_CUSTOMER, $commentAt);
 
-        $this->actingAs($customer)
+        $response = $this->actingAs($customer)
             ->withSession(['active_role_id' => $roleId])
-            ->get(route('storefront.account.orders.show', $order))
-            ->assertOk()
+            ->get(route('storefront.account.orders.show', $order));
+
+        $response->assertOk()
             ->assertSee('ORD-DETAIL-001')
             ->assertSee('Out for Delivery')
             ->assertSee('Placed')
@@ -207,9 +217,29 @@ class StorefrontCustomerOrdersTest extends TestCase
             ->assertSee('INR 500.00')
             ->assertSee('Balance')
             ->assertSee('INR 1,468.00')
+            ->assertSee('Order Activity')
+            ->assertSee('Order Placed')
+            ->assertSee('We have received your order and will confirm it shortly.')
+            ->assertSee('Order Confirmed')
+            ->assertSee('Your order has been confirmed and is being prepared.')
+            ->assertSee('Order Processing')
+            ->assertSee('Your order is currently being prepared.')
+            ->assertSee('Message from '.$fixture['shop']->name)
             ->assertSee('Customer visible update')
+            ->assertSee(app_datetime($commentAt))
             ->assertDontSee('Merchant only internal note')
+            ->assertDontSee('Other order customer visible update')
+            ->assertDontSee('Merchant Only')
+            ->assertDontSee('notify_email')
+            ->assertDontSee('notify_sms')
+            ->assertDontSee('notify_whatsapp')
             ->assertDontSee('Updated by');
+
+        $content = $this->orderActivitySection($response->getContent());
+        $this->assertLessThan(strpos($content, 'Order Confirmed'), strpos($content, 'Order Placed'));
+        $this->assertLessThan(strpos($content, 'Order Processing'), strpos($content, 'Order Confirmed'));
+        $this->assertLessThan(strpos($content, 'Customer visible update'), strpos($content, 'Order Processing'));
+        $this->assertLessThan(strpos($content, 'Packed'), strpos($content, 'Customer visible update'));
     }
 
     public function test_pickup_progress_and_cancelled_order_are_customer_friendly(): void
@@ -237,6 +267,10 @@ class StorefrontCustomerOrdersTest extends TestCase
             ->get(route('storefront.account.orders.show', $pickup))
             ->assertOk()
             ->assertSee('Ready for Pickup')
+            ->assertSee('Order Activity')
+            ->assertSee('Order Placed')
+            ->assertSee('Order Confirmed')
+            ->assertSee('Order Processing')
             ->assertSee('Pickup From')
             ->assertSee('Cash at Shop')
             ->assertDontSee('Packed')
@@ -257,6 +291,8 @@ class StorefrontCustomerOrdersTest extends TestCase
             ->get(route('storefront.account.orders.show', $cancelled))
             ->assertOk()
             ->assertSee('Cancelled')
+            ->assertSee('Order Cancelled')
+            ->assertSee('Your order has been cancelled.')
             ->assertSee('Order was cancelled')
             ->assertSee('Shop could not fulfil this order.');
     }
@@ -453,14 +489,23 @@ class StorefrontCustomerOrdersTest extends TestCase
         ]);
     }
 
-    private function comment(Order $order, string $comment, string $visibility): OrderComment
+    private function comment(Order $order, string $comment, string $visibility, mixed $createdAt = null): OrderComment
     {
-        return OrderComment::query()->create([
+        $orderComment = OrderComment::query()->create([
             'order_id' => $order->getKey(),
             'author_type' => OrderComment::AUTHOR_MERCHANT,
             'comment' => $comment,
             'visibility' => $visibility,
         ]);
+
+        if ($createdAt !== null) {
+            $orderComment->forceFill([
+                'created_at' => $createdAt,
+                'updated_at' => $createdAt,
+            ])->save();
+        }
+
+        return $orderComment->refresh();
     }
 
     private function customerUser(string $email, string $name, string $mobile): User
@@ -523,5 +568,16 @@ class StorefrontCustomerOrdersTest extends TestCase
             ['group' => 'currency', 'setting_key' => $key],
             ['setting_value' => $value, 'setting_type' => $type],
         );
+    }
+
+    private function orderActivitySection(string $content): string
+    {
+        $start = strpos($content, '<h6 class="mb-16">Order Activity</h6>');
+        $this->assertIsInt($start);
+
+        $end = strpos($content, '</section>', $start);
+        $this->assertIsInt($end);
+
+        return substr($content, $start, $end - $start);
     }
 }

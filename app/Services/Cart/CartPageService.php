@@ -6,6 +6,7 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\ProductVariant;
 use App\Services\Admin\AdminSettingsService;
+use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -18,6 +19,7 @@ class CartPageService
         private readonly CartResolver $cartResolver,
         private readonly CartItemQuantityValidator $quantityValidator,
         private readonly AdminSettingsService $settings,
+        private readonly StorefrontUrlService $urls,
     ) {
     }
 
@@ -53,6 +55,7 @@ class CartPageService
             'items.shop.city',
             'items.shop.merchant',
             'items.product.primaryImage',
+            'items.product.category.parent.parent',
             'items.product.merchant',
             'items.product.shop.merchant',
             'items.productVariant.availabilityStatus',
@@ -134,7 +137,7 @@ class CartPageService
             'shop_name' => $item->shop?->name ?: 'Unavailable Shop',
             'product_variant_id' => $variant?->getKey(),
             'product_name' => $product?->product_name ?: 'Unavailable Product',
-            'product_url' => $product?->slug ? route('storefront.product.show', $product->slug) : '#',
+            'product_url' => $product?->slug ? $this->urls->product($product) : '#',
             'image' => $this->imageUrl($item),
             'attributes' => $this->variantAttributes($variant),
             'quantity' => $this->formatQuantity($quantity),

@@ -85,7 +85,7 @@
                         @if ($loop->last)
                             <span>{{ $breadcrumbCategory->name }}</span>
                         @else
-                            <a href="{{ $breadcrumbCategory->parent ? route('storefront.category.child.show', [$breadcrumbCategory->parent->slug, $breadcrumbCategory->slug]) : route('storefront.category.show', $breadcrumbCategory->slug) }}">{{ $breadcrumbCategory->name }}</a>
+                            <a href="{{ $storefrontUrls->category($breadcrumbCategory) }}">{{ $breadcrumbCategory->name }}</a>
                         @endif
                     @endforeach
                 </div>
@@ -241,13 +241,13 @@
                     <div id="filter-category" class="collapse storefront-filter-collapse">
                         <ul class="collapse-body filter-group-check group-category">
                             <li class="list-item">
-                                <a href="{{ $category->parent ? route('storefront.category.child.show', [$category->parent->slug, $category->slug]) : route('storefront.category.show', $category->slug) }}" class="filter-check">
+                                <a href="{{ $storefrontUrls->category($category) }}" class="filter-check">
                                     {{ $category->name }}
                                 </a>
                             </li>
                             @foreach ($childCategories as $childCategory)
                                 <li class="list-item">
-                                    <a href="{{ route('storefront.category.child.show', [$childCategory->parent->slug, $childCategory->slug]) }}" class="filter-check">
+                                    <a href="{{ $storefrontUrls->category($childCategory) }}" class="filter-check">
                                         {{ $childCategory->name }}
                                     </a>
                                 </li>

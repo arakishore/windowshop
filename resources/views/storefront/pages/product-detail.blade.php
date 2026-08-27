@@ -35,6 +35,7 @@
 
 @section('title', $productMetaTitle)
 @section('meta_description', $productMetaDescription)
+@section('canonical_url', $product['canonical_url'])
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('assets/storefront/css/drift-basic.min.css') }}">
@@ -47,10 +48,14 @@
             <div class="category-listing-header product-detail-breadcrumb-header">
                 <div class="category-listing-breadcrumbs pb-3">
                     <a href="{{ route('storefront.home') }}">Home</a>
-                    <span>/</span>
-                    <a href="{{ route('storefront.products') }}">Products</a>
-                    <span>/</span>
-                    <a href="{{ $product['category_url'] }}">{{ $product['category'] }}</a>
+                    @foreach ($product['category_breadcrumbs'] ?? [] as $breadcrumb)
+                        <span>/</span>
+                        <a href="{{ $breadcrumb['url'] }}">{{ $breadcrumb['name'] }}</a>
+                    @endforeach
+                    @if (empty($product['category_breadcrumbs']))
+                        <span>/</span>
+                        <a href="{{ route('storefront.products') }}">Products</a>
+                    @endif
                     <span>/</span>
                     <span>{{ $product['name'] }}</span>
                 </div>

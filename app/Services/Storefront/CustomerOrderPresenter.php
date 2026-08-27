@@ -18,6 +18,7 @@ class CustomerOrderPresenter
 
     public function __construct(
         private readonly AdminSettingsService $settings,
+        private readonly StorefrontUrlService $urls,
     ) {
     }
 
@@ -163,7 +164,7 @@ class CustomerOrderPresenter
     public function productUrl(OrderItem $item): ?string
     {
         return $item->product?->slug
-            ? route('storefront.product.show', $item->product->slug)
+            ? $this->urls->product($item->product)
             : null;
     }
 
@@ -238,6 +239,38 @@ class CustomerOrderPresenter
             ->values();
     }
 
+    /**
+     * @return Collection<int, array{type: string, tone: string, timestamp: \Illuminate\Support\Carbon|null, display_time: string, title: string, description: string|null}>
+     */
+    public function activity(Order $order): Collection
+    {
+        $statusItems = $order->statusHistories
+            ->sortBy('created_at')
+            ->map(fn ($history): array => [
+                'type' => 'status',
+                'tone' => $this->activityStatusTone($history->to_status),
+                'timestamp' => $history->created_at,
+                'display_time' => app_datetime($history->created_at),
+                'title' => $this->activityStatusLabel($history->to_status),
+                'description' => $this->activityStatusDescription($history->to_status),
+            ]);
+
+        $commentItems = $this->customerVisibleComments($order)
+            ->map(fn (OrderComment $comment): array => [
+                'type' => 'comment',
+                'tone' => 'message',
+                'timestamp' => $comment->created_at,
+                'display_time' => app_datetime($comment->created_at),
+                'title' => 'Message from '.($order->shop?->name ?? 'the shop'),
+                'description' => $comment->comment,
+            ]);
+
+        return $statusItems
+            ->merge($commentItems)
+            ->sortBy(fn (array $activity): string => optional($activity['timestamp'])->format('Y-m-d H:i:s.u') ?? '')
+            ->values();
+    }
+
     public function quantityLabel(int $quantity): string
     {
         return $quantity.' '.Str::plural('Item', $quantity);
@@ -266,6 +299,45 @@ class CustomerOrderPresenter
         }
 
         return $statuses;
+    }
+
+    private function activityStatusLabel(?string $code): string
+    {
+        return $code === Order::STATUS_PENDING
+            ? 'Order Placed'
+            : $this->statusLabel($code);
+    }
+
+    private function activityStatusDescription(?string $code): ?string
+    {
+        $status = $this->orderStatuses()[$code ?? ''] ?? null;
+
+        if ($status instanceof OrderStatus && filled($status->customer_description)) {
+            return $status->customer_description;
+        }
+
+        return match ($code) {
+            Order::STATUS_PENDING => 'Your order has been placed.',
+            Order::STATUS_CONFIRMED => 'Your order has been confirmed by the shop.',
+            Order::STATUS_PROCESSING => 'Your order is being prepared.',
+            Order::STATUS_READY_FOR_PICKUP => 'Your order is ready for pickup.',
+            Order::STATUS_COMPLETED => 'Your order has been completed.',
+            Order::STATUS_CANCELLED => 'Your order has been cancelled.',
+            default => null,
+        };
+    }
+
+    private function activityStatusTone(?string $code): string
+    {
+        return match ($code) {
+            Order::STATUS_COMPLETED,
+            OrderStatus::CODE_DELIVERED => 'success',
+            Order::STATUS_CANCELLED,
+            OrderStatus::CODE_FAILED,
+            OrderStatus::CODE_RETURN_REJECTED,
+            OrderStatus::CODE_EXCHANGE_REJECTED => 'danger',
+            default => 'neutral',
+        };
     }
 
     /**

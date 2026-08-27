@@ -1,17 +1,14 @@
 @php
     $storefrontNavigationCategories = $storefrontNavigationCategories ?? collect();
     $storefrontShop = $storefrontShop ?? null;
+    $storefrontUrls = app(\App\Services\Storefront\StorefrontUrlService::class);
 
-    $categoryUrl = function ($category, $parentCategory = null) use ($storefrontShop): string {
+    $categoryUrl = function ($category, $parentCategory = null) use ($storefrontShop, $storefrontUrls): string {
         if ($storefrontShop) {
             return route('storefront.store.category.show', [$storefrontShop->slug, $category->slug]);
         }
 
-        if ($parentCategory) {
-            return route('storefront.category.child.show', [$parentCategory->slug, $category->slug]);
-        }
-
-        return route('storefront.category.show', $category->slug);
+        return $storefrontUrls->category($category);
     };
 @endphp
 

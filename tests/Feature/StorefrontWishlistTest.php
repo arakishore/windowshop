@@ -14,6 +14,7 @@ use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\User;
 use App\Models\WishlistItem;
+use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -161,7 +162,7 @@ class StorefrontWishlistTest extends TestCase
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $roleId])
-            ->get(route('storefront.product.show', $product->slug))
+            ->get($this->productUrl($product))
             ->assertOk()
             ->assertSee('product-wishlist-btn', false)
             ->assertSee('data-wishlist-state="1"', false)
@@ -384,5 +385,10 @@ class StorefrontWishlistTest extends TestCase
             ['group' => 'currency', 'setting_key' => $key],
             ['setting_value' => $value, 'setting_type' => $type],
         );
+    }
+
+    private function productUrl(Product $product): string
+    {
+        return app(StorefrontUrlService::class)->product($product);
     }
 }

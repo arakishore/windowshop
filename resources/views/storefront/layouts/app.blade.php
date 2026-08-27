@@ -8,6 +8,9 @@
     <meta name="description" content="@yield('meta_description', 'WindowShop storefront preview.')">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'WindowShop Storefront')</title>
+    @hasSection('canonical_url')
+        <link rel="canonical" href="@yield('canonical_url')">
+    @endif
 
     <link rel="stylesheet" href="{{ asset('assets/storefront/fonts/fonts.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/storefront/icon/icomoon/style.css') }}">

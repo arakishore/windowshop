@@ -17,6 +17,7 @@ use App\Models\ProductVariantAttribute;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\Storefront\CustomerLocationService;
+use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -158,7 +159,7 @@ class StorefrontProductListingTest extends TestCase
 
         $this->get(route('storefront.products'))
             ->assertOk()
-            ->assertSee(route('storefront.product.show', $product->slug), false);
+            ->assertSee($this->productUrl($product), false);
     }
 
     public function test_product_detail_page_renders_live_product_data_and_seo(): void
@@ -240,7 +241,9 @@ class StorefrontProductListingTest extends TestCase
         $related = $this->product($fixture, 'Related Cotton Shirt');
         $this->variant($related);
 
-        $content = $this->get(route('storefront.product.show', $product->slug))
+        $canonicalUrl = $this->productUrl($product);
+
+        $content = $this->get($canonicalUrl)
             ->assertOk()
             ->assertSee('Dynamic Cotton Shirt')
             ->assertSee('Full cotton shirt product description from the database.')
@@ -288,8 +291,20 @@ class StorefrontProductListingTest extends TestCase
             ->assertSee('Related Cotton Shirt')
             ->getContent();
 
+        $breadcrumbs = $this->productBreadcrumbSection($content);
+        $this->assertStringContainsString('href="'.route('storefront.home').'"', $breadcrumbs);
+        $this->assertStringContainsString('href="'.$this->categoryUrl($fixture['root']).'"', $breadcrumbs);
+        $this->assertStringContainsString('href="'.$this->categoryUrl($fixture['category']->parent).'"', $breadcrumbs);
+        $this->assertStringContainsString('href="'.$this->categoryUrl($fixture['category']).'"', $breadcrumbs);
+        $this->assertStringContainsString('Apparel', $breadcrumbs);
+        $this->assertStringContainsString('Women', $breadcrumbs);
+        $this->assertStringContainsString('T-Shirts', $breadcrumbs);
+        $this->assertStringContainsString('Dynamic Cotton Shirt', $breadcrumbs);
+        $this->assertStringNotContainsString('Products', $breadcrumbs);
+        $this->assertStringNotContainsString('href="'.$canonicalUrl.'">Dynamic Cotton Shirt</a>', $breadcrumbs);
         $this->assertStringContainsString('<title>Cotton Shirt Detail | LocalHyper</title>', $content);
         $this->assertStringContainsString('<meta name="description" content="Cotton shirt meta description on LocalHyper.">', $content);
+        $this->assertStringContainsString('<link rel="canonical" href="'.$canonicalUrl.'">', $content);
         $this->assertStringContainsString('assets/storefront/css/photoswipe.css', $content);
         $this->assertStringContainsString('assets/storefront/css/drift-basic.min.css', $content);
         $this->assertStringContainsString('data-pswp-width="576px"', $content);
@@ -306,6 +321,90 @@ class StorefrontProductListingTest extends TestCase
         $this->assertStringNotContainsString('(0 reviews)', $content);
         $this->assertStringNotContainsString('Contact Store', $content);
     }
+
+    public function test_old_and_mismatched_product_urls_redirect_to_canonical_category_product_url(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Canonical Redirect Product');
+        $this->variant($product);
+        $canonicalUrl = $this->productUrl($product);
+
+        $this->get(route('storefront.product.show', $product->slug))
+            ->assertMovedPermanently()
+            ->assertRedirect($canonicalUrl);
+
+        $this->get(url('/category/wrong/path/products/'.$product->slug))
+            ->assertMovedPermanently()
+            ->assertRedirect($canonicalUrl);
+    }
+
+    public function test_nested_category_path_page_resolves_and_redirects_mismatched_paths(): void
+    {
+        $fixture = $this->fixture();
+        $grandchild = ProductCategory::query()->create([
+            'parent_id' => $fixture['category']->getKey(),
+            'name' => 'Nested Shirts '.Str::random(4),
+            'slug' => 'nested-shirts-'.Str::random(8),
+            'status' => 'active',
+        ]);
+        $product = $this->product([...$fixture, 'category' => $grandchild], 'Nested Category Product');
+        $this->variant($product);
+
+        $this->get($this->categoryUrl($grandchild))
+            ->assertOk()
+            ->assertSee('Nested Category Product')
+            ->assertSeeInOrder([$fixture['root']->name, $fixture['category']->name, $grandchild->name]);
+
+        $this->get(url('/category/'.$fixture['root']->slug.'/wrong/'.$grandchild->slug))
+            ->assertMovedPermanently()
+            ->assertRedirect($this->categoryUrl($grandchild));
+    }
+
+    public function test_category_urls_use_full_hierarchy_and_short_urls_redirect(): void
+    {
+        $fixture = $this->fixture();
+        $fixture['root']->forceFill([
+            'name' => 'Apparel',
+            'slug' => 'apparel-1',
+        ])->save();
+        $fixture['category']->forceFill([
+            'name' => 'Women',
+            'slug' => 'women-18',
+        ])->save();
+        $shirts = ProductCategory::query()->create([
+            'parent_id' => $fixture['category']->getKey(),
+            'name' => 'Shirts',
+            'slug' => 'shirts-21',
+            'status' => 'active',
+        ]);
+        $product = $this->product([...$fixture, 'category' => $shirts], 'Hierarchy Product');
+        $this->variant($product);
+
+        $this->assertSame(url('/category/apparel-1'), $this->categoryUrl($fixture['root']));
+        $this->assertSame(url('/category/apparel-1/women-18'), $this->categoryUrl($fixture['category']));
+        $this->assertSame(url('/category/apparel-1/women-18/shirts-21'), $this->categoryUrl($shirts));
+        $this->assertSame(url('/category/apparel-1/women-18/shirts-21/products/'.$product->slug), $this->productUrl($product));
+
+        $content = $this->get($this->categoryUrl($shirts))
+            ->assertOk()
+            ->assertSeeInOrder(['Home', 'Apparel', 'Women', 'Shirts'])
+            ->assertSee($this->categoryUrl($fixture['root']), false)
+            ->assertSee($this->categoryUrl($fixture['category']), false)
+            ->assertSee($this->productUrl($product), false)
+            ->getContent();
+
+        $breadcrumbs = $this->productBreadcrumbSection($content);
+        $this->assertStringNotContainsString(route('storefront.category.child.show', [$fixture['category']->slug, $shirts->slug]), $breadcrumbs);
+
+        $this->get(url('/category/women-18/shirts-21'))
+            ->assertMovedPermanently()
+            ->assertRedirect($this->categoryUrl($shirts));
+
+        $this->get(url('/category/apparel-1/not-women/shirts-21'))
+            ->assertMovedPermanently()
+            ->assertRedirect($this->categoryUrl($shirts));
+    }
+
 
     public function test_product_detail_rejects_inactive_or_unavailable_products(): void
     {
@@ -351,7 +450,7 @@ class StorefrontProductListingTest extends TestCase
         $this->get(route('storefront.category.show', $fixture['root']->slug))
             ->assertOk()
             ->assertSee($fixture['root']->name)
-            ->assertSee(route('storefront.category.child.show', [$fixture['root']->slug, $fixture['category']->slug]), false)
+            ->assertSee($this->categoryUrl($fixture['category']), false)
             ->assertSee($fixture['category']->name)
             ->assertSee('Category Tree Product')
             ->assertSee('Inner Category Product')
@@ -364,7 +463,7 @@ class StorefrontProductListingTest extends TestCase
         $this->get(route('storefront.category.child.show', [$fixture['root']->slug, $fixture['category']->slug]))
             ->assertOk()
             ->assertSee($grandchild->name)
-            ->assertSee(route('storefront.category.child.show', [$fixture['category']->slug, $grandchild->slug]), false)
+            ->assertSee($this->categoryUrl($grandchild), false)
             ->assertDontSee('meta-filter-shop')
             ->assertDontSee('id="listLayout"', false)
             ->assertSee('tf-col-2 md-col-3 lg-col-4', false)
@@ -800,5 +899,26 @@ class StorefrontProductListingTest extends TestCase
         $this->assertIsInt($end);
 
         return substr($content, $start, $end - $start);
+    }
+
+    private function productBreadcrumbSection(string $content): string
+    {
+        $start = strpos($content, '<div class="category-listing-breadcrumbs');
+        $this->assertIsInt($start);
+
+        $end = strpos($content, '</div>', $start);
+        $this->assertIsInt($end);
+
+        return substr($content, $start, $end - $start);
+    }
+
+    private function productUrl(Product $product): string
+    {
+        return app(StorefrontUrlService::class)->product($product);
+    }
+
+    private function categoryUrl(ProductCategory $category): string
+    {
+        return app(StorefrontUrlService::class)->category($category);
     }
 }

@@ -26,6 +26,7 @@ class ProductListingService
         private readonly SystemSettingService $systemSettings,
         private readonly CustomerLocationService $location,
         private readonly ProductLocationSorter $locationSorter,
+        private readonly StorefrontUrlService $urls,
     ) {
     }
 
@@ -115,6 +116,9 @@ class ProductListingService
             })
             ->with([
                 'brand:id,name',
+                'category:id,parent_id,name,slug',
+                'category.parent:id,parent_id,name,slug',
+                'category.parent.parent:id,parent_id,name,slug',
                 'shop:id,merchant_id,name,slug,status',
                 'primaryImage' => fn ($query) => $query
                     ->where('status', 'active')
@@ -168,6 +172,7 @@ class ProductListingService
                 'brand:id,name',
                 'category:id,name,slug,parent_id,product_disclaimer',
                 'category.parent:id,name,slug,parent_id,product_disclaimer',
+                'category.parent.parent:id,name,slug,parent_id,product_disclaimer',
                 'rootProductCategory:id,name,slug,parent_id,product_disclaimer',
                 'shop:id,merchant_id,name,slug,short_description,description,address_line_1,address_line_2,landmark,pincode,mobile,whatsapp_number,website_url,status',
                 'shop.merchant:id,status',
@@ -339,7 +344,7 @@ class ProductListingService
             'name' => $product->product_name,
             'brand' => $product->brand?->name,
             'store' => $product->shop?->name ?? 'Local Store',
-            'url' => route('storefront.product.show', $product->slug),
+            'url' => $this->urls->product($product),
             'wishlist_store_url' => route('storefront.wishlist.products.store', $product),
             'wishlist_destroy_url' => route('storefront.wishlist.products.destroy', $product),
             'image' => $image,
@@ -378,9 +383,10 @@ class ProductListingService
             'wishlist_destroy_url' => route('storefront.wishlist.products.destroy', $product),
             'delivery_check_url' => route('storefront.product.delivery-check', $product->slug),
             'category' => $product->category?->name ?? $product->rootProductCategory?->name ?? 'Products',
-            'category_url' => $product->category
-                ? ($product->category->parent ? route('storefront.category.child.show', [$product->category->parent->slug, $product->category->slug]) : route('storefront.category.show', $product->category->slug))
-                : route('storefront.products'),
+            'category_url' => $product->category ? $this->urls->category($product->category) : route('storefront.products'),
+            'category_breadcrumbs' => $this->urls->categoryBreadcrumbs($product->category),
+            'category_path' => $this->urls->categoryPath($product->category),
+            'canonical_url' => $this->urls->product($product),
             'store' => $product->shop?->name ?? 'Local Store',
             'store_url' => $product->shop?->slug ? route('storefront.store.show', $product->shop->slug) : null,
             'store_address' => $this->shopAddress($product->shop),

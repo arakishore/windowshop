@@ -82,6 +82,9 @@ Route::post('/cart/items', [CartItemController::class, 'store'])->name('storefro
 Route::patch('/cart/items/{cartItem}', [CartItemController::class, 'update'])->name('storefront.cart.items.update');
 Route::delete('/cart/items/{cartItem}', [CartItemController::class, 'destroy'])->name('storefront.cart.items.destroy');
 Route::post('/products/{slug}/delivery-check', [StorefrontController::class, 'checkProductDelivery'])->name('storefront.product.delivery-check');
+Route::get('/category/{categoryPath}/products/{slug}', [StorefrontController::class, 'productDetailWithCategory'])
+    ->where('categoryPath', '.+')
+    ->name('storefront.category.product.show');
 Route::get('/products/{slug}', [StorefrontController::class, 'productDetail'])->name('storefront.product.show');
 Route::get('/shop', [StorefrontController::class, 'products'])->name('storefront.shop');
 Route::get('/product-detail', [StorefrontController::class, 'productDetail'])->name('storefront.product.detail');
@@ -101,6 +104,9 @@ Route::post('/checkout/place-order', [CheckoutController::class, 'placeOrder'])-
 Route::get('/checkout/order/{order}', [CheckoutController::class, 'success'])->name('storefront.checkout.success');
 Route::get('/category/{parentSlug}/{slug}', [StorefrontController::class, 'categoryWithParent'])->name('storefront.category.child.show');
 Route::get('/category/{slug}', [StorefrontController::class, 'category'])->name('storefront.category.show');
+Route::get('/category/{categoryPath}', [StorefrontController::class, 'categoryPath'])
+    ->where('categoryPath', '.+')
+    ->name('storefront.category.path.show');
 Route::get('/store/{slug}', [StorefrontController::class, 'store'])->name('storefront.store.show');
 Route::get('/store/{slug}/category/{categorySlug}', [StorefrontController::class, 'storeCategory'])->name('storefront.store.category.show');
 

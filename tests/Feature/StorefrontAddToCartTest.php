@@ -10,6 +10,7 @@ use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\User;
+use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -387,7 +388,7 @@ class StorefrontAddToCartTest extends TestCase
             'quantity' => 3,
         ])->assertCreated();
 
-        $this->get(route('storefront.product.show', $fixture['product']->slug))
+        $this->get($this->productUrl($fixture['product']))
             ->assertOk()
             ->assertSee('data-storefront-cart-count>3</span>', false);
     }
@@ -410,7 +411,7 @@ class StorefrontAddToCartTest extends TestCase
 
         $this->actingAs($admin)
             ->withSession(['active_role_id' => $adminRoleId])
-            ->get(route('storefront.product.show', $fixture['product']->slug))
+            ->get($this->productUrl($fixture['product']))
             ->assertOk()
             ->assertSee('data-storefront-cart-count>0</span>', false)
             ->assertDontSee('data-storefront-cart-count>4</span>', false);
@@ -518,5 +519,10 @@ class StorefrontAddToCartTest extends TestCase
         ]);
 
         return (int) DB::table('auth_roles')->where('slug', $slug)->value('id');
+    }
+
+    private function productUrl(Product $product): string
+    {
+        return app(StorefrontUrlService::class)->product($product);
     }
 }

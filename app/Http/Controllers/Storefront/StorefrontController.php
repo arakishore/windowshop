@@ -16,6 +16,7 @@ use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductListingService;
 use App\Services\Storefront\StorefrontCustomerContext;
+use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,6 +32,7 @@ class StorefrontController extends Controller
         private readonly BannerService $banners,
         private readonly ProductListingService $productListings,
         private readonly StorefrontCustomerContext $customerContext,
+        private readonly StorefrontUrlService $urls,
     ) {}
 
     public function home(): View
@@ -253,11 +255,39 @@ class StorefrontController extends Controller
         ]);
     }
 
-    public function productDetail(Request $request, ?string $slug = null): View
+    public function productDetail(Request $request, ?string $slug = null): View|RedirectResponse
     {
         $detail = $this->productListings->productDetail($slug);
 
         abort_if($detail === null, 404);
+
+        if ($slug !== null && ($detail['product']['canonical_url'] ?? null) !== null && $request->url() !== $detail['product']['canonical_url']) {
+            return redirect()->to($detail['product']['canonical_url'], 301);
+        }
+
+        $wishlistProducts = collect([$detail['product']])
+            ->merge($detail['relatedProducts'])
+            ->all();
+
+        return view('storefront.pages.product-detail', [
+            'product' => $detail['product'],
+            'relatedProducts' => $detail['relatedProducts'],
+            'wishlistedProductIds' => $this->wishlistedProductIds($request, $wishlistProducts),
+            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
+        ]);
+    }
+
+    public function productDetailWithCategory(Request $request, string $categoryPath, string $slug): View|RedirectResponse
+    {
+        $detail = $this->productListings->productDetail($slug);
+
+        abort_if($detail === null, 404);
+
+        $canonicalUrl = (string) ($detail['product']['canonical_url'] ?? route('storefront.product.show', $slug));
+
+        if (trim($categoryPath, '/') !== (string) ($detail['product']['category_path'] ?? '')) {
+            return redirect()->to($canonicalUrl, 301);
+        }
 
         $wishlistProducts = collect([$detail['product']])
             ->merge($detail['relatedProducts'])
@@ -382,7 +412,7 @@ class StorefrontController extends Controller
         ]);
     }
 
-    public function category(Request $request, string $slug): View
+    public function category(Request $request, string $slug): View|RedirectResponse
     {
         $category = ProductCategory::query()
             ->with($this->categoryListingRelations())
@@ -390,10 +420,14 @@ class StorefrontController extends Controller
             ->where('status', 'active')
             ->firstOrFail();
 
+        if ($category->parent_id !== null) {
+            return redirect()->to($this->urls->category($category), 301);
+        }
+
         return $this->categoryListingView($request, $category);
     }
 
-    public function categoryWithParent(Request $request, string $parentSlug, string $slug): View
+    public function categoryWithParent(Request $request, string $parentSlug, string $slug): View|RedirectResponse
     {
         $parent = ProductCategory::query()
             ->where('slug', $parentSlug)
@@ -406,6 +440,33 @@ class StorefrontController extends Controller
             ->where('status', 'active')
             ->where('parent_id', $parent->getKey())
             ->firstOrFail();
+
+        $requestedPath = $parentSlug.'/'.$slug;
+
+        if (! $this->urls->categoryMatchesPath($category, $requestedPath)) {
+            return redirect()->to($this->urls->category($category), 301);
+        }
+
+        return $this->categoryListingView($request, $category);
+    }
+
+    public function categoryPath(Request $request, string $categoryPath): View|RedirectResponse
+    {
+        $slugs = collect(explode('/', trim($categoryPath, '/')))
+            ->filter()
+            ->values();
+
+        abort_if($slugs->isEmpty(), 404);
+
+        $category = ProductCategory::query()
+            ->with($this->categoryListingRelations())
+            ->where('slug', $slugs->last())
+            ->where('status', 'active')
+            ->firstOrFail();
+
+        if (! $this->urls->categoryMatchesPath($category, $categoryPath)) {
+            return redirect()->to($this->urls->category($category), 301);
+        }
 
         return $this->categoryListingView($request, $category);
     }
@@ -426,6 +487,7 @@ class StorefrontController extends Controller
             'products' => $products = $this->productListings->categoryProducts($category, $selectedFilters),
             'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
             'attributeFilters' => $this->productListings->categoryAttributeFilters($category),
+            'storefrontUrls' => $this->urls,
             'selectedFilters' => $selectedFilters,
             'selectedAttributeFilters' => $selectedFilters['attributes'],
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
@@ -537,7 +599,7 @@ class StorefrontController extends Controller
                 return [
                     'name' => $category->name,
                     'image' => $category->image_path ? 'storage/'.$category->image_path : $fallbackImage,
-                    'url' => route('storefront.category.show', $category->slug),
+                    'url' => $this->urls->category($category),
                 ];
             });
     }
