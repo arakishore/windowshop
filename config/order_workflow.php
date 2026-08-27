@@ -31,6 +31,7 @@ return [
                 Order::STATUS_CANCELLED,
             ],
             Order::STATUS_READY_FOR_PICKUP => [
+                Order::STATUS_CANCELLED,
                 Order::STATUS_COMPLETED,
             ],
             Order::STATUS_COMPLETED => [],

@@ -1038,14 +1038,68 @@ class MerchantOrderActionsTest extends TestCase
         ]);
     }
 
-    public function test_cancelling_from_disallowed_status_is_rejected(): void
+    public function test_ready_for_pickup_order_can_be_cancelled_and_restores_inventory(): void
+    {
+        [$user, $merchantId, $shopId] = $this->merchantShopFixture();
+        $reason = $this->cancellationReason($merchantId, [
+            'code' => 'customer_not_collecting',
+            'name' => 'Customer Not Collecting',
+        ]);
+        $order = $this->operationalOrder($shopId, [
+            'order_status' => Order::STATUS_READY_FOR_PICKUP,
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+        ]);
+        $variantId = $this->variantForShop($shopId, 8);
+        $this->orderItem($order, $variantId, 2);
+        $this->statusHistory($order, Order::STATUS_PROCESSING, Order::STATUS_READY_FOR_PICKUP, 'Ready');
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.cancel', $order), [
+                'cancellation_reason_id' => $reason->getKey(),
+                'cancellation_note' => 'Customer asked us to cancel before pickup.',
+            ])
+            ->assertRedirect(route('merchant.orders.show', $order))
+            ->assertSessionHas('success', 'Order cancelled successfully.');
+
+        $order->refresh();
+        $this->assertSame(Order::STATUS_CANCELLED, $order->order_status);
+        $this->assertNotNull($order->cancelled_at);
+        $this->assertSame(10, (int) DB::table('product_variants')->where('id', $variantId)->value('stock_quantity'));
+        $this->assertDatabaseHas('order_status_histories', [
+            'order_id' => $order->getKey(),
+            'from_status' => Order::STATUS_READY_FOR_PICKUP,
+            'to_status' => Order::STATUS_CANCELLED,
+            'changed_by' => $user->getKey(),
+            'notes' => 'Cancelled by merchant. Reason: Customer Not Collecting. Note: Customer asked us to cancel before pickup.',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Order Activity')
+            ->assertSee('Cancelled')
+            ->assertSee('Cancelled by merchant. Reason: Customer Not Collecting. Note: Customer asked us to cancel before pickup.')
+            ->assertDontSee('Complete Pickup');
+    }
+
+    public function test_completed_pickup_order_cannot_be_cancelled(): void
     {
         [$user, $merchantId, $shopId] = $this->merchantShopFixture();
         $reason = $this->cancellationReason($merchantId);
         $order = $this->operationalOrder($shopId, [
-            'order_status' => Order::STATUS_READY_FOR_PICKUP,
+            'order_status' => Order::STATUS_COMPLETED,
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+            'payment_method' => 'cash_at_shop',
+            'payment_status' => PaymentStatus::CODE_PAID,
+            'amount_paid' => 1998,
         ]);
-        $this->statusHistory($order, null, Order::STATUS_READY_FOR_PICKUP, 'Ready');
+        $variantId = $this->variantForShop($shopId, 8);
+        $this->orderItem($order, $variantId, 2);
+        $this->statusHistory($order, Order::STATUS_READY_FOR_PICKUP, Order::STATUS_COMPLETED, 'Customer collected the order from the shop.');
 
         $this
             ->actingAs($user)
@@ -1057,8 +1111,12 @@ class MerchantOrderActionsTest extends TestCase
             ->assertRedirect(route('merchant.orders.show', $order))
             ->assertSessionHasErrors('order_status');
 
-        $this->assertSame(Order::STATUS_READY_FOR_PICKUP, $order->fresh()->order_status);
-        $this->assertNull($order->fresh()->cancelled_at);
+        $order->refresh();
+        $this->assertSame(Order::STATUS_COMPLETED, $order->order_status);
+        $this->assertNull($order->cancelled_at);
+        $this->assertSame(PaymentStatus::CODE_PAID, $order->payment_status);
+        $this->assertSame('1998.00', $order->amount_paid);
+        $this->assertSame(8, (int) DB::table('product_variants')->where('id', $variantId)->value('stock_quantity'));
         $this->assertSame(1, DB::table('order_status_histories')->where('order_id', $order->getKey())->count());
     }
 
@@ -1348,7 +1406,7 @@ class MerchantOrderActionsTest extends TestCase
             ->withSession(['active_shop_id' => $shopId])
             ->get(route('merchant.orders.show', $ready))
             ->assertOk()
-            ->assertDontSee('Cancel Order')
+            ->assertSee('Cancel Order')
             ->assertSee('Complete Pickup')
             ->assertDontSee('Mark Ready for Pickup')
             ->assertDontSee('Mark Packed');

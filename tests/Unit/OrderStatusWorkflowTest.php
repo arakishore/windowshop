@@ -27,6 +27,7 @@ class OrderStatusWorkflowTest extends TestCase
             Order::STATUS_CANCELLED,
         ]);
         $this->assertAllowed($service, Order::FULFILMENT_PICKUP, Order::STATUS_READY_FOR_PICKUP, [
+            Order::STATUS_CANCELLED,
             Order::STATUS_COMPLETED,
         ]);
         $this->assertTerminal($service, Order::FULFILMENT_PICKUP, Order::STATUS_COMPLETED);
@@ -36,9 +37,6 @@ class OrderStatusWorkflowTest extends TestCase
         $this->assertFalse($service->canTransition($processing, OrderStatus::CODE_PACKED));
         $this->assertFalse($service->canTransition($processing, OrderStatus::CODE_SHIPPED));
         $this->assertFalse($service->canTransition($processing, OrderStatus::CODE_OUT_FOR_DELIVERY));
-
-        $ready = $this->order(Order::FULFILMENT_PICKUP, Order::STATUS_READY_FOR_PICKUP);
-        $this->assertFalse($service->canTransition($ready, Order::STATUS_CANCELLED));
     }
 
     public function test_delivery_workflow_matches_configured_v1_flow(): void
