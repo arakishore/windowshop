@@ -36,11 +36,9 @@ class CustomerOrderCancellationService
 
     public function canCancel(Order $order): bool
     {
-        return $order->fulfilment_type === Order::FULFILMENT_PICKUP
-            && $order->payment_method === 'cash_at_shop'
-            && (float) $order->amount_paid <= 0
-            && $order->payment_status !== Order::PAYMENT_PAID
-            && $this->statuses->canTransition($order, Order::STATUS_CANCELLED);
+        return $this->hasAllowedPaymentMethod($order)
+            && $this->doesNotRequireRefund($order)
+            && $this->statuses->canCustomerCancel($order);
     }
 
     public function cancel(Order $order, User $actor, string $reason, ?string $note = null): Order
@@ -69,9 +67,8 @@ class CustomerOrderCancellationService
                 $historyNote .= ' Note: '.$note;
             }
 
-            return $this->statuses->transition(
+            return $this->statuses->transitionForCustomerCancellation(
                 $order,
-                Order::STATUS_CANCELLED,
                 $actor,
                 $historyNote,
                 [
@@ -106,5 +103,20 @@ class CustomerOrderCancellationService
         }
 
         return $model;
+    }
+
+    private function hasAllowedPaymentMethod(Order $order): bool
+    {
+        $methods = (array) config("order_workflow.customer_cancellation.allowed_payment_methods.{$order->fulfilment_type}", []);
+
+        return in_array($order->payment_method, $methods, true);
+    }
+
+    private function doesNotRequireRefund(Order $order): bool
+    {
+        $refundRequiredStatuses = (array) config('order_workflow.customer_cancellation.refund_required_payment_statuses', []);
+
+        return (float) $order->amount_paid <= 0
+            && ! in_array($order->payment_status, $refundRequiredStatuses, true);
     }
 }

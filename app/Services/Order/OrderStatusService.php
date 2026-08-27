@@ -23,9 +23,42 @@ class OrderStatusService
 
     public function transition(Order $order, string $toStatus, ?User $actor = null, ?string $notes = null, ?array $metadata = null): Order
     {
-        return DB::transaction(function () use ($order, $toStatus, $actor, $notes, $metadata): Order {
-            $fromStatus = $order->order_status;
+        return $this->transitionUsing($order, $toStatus, $actor, $notes, $metadata, function () use ($order, $toStatus): void {
             $this->assertCanTransition($order, $toStatus);
+        });
+    }
+
+    public function transitionForCustomerCancellation(Order $order, ?User $actor = null, ?string $notes = null, ?array $metadata = null): Order
+    {
+        return $this->transitionUsing($order, Order::STATUS_CANCELLED, $actor, $notes, $metadata, function () use ($order): void {
+            $this->assertCanCustomerCancel($order);
+        });
+    }
+
+    public function canCustomerCancel(Order $order): bool
+    {
+        $allowedStatuses = (array) config("order_workflow.customer_cancellation.allowed_order_statuses.{$order->fulfilment_type}", []);
+
+        return in_array($order->order_status, $allowedStatuses, true);
+    }
+
+    public function assertCanCustomerCancel(Order $order): void
+    {
+        if (! $this->canCustomerCancel($order)) {
+            throw ValidationException::withMessages([
+                'order_status' => 'This order cannot be cancelled from the customer account.',
+            ]);
+        }
+    }
+
+    /**
+     * @param callable(): void $assertAllowed
+     */
+    private function transitionUsing(Order $order, string $toStatus, ?User $actor, ?string $notes, ?array $metadata, callable $assertAllowed): Order
+    {
+        return DB::transaction(function () use ($order, $toStatus, $actor, $notes, $metadata, $assertAllowed): Order {
+            $fromStatus = $order->order_status;
+            $assertAllowed();
 
             $changes = [
                 'order_status' => $toStatus,

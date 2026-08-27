@@ -84,6 +84,26 @@ class OrderStatusWorkflowTest extends TestCase
         $this->assertFalse($service->canTransition($shipped, Order::STATUS_CANCELLED));
     }
 
+    public function test_customer_cancellation_status_rule_allows_delivery_until_packed_without_changing_merchant_flow(): void
+    {
+        $service = new OrderStatusService();
+
+        foreach ([Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_PROCESSING, OrderStatus::CODE_PACKED] as $status) {
+            $order = $this->order(Order::FULFILMENT_DELIVERY, $status);
+
+            $this->assertTrue($service->canCustomerCancel($order), "Delivery {$status} should be customer cancellable.");
+        }
+
+        foreach ([OrderStatus::CODE_SHIPPED, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_CANCELLED] as $status) {
+            $order = $this->order(Order::FULFILMENT_DELIVERY, $status);
+
+            $this->assertFalse($service->canCustomerCancel($order), "Delivery {$status} should not be customer cancellable.");
+        }
+
+        $packed = $this->order(Order::FULFILMENT_DELIVERY, OrderStatus::CODE_PACKED);
+        $this->assertFalse($service->canTransition($packed, Order::STATUS_CANCELLED));
+    }
+
     public function test_terminal_and_non_normal_statuses_have_no_generic_next_statuses(): void
     {
         $service = new OrderStatusService();

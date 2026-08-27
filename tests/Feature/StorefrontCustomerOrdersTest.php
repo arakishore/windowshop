@@ -406,6 +406,79 @@ class StorefrontCustomerOrdersTest extends TestCase
             ->assertSee('Updated by '.$customer->name);
     }
 
+    public function test_customer_can_cancel_unpaid_cod_delivery_order_until_packed_and_inventory_is_restored(): void
+    {
+        $customer = $this->customerUser('orders-delivery-cancel@example.test', 'Delivery Cancel Customer', '9422945110');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $fixture = $this->fixture('Delivery Cancel Shop');
+        $merchantRoleId = $this->assignRole($fixture['merchantUser'], 'merchant');
+
+        foreach ([Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_PROCESSING, OrderStatus::CODE_PACKED] as $status) {
+            $product = $this->product($fixture, 'Delivery Cancellable Product '.$status);
+            $variant = $this->variant($product);
+            $variant->forceFill(['stock_quantity' => 3])->save();
+            $order = $this->order($globalCustomer, $fixture, [
+                'order_number' => 'ORD-DEL-CANCEL-'.Str::upper(Str::random(6)),
+                'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+                'order_status' => $status,
+                'payment_method' => 'cash_on_delivery',
+                'payment_status' => PaymentStatus::CODE_PENDING,
+                'amount_paid' => 0,
+            ]);
+            $this->item($order, $product, [
+                'product_variant_id' => $variant->getKey(),
+                'quantity' => 2,
+                'line_total' => 200,
+            ]);
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->get(route('storefront.account.orders.show', $order))
+                ->assertOk()
+                ->assertSee('Cancel Order');
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->post(route('storefront.account.orders.cancel', $order), [
+                    'cancellation_reason' => 'want_to_place_different_order',
+                    'cancellation_note' => 'Delivery order customer note.',
+                ])
+                ->assertRedirect(route('storefront.account.orders.show', $order))
+                ->assertSessionHas('success', 'Order cancelled.');
+
+            $order->refresh();
+            $this->assertSame(Order::STATUS_CANCELLED, $order->order_status);
+            $this->assertSame(5, (int) $variant->refresh()->stock_quantity);
+
+            $history = $order->statusHistories()->latest('id')->firstOrFail();
+            $this->assertSame($status, $history->from_status);
+            $this->assertSame(Order::STATUS_CANCELLED, $history->to_status);
+            $this->assertSame('customer_cancel', $history->metadata['action'] ?? null);
+            $this->assertSame('customer', $history->metadata['initiated_by'] ?? null);
+            $this->assertSame('want_to_place_different_order', $history->metadata['reason_code'] ?? null);
+            $this->assertSame('Want to place a different order', $history->metadata['reason_name'] ?? null);
+            $this->assertNotEmpty($history->metadata['stock_restored'] ?? []);
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->get(route('storefront.account.orders.show', $order))
+                ->assertOk()
+                ->assertSee('Order Cancelled')
+                ->assertSee('Your order has been cancelled. Reason: Want to place a different order.')
+                ->assertDontSee('Delivery order customer note.');
+        }
+
+        $latestOrder = Order::query()->where('customer_id', $globalCustomer->getKey())->latest('id')->firstOrFail();
+
+        $this->actingAs($fixture['merchantUser'])
+            ->withSession(['active_role_id' => $merchantRoleId, 'active_shop_id' => $fixture['shop']->getKey()])
+            ->get(route('merchant.orders.show', $latestOrder))
+            ->assertOk()
+            ->assertSee('Customer requested cancellation. Reason: Want to place a different order. Note: Delivery order customer note.')
+            ->assertSee('Updated by '.$customer->name);
+    }
+
     public function test_customer_cancel_order_rejects_ineligible_forged_and_unowned_requests(): void
     {
         $customer = $this->customerUser('orders-cancel-security@example.test', 'Cancel Security Customer', '9422945107');
@@ -434,8 +507,43 @@ class StorefrontCustomerOrdersTest extends TestCase
                 'payment_status' => PaymentStatus::CODE_PAID,
                 'amount_paid' => 100,
             ],
-            'delivery' => [
-                'order_status' => Order::STATUS_PROCESSING,
+            'delivery_packed_paid' => [
+                'order_status' => OrderStatus::CODE_PACKED,
+                'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+                'payment_method' => 'cash_on_delivery',
+                'payment_status' => PaymentStatus::CODE_PAID,
+                'amount_paid' => 100,
+            ],
+            'delivery_shipped' => [
+                'order_status' => OrderStatus::CODE_SHIPPED,
+                'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+                'payment_method' => 'cash_on_delivery',
+                'payment_status' => PaymentStatus::CODE_PENDING,
+                'amount_paid' => 0,
+            ],
+            'delivery_out_for_delivery' => [
+                'order_status' => OrderStatus::CODE_OUT_FOR_DELIVERY,
+                'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+                'payment_method' => 'cash_on_delivery',
+                'payment_status' => PaymentStatus::CODE_PENDING,
+                'amount_paid' => 0,
+            ],
+            'delivery_delivered' => [
+                'order_status' => OrderStatus::CODE_DELIVERED,
+                'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+                'payment_method' => 'cash_on_delivery',
+                'payment_status' => PaymentStatus::CODE_PENDING,
+                'amount_paid' => 0,
+            ],
+            'delivery_completed' => [
+                'order_status' => Order::STATUS_COMPLETED,
+                'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+                'payment_method' => 'cash_on_delivery',
+                'payment_status' => PaymentStatus::CODE_PENDING,
+                'amount_paid' => 0,
+            ],
+            'delivery_cancelled' => [
+                'order_status' => Order::STATUS_CANCELLED,
                 'fulfilment_type' => Order::FULFILMENT_DELIVERY,
                 'payment_method' => 'cash_on_delivery',
                 'payment_status' => PaymentStatus::CODE_PENDING,

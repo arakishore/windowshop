@@ -68,6 +68,37 @@ return [
         ],
     ],
 
+    'customer_cancellation' => [
+        'allowed_order_statuses' => [
+            Order::FULFILMENT_PICKUP => [
+                Order::STATUS_PENDING,
+                Order::STATUS_CONFIRMED,
+                Order::STATUS_PROCESSING,
+                Order::STATUS_READY_FOR_PICKUP,
+            ],
+            Order::FULFILMENT_DELIVERY => [
+                Order::STATUS_PENDING,
+                Order::STATUS_CONFIRMED,
+                Order::STATUS_PROCESSING,
+                OrderStatus::CODE_PACKED,
+            ],
+        ],
+        'allowed_payment_methods' => [
+            Order::FULFILMENT_PICKUP => [
+                'cash_at_shop',
+            ],
+            Order::FULFILMENT_DELIVERY => [
+                'cash_on_delivery',
+            ],
+        ],
+        'refund_required_payment_statuses' => [
+            Order::PAYMENT_PAID,
+            Order::PAYMENT_PARTIALLY_PAID,
+            Order::PAYMENT_REFUNDED,
+            Order::PAYMENT_PARTIALLY_REFUNDED,
+        ],
+    ],
+
     'status_action_labels' => [
         Order::STATUS_CONFIRMED => 'Accept Order',
         Order::STATUS_PROCESSING => 'Start Processing',
