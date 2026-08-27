@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\AdminSetting;
 use App\Models\Customer;
+use App\Models\CustomerCancellationReason;
+use App\Models\MerchantCancellationReason;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderComment;
@@ -324,8 +326,260 @@ class StorefrontCustomerOrdersTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_customer_can_cancel_own_pickup_cash_at_shop_order_from_allowed_statuses(): void
+    {
+        $customer = $this->customerUser('orders-cancel@example.test', 'Cancel Customer', '9422945106');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $fixture = $this->fixture('Customer Cancel Shop');
+        $merchantRoleId = $this->assignRole($fixture['merchantUser'], 'merchant');
+
+        foreach ([Order::STATUS_PENDING, Order::STATUS_CONFIRMED, Order::STATUS_PROCESSING, Order::STATUS_READY_FOR_PICKUP] as $status) {
+            $product = $this->product($fixture, 'Cancellable Product '.$status);
+            $variant = $this->variant($product);
+            $variant->forceFill(['stock_quantity' => 8])->save();
+            $order = $this->order($globalCustomer, $fixture, [
+                'order_number' => 'ORD-CANCEL-'.Str::upper(Str::random(6)),
+                'fulfilment_type' => Order::FULFILMENT_PICKUP,
+                'order_status' => $status,
+                'payment_method' => 'cash_at_shop',
+                'payment_status' => PaymentStatus::CODE_PENDING,
+                'amount_paid' => 0,
+            ]);
+            $this->item($order, $product, [
+                'product_variant_id' => $variant->getKey(),
+                'quantity' => 2,
+                'line_total' => 200,
+            ]);
+            $this->history($order, null, $status, now()->subMinutes(5));
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->get(route('storefront.account.orders.show', $order))
+                ->assertOk()
+                ->assertSee('Cancel Order');
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->post(route('storefront.account.orders.cancel', $order), [
+                    'cancellation_reason' => 'ordered_by_mistake',
+                    'cancellation_note' => 'Please do not show this note to customer activity.',
+                ])
+                ->assertRedirect(route('storefront.account.orders.show', $order))
+                ->assertSessionHas('success', 'Order cancelled.');
+
+            $order->refresh();
+            $this->assertSame(Order::STATUS_CANCELLED, $order->order_status);
+            $this->assertNotNull($order->cancelled_at);
+            $this->assertSame(10, (int) $variant->refresh()->stock_quantity);
+            $this->assertDatabaseHas('order_status_histories', [
+                'order_id' => $order->getKey(),
+                'from_status' => $status,
+                'to_status' => Order::STATUS_CANCELLED,
+                'changed_by' => $customer->getKey(),
+            ]);
+
+            $history = $order->statusHistories()->latest('id')->firstOrFail();
+            $this->assertSame('customer_cancel', $history->metadata['action'] ?? null);
+            $this->assertSame('customer', $history->metadata['initiated_by'] ?? null);
+            $this->assertSame('Ordered by mistake', $history->metadata['reason_name'] ?? null);
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->get(route('storefront.account.orders.show', $order))
+                ->assertOk()
+                ->assertDontSee('Cancel Order')
+                ->assertSee('Order Cancelled')
+                ->assertSee('Your order has been cancelled. Reason: Ordered by mistake.')
+                ->assertSee('Reason: Ordered by mistake')
+                ->assertDontSee('Please do not show this note to customer activity.');
+        }
+
+        $latestOrder = Order::query()->where('customer_id', $globalCustomer->getKey())->latest('id')->firstOrFail();
+
+        $this->actingAs($fixture['merchantUser'])
+            ->withSession(['active_role_id' => $merchantRoleId, 'active_shop_id' => $fixture['shop']->getKey()])
+            ->get(route('merchant.orders.show', $latestOrder))
+            ->assertOk()
+            ->assertSee('Order Activity')
+            ->assertSee('Customer requested cancellation. Reason: Ordered by mistake. Note: Please do not show this note to customer activity.')
+            ->assertSee('Updated by '.$customer->name);
+    }
+
+    public function test_customer_cancel_order_rejects_ineligible_forged_and_unowned_requests(): void
+    {
+        $customer = $this->customerUser('orders-cancel-security@example.test', 'Cancel Security Customer', '9422945107');
+        $other = $this->customerUser('orders-cancel-other@example.test', 'Other Cancel Customer', '9422945108');
+        $roleId = $this->assignRole($customer, 'customer');
+        $otherRoleId = $this->assignRole($other, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $otherGlobalCustomer = $this->globalCustomer($other);
+        $fixture = $this->fixture('Customer Cancel Security Shop');
+        $product = $this->product($fixture, 'Security Cancel Product');
+        $variant = $this->variant($product);
+
+        foreach ([
+            'completed' => [
+                'order_status' => Order::STATUS_COMPLETED,
+                'payment_status' => PaymentStatus::CODE_PENDING,
+                'amount_paid' => 0,
+            ],
+            'cancelled' => [
+                'order_status' => Order::STATUS_CANCELLED,
+                'payment_status' => PaymentStatus::CODE_PENDING,
+                'amount_paid' => 0,
+            ],
+            'paid' => [
+                'order_status' => Order::STATUS_PROCESSING,
+                'payment_status' => PaymentStatus::CODE_PAID,
+                'amount_paid' => 100,
+            ],
+            'delivery' => [
+                'order_status' => Order::STATUS_PROCESSING,
+                'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+                'payment_method' => 'cash_on_delivery',
+                'payment_status' => PaymentStatus::CODE_PENDING,
+                'amount_paid' => 0,
+            ],
+        ] as $label => $overrides) {
+            $variant->forceFill(['stock_quantity' => 8])->save();
+            $order = $this->order($globalCustomer, $fixture, array_merge([
+                'order_number' => 'ORD-REJECT-'.Str::upper($label).'-'.Str::upper(Str::random(4)),
+                'fulfilment_type' => Order::FULFILMENT_PICKUP,
+                'order_status' => Order::STATUS_PROCESSING,
+                'payment_method' => 'cash_at_shop',
+            ], $overrides));
+            $originalStatus = $order->order_status;
+            $this->item($order, $product, ['product_variant_id' => $variant->getKey(), 'quantity' => 2]);
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->get(route('storefront.account.orders.show', $order))
+                ->assertOk()
+                ->assertDontSee('data-bs-target="#cancelOrderModal"', false);
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->from(route('storefront.account.orders.show', $order))
+                ->post(route('storefront.account.orders.cancel', $order), [
+                    'cancellation_reason' => 'want_to_change_items',
+                ])
+                ->assertRedirect(route('storefront.account.orders.show', $order))
+                ->assertSessionHasErrors('order_status');
+
+            $this->assertSame($originalStatus, $order->fresh()->order_status);
+            $this->assertSame(8, (int) $variant->refresh()->stock_quantity);
+        }
+
+        $ownedOrder = $this->order($globalCustomer, $fixture, [
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+            'order_status' => Order::STATUS_PENDING,
+            'payment_method' => 'cash_at_shop',
+            'payment_status' => PaymentStatus::CODE_PENDING,
+            'amount_paid' => 0,
+        ]);
+        $this->item($ownedOrder, $product, ['product_variant_id' => $variant->getKey(), 'quantity' => 1]);
+
+        $this->actingAs($other)
+            ->withSession(['active_role_id' => $otherRoleId])
+            ->post(route('storefront.account.orders.cancel', $ownedOrder), [
+                'cancellation_reason' => 'ordered_by_mistake',
+            ])
+            ->assertNotFound();
+
+        $otherOrder = $this->order($otherGlobalCustomer, $fixture, [
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+            'order_status' => Order::STATUS_PENDING,
+            'payment_method' => 'cash_at_shop',
+            'payment_status' => PaymentStatus::CODE_PENDING,
+            'amount_paid' => 0,
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.orders.cancel', $otherOrder), [
+                'cancellation_reason' => 'ordered_by_mistake',
+            ])
+            ->assertNotFound();
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->from(route('storefront.account.orders.show', $ownedOrder))
+            ->post(route('storefront.account.orders.cancel', $ownedOrder), [
+                'cancellation_reason' => 'other',
+                'cancellation_note' => '',
+            ])
+            ->assertRedirect(route('storefront.account.orders.show', $ownedOrder))
+            ->assertSessionHasErrors('cancellation_note');
+    }
+
+    public function test_customer_cancel_modal_uses_active_global_reasons_in_sort_order_not_merchant_reasons(): void
+    {
+        $customer = $this->customerUser('orders-cancel-reasons@example.test', 'Cancel Reason Customer', '9422945109');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $fixture = $this->fixture('Customer Cancel Reason Shop');
+        $product = $this->product($fixture, 'Reason Modal Product');
+        $this->variant($product);
+        $order = $this->order($globalCustomer, $fixture, [
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+            'order_status' => Order::STATUS_PENDING,
+            'payment_method' => 'cash_at_shop',
+            'payment_status' => PaymentStatus::CODE_PENDING,
+            'amount_paid' => 0,
+        ]);
+        $this->item($order, $product);
+
+        CustomerCancellationReason::query()->update(['status' => CustomerCancellationReason::STATUS_INACTIVE]);
+        CustomerCancellationReason::query()->create([
+            'code' => 'second_global_reason',
+            'name' => 'Second Global Reason',
+            'requires_comment' => false,
+            'sort_order' => 20,
+            'status' => CustomerCancellationReason::STATUS_ACTIVE,
+        ]);
+        CustomerCancellationReason::query()->create([
+            'code' => 'first_global_reason',
+            'name' => 'First Global Reason',
+            'requires_comment' => true,
+            'sort_order' => 10,
+            'status' => CustomerCancellationReason::STATUS_ACTIVE,
+        ]);
+        CustomerCancellationReason::query()->create([
+            'code' => 'hidden_global_reason',
+            'name' => 'Hidden Global Reason',
+            'requires_comment' => false,
+            'sort_order' => 1,
+            'status' => CustomerCancellationReason::STATUS_INACTIVE,
+        ]);
+        MerchantCancellationReason::query()->create([
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'code' => 'merchant_only_reason',
+            'name' => 'Merchant Only Reason',
+            'sort_order' => 1,
+            'customer_selectable' => true,
+            'merchant_selectable' => true,
+            'requires_comment' => false,
+            'status' => MerchantCancellationReason::STATUS_ACTIVE,
+        ]);
+
+        $response = $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.orders.show', $order));
+
+        $response->assertOk()
+            ->assertSee('First Global Reason')
+            ->assertSee('Second Global Reason')
+            ->assertDontSee('Hidden Global Reason')
+            ->assertDontSee('Merchant Only Reason');
+
+        $select = $this->cancellationReasonSelect($response->getContent());
+        $this->assertLessThan(strpos($select, 'Second Global Reason'), strpos($select, 'First Global Reason'));
+        $this->assertStringContainsString('value="first_global_reason" data-requires-note="1"', $select);
+    }
+
     /**
-     * @return array{merchant: MerchantProfile, shop: Shop, root: ProductCategory, category: ProductCategory}
+     * @return array{merchantUser: User, merchant: MerchantProfile, shop: Shop, root: ProductCategory, category: ProductCategory}
      */
     private function fixture(string $name): array
     {
@@ -362,7 +616,7 @@ class StorefrontCustomerOrdersTest extends TestCase
             'status' => 'active',
         ]);
 
-        return compact('merchant', 'shop', 'root', 'category');
+        return compact('merchantUser', 'merchant', 'shop', 'root', 'category');
     }
 
     private function product(array $fixture, string $name): Product
@@ -576,6 +830,17 @@ class StorefrontCustomerOrdersTest extends TestCase
         $this->assertIsInt($start);
 
         $end = strpos($content, '</section>', $start);
+        $this->assertIsInt($end);
+
+        return substr($content, $start, $end - $start);
+    }
+
+    private function cancellationReasonSelect(string $content): string
+    {
+        $start = strpos($content, '<select id="cancellation_reason"');
+        $this->assertIsInt($start);
+
+        $end = strpos($content, '</select>', $start);
         $this->assertIsInt($end);
 
         return substr($content, $start, $end - $start);

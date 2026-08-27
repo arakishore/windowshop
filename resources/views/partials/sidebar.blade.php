@@ -127,6 +127,11 @@
 									</a>
 								</li>
 								<li class="nav-item">
+									<a href="{{ route('admin.master.customer-cancellation-reasons.index') }}" class="nav-link {{ request()->routeIs('admin.master.customer-cancellation-reasons.*') ? 'active' : '' }}">
+										Customer Cancellation Reasons
+									</a>
+								</li>
+								<li class="nav-item">
 									<a href="{{ route('admin.master.postal-codes.index') }}" class="nav-link {{ request()->routeIs('admin.master.postal-codes.*') ? 'active' : '' }}">
 										Postal Codes
 									</a>

@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\BannerTemplateController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
+use App\Http\Controllers\Admin\MasterData\CustomerCancellationReasonController;
 use App\Http\Controllers\Admin\MasterData\OrderStatusController;
 use App\Http\Controllers\Admin\MasterData\PaymentStatusController;
 use App\Http\Controllers\Admin\MasterData\PostalCodeRestrictionController;
@@ -72,6 +73,7 @@ Route::post('/account/addresses/{address}/default-delivery', [AccountAddressCont
 Route::post('/account/addresses/{address}/default-billing', [AccountAddressController::class, 'defaultBilling'])->name('storefront.account.addresses.default-billing');
 Route::get('/account/orders', [CustomerAccountController::class, 'orders'])->name('storefront.account.orders');
 Route::get('/account/orders/{order}', [CustomerAccountController::class, 'orderDetail'])->name('storefront.account.orders.show');
+Route::post('/account/orders/{order}/cancel', [CustomerAccountController::class, 'cancelOrder'])->name('storefront.account.orders.cancel');
 Route::get('/account/wishlist', [CustomerAccountController::class, 'wishlist'])->name('storefront.account.wishlist');
 Route::get('/forgot-password', [StorefrontController::class, 'forgotPassword'])->name('storefront.forgot-password');
 Route::view('/demo/shopping-bag-box', 'storefront.pages.demo-shopping-bag-box')->name('storefront.demo.shopping-bag-box');
@@ -126,6 +128,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('master/shop-audiences', ShopAudienceController::class)
             ->except(['show'])
             ->names('master.shop-audiences');
+        Route::resource('master/customer-cancellation-reasons', CustomerCancellationReasonController::class)
+            ->except(['show'])
+            ->parameters(['customer-cancellation-reasons' => 'customerCancellationReason'])
+            ->names('master.customer-cancellation-reasons');
         Route::resource('master/brands', BrandController::class)
             ->except(['show'])
             ->names('master.brands');

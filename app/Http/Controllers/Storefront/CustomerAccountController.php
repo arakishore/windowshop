@@ -10,6 +10,7 @@ use App\Models\ProductVariant;
 use App\Models\User;
 use App\Models\WishlistItem;
 use App\Services\Checkout\CheckoutPageService;
+use App\Services\Order\CustomerOrderCancellationService;
 use App\Services\Storefront\CustomerOrderPresenter;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductListingService;
@@ -30,6 +31,7 @@ class CustomerAccountController extends Controller
         private readonly CheckoutPageService $checkoutPage,
         private readonly ProductListingService $productListings,
         private readonly CustomerOrderPresenter $ordersPresenter,
+        private readonly CustomerOrderCancellationService $customerCancellation,
     ) {
     }
 
@@ -165,7 +167,44 @@ class CustomerAccountController extends Controller
         return view('storefront.account.order-detail', $this->accountViewData($customer, [
             'order' => $order,
             'presenter' => $this->ordersPresenter,
+            'canCancelOrder' => $this->customerCancellation->canCancel($order),
+            'cancellationReasons' => $this->customerCancellation->reasonOptions(),
         ]));
+    }
+
+    public function cancelOrder(Request $request, Order $order): RedirectResponse
+    {
+        $customer = $this->customerOrRedirect($request);
+
+        if (! $customer instanceof User) {
+            return $customer;
+        }
+
+        $globalCustomer = $this->customerContext->customer($request);
+        abort_unless($globalCustomer instanceof Customer, 403);
+        abort_unless((int) $order->customer_id === (int) $globalCustomer->getKey(), 404);
+
+        $data = $request->validate([
+            'cancellation_reason' => ['required', 'string'],
+            'cancellation_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $this->customerCancellation->cancel(
+                $order,
+                $customer,
+                (string) $data['cancellation_reason'],
+                $data['cancellation_note'] ?? null,
+            );
+        } catch (ValidationException $exception) {
+            return back()
+                ->withInput()
+                ->withErrors($exception->errors());
+        }
+
+        return redirect()
+            ->route('storefront.account.orders.show', $order)
+            ->with('success', 'Order cancelled.');
     }
 
     public function wishlist(Request $request): View|RedirectResponse

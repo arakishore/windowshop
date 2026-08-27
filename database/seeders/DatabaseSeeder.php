@@ -30,5 +30,6 @@ class DatabaseSeeder extends Seeder
         $this->call(ShopSettingsSeeder::class);
         $this->call(ProductAvailabilityStatusSeeder::class);
         $this->call(MerchantCancellationReasonSeeder::class);
+        $this->call(CustomerCancellationReasonSeeder::class);
     }
 }

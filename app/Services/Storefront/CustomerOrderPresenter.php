@@ -252,7 +252,7 @@ class CustomerOrderPresenter
                 'timestamp' => $history->created_at,
                 'display_time' => app_datetime($history->created_at),
                 'title' => $this->activityStatusLabel($history->to_status),
-                'description' => $this->activityStatusDescription($history->to_status),
+                'description' => $this->activityStatusDescription($history),
             ]);
 
         $commentItems = $this->customerVisibleComments($order)
@@ -308,15 +308,17 @@ class CustomerOrderPresenter
             : $this->statusLabel($code);
     }
 
-    private function activityStatusDescription(?string $code): ?string
+    private function activityStatusDescription($history): ?string
     {
+        $code = $history->to_status;
         $status = $this->orderStatuses()[$code ?? ''] ?? null;
+        $description = null;
 
         if ($status instanceof OrderStatus && filled($status->customer_description)) {
-            return $status->customer_description;
+            $description = $status->customer_description;
         }
 
-        return match ($code) {
+        $description ??= match ($code) {
             Order::STATUS_PENDING => 'Your order has been placed.',
             Order::STATUS_CONFIRMED => 'Your order has been confirmed by the shop.',
             Order::STATUS_PROCESSING => 'Your order is being prepared.',
@@ -325,6 +327,16 @@ class CustomerOrderPresenter
             Order::STATUS_CANCELLED => 'Your order has been cancelled.',
             default => null,
         };
+
+        if ($code === Order::STATUS_CANCELLED
+            && ($history->metadata['action'] ?? null) === 'customer_cancel'
+            && ($history->metadata['customer_safe_reason'] ?? false)
+            && filled($history->metadata['reason_name'] ?? null)) {
+            $reason = (string) $history->metadata['reason_name'];
+            $description = trim((string) $description).' Reason: '.$reason.'.';
+        }
+
+        return $description;
     }
 
     private function activityStatusTone(?string $code): string

@@ -29,8 +29,53 @@
                 <p class="cl-text-2 mb-0">Placed {{ app_datetime($order->created_at) }}</p>
                 <p class="fw-medium mb-0">{{ $order->shop?->name ?? 'WindowShop Store' }}</p>
             </div>
-            <a href="{{ route('storefront.account.orders') }}" class="tf-btn btn-line small">Back to Orders</a>
+            <div class="account-order-actions">
+                @if ($canCancelOrder)
+                    <button type="button" class="account-cancel-order-btn" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">Cancel Order</button>
+                @endif
+                <a href="{{ route('storefront.account.orders') }}" class="tf-btn btn-line small">Back to Orders</a>
+            </div>
         </div>
+
+        @if ($canCancelOrder)
+            <div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <form method="POST" action="{{ route('storefront.account.orders.cancel', $order) }}" class="modal-content account-cancel-modal" data-customer-cancel-order-form>
+                        @csrf
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="cancelOrderModalLabel">Cancel Order</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to cancel this order?</p>
+
+                            <div class="mb-16">
+                                <label for="cancellation_reason" class="form-label">Reason <span class="text-danger">*</span></label>
+                                <select id="cancellation_reason" name="cancellation_reason" class="form-select @error('cancellation_reason') is-invalid @enderror" required data-customer-cancel-reason>
+                                    <option value="">Select reason</option>
+                                    @foreach ($cancellationReasons as $reasonValue => $reason)
+                                        <option value="{{ $reasonValue }}" data-requires-note="{{ $reason['requires_comment'] ? 1 : 0 }}" @selected(old('cancellation_reason') === $reasonValue)>
+                                            {{ $reason['name'] }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('cancellation_reason')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+
+                            <div>
+                                <label for="cancellation_note" class="form-label">Additional Note</label>
+                                <textarea id="cancellation_note" name="cancellation_note" rows="3" maxlength="1000" class="form-control @error('cancellation_note') is-invalid @enderror" data-customer-cancel-note>{{ old('cancellation_note') }}</textarea>
+                                @error('cancellation_note')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="account-modal-secondary-btn" data-bs-dismiss="modal">Keep Order</button>
+                            <button type="submit" class="account-modal-danger-btn">Cancel Order</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        @endif
 
         @if ($order->order_status === \App\Models\Order::STATUS_CANCELLED)
             <div class="account-order-alert mb-24">
@@ -192,11 +237,115 @@
 @push('styles')
     <style>
         .account-order-detail-head,
-        .account-order-title-row {
+        .account-order-title-row,
+        .account-order-actions {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
             gap: 14px;
+        }
+
+        .account-order-actions {
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .account-cancel-order-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            padding: 8px 16px;
+            border: 1px solid rgba(220, 53, 69, .35);
+            border-radius: 6px;
+            background: #fff;
+            color: #dc3545;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .account-cancel-order-btn:hover {
+            border-color: #dc3545;
+            background: rgba(220, 53, 69, .08);
+            color: #b02a37;
+        }
+
+        .account-cancel-modal {
+            border: 0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .account-cancel-modal .modal-header {
+            padding: 18px 20px 14px;
+            border-bottom: 1px solid #eef0f3;
+        }
+
+        .account-cancel-modal .modal-title {
+            font-size: 22px;
+            line-height: 1.25;
+            font-weight: 700;
+        }
+
+        .account-cancel-modal .modal-body {
+            display: grid;
+            gap: 16px;
+            padding: 18px 20px;
+        }
+
+        .account-cancel-modal .modal-body p,
+        .account-cancel-modal .form-label {
+            margin-bottom: 0;
+        }
+
+        .account-cancel-modal .form-select,
+        .account-cancel-modal .form-control {
+            border-color: #d9dee5;
+            border-radius: 6px;
+        }
+
+        .account-cancel-modal textarea.form-control {
+            min-height: 96px;
+            resize: vertical;
+        }
+
+        .account-cancel-modal .modal-footer {
+            gap: 10px;
+            padding: 14px 20px 18px;
+            border-top: 1px solid #eef0f3;
+        }
+
+        .account-modal-secondary-btn,
+        .account-modal-danger-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .account-modal-secondary-btn {
+            border: 1px solid #d9dee5;
+            background: #fff;
+            color: var(--main);
+        }
+
+        .account-modal-secondary-btn:hover {
+            background: #f6f7f9;
+        }
+
+        .account-modal-danger-btn {
+            border: 1px solid #dc3545;
+            background: #dc3545;
+            color: #fff;
+        }
+
+        .account-modal-danger-btn:hover {
+            border-color: #b02a37;
+            background: #b02a37;
         }
 
         .account-order-title-row {
@@ -501,4 +650,29 @@
             }
         }
     </style>
+@endpush
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('[data-customer-cancel-order-form]').forEach((form) => {
+                const reason = form.querySelector('[data-customer-cancel-reason]');
+                const note = form.querySelector('[data-customer-cancel-note]');
+                const applyRequirement = () => {
+                    const selected = reason?.selectedOptions?.[0];
+                    note.required = selected?.dataset.requiresNote === '1';
+                };
+
+                reason?.addEventListener('change', applyRequirement);
+                applyRequirement();
+            });
+
+            @if($errors->has('cancellation_reason') || $errors->has('cancellation_note') || $errors->has('order_status'))
+                const cancelModal = document.getElementById('cancelOrderModal');
+                if (cancelModal && window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(cancelModal).show();
+                }
+            @endif
+        });
+    </script>
 @endpush
