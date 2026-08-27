@@ -10,14 +10,11 @@ use App\Services\Cart\CartPageService;
 use App\Services\Checkout\CheckoutPageService;
 use App\Services\Checkout\CheckoutPostalCodeLookupService;
 use App\Services\Customer\CustomerAddressService;
+use App\Services\Customer\StorefrontCustomerAddressValidator;
 use App\Services\Storefront\StorefrontCustomerContext;
-use App\Services\Storefront\StorefrontCountryResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 
 class CheckoutAddressController extends Controller
 {
@@ -26,8 +23,8 @@ class CheckoutAddressController extends Controller
         private readonly CheckoutPageService $checkoutPage,
         private readonly CheckoutPostalCodeLookupService $postalLookup,
         private readonly CustomerAddressService $addresses,
+        private readonly StorefrontCustomerAddressValidator $addressValidator,
         private readonly StorefrontCustomerContext $customerContext,
-        private readonly StorefrontCountryResolver $countries,
     ) {
     }
 
@@ -149,75 +146,7 @@ class CheckoutAddressController extends Controller
      */
     private function validatedAddress(Request $request): array
     {
-        $data = $request->validate([
-            'label' => ['required', Rule::in(['Home', 'Work', 'Other'])],
-            'recipient_name' => ['required', 'string', 'max:150'],
-            'recipient_mobile_country_code' => ['nullable', 'string', 'max:10'],
-            'recipient_mobile' => ['required', 'string', 'max:30'],
-            'address_line_1' => ['required', 'string', 'max:190'],
-            'address_line_2' => ['nullable', 'string', 'max:190'],
-            'landmark' => ['nullable', 'string', 'max:150'],
-            'state_id' => ['nullable', 'integer'],
-            'city_id' => ['nullable', 'integer'],
-            'postal_code' => ['nullable', 'string', 'max:20'],
-            'is_default_shipping' => ['nullable', 'boolean'],
-            'is_default_billing' => ['nullable', 'boolean'],
-            'status' => ['nullable', Rule::in([CustomerAddress::STATUS_ACTIVE])],
-        ]) + [
-            'status' => CustomerAddress::STATUS_ACTIVE,
-        ];
-        $country = $this->countries->defaultCountry();
-        $data['country_id'] = $country->getKey();
-
-        if ($this->countries->isIndia($country)) {
-            $lookup = $this->postalLookup->lookupIndiaPin((string) ($data['postal_code'] ?? ''));
-
-            if (! $lookup['valid']) {
-                throw ValidationException::withMessages([
-                    'postal_code' => 'Please enter a valid Indian PIN code.',
-                ]);
-            }
-
-            $location = $this->postalLookup->resolveIndiaAddressLocation((string) $lookup['postal_code']);
-            $data['country_id'] = $location['country_id'];
-            $data['state_id'] = $location['state_id'];
-            $data['city_id'] = $location['city_id'];
-            $data['postal_code'] = $lookup['postal_code'];
-
-            return $data;
-        }
-
-        if (($data['state_id'] ?? null) !== null) {
-            $stateExists = DB::table('loc_states')
-                ->where('id', (int) $data['state_id'])
-                ->where('country_id', (int) $data['country_id'])
-                ->where('status', true)
-                ->whereNull('deleted_at')
-                ->exists();
-
-            if (! $stateExists) {
-                throw ValidationException::withMessages([
-                    'state_id' => 'Please select a valid state for the selected country.',
-                ]);
-            }
-        }
-
-        if (($data['city_id'] ?? null) !== null) {
-            $cityExists = DB::table('loc_cities')
-                ->where('id', (int) $data['city_id'])
-                ->where('country_id', (int) $data['country_id'])
-                ->when(($data['state_id'] ?? null) !== null, fn ($query) => $query->where('state_id', (int) $data['state_id']))
-                ->whereNull('deleted_at')
-                ->exists();
-
-            if (! $cityExists) {
-                throw ValidationException::withMessages([
-                    'city_id' => 'Please select a valid city for the selected state.',
-                ]);
-            }
-        }
-
-        return $data;
+        return $this->addressValidator->validate($request);
     }
 
     private function checkoutResponse(Request $request, string $message): JsonResponse|RedirectResponse

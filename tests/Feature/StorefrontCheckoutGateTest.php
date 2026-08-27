@@ -1662,7 +1662,7 @@ class StorefrontCheckoutGateTest extends TestCase
         ]);
     }
 
-    public function test_valid_pin_is_not_rejected_when_city_master_match_is_missing(): void
+    public function test_valid_pin_creates_city_master_match_when_missing(): void
     {
         $customer = $this->customerUser('city-missing@example.test');
         $fixture = $this->productFixture();
@@ -1682,11 +1682,18 @@ class StorefrontCheckoutGateTest extends TestCase
             ])
             ->assertRedirect(route('storefront.checkout'));
 
+        $cityId = (int) DB::table('loc_cities')
+            ->where('country_id', $india['country_id'])
+            ->where('state_id', $india['state_id'])
+            ->where('name', 'Nashik')
+            ->value('id');
+
+        $this->assertGreaterThan(0, $cityId);
         $this->assertDatabaseHas('customer_addresses', [
             'recipient_name' => 'Missing City Customer',
             'country_id' => $india['country_id'],
             'state_id' => $india['state_id'],
-            'city_id' => null,
+            'city_id' => $cityId,
             'postal_code' => '422009',
         ]);
     }

@@ -4,7 +4,7 @@
 @section('meta_description', 'Review your WindowShop customer profile.')
 
 @section('content')
-    @component('storefront.account.partials.shell', ['customer' => $customer])
+    @component('storefront.account.partials.shell', ['customer' => $customer, 'accountPageTitle' => 'Profile'])
         <div class="mb-24">
             <p class="text-caption-01 cl-text-3 mb-6">Profile</p>
             <h4 class="mb-10">Your Details</h4>

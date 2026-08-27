@@ -20,7 +20,14 @@ class CustomerAddressService
     public function create(Customer $customer, array $data): CustomerAddress
     {
         return DB::transaction(function () use ($customer, $data): CustomerAddress {
-            $address = $customer->addresses()->create($this->payload($data));
+            $payload = $this->payload($data);
+
+            if ($this->isFirstActiveAddress($customer)) {
+                $payload['is_default_shipping'] = true;
+                $payload['is_default_billing'] = true;
+            }
+
+            $address = $customer->addresses()->create($payload);
             $this->syncDefaults($address);
 
             return $address->refresh();
@@ -37,6 +44,51 @@ class CustomerAddressService
             $this->syncDefaults($address);
 
             return $address->refresh();
+        });
+    }
+
+    public function setDefaultShipping(CustomerAddress $address): CustomerAddress
+    {
+        return DB::transaction(function () use ($address): CustomerAddress {
+            $address->forceFill([
+                'is_default_shipping' => true,
+                'status' => CustomerAddress::STATUS_ACTIVE,
+            ])->save();
+
+            $this->syncDefaults($address);
+
+            return $address->refresh();
+        });
+    }
+
+    public function setDefaultBilling(CustomerAddress $address): CustomerAddress
+    {
+        return DB::transaction(function () use ($address): CustomerAddress {
+            $address->forceFill([
+                'is_default_billing' => true,
+                'status' => CustomerAddress::STATUS_ACTIVE,
+            ])->save();
+
+            $this->syncDefaults($address);
+
+            return $address->refresh();
+        });
+    }
+
+    public function delete(CustomerAddress $address): void
+    {
+        DB::transaction(function () use ($address): void {
+            $customerId = (int) $address->customer_id;
+            $wasDefaultShipping = (bool) $address->is_default_shipping;
+            $wasDefaultBilling = (bool) $address->is_default_billing;
+
+            $address->forceFill([
+                'is_default_shipping' => false,
+                'is_default_billing' => false,
+            ])->save();
+            $address->delete();
+
+            $this->promoteDefaults($customerId, $wasDefaultShipping, $wasDefaultBilling);
         });
     }
 
@@ -85,5 +137,59 @@ class CustomerAddressService
                 ->whereKeyNot($address->getKey())
                 ->update(['is_default_billing' => false]);
         }
+    }
+
+    private function isFirstActiveAddress(Customer $customer): bool
+    {
+        return ! $customer->addresses()
+            ->where('status', CustomerAddress::STATUS_ACTIVE)
+            ->exists();
+    }
+
+    private function promoteDefaults(int $customerId, bool $promoteShipping, bool $promoteBilling): void
+    {
+        if (! $promoteShipping && ! $promoteBilling) {
+            return;
+        }
+
+        $replacement = CustomerAddress::query()
+            ->where('customer_id', $customerId)
+            ->where('status', CustomerAddress::STATUS_ACTIVE)
+            ->orderByDesc('is_default_shipping')
+            ->orderByDesc('is_default_billing')
+            ->orderBy('id')
+            ->first();
+
+        if (! $replacement instanceof CustomerAddress) {
+            return;
+        }
+
+        if ($promoteShipping && ! $this->hasDefaultShipping($customerId)) {
+            $replacement->forceFill(['is_default_shipping' => true])->save();
+            $this->syncDefaults($replacement);
+        }
+
+        if ($promoteBilling && ! $this->hasDefaultBilling($customerId)) {
+            $replacement->forceFill(['is_default_billing' => true])->save();
+            $this->syncDefaults($replacement);
+        }
+    }
+
+    private function hasDefaultShipping(int $customerId): bool
+    {
+        return CustomerAddress::query()
+            ->where('customer_id', $customerId)
+            ->where('status', CustomerAddress::STATUS_ACTIVE)
+            ->where('is_default_shipping', true)
+            ->exists();
+    }
+
+    private function hasDefaultBilling(int $customerId): bool
+    {
+        return CustomerAddress::query()
+            ->where('customer_id', $customerId)
+            ->where('status', CustomerAddress::STATUS_ACTIVE)
+            ->where('is_default_billing', true)
+            ->exists();
     }
 }

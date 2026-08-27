@@ -145,6 +145,299 @@ class StorefrontCustomerAccountFoundationTest extends TestCase
         $this->assertSame([$ownAddress->getKey()], $checkoutAddresses->pluck('id')->all());
     }
 
+    public function test_customer_can_add_address_and_first_address_becomes_delivery_and_billing_default(): void
+    {
+        $this->locationFixture();
+        $this->postalCodeFixture('600001', 'Chennai', 'Tamil Nadu');
+        $customer = $this->customerUser('add-address@example.test', 'Add Customer', '9876500001');
+        $roleId = $this->assignRole($customer, 'customer');
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.addresses.store'), $this->addressPayload([
+                'address_type' => 'Other',
+                'label' => 'Parents Home',
+                'address_label' => 'Parents Home',
+                'recipient_name' => 'Parent Customer',
+                'recipient_mobile' => '9876500002',
+                'address_line_1' => '45 Parent Road',
+                'city_name' => 'Cidco Nashik',
+            ]))
+            ->assertRedirect(route('storefront.account.addresses'));
+
+        $address = CustomerAddress::query()->with('city')->firstOrFail();
+
+        $this->assertSame($this->globalCustomer($customer)->getKey(), $address->customer_id);
+        $this->assertSame('Parents Home', $address->label);
+        $this->assertSame('Cidco Nashik', $address->city?->name);
+        $this->assertSame('919876500002', $address->recipient_mobile_normalized);
+        $this->assertTrue((bool) $address->is_default_shipping);
+        $this->assertTrue((bool) $address->is_default_billing);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.addresses'))
+            ->assertOk()
+            ->assertSee('45 Parent Road')
+            ->assertSee('Default Delivery')
+            ->assertSee('Default Billing');
+    }
+
+    public function test_second_address_does_not_duplicate_defaults_and_customer_can_change_each_default(): void
+    {
+        [$countryId, $stateId, $cityId] = $this->locationFixture();
+        $this->postalCodeFixture('600001', 'Chennai', 'Tamil Nadu');
+        $customer = $this->customerUser('defaults-address@example.test', 'Defaults Customer', '9876500011');
+        $roleId = $this->assignRole($customer, 'customer');
+        $first = $this->address($customer, [
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.addresses.store'), $this->addressPayload([
+                'label' => 'Office',
+                'recipient_mobile' => '9876500012',
+                'address_line_1' => '77 Office Road',
+            ]))
+            ->assertRedirect(route('storefront.account.addresses'));
+
+        $second = CustomerAddress::query()->where('label', 'Office')->firstOrFail();
+
+        $this->assertFalse((bool) $second->is_default_shipping);
+        $this->assertFalse((bool) $second->is_default_billing);
+        $this->assertSame(1, CustomerAddress::query()->where('customer_id', $first->customer_id)->where('is_default_shipping', true)->count());
+        $this->assertSame(1, CustomerAddress::query()->where('customer_id', $first->customer_id)->where('is_default_billing', true)->count());
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.addresses.default-delivery', $second))
+            ->assertRedirect(route('storefront.account.addresses'));
+
+        $this->assertFalse((bool) $first->refresh()->is_default_shipping);
+        $this->assertTrue((bool) $second->refresh()->is_default_shipping);
+        $this->assertTrue((bool) $first->is_default_billing);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.addresses.default-billing', $second))
+            ->assertRedirect(route('storefront.account.addresses'));
+
+        $this->assertFalse((bool) $first->refresh()->is_default_billing);
+        $this->assertTrue((bool) $second->refresh()->is_default_billing);
+        $this->assertSame(1, CustomerAddress::query()->where('customer_id', $first->customer_id)->where('is_default_shipping', true)->count());
+        $this->assertSame(1, CustomerAddress::query()->where('customer_id', $first->customer_id)->where('is_default_billing', true)->count());
+    }
+
+    public function test_edit_updates_saved_checkout_address_but_not_order_snapshots(): void
+    {
+        [$countryId, $stateId, $cityId] = $this->locationFixture();
+        $this->postalCodeFixture('600001', 'Chennai', 'Tamil Nadu');
+        [$merchant, , $shop] = $this->merchantFixture('Snapshot Merchant');
+        $customer = $this->customerUser('snapshot-address@example.test', 'Snapshot Customer', '9876500021');
+        $roleId = $this->assignRole($customer, 'customer');
+        $merchantCustomer = $this->merchantCustomer($merchant, $customer, 'Snapshot Customer', '9876500021');
+        $address = $this->address($customer, [
+            'recipient_name' => 'Original Recipient',
+            'address_line_1' => 'Original Road',
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $order = $this->createOrder($merchant, $shop, $merchantCustomer, 'ORD-SNAPSHOT-ACCOUNT', [
+            'shipping_recipient_name' => 'Original Recipient',
+            'shipping_address_line_1' => 'Original Road',
+            'billing_recipient_name' => 'Original Recipient',
+            'billing_address_line_1' => 'Original Road',
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->put(route('storefront.account.addresses.update', $address), $this->addressPayload([
+                'label' => 'Updated Label',
+                'recipient_name' => 'Updated Recipient',
+                'address_line_1' => 'Updated Road',
+                'is_default_shipping' => '1',
+                'is_default_billing' => '1',
+            ]))
+            ->assertRedirect(route('storefront.account.addresses'));
+
+        $this->assertSame('Updated Road', $address->refresh()->address_line_1);
+        $this->assertSame(
+            'Updated Road',
+            app(CheckoutPageService::class)->addressesFor($customer)->firstWhere('id', $address->getKey())?->address_line_1,
+        );
+        $this->assertSame('Original Recipient', $order->refresh()->shipping_recipient_name);
+        $this->assertSame('Original Road', $order->shipping_address_line_1);
+        $this->assertSame('Original Road', $order->billing_address_line_1);
+    }
+
+    public function test_customer_can_delete_normal_address_without_changing_defaults(): void
+    {
+        [$countryId, $stateId, $cityId] = $this->locationFixture();
+        $customer = $this->customerUser('delete-normal@example.test', 'Delete Normal', '9876500031');
+        $roleId = $this->assignRole($customer, 'customer');
+        $default = $this->address($customer, [
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $normal = $this->address($customer, [
+            'label' => 'Temporary',
+            'address_line_1' => 'Temporary Road',
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->delete(route('storefront.account.addresses.destroy', $normal))
+            ->assertRedirect(route('storefront.account.addresses'));
+
+        $this->assertSoftDeleted('customer_addresses', ['id' => $normal->getKey()]);
+        $this->assertTrue((bool) $default->refresh()->is_default_shipping);
+        $this->assertTrue((bool) $default->is_default_billing);
+    }
+
+    public function test_deleting_default_promotes_another_address_and_deleting_last_leaves_no_defaults(): void
+    {
+        [$countryId, $stateId, $cityId] = $this->locationFixture();
+        $customer = $this->customerUser('delete-default@example.test', 'Delete Default', '9876500041');
+        $roleId = $this->assignRole($customer, 'customer');
+        $first = $this->address($customer, [
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $second = $this->address($customer, [
+            'label' => 'Replacement',
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->delete(route('storefront.account.addresses.destroy', $first))
+            ->assertRedirect(route('storefront.account.addresses'));
+
+        $this->assertTrue((bool) $second->refresh()->is_default_shipping);
+        $this->assertTrue((bool) $second->is_default_billing);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->delete(route('storefront.account.addresses.destroy', $second))
+            ->assertRedirect(route('storefront.account.addresses'));
+
+        $globalCustomerId = $this->globalCustomer($customer)->getKey();
+        $this->assertSame(0, CustomerAddress::query()->where('customer_id', $globalCustomerId)->count());
+        $this->assertSame(0, CustomerAddress::withTrashed()->where('customer_id', $globalCustomerId)->where('is_default_shipping', true)->count());
+        $this->assertSame(0, CustomerAddress::withTrashed()->where('customer_id', $globalCustomerId)->where('is_default_billing', true)->count());
+    }
+
+    public function test_deleting_billing_default_promotes_delivery_default_when_it_is_the_remaining_address(): void
+    {
+        [$countryId, $stateId, $cityId] = $this->locationFixture();
+        $customer = $this->customerUser('split-default@example.test', 'Split Default', '9876500045');
+        $roleId = $this->assignRole($customer, 'customer');
+        $home = $this->address($customer, [
+            'label' => 'Home',
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+            'is_default_shipping' => true,
+            'is_default_billing' => false,
+        ]);
+        $work = $this->address($customer, [
+            'label' => 'Work',
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+            'is_default_shipping' => false,
+            'is_default_billing' => true,
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->delete(route('storefront.account.addresses.destroy', $work))
+            ->assertRedirect(route('storefront.account.addresses'));
+
+        $this->assertTrue((bool) $home->refresh()->is_default_shipping);
+        $this->assertTrue((bool) $home->is_default_billing);
+        $this->assertSoftDeleted('customer_addresses', ['id' => $work->getKey()]);
+    }
+
+    public function test_customer_cannot_manage_another_customers_address(): void
+    {
+        [$countryId, $stateId, $cityId] = $this->locationFixture();
+        $customer = $this->customerUser('owner-address@example.test', 'Owner Customer', '9876500051');
+        $otherCustomer = $this->customerUser('wrong-address@example.test', 'Wrong Customer', '9876500052');
+        $roleId = $this->assignRole($customer, 'customer');
+        $otherAddress = $this->address($otherCustomer, [
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.addresses.edit', $otherAddress))
+            ->assertNotFound();
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->put(route('storefront.account.addresses.update', $otherAddress), $this->addressPayload())
+            ->assertNotFound();
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.addresses.default-delivery', $otherAddress))
+            ->assertNotFound();
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->delete(route('storefront.account.addresses.destroy', $otherAddress))
+            ->assertNotFound();
+    }
+
+    public function test_global_customer_address_is_visible_once_across_multiple_merchant_links(): void
+    {
+        [$countryId, $stateId, $cityId] = $this->locationFixture();
+        [$firstMerchant] = $this->merchantFixture('First Account Merchant');
+        [$secondMerchant] = $this->merchantFixture('Second Account Merchant');
+        $customer = $this->customerUser('global-address@example.test', 'Global Address', '9876500061');
+        $roleId = $this->assignRole($customer, 'customer');
+
+        $this->merchantCustomer($firstMerchant, $customer, 'Global Address', '9876500061');
+        $this->merchantCustomer($secondMerchant, $customer, 'Global Address', '9876500061');
+        $this->address($customer, [
+            'label' => 'Global Home',
+            'address_line_1' => 'One Global Road',
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'city_id' => $cityId,
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.addresses'))
+            ->assertOk()
+            ->assertSee('One Global Road');
+
+        $this->assertSame(1, CustomerAddress::query()->where('customer_id', $this->globalCustomer($customer)->getKey())->count());
+    }
+
     public function test_backoffice_user_with_non_customer_active_role_cannot_use_customer_account(): void
     {
         $user = $this->customerUser('merchant-role@example.test', 'Merchant Role', '9000011111');
@@ -273,6 +566,26 @@ class StorefrontCustomerAccountFoundationTest extends TestCase
         ], $overrides));
     }
 
+    /**
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    private function addressPayload(array $overrides = []): array
+    {
+        return array_merge([
+            'label' => 'Home',
+            'recipient_name' => 'Recipient Customer',
+            'recipient_mobile_country_code' => '+91',
+            'recipient_mobile' => '9876543210',
+            'address_line_1' => 'Main Street',
+            'address_line_2' => null,
+            'landmark' => null,
+            'postal_code' => '600001',
+            'is_default_shipping' => '0',
+            'is_default_billing' => '0',
+        ], $overrides);
+    }
+
     private function globalCustomer(User $user): Customer
     {
         return Customer::query()->firstOrCreate([
@@ -287,13 +600,16 @@ class StorefrontCustomerAccountFoundationTest extends TestCase
         ]);
     }
 
-    private function createOrder(MerchantProfile $merchant, Shop $shop, MerchantCustomer $customer, string $number): Order
+    /**
+     * @param array<string, mixed> $overrides
+     */
+    private function createOrder(MerchantProfile $merchant, Shop $shop, MerchantCustomer $customer, string $number, array $overrides = []): Order
     {
-        return Order::query()->create([
+        return Order::query()->create(array_merge([
             'order_number' => $number,
             'merchant_id' => $merchant->getKey(),
             'shop_id' => $shop->getKey(),
-            'customer_id' => $customer->getKey(),
+            'customer_id' => $customer->customer_id,
             'created_source' => Order::SOURCE_STOREFRONT,
             'fulfilment_type' => Order::FULFILMENT_DELIVERY,
             'order_status' => Order::STATUS_PENDING,
@@ -303,7 +619,7 @@ class StorefrontCustomerAccountFoundationTest extends TestCase
             'customer_name' => $customer->name,
             'customer_mobile' => $customer->mobile,
             'customer_email' => $customer->email,
-        ]);
+        ], $overrides));
     }
 
     /**
@@ -340,5 +656,21 @@ class StorefrontCustomerAccountFoundationTest extends TestCase
         ]);
 
         return [$countryId, $stateId, $cityId];
+    }
+
+    private function postalCodeFixture(string $postalCode, string $district, string $state): void
+    {
+        DB::table('postal_codes')->insert([
+            'source_key' => 'test-'.$postalCode,
+            'office_name' => $district.' Head Office',
+            'postal_code' => $postalCode,
+            'delivery_status' => 'Delivery',
+            'shipping_enabled' => true,
+            'district' => $district,
+            'state' => $state,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

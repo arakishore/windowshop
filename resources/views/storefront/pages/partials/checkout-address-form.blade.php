@@ -4,6 +4,9 @@
     $fieldPrefix = md5($action.($method ?? 'POST'));
     $defaultCheckboxName = $defaultCheckboxName ?? 'is_default_shipping';
     $defaultCheckboxLabel = $defaultCheckboxLabel ?? 'Use as default delivery address';
+    $currentLabel = old('label', $addressForm['label'] ?? 'Home');
+    $addressType = old('address_type', in_array($currentLabel, ['Home', 'Work'], true) ? $currentLabel : 'Other');
+    $otherLabel = old('address_label', $addressType === 'Other' ? $currentLabel : '');
 @endphp
 
 <form
@@ -22,6 +25,26 @@
     @if (isset($addressContext))
         <input type="hidden" name="address_context" value="{{ $addressContext }}">
     @endif
+    <input type="hidden" name="label" value="{{ $currentLabel }}" data-address-label-value>
+    <input type="hidden" name="recipient_mobile_country_code" value="+91">
+
+    <fieldset class="full">
+        <label class="tf-lable fw-medium d-block mb-8">Address Type <span class="text-primary">*</span></label>
+        <div class="d-flex flex-wrap gap-3" data-address-type-group>
+            @foreach (['Home', 'Work', 'Other'] as $type)
+                <label class="checkbox-wrap">
+                    <input type="radio" name="address_type" value="{{ $type }}" class="tf-check-rounded style-2" {{ $addressType === $type ? 'checked' : '' }}>
+                    <span class="fw-medium lh-24">{{ $type }}</span>
+                </label>
+            @endforeach
+        </div>
+        @error('label') <p class="text-danger text-caption-01 mt-4 mb-0">{{ $message }}</p> @enderror
+    </fieldset>
+
+    <fieldset class="full" data-address-other-label-wrap @if ($addressType !== 'Other') hidden @endif>
+        <input type="text" name="address_label" value="{{ $otherLabel }}" placeholder="Address Label">
+        @error('address_label') <p class="text-danger text-caption-01 mt-4 mb-0">{{ $message }}</p> @enderror
+    </fieldset>
 
     <fieldset>
         <input type="text" name="recipient_name" value="{{ old('recipient_name', $addressForm['recipient_name'] ?? '') }}" placeholder="Full Name*" required>
@@ -55,29 +78,16 @@
     </fieldset>
 
     <fieldset>
-        <input type="text" value="{{ old('city_name', $addressForm['city_name'] ?? '') }}" placeholder="City" data-address-city-display readonly>
+        <input type="text" name="city_name" value="{{ old('city_name', $addressForm['city_name'] ?? '') }}" placeholder="City*" data-address-city-display>
         <input type="hidden" name="city_id" value="{{ old('city_id', $addressForm['city_id'] ?? '') }}" data-address-city-id>
         @error('city_id') <p class="text-danger text-caption-01 mt-4 mb-0">{{ $message }}</p> @enderror
+        @error('city_name') <p class="text-danger text-caption-01 mt-4 mb-0">{{ $message }}</p> @enderror
     </fieldset>
 
     <fieldset>
-        <input type="text" value="{{ old('state_name', $addressForm['state_name'] ?? '') }}" placeholder="State" data-address-state-display readonly>
+        <input type="text" name="state_name" value="{{ old('state_name', $addressForm['state_name'] ?? '') }}" placeholder="State*" data-address-state-display readonly>
         <input type="hidden" name="state_id" value="{{ old('state_id', $addressForm['state_id'] ?? '') }}" data-address-state-id>
         @error('state_id') <p class="text-danger text-caption-01 mt-4 mb-0">{{ $message }}</p> @enderror
-    </fieldset>
-
-    <fieldset class="full">
-        <label class="tf-lable fw-medium d-block mb-8">Address Type <span class="text-primary">*</span></label>
-        <div class="d-flex flex-wrap gap-3">
-            @foreach (['Home', 'Work', 'Other'] as $type)
-                @php($checkedType = old('label', $addressForm['label'] ?? 'Home'))
-                <label class="checkbox-wrap">
-                    <input type="radio" name="label" value="{{ $type }}" class="tf-check-rounded style-2" {{ $checkedType === $type ? 'checked' : '' }}>
-                    <span class="fw-medium lh-24">{{ $type }}</span>
-                </label>
-            @endforeach
-        </div>
-        @error('label') <p class="text-danger text-caption-01 mt-4 mb-0">{{ $message }}</p> @enderror
     </fieldset>
 
     <div class="checkbox-wrap full">
@@ -187,6 +197,9 @@
                     const cityId = form.querySelector('[data-address-city-id]');
                     const stateId = form.querySelector('[data-address-state-id]');
                     const feedback = form.querySelector('[data-address-pin-feedback]');
+                    const labelValue = form.querySelector('[data-address-label-value]');
+                    const otherWrap = form.querySelector('[data-address-other-label-wrap]');
+                    const otherInput = form.querySelector('[name="address_label"]');
                     const defaultCountryIso2 = (form.dataset.defaultCountryIso2 || '').toUpperCase();
 
                     const isIndia = function () {
@@ -201,6 +214,20 @@
                         if (feedback) {
                             feedback.textContent = '';
                             feedback.classList.remove('text-success', 'text-danger');
+                        }
+                    };
+
+                    const syncLabel = function () {
+                        const checked = form.querySelector('[name="address_type"]:checked');
+                        const type = checked ? checked.value : 'Home';
+                        const isOther = type === 'Other';
+
+                        if (otherWrap) {
+                            otherWrap.hidden = !isOther;
+                        }
+
+                        if (labelValue) {
+                            labelValue.value = isOther ? (otherInput ? otherInput.value : '') : type;
                         }
                     };
 
@@ -271,7 +298,17 @@
                         postal.addEventListener('blur', lookupPin);
                     }
 
+                    form.querySelectorAll('[name="address_type"]').forEach(function (radio) {
+                        radio.addEventListener('change', syncLabel);
+                    });
+
+                    if (otherInput) {
+                        otherInput.addEventListener('input', syncLabel);
+                    }
+
                     form.addEventListener('submit', function (event) {
+                        syncLabel();
+
                         if (!form.hasAttribute('data-checkout-ajax-form')) {
                             return;
                         }
@@ -331,6 +368,8 @@
                                 }
                             });
                     });
+
+                    syncLabel();
                 };
 
                 checkout.init = function () {

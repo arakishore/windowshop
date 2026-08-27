@@ -4,7 +4,7 @@
 @section('meta_description', 'WindowShop customer account overview.')
 
 @section('content')
-    @component('storefront.account.partials.shell', ['customer' => $customer])
+    @component('storefront.account.partials.shell', ['customer' => $customer, 'accountPageTitle' => 'My Account'])
         <div class="mb-24">
             <p class="text-caption-01 cl-text-3 mb-6">Dashboard</p>
             <h4 class="mb-10">Welcome back, {{ $customer->name }}</h4>
