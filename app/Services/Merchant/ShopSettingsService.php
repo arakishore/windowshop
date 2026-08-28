@@ -73,6 +73,14 @@ class ShopSettingsService
         if ($type !== null && ! in_array($type, $this->supportedTypes(), true)) {
             throw new InvalidArgumentException('Unsupported shop setting type.');
         }
+
+        if ($group === 'fulfillment' && $key === 'delivery_scope' && ! in_array($value, ['local_only', 'nationwide'], true)) {
+            throw new InvalidArgumentException('Delivery scope must be local_only or nationwide.');
+        }
+
+        if ($group === 'returns' && in_array($key, ['refund_window_days', 'exchange_window_days'], true) && (int) $value < 0) {
+            throw new InvalidArgumentException('Return and exchange window days must be zero or greater.');
+        }
     }
 
     /**

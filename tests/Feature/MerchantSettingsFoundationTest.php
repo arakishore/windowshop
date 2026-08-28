@@ -4,10 +4,16 @@ namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
 use App\Models\MerchantSetting;
+use App\Models\ProductCategory;
+use App\Models\Shop;
+use App\Models\ShopSetting;
 use App\Models\User;
 use App\Services\Merchant\MerchantSettingsInitializer;
 use App\Services\Merchant\MerchantSettingsService;
+use App\Services\Merchant\ShopSettingsInitializer;
+use App\Services\Merchant\ShopSettingsService;
 use Database\Seeders\MerchantSettingsSeeder;
+use Database\Seeders\ShopSettingsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -488,14 +494,214 @@ class MerchantSettingsFoundationTest extends TestCase
         ]);
     }
 
+    public function test_default_shop_return_exchange_and_delivery_scope_settings_are_created(): void
+    {
+        $merchant = $this->merchantFixture('Shop Defaults Merchant');
+        $shop = $this->shopFixture($merchant);
+        $expectedCount = collect($this->shopInitializer()->defaults())->sum(fn (array $settings): int => count($settings));
+
+        $this->assertSame($expectedCount, ShopSetting::query()->where('shop_id', $shop->getKey())->count());
+        $this->assertFalse($this->shopSettings()->get($shop->getKey(), 'returns', 'refund_allowed'));
+        $this->assertSame(0, $this->shopSettings()->get($shop->getKey(), 'returns', 'refund_window_days'));
+        $this->assertTrue($this->shopSettings()->get($shop->getKey(), 'returns', 'exchange_allowed'));
+        $this->assertSame(7, $this->shopSettings()->get($shop->getKey(), 'returns', 'exchange_window_days'));
+        $this->assertSame('local_only', $this->shopSettings()->get($shop->getKey(), 'fulfillment', 'delivery_scope'));
+    }
+
+    public function test_shop_settings_seeder_initializes_existing_shops_idempotently(): void
+    {
+        $merchant = $this->merchantFixture('Existing Shop Settings Merchant');
+        $shop = $this->shopFixture($merchant);
+
+        ShopSetting::query()->where('shop_id', $shop->getKey())->delete();
+
+        $this->seed(ShopSettingsSeeder::class);
+        $this->seed(ShopSettingsSeeder::class);
+
+        $this->assertFalse($this->shopSettings()->get($shop->getKey(), 'returns', 'refund_allowed'));
+        $this->assertSame(0, $this->shopSettings()->get($shop->getKey(), 'returns', 'refund_window_days'));
+        $this->assertTrue($this->shopSettings()->get($shop->getKey(), 'returns', 'exchange_allowed'));
+        $this->assertSame(7, $this->shopSettings()->get($shop->getKey(), 'returns', 'exchange_window_days'));
+        $this->assertSame('local_only', $this->shopSettings()->get($shop->getKey(), 'fulfillment', 'delivery_scope'));
+    }
+
+    public function test_merchant_can_update_shop_return_exchange_policy_and_delivery_scope(): void
+    {
+        $merchant = $this->merchantFixture('Shop Policy Merchant');
+        $shop = $this->shopFixture($merchant);
+        $this->assignMerchantRole($merchant->user);
+
+        $response = $this->actingAs($merchant->user)
+            ->withSession([
+                'merchant_id' => $merchant->getKey(),
+                'active_shop_id' => $shop->getKey(),
+            ])
+            ->put(route('merchant.settings.update'), [
+                'active_tab' => 'orders',
+                'settings' => $this->defaultMerchantSettingsPayload(),
+                'shop_settings' => [
+                    'returns' => [
+                        'refund_allowed' => '1',
+                        'refund_window_days' => '5',
+                        'exchange_allowed' => '1',
+                        'exchange_window_days' => '10',
+                    ],
+                    'fulfillment' => [
+                        'delivery_enabled' => '1',
+                        'delivery_scope' => 'nationwide',
+                        'pickup_enabled' => '1',
+                    ],
+                ],
+            ]);
+
+        $response
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Merchant settings updated successfully.');
+
+        $this->assertTrue($this->shopSettings()->get($shop->getKey(), 'returns', 'refund_allowed'));
+        $this->assertSame(5, $this->shopSettings()->get($shop->getKey(), 'returns', 'refund_window_days'));
+        $this->assertTrue($this->shopSettings()->get($shop->getKey(), 'returns', 'exchange_allowed'));
+        $this->assertSame(10, $this->shopSettings()->get($shop->getKey(), 'returns', 'exchange_window_days'));
+        $this->assertSame('nationwide', $this->shopSettings()->get($shop->getKey(), 'fulfillment', 'delivery_scope'));
+    }
+
+    public function test_disabled_return_or_exchange_policy_saves_window_as_zero(): void
+    {
+        $merchant = $this->merchantFixture('Disabled Policy Merchant');
+        $shop = $this->shopFixture($merchant);
+        $this->assignMerchantRole($merchant->user);
+
+        $this->actingAs($merchant->user)
+            ->withSession([
+                'merchant_id' => $merchant->getKey(),
+                'active_shop_id' => $shop->getKey(),
+            ])
+            ->put(route('merchant.settings.update'), [
+                'active_tab' => 'orders',
+                'settings' => $this->defaultMerchantSettingsPayload(),
+                'shop_settings' => [
+                    'returns' => [
+                        'refund_allowed' => '0',
+                        'refund_window_days' => '12',
+                        'exchange_allowed' => '0',
+                        'exchange_window_days' => '15',
+                    ],
+                    'fulfillment' => [
+                        'delivery_enabled' => '1',
+                        'delivery_scope' => 'local_only',
+                        'pickup_enabled' => '1',
+                    ],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertFalse($this->shopSettings()->get($shop->getKey(), 'returns', 'refund_allowed'));
+        $this->assertSame(0, $this->shopSettings()->get($shop->getKey(), 'returns', 'refund_window_days'));
+        $this->assertFalse($this->shopSettings()->get($shop->getKey(), 'returns', 'exchange_allowed'));
+        $this->assertSame(0, $this->shopSettings()->get($shop->getKey(), 'returns', 'exchange_window_days'));
+    }
+
+    public function test_delivery_scope_accepts_local_only_and_nationwide(): void
+    {
+        $merchant = $this->merchantFixture('Delivery Scope Merchant');
+        $shop = $this->shopFixture($merchant);
+
+        $this->shopSettings()->setTyped($shop->getKey(), 'fulfillment', 'delivery_scope', 'local_only', ShopSetting::TYPE_STRING);
+        $this->assertSame('local_only', $this->shopSettings()->get($shop->getKey(), 'fulfillment', 'delivery_scope'));
+
+        $this->shopSettings()->setTyped($shop->getKey(), 'fulfillment', 'delivery_scope', 'nationwide', ShopSetting::TYPE_STRING);
+        $this->assertSame('nationwide', $this->shopSettings()->get($shop->getKey(), 'fulfillment', 'delivery_scope'));
+    }
+
+    public function test_invalid_delivery_scope_is_rejected(): void
+    {
+        $merchant = $this->merchantFixture('Invalid Delivery Scope Merchant');
+        $shop = $this->shopFixture($merchant);
+        $this->assignMerchantRole($merchant->user);
+
+        $this->actingAs($merchant->user)
+            ->withSession([
+                'merchant_id' => $merchant->getKey(),
+                'active_shop_id' => $shop->getKey(),
+            ])
+            ->from(route('merchant.settings.edit'))
+            ->put(route('merchant.settings.update'), [
+                'shop_settings' => [
+                    'fulfillment' => [
+                        'delivery_scope' => 'international',
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('merchant.settings.edit'))
+            ->assertSessionHasErrors('shop_settings.fulfillment.delivery_scope');
+    }
+
+    public function test_negative_return_exchange_window_days_are_rejected(): void
+    {
+        $merchant = $this->merchantFixture('Negative Policy Merchant');
+        $shop = $this->shopFixture($merchant);
+        $this->assignMerchantRole($merchant->user);
+
+        $this->actingAs($merchant->user)
+            ->withSession([
+                'merchant_id' => $merchant->getKey(),
+                'active_shop_id' => $shop->getKey(),
+            ])
+            ->from(route('merchant.settings.edit'))
+            ->put(route('merchant.settings.update'), [
+                'shop_settings' => [
+                    'returns' => [
+                        'refund_allowed' => '1',
+                        'refund_window_days' => '-1',
+                        'exchange_allowed' => '1',
+                        'exchange_window_days' => '-2',
+                    ],
+                    'fulfillment' => [
+                        'delivery_scope' => 'local_only',
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('merchant.settings.edit'))
+            ->assertSessionHasErrors([
+                'shop_settings.returns.refund_window_days',
+                'shop_settings.returns.exchange_window_days',
+            ]);
+    }
+
     private function settings(): MerchantSettingsService
     {
         return app(MerchantSettingsService::class);
     }
 
+    private function shopSettings(): ShopSettingsService
+    {
+        return app(ShopSettingsService::class);
+    }
+
     private function initializer(): MerchantSettingsInitializer
     {
         return app(MerchantSettingsInitializer::class);
+    }
+
+    private function shopInitializer(): ShopSettingsInitializer
+    {
+        return app(ShopSettingsInitializer::class);
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function defaultMerchantSettingsPayload(): array
+    {
+        $payload = [];
+
+        foreach ($this->initializer()->defaults() as $group => $settings) {
+            foreach ($settings as $key => $definition) {
+                $payload[$group][$key] = $definition['value'];
+            }
+        }
+
+        return $payload;
     }
 
     private function merchantFixture(string $businessName): MerchantProfile
@@ -533,6 +739,25 @@ class MerchantSettingsFoundationTest extends TestCase
             'role_id' => $roleId,
             'created_at' => now(),
             'updated_at' => now(),
+        ]);
+    }
+
+    private function shopFixture(MerchantProfile $merchant): Shop
+    {
+        $category = ProductCategory::query()->create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Apparel '.Str::random(6),
+            'slug' => 'apparel-'.Str::random(6),
+            'status' => 'active',
+        ]);
+
+        return Shop::query()->create([
+            'merchant_id' => $merchant->getKey(),
+            'root_product_category_id' => $category->getKey(),
+            'name' => 'Policy Shop '.Str::random(6),
+            'slug' => 'policy-shop-'.Str::random(6),
+            'address_line_1' => 'Main Road',
+            'status' => 'active',
         ]);
     }
 }

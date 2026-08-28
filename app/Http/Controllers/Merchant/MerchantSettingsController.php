@@ -15,6 +15,7 @@ use App\Services\Merchant\ShopSettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -152,7 +153,7 @@ class MerchantSettingsController extends Controller
                 }
 
                 $value = $this->normalizeInputValue($rawValue, $definition['type'], true);
-                $value = $this->normalizeShopSettingValue($group, $key, $value);
+                $value = $this->normalizeShopSettingValue($group, $key, $value, $shopPayload);
 
                 try {
                     $this->shopSettings->setTyped($shopId, $group, $key, $value, $definition['type']);
@@ -173,6 +174,7 @@ class MerchantSettingsController extends Controller
     {
         $validated = $request->validate([
             'shop_settings.fulfillment.delivery_enabled' => ['nullable', 'boolean'],
+            'shop_settings.fulfillment.delivery_scope' => ['nullable', Rule::in(['local_only', 'nationwide'])],
             'shop_settings.fulfillment.delivery_min_order_amount' => ['nullable', 'numeric', 'gte:0'],
             'shop_settings.fulfillment.delivery_flat_charge' => ['nullable', 'numeric', 'gte:0'],
             'shop_settings.fulfillment.free_delivery_above' => ['nullable', 'numeric', 'gte:0'],
@@ -187,6 +189,10 @@ class MerchantSettingsController extends Controller
             'shop_settings.payment.merchant_upi_enabled' => ['nullable', 'boolean'],
             'shop_settings.payment.merchant_upi_id' => ['nullable', 'string', 'max:191'],
             'shop_settings.payment.merchant_upi_payee_name' => ['nullable', 'string', 'max:191'],
+            'shop_settings.returns.refund_allowed' => ['nullable', 'boolean'],
+            'shop_settings.returns.refund_window_days' => ['nullable', 'integer', 'gte:0'],
+            'shop_settings.returns.exchange_allowed' => ['nullable', 'boolean'],
+            'shop_settings.returns.exchange_window_days' => ['nullable', 'integer', 'gte:0'],
             'merchant_upi_qr' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
 
@@ -239,10 +245,27 @@ class MerchantSettingsController extends Controller
         }
     }
 
-    private function normalizeShopSettingValue(string $group, string $key, mixed $value): mixed
+    /**
+     * @param array<string, mixed> $shopPayload
+     */
+    private function normalizeShopSettingValue(string $group, string $key, mixed $value, array $shopPayload): mixed
     {
+        if ($group === 'returns') {
+            if ($key === 'refund_window_days') {
+                return (bool) data_get($shopPayload, 'returns.refund_allowed', false) ? ($value ?? 0) : 0;
+            }
+
+            if ($key === 'exchange_window_days') {
+                return (bool) data_get($shopPayload, 'returns.exchange_allowed', false) ? ($value ?? 0) : 0;
+            }
+        }
+
         if ($group !== 'fulfillment') {
             return $value;
+        }
+
+        if ($key === 'delivery_scope') {
+            return $value ?: 'local_only';
         }
 
         if (in_array($key, ['delivery_min_order_amount', 'free_delivery_above'], true)) {

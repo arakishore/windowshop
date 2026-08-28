@@ -247,3 +247,99 @@ Do not duplicate functionality already present in the project.
 Before implementation, inspect the existing schema and tell me if any suggested field or foreign key conflicts with the current WindowShop architecture.
 
 Then implement the feature step-by-step with minimal changes to existing working modules.
+
+
+Yes. I remember several items we deliberately **bypassed/deferred for later versions** while building WindowShop. It is a good time to maintain a proper **V2 / Future Features backlog**.
+
+From our work so far, these are the main ones:
+
+| Module                     | Deferred Feature                                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Products**               | Product grouping / related products for same design in different colors                                                 |
+| **Wishlist**               | Color-aware wishlist; currently wishlist saves the product only                                                         |
+| **Checkout**               | True multi-merchant checkout — one cart containing products from multiple shops and creating separate shop orders       |
+| **Payments**               | Full online payment gateway                                                                                             |
+| **Payments**               | Refund handling for already-paid customer cancellations                                                                 |
+| **Pickup**                 | Customer-selectable pickup date/time / scheduled pickup                                                                 |
+| **Delivery / Logistics**   | Dedicated delivery module                                                                                               |
+| **Delivery / Logistics**   | Courier/driver assignment                                                                                               |
+| **Delivery / Logistics**   | Shipment tracking                                                                                                       |
+| **Delivery / Logistics**   | Pickup from merchant → in transit → out for delivery tracking                                                           |
+| **Delivery / Logistics**   | Failed delivery attempts / rescheduling / reasons                                                                       |
+| **Delivery / Logistics**   | Proof of delivery                                                                                                       |
+| **Delivery / Logistics**   | Return-to-origin (RTO) / post-dispatch exceptions                                                                       |
+| **Delivery**               | Unified delivery API/integration for merchants                                                                          |
+| **Orders**                 | Returns workflow                                                                                                        |
+| **Orders**                 | Exchange workflow/customer exchange requests                                                                            |
+| **Orders**                 | Buy Again / Reorder                                                                                                     |
+| **Orders**                 | Product reviews from completed orders                                                                                   |
+| **Orders**                 | Invoice / receipt functionality                                                                                         |
+| **Customer Account**       | Mobile number change with OTP verification                                                                              |
+| **Customer Account**       | Email change with verification                                                                                          |
+| **Customer Profile**       | More profile fields; currently we intentionally kept profile editing mainly to Name                                     |
+| **Customer Communication** | Customer reply/commenting on orders                                                                                     |
+| **Catalog/Home**           | Some advanced merchandising/homepage offer functionality we intentionally left until the core commerce flow is complete |
+
+A few of these are particularly important architectural items rather than ordinary features.
+
+### High-priority V2 architecture
+
+I would mark these separately:
+
+**1. Multi-Merchant Checkout ⭐**
+This is actually the next major thing we said we'd investigate. A customer should eventually be able to buy:
+
+```text
+Cart
+├── Vana Women's Studio
+│   ├── Product A
+│   └── Product B
+│
+├── FitZone Sports
+│   └── Product C
+│
+└── Urban Man
+    └── Product D
+
+            ↓
+
+        One Checkout
+
+            ↓
+
+Separate order per shop
+```
+
+**2. Delivery / Logistics ⭐**
+We deliberately kept the current order workflow extensible and postponed the real logistics layer.
+
+**3. Online Payments + Refunds ⭐**
+Especially important before allowing automatic cancellation of already-paid orders.
+
+**4. Product Groups / Color Relationships ⭐**
+We deliberately left the wishlist product-level until we decide how Red/Blue/Green versions of the same design should be related.
+
+**5. Returns / Exchanges ⭐**
+These should be built on top of the now-stable order lifecycle rather than mixed into basic cancellation.
+
+I suggest we create a permanent document in the project called something like:
+
+> **WindowShop – V2 / Deferred Features Backlog**
+
+and whenever we say *“later,” “V2,” “skip for now,”* etc., add it there. That will prevent us from forgetting features while keeping V1 controlled.
+Added to our **WindowShop V2 / Deferred Features Backlog**:
+
+* **Social Login**
+
+  * Google Login
+  * Facebook Login
+* **Product Sharing**
+
+  * Share product to social media
+  * Product share links with image/title/URL
+* **WhatsApp Integration**
+
+  * Share product via WhatsApp
+  * **Chat with Merchant on WhatsApp** directly from product/shop pages, ideally including product name/link in the pre-filled message.
+
+ Ask A Question product

@@ -30,6 +30,7 @@ class ShopSettingsInitializer
             ],
             'fulfillment' => [
                 'delivery_enabled' => ['value' => true, 'type' => ShopSetting::TYPE_BOOLEAN],
+                'delivery_scope' => ['value' => 'local_only', 'type' => ShopSetting::TYPE_STRING],
                 'delivery_min_order_amount' => ['value' => null, 'type' => ShopSetting::TYPE_DECIMAL],
                 'delivery_flat_charge' => ['value' => 0, 'type' => ShopSetting::TYPE_DECIMAL],
                 'free_delivery_above' => ['value' => null, 'type' => ShopSetting::TYPE_DECIMAL],
@@ -37,6 +38,12 @@ class ShopSettingsInitializer
                 'delivery_estimate_max_days' => ['value' => null, 'type' => ShopSetting::TYPE_INTEGER],
                 'pickup_enabled' => ['value' => true, 'type' => ShopSetting::TYPE_BOOLEAN],
                 'pickup_instructions' => ['value' => null, 'type' => ShopSetting::TYPE_STRING],
+            ],
+            'returns' => [
+                'refund_allowed' => ['value' => false, 'type' => ShopSetting::TYPE_BOOLEAN],
+                'refund_window_days' => ['value' => 0, 'type' => ShopSetting::TYPE_INTEGER],
+                'exchange_allowed' => ['value' => true, 'type' => ShopSetting::TYPE_BOOLEAN],
+                'exchange_window_days' => ['value' => 7, 'type' => ShopSetting::TYPE_INTEGER],
             ],
         ];
     }

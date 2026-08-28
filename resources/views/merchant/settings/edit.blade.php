@@ -256,7 +256,7 @@
         $settingsTabs = [
             'general' => ['General', 'ph-gear'],
             'pos' => ['POS', 'ph-desktop'],
-            'orders' => ['Orders', 'ph-receipt'],
+            'orders' => ['Refund / Exchange', 'ph-receipt'],
             'inventory' => ['Inventory', 'ph-stack'],
             'products' => ['Products', 'ph-package'],
             'payments' => ['Payments', 'ph-credit-card'],
@@ -508,10 +508,99 @@
                 <div class="{{ $tabPaneClass('orders') }}" id="settings_orders" role="tabpanel">
                     <div class="card merchant-settings-card">
                         <div class="card-header">
-                            <h5 class="mb-0">Orders</h5>
+                            <h5 class="mb-0">Refund & Exchange Policy</h5>
+                            <div class="text-muted fs-sm mt-1">Shop-level customer policy used by storefront orders.</div>
                         </div>
-                        <div class="card-body text-muted">
-                            Online order preferences will appear here later.
+                        <div class="card-body">
+                            @if ($activeShop)
+                                <div class="settings-shop-label rounded p-3 mb-3">
+                                    <div class="text-muted fs-sm">Policy settings for:</div>
+                                    <div class="fw-semibold">{{ $activeShopLabel }}</div>
+                                </div>
+
+                                @php
+                                    $refundAllowed = $shopField('returns', 'refund_allowed');
+                                    $refundWindowDays = $shopField('returns', 'refund_window_days');
+                                    $exchangeAllowed = $shopField('returns', 'exchange_allowed');
+                                    $exchangeWindowDays = $shopField('returns', 'exchange_window_days');
+                                @endphp
+
+                                <div class="merchant-settings-grid">
+                                    <div>
+                                        <input type="hidden" name="{{ $refundAllowed['name'] }}" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                type="checkbox"
+                                                class="form-check-input js-return-policy-toggle {{ $errors->has($refundAllowed['errorKey']) ? 'is-invalid' : '' }}"
+                                                id="{{ $refundAllowed['id'] }}"
+                                                name="{{ $refundAllowed['name'] }}"
+                                                value="1"
+                                                data-window-target="#{{ $refundWindowDays['id'] }}"
+                                                @checked((bool) $refundAllowed['value'])
+                                            >
+                                            <label class="form-check-label fw-semibold" for="{{ $refundAllowed['id'] }}">Refund Allowed</label>
+                                        </div>
+                                        @if ($errors->has($refundAllowed['errorKey']))
+                                            <div class="invalid-feedback d-block">{{ $errors->first($refundAllowed['errorKey']) }}</div>
+                                        @endif
+                                    </div>
+
+                                    <div>
+                                        <label for="{{ $refundWindowDays['id'] }}" class="form-label fw-semibold">Refund Window Days</label>
+                                        <input
+                                            id="{{ $refundWindowDays['id'] }}"
+                                            type="number"
+                                            name="{{ $refundWindowDays['name'] }}"
+                                            value="{{ $refundWindowDays['value'] }}"
+                                            class="form-control js-return-policy-window {{ $errors->has($refundWindowDays['errorKey']) ? 'is-invalid' : '' }}"
+                                            min="0"
+                                            step="1"
+                                        >
+                                        <div class="form-text">Saved as 0 when refunds are not allowed.</div>
+                                        @if ($errors->has($refundWindowDays['errorKey']))
+                                            <div class="invalid-feedback d-block">{{ $errors->first($refundWindowDays['errorKey']) }}</div>
+                                        @endif
+                                    </div>
+
+                                    <div>
+                                        <input type="hidden" name="{{ $exchangeAllowed['name'] }}" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                type="checkbox"
+                                                class="form-check-input js-return-policy-toggle {{ $errors->has($exchangeAllowed['errorKey']) ? 'is-invalid' : '' }}"
+                                                id="{{ $exchangeAllowed['id'] }}"
+                                                name="{{ $exchangeAllowed['name'] }}"
+                                                value="1"
+                                                data-window-target="#{{ $exchangeWindowDays['id'] }}"
+                                                @checked((bool) $exchangeAllowed['value'])
+                                            >
+                                            <label class="form-check-label fw-semibold" for="{{ $exchangeAllowed['id'] }}">Exchange Allowed</label>
+                                        </div>
+                                        @if ($errors->has($exchangeAllowed['errorKey']))
+                                            <div class="invalid-feedback d-block">{{ $errors->first($exchangeAllowed['errorKey']) }}</div>
+                                        @endif
+                                    </div>
+
+                                    <div>
+                                        <label for="{{ $exchangeWindowDays['id'] }}" class="form-label fw-semibold">Exchange Window Days</label>
+                                        <input
+                                            id="{{ $exchangeWindowDays['id'] }}"
+                                            type="number"
+                                            name="{{ $exchangeWindowDays['name'] }}"
+                                            value="{{ $exchangeWindowDays['value'] }}"
+                                            class="form-control js-return-policy-window {{ $errors->has($exchangeWindowDays['errorKey']) ? 'is-invalid' : '' }}"
+                                            min="0"
+                                            step="1"
+                                        >
+                                        <div class="form-text">Saved as 0 when exchanges are not allowed.</div>
+                                        @if ($errors->has($exchangeWindowDays['errorKey']))
+                                            <div class="invalid-feedback d-block">{{ $errors->first($exchangeWindowDays['errorKey']) }}</div>
+                                        @endif
+                                    </div>
+                                </div>
+                            @else
+                                <div class="text-muted">No active shop is available for return and exchange policy settings.</div>
+                            @endif
                         </div>
                     </div>
 
@@ -843,6 +932,7 @@
 
                                 @php
                                     $deliveryEnabled = $shopField('fulfillment', 'delivery_enabled');
+                                    $deliveryScope = $shopField('fulfillment', 'delivery_scope');
                                     $deliveryMinOrder = $shopField('fulfillment', 'delivery_min_order_amount');
                                     $deliveryFlatCharge = $shopField('fulfillment', 'delivery_flat_charge');
                                     $freeDeliveryAbove = $shopField('fulfillment', 'free_delivery_above');
@@ -893,7 +983,34 @@
                                 </div>
 
                                 <div class="mt-3 js-storefront-delivery-dependent">
-                                    <div class="settings-section-title">Delivery Pricing</div>
+                                    <div class="settings-section-title">Delivery Coverage</div>
+                                    <div>
+                                        <label class="form-label fw-semibold d-block">Coverage Area</label>
+                                        <div class="d-flex flex-wrap gap-3" role="radiogroup" aria-label="Delivery coverage">
+                                            @foreach ([
+                                                'local_only' => 'Local Area / City Only',
+                                                'nationwide' => 'All India',
+                                            ] as $scope => $label)
+                                                <div class="form-check form-check-inline mb-0">
+                                                    <input
+                                                        type="radio"
+                                                        class="form-check-input {{ $errors->has($deliveryScope['errorKey']) ? 'is-invalid' : '' }}"
+                                                        id="{{ $deliveryScope['id'] }}_{{ $scope }}"
+                                                        name="{{ $deliveryScope['name'] }}"
+                                                        value="{{ $scope }}"
+                                                        @checked($deliveryScope['value'] === $scope)
+                                                    >
+                                                    <label class="form-check-label" for="{{ $deliveryScope['id'] }}_{{ $scope }}">{{ $label }}</label>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                        <div class="form-text">PIN/postcode checks still decide final delivery availability.</div>
+                                        @if ($errors->has($deliveryScope['errorKey']))
+                                            <div class="invalid-feedback d-block">{{ $errors->first($deliveryScope['errorKey']) }}</div>
+                                        @endif
+                                    </div>
+
+                                    <div class="settings-section-title mt-3">Delivery Pricing</div>
                                     <div class="merchant-settings-grid">
                                         <div>
                                             <label for="{{ $deliveryMinOrder['id'] }}" class="form-label fw-semibold">Minimum Delivery Order</label>
@@ -1214,6 +1331,7 @@
             const pickupToggle = document.querySelector('.js-storefront-pickup-toggle');
             const codToggle = document.querySelector('.js-storefront-cod-toggle');
             const upiToggle = document.querySelector('.js-storefront-upi-toggle');
+            const returnPolicyToggles = Array.from(document.querySelectorAll('.js-return-policy-toggle'));
             const activeTabInput = document.querySelector('.js-active-settings-tab');
             const exampleAmount = 1043.28;
             const formatMoney = (value) => `Rs ${Number(value || 0).toFixed(2)}`;
@@ -1299,6 +1417,22 @@
                 toggleElements('.js-storefront-upi-dependent', upiToggle?.checked ?? false);
             };
 
+            const renderReturnPolicyWindows = () => {
+                returnPolicyToggles.forEach((toggle) => {
+                    const windowInput = document.querySelector(toggle.dataset.windowTarget || '');
+
+                    if (!windowInput) {
+                        return;
+                    }
+
+                    windowInput.disabled = !toggle.checked;
+
+                    if (!toggle.checked) {
+                        windowInput.value = '0';
+                    }
+                });
+            };
+
             const setupImagePreview = (inputId, previewId, placeholderId) => {
                 const input = document.getElementById(inputId);
                 const preview = document.getElementById(previewId);
@@ -1328,6 +1462,7 @@
             pickupToggle?.addEventListener('change', renderStorefrontDependencies);
             codToggle?.addEventListener('change', renderStorefrontDependencies);
             upiToggle?.addEventListener('change', renderStorefrontDependencies);
+            returnPolicyToggles.forEach((toggle) => toggle.addEventListener('change', renderReturnPolicyWindows));
             document.querySelectorAll('[data-settings-tab]').forEach((button) => {
                 button.addEventListener('shown.bs.tab', () => {
                     if (activeTabInput) {
@@ -1340,6 +1475,7 @@
             renderPreview();
             renderReceiptPreview();
             renderStorefrontDependencies();
+            renderReturnPolicyWindows();
         });
     </script>
 @endpush
