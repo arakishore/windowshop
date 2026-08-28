@@ -38,6 +38,33 @@
         'expired' => 'Expired',
         'disabled' => 'Disabled',
     ];
+    $showReturnPolicyControls = ($productRoutePrefix ?? 'admin') === 'merchant';
+    $productReturnPolicy = $product?->returnPolicy;
+    $shopReturnPolicy = $shopReturnPolicy ?? [
+        'refund_allowed' => false,
+        'refund_window_days' => 0,
+        'exchange_allowed' => true,
+        'exchange_window_days' => 7,
+    ];
+    $policyMode = function (string $key) use ($productReturnPolicy): string {
+        $value = $productReturnPolicy?->{$key};
+
+        if ($value === null) {
+            return 'inherit';
+        }
+
+        return $value ? 'allowed' : 'not_allowed';
+    };
+    $selectedRefundPolicy = old('return_policy.refund', $policyMode('refund_allowed'));
+    $selectedRefundWindowDays = old('return_policy.refund_window_days', $productReturnPolicy?->refund_window_days ?? $shopReturnPolicy['refund_window_days']);
+    $selectedExchangePolicy = old('return_policy.exchange', $policyMode('exchange_allowed'));
+    $selectedExchangeWindowDays = old('return_policy.exchange_window_days', $productReturnPolicy?->exchange_window_days ?? $shopReturnPolicy['exchange_window_days']);
+    $shopRefundSummary = $shopReturnPolicy['refund_allowed']
+        ? 'Refund within '.$shopReturnPolicy['refund_window_days'].' '.Str::plural('day', (int) $shopReturnPolicy['refund_window_days'])
+        : 'No Refund';
+    $shopExchangeSummary = $shopReturnPolicy['exchange_allowed']
+        ? 'Exchange within '.$shopReturnPolicy['exchange_window_days'].' '.Str::plural('day', (int) $shopReturnPolicy['exchange_window_days'])
+        : 'No Exchange';
 @endphp
 
 @if ($errors->any())
@@ -211,6 +238,104 @@
             </div>
         @endif
 
+        @if($showReturnPolicyControls)
+            <div class="col-12">
+                <div class="border-top pt-3 mt-2">
+                    <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-lg-between gap-2 mb-3">
+                        <div>
+                            <div class="fw-semibold">Refund / Exchange Policy</div>
+                            <div class="text-muted small">Optional product override. Leave as shop policy unless this product needs a different rule.</div>
+                        </div>
+                        <div class="text-lg-end small">
+                            <div class="text-muted">Shop Policy</div>
+                            <div class="fw-semibold">{{ $shopRefundSummary }}</div>
+                            <div class="fw-semibold">{{ $shopExchangeSummary }}</div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-lg-7">
+                            <label class="form-label fw-semibold d-block">Refund</label>
+                            <div class="d-flex flex-column gap-2">
+                                @foreach ([
+                                    'inherit' => 'Use Shop Policy',
+                                    'allowed' => 'Allowed',
+                                    'not_allowed' => 'Not Allowed',
+                                ] as $mode => $label)
+                                    <label class="form-check mb-0">
+                                        <input
+                                            type="radio"
+                                            class="form-check-input js-product-policy-mode @error('return_policy.refund') is-invalid @enderror"
+                                            name="return_policy[refund]"
+                                            value="{{ $mode }}"
+                                            data-window-target="#return_policy_refund_window_days"
+                                            @checked($selectedRefundPolicy === $mode)
+                                        >
+                                        <span class="form-check-label">{{ $label }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                            @error('return_policy.refund')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="col-lg-5">
+                            <label for="return_policy_refund_window_days" class="form-label fw-semibold">Refund Window Days</label>
+                            <input
+                                id="return_policy_refund_window_days"
+                                type="number"
+                                name="return_policy[refund_window_days]"
+                                value="{{ $selectedRefundWindowDays }}"
+                                class="form-control js-product-policy-window @error('return_policy.refund_window_days') is-invalid @enderror"
+                                min="0"
+                                step="1"
+                            >
+                            <div class="form-text">Used only when refund is explicitly allowed.</div>
+                            @error('return_policy.refund_window_days')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="col-lg-7">
+                            <label class="form-label fw-semibold d-block">Exchange</label>
+                            <div class="d-flex flex-column gap-2">
+                                @foreach ([
+                                    'inherit' => 'Use Shop Policy',
+                                    'allowed' => 'Allowed',
+                                    'not_allowed' => 'Not Allowed',
+                                ] as $mode => $label)
+                                    <label class="form-check mb-0">
+                                        <input
+                                            type="radio"
+                                            class="form-check-input js-product-policy-mode @error('return_policy.exchange') is-invalid @enderror"
+                                            name="return_policy[exchange]"
+                                            value="{{ $mode }}"
+                                            data-window-target="#return_policy_exchange_window_days"
+                                            @checked($selectedExchangePolicy === $mode)
+                                        >
+                                        <span class="form-check-label">{{ $label }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                            @error('return_policy.exchange')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="col-lg-5">
+                            <label for="return_policy_exchange_window_days" class="form-label fw-semibold">Exchange Window Days</label>
+                            <input
+                                id="return_policy_exchange_window_days"
+                                type="number"
+                                name="return_policy[exchange_window_days]"
+                                value="{{ $selectedExchangeWindowDays }}"
+                                class="form-control js-product-policy-window @error('return_policy.exchange_window_days') is-invalid @enderror"
+                                min="0"
+                                step="1"
+                            >
+                            <div class="form-text">Used only when exchange is explicitly allowed.</div>
+                            @error('return_policy.exchange_window_days')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         @if($product && $merchantTaxEnabled)
             <div class="col-12">
                 <div class="border-top pt-3 mt-2">
@@ -290,6 +415,7 @@
             const taxCategoryDefault = document.querySelector('.js-tax-category-default');
             const taxEffective = document.querySelector('.js-tax-effective');
             const taxCurrentCategory = document.querySelector('.js-tax-current-category');
+            const productPolicyModes = Array.from(document.querySelectorAll('.js-product-policy-mode'));
             let productNameTouched = productNameInput ? productNameInput.value.trim() !== '' : true;
             let lastSuggestedProductName = '';
 
@@ -455,6 +581,25 @@
                 }
             };
 
+            const syncProductPolicyWindows = function () {
+                const targets = new Set(productPolicyModes.map((input) => input.dataset.windowTarget).filter(Boolean));
+
+                targets.forEach(function (selector) {
+                    const selected = productPolicyModes.find((input) => input.dataset.windowTarget === selector && input.checked);
+                    const windowInput = document.querySelector(selector);
+
+                    if (!windowInput) {
+                        return;
+                    }
+
+                    windowInput.disabled = !selected || selected.value !== 'allowed';
+
+                    if (selected && selected.value === 'not_allowed') {
+                        windowInput.value = '0';
+                    }
+                });
+            };
+
             if (productNameInput) {
                 productNameInput.addEventListener('input', function () {
                     if (productNameInput.value.trim() === '') {
@@ -489,9 +634,13 @@
             if (taxClassSelect) {
                 taxClassSelect.addEventListener('change', syncTaxConfiguration);
             }
+            productPolicyModes.forEach(function (input) {
+                input.addEventListener('change', syncProductPolicyWindows);
+            });
 
             syncCategoryOptions();
             syncTaxConfiguration();
+            syncProductPolicyWindows();
             syncProductNameSuggestion();
         });
     </script>

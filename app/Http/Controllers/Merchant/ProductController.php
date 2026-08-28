@@ -26,6 +26,7 @@ use App\Services\Product\ProductBarcodeService;
 use App\Services\Product\ProductDescriptionTemplateService;
 use App\Services\Product\ProductDuplicationService;
 use App\Services\Product\ProductImageService;
+use App\Services\Product\ProductReturnPolicyService;
 use App\Services\Product\ProductVariantGenerationService;
 use App\Services\Product\ProductVariantManagementService;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
@@ -51,6 +52,7 @@ class ProductController extends Controller
         private readonly ProductImageService $productImageService,
         private readonly ProductDuplicationService $productDuplicationService,
         private readonly MerchantAvailabilityStatusSeeder $availabilityStatusSeeder,
+        private readonly ProductReturnPolicyService $returnPolicyService,
     ) {
     }
 
@@ -108,7 +110,7 @@ class ProductController extends Controller
 
         abort_unless((int) $data['shop_id'] === (int) $shop->getKey(), 404);
 
-        $product = DB::transaction(function () use ($data, $merchandising, $shop): Product {
+        $product = DB::transaction(function () use ($request, $data, $merchandising, $shop): Product {
             $product = Product::create([
                 'merchant_id' => $shop->merchant_id,
                 'shop_id' => $shop->getKey(),
@@ -128,6 +130,7 @@ class ProductController extends Controller
 
             $product->updateQuietly(['slug' => $product->slugFromName()]);
             $this->variantManagementService->ensureBaseVariant($product, Auth::user());
+            $this->returnPolicyService->sync($product, $request->returnPolicyConfiguration());
 
             return $product;
         });
@@ -160,6 +163,7 @@ class ProductController extends Controller
                 'brand',
                 'availabilityStatus',
                 'taxClass.rates.components',
+                'returnPolicy',
                 'attributes',
                 'variants.attributes.group',
                 'variants.attributes.value',
@@ -210,7 +214,10 @@ class ProductController extends Controller
             $updates['short_description'] = $this->nullable($data['short_description'] ?? null);
         }
 
-        $product->forceFill($updates)->save();
+        DB::transaction(function () use ($product, $updates, $request): void {
+            $product->forceFill($updates)->save();
+            $this->returnPolicyService->sync($product, $request->returnPolicyConfiguration());
+        });
 
         return redirect()
             ->route('merchant.products.edit', $product)
@@ -621,6 +628,7 @@ class ProductController extends Controller
             'taxClasses' => $this->taxClasses(),
             'availabilityStatuses' => $this->availabilityStatuses($shop->merchant_id, $product),
             'merchantTaxEnabled' => $this->merchantTaxEnabled($shop, $product),
+            'shopReturnPolicy' => $this->returnPolicyService->shopPolicy($shop),
             'statuses' => $this->statuses(),
             'productRoutePrefix' => 'merchant',
         ];

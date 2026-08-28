@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\ValidatesProductReturnPolicy;
 use App\Models\Brand;
 use App\Models\ProductCategory;
 use App\Models\Shop;
@@ -13,6 +14,8 @@ use Illuminate\Validation\Validator;
 
 class StoreProductQuickCreateRequest extends FormRequest
 {
+    use ValidatesProductReturnPolicy;
+
     public function authorize(): bool
     {
         return true;
@@ -52,6 +55,7 @@ class StoreProductQuickCreateRequest extends FormRequest
             'status' => ['required', Rule::in(['draft', 'active', 'inactive', 'archived'])],
             'tax_mode' => ['sometimes', Rule::in(['inherit'])],
             'tax_class_id' => ['prohibited'],
+            ...$this->returnPolicyRules(),
         ];
     }
 

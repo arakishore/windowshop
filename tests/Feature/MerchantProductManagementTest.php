@@ -8,6 +8,7 @@ use App\Models\ProductAttributeGroup;
 use App\Models\ProductAttributeGroupValue;
 use App\Models\ProductCategory;
 use App\Models\ProductCategoryAttributeGroup;
+use App\Models\ProductReturnPolicy;
 use App\Models\Shop;
 use App\Models\TaxClass;
 use App\Models\TaxRateComponent;
@@ -437,6 +438,203 @@ class MerchantProductManagementTest extends TestCase
         $this->assertTrue($otherUser->exists);
     }
 
+    public function test_no_product_policy_row_means_shop_policy_inheritance(): void
+    {
+        [$user, $shop, $category] = $this->merchantFixture();
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->post(route('merchant.products.store'), [
+                'shop_id' => $shop->getKey(),
+                'product_category_id' => $category->getKey(),
+                'brand_id' => null,
+                'product_name' => 'Inherited Policy Product',
+                'status' => 'draft',
+            ])
+            ->assertRedirect();
+
+        $product = Product::query()->where('product_name', 'Inherited Policy Product')->firstOrFail();
+
+        $this->assertDatabaseMissing('product_return_policies', [
+            'product_id' => $product->getKey(),
+        ]);
+    }
+
+    public function test_refund_can_be_explicitly_enabled_with_window_override(): void
+    {
+        [$user, $shop, $category] = $this->merchantFixture();
+        $product = $this->productFixture($shop, $category);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->put(route('merchant.products.update', $product), $this->productUpdatePayload($product, [
+                'refund' => 'allowed',
+                'refund_window_days' => '5',
+                'exchange' => 'inherit',
+            ]))
+            ->assertRedirect();
+
+        $policy = $product->returnPolicy()->firstOrFail();
+
+        $this->assertTrue($policy->refund_allowed);
+        $this->assertSame(5, $policy->refund_window_days);
+        $this->assertNull($policy->exchange_allowed);
+        $this->assertNull($policy->exchange_window_days);
+    }
+
+    public function test_refund_can_be_explicitly_disabled_and_forces_window_zero(): void
+    {
+        [$user, $shop, $category] = $this->merchantFixture();
+        $product = $this->productFixture($shop, $category);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->put(route('merchant.products.update', $product), $this->productUpdatePayload($product, [
+                'refund' => 'not_allowed',
+                'refund_window_days' => '9',
+                'exchange' => 'inherit',
+            ]))
+            ->assertRedirect();
+
+        $policy = $product->returnPolicy()->firstOrFail();
+
+        $this->assertFalse($policy->refund_allowed);
+        $this->assertSame(0, $policy->refund_window_days);
+    }
+
+    public function test_exchange_can_be_explicitly_enabled_with_window_override(): void
+    {
+        [$user, $shop, $category] = $this->merchantFixture();
+        $product = $this->productFixture($shop, $category);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->put(route('merchant.products.update', $product), $this->productUpdatePayload($product, [
+                'refund' => 'inherit',
+                'exchange' => 'allowed',
+                'exchange_window_days' => '3',
+            ]))
+            ->assertRedirect();
+
+        $policy = $product->returnPolicy()->firstOrFail();
+
+        $this->assertNull($policy->refund_allowed);
+        $this->assertNull($policy->refund_window_days);
+        $this->assertTrue($policy->exchange_allowed);
+        $this->assertSame(3, $policy->exchange_window_days);
+    }
+
+    public function test_exchange_can_be_explicitly_disabled_and_forces_window_zero(): void
+    {
+        [$user, $shop, $category] = $this->merchantFixture();
+        $product = $this->productFixture($shop, $category);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->put(route('merchant.products.update', $product), $this->productUpdatePayload($product, [
+                'refund' => 'inherit',
+                'exchange' => 'not_allowed',
+                'exchange_window_days' => '8',
+            ]))
+            ->assertRedirect();
+
+        $policy = $product->returnPolicy()->firstOrFail();
+
+        $this->assertFalse($policy->exchange_allowed);
+        $this->assertSame(0, $policy->exchange_window_days);
+    }
+
+    public function test_null_fields_correctly_represent_individual_inheritance(): void
+    {
+        [$user, $shop, $category] = $this->merchantFixture();
+        $product = $this->productFixture($shop, $category);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->put(route('merchant.products.update', $product), $this->productUpdatePayload($product, [
+                'refund' => 'inherit',
+                'exchange' => 'allowed',
+                'exchange_window_days' => '4',
+            ]))
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('product_return_policies', [
+            'product_id' => $product->getKey(),
+            'refund_allowed' => null,
+            'refund_window_days' => null,
+            'exchange_allowed' => true,
+            'exchange_window_days' => 4,
+        ]);
+    }
+
+    public function test_negative_product_policy_window_days_are_rejected(): void
+    {
+        [$user, $shop, $category] = $this->merchantFixture();
+        $product = $this->productFixture($shop, $category);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->from(route('merchant.products.edit', $product))
+            ->put(route('merchant.products.update', $product), $this->productUpdatePayload($product, [
+                'refund' => 'allowed',
+                'refund_window_days' => '-1',
+                'exchange' => 'allowed',
+                'exchange_window_days' => '-2',
+            ]))
+            ->assertRedirect(route('merchant.products.edit', $product))
+            ->assertSessionHasErrors([
+                'return_policy.refund_window_days',
+                'return_policy.exchange_window_days',
+            ]);
+    }
+
+    public function test_returning_everything_to_inherit_removes_unnecessary_policy_row(): void
+    {
+        [$user, $shop, $category] = $this->merchantFixture();
+        $product = $this->productFixture($shop, $category);
+
+        ProductReturnPolicy::query()->create([
+            'product_id' => $product->getKey(),
+            'refund_allowed' => true,
+            'refund_window_days' => 5,
+            'exchange_allowed' => false,
+            'exchange_window_days' => 0,
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->put(route('merchant.products.update', $product), $this->productUpdatePayload($product, [
+                'refund' => 'inherit',
+                'exchange' => 'inherit',
+            ]))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('product_return_policies', [
+            'product_id' => $product->getKey(),
+        ]);
+    }
+
+    public function test_merchant_cannot_change_another_shop_product_policy(): void
+    {
+        [$user, $shop] = $this->merchantFixture();
+        [$otherUser, $otherShop, $otherCategory] = $this->merchantFixture('policy-other@example.test', 'Other Policy Shop');
+        $otherProduct = $this->productFixture($otherShop, $otherCategory, 'Other Policy Product');
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->put(route('merchant.products.update', $otherProduct), $this->productUpdatePayload($otherProduct, [
+                'refund' => 'allowed',
+                'refund_window_days' => '6',
+                'exchange' => 'not_allowed',
+            ]))
+            ->assertNotFound();
+
+        $this->assertDatabaseMissing('product_return_policies', [
+            'product_id' => $otherProduct->getKey(),
+        ]);
+        $this->assertTrue($otherUser->exists);
+    }
+
     /**
      * @return array{0: User, 1: Shop, 2: ProductCategory}
      */
@@ -530,6 +728,36 @@ class MerchantProductManagementTest extends TestCase
         ]);
 
         return $user;
+    }
+
+    private function productFixture(Shop $shop, ProductCategory $category, string $name = 'Policy Product'): Product
+    {
+        return Product::query()->create([
+            'merchant_id' => $shop->merchant_id,
+            'shop_id' => $shop->getKey(),
+            'root_product_category_id' => $shop->root_product_category_id,
+            'product_category_id' => $category->getKey(),
+            'product_name' => $name.' '.Str::random(6),
+            'slug' => Str::slug($name).'-'.Str::random(6),
+            'status' => 'draft',
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $returnPolicy
+     * @return array<string, mixed>
+     */
+    private function productUpdatePayload(Product $product, array $returnPolicy): array
+    {
+        return [
+            'shop_id' => $product->shop_id,
+            'product_category_id' => $product->product_category_id,
+            'brand_id' => null,
+            'product_name' => $product->product_name,
+            'status' => 'draft',
+            'tax_mode' => 'inherit',
+            'return_policy' => $returnPolicy,
+        ];
     }
 
     private function createTaxClassWithRate(string $code, string $name, string $totalRate, string $componentRate): TaxClass

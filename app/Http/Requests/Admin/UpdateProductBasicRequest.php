@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\ValidatesProductReturnPolicy;
 use App\Models\Brand;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
@@ -14,6 +15,8 @@ use Illuminate\Validation\Validator;
 
 class UpdateProductBasicRequest extends FormRequest
 {
+    use ValidatesProductReturnPolicy;
+
     private bool $taxConfigurationSubmitted = true;
 
     public function authorize(): bool
@@ -80,6 +83,7 @@ class UpdateProductBasicRequest extends FormRequest
             'status' => ['required', Rule::in(['draft', 'active', 'inactive', 'archived'])],
             'tax_mode' => ['required', Rule::in(['inherit', 'override', 'exempt'])],
             'tax_class_id' => ['nullable', 'integer'],
+            ...$this->returnPolicyRules(),
         ];
     }
 
