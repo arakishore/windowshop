@@ -110,7 +110,21 @@
                             <td>{{ $fulfillmentTypes[$order->fulfilment_type] ?? Str::headline((string) $order->fulfilment_type) }}</td>
                             <td>{{ $paymentMethods[$order->payment_method] ?? Str::headline((string) $order->payment_method) }}</td>
                             <td><span class="badge {{ $paymentStatusClass($order->payment_status) }} bg-opacity-10 text-body">{{ $paymentStatusLabel($order->payment_status) }}</span></td>
-                            <td><span class="badge {{ $statusClass($order->order_status) }} bg-opacity-10 text-body">{{ $statusLabel($order->order_status) }}</span></td>
+                            <td>
+                                <span class="badge {{ $statusClass($order->order_status) }} bg-opacity-10 text-body">{{ $statusLabel($order->order_status) }}</span>
+                                @php($orderStockShortage = $stockShortages[$order->getKey()] ?? ['has_shortage' => false])
+                                @if($orderStockShortage['has_shortage'])
+                                    <div class="mt-1">
+                                        <span class="badge bg-warning bg-opacity-10 text-warning">
+                                            <i class="ph-warning-circle me-1"></i>
+                                            Stock Shortage
+                                        </span>
+                                        @if(filled($orderStockShortage['summary'] ?? null))
+                                            <div class="text-muted fs-sm">{{ $orderStockShortage['summary'] }}</div>
+                                        @endif
+                                    </div>
+                                @endif
+                            </td>
                             <td class="text-end fw-semibold">{{ $money($order->grand_total) }}</td>
                             <td class="text-center">
                                 <a href="{{ route('merchant.orders.show', $order) }}" class="btn btn-light btn-sm">

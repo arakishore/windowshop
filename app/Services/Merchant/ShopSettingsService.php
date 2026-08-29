@@ -68,6 +68,11 @@ class ShopSettingsService
             });
     }
 
+    public function castSetting(ShopSetting $setting): mixed
+    {
+        return $this->castValue($setting->setting_value, $setting->setting_type);
+    }
+
     public function validate(string $group, string $key, mixed $value, ?string $type = null): void
     {
         if ($type !== null && ! in_array($type, $this->supportedTypes(), true)) {

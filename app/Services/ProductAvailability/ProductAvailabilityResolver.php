@@ -13,6 +13,7 @@ class ProductAvailabilityResolver
      *     availability_status_id: int|null,
      *     availability_code: string|null,
      *     availability_label: string,
+     *     availability_status_active: bool,
      *     purchase_allowed: bool,
      *     badge_type: string,
      *     stock_quantity: int,
@@ -26,19 +27,31 @@ class ProductAvailabilityResolver
         $variant = $item instanceof ProductVariant ? $item->loadMissing(['product.availabilityStatus', 'availabilityStatus']) : null;
         $product = $item instanceof Product ? $item->loadMissing('availabilityStatus') : $variant->product;
         $stockQuantity = $variant instanceof ProductVariant ? (int) $variant->stock_quantity : (int) ($product->variants()->sum('stock_quantity'));
+        $rawStatus = $variant?->availabilityStatus ?: $product->availabilityStatus;
         $status = $this->effectiveStatus($product, $variant);
         $isInStock = $stockQuantity > 0;
         $purchaseAllowed = (bool) $status?->purchase_allowed;
-        $canPurchase = $isInStock || $purchaseAllowed;
-        $label = $status?->name ?: ($isInStock ? 'In Stock' : 'Out of Stock');
+        $code = $status?->code;
+        $canPurchase = $purchaseAllowed && match ($code) {
+            ProductAvailabilityStatus::CODE_IN_STOCK => $isInStock,
+            ProductAvailabilityStatus::CODE_BACKORDER,
+            ProductAvailabilityStatus::CODE_PREORDER => true,
+            ProductAvailabilityStatus::CODE_OUT_OF_STOCK,
+            ProductAvailabilityStatus::CODE_COMING_SOON,
+            ProductAvailabilityStatus::CODE_DISCONTINUED => false,
+            null => false,
+            default => $isInStock,
+        };
+        $label = $rawStatus?->name ?: ($isInStock ? 'In Stock' : 'Out of Stock');
         $badgeType = in_array($status?->badge_type, ProductAvailabilityStatus::badgeTypes(), true)
             ? (string) $status->badge_type
             : ProductAvailabilityStatus::BADGE_SECONDARY;
 
         return [
             'availability_status_id' => $status?->getKey(),
-            'availability_code' => $status?->code,
+            'availability_code' => $code,
             'availability_label' => $label,
+            'availability_status_active' => $status !== null,
             'purchase_allowed' => $purchaseAllowed,
             'badge_type' => $badgeType,
             'stock_quantity' => $stockQuantity,

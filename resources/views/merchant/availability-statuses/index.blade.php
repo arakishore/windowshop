@@ -22,7 +22,7 @@
     <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
         <div>
             <h3 class="mb-1">Availability Statuses</h3>
-            <div class="text-muted">Customer-facing labels and zero-stock purchase behaviour.</div>
+            <div class="text-muted">Customer-facing labels and purchase availability rules.</div>
         </div>
         <a href="{{ route('merchant.availability-statuses.index', ['new' => 1]) }}" class="btn btn-primary">
             <i class="ph-plus me-2"></i>
@@ -176,8 +176,9 @@
                             </div>
                             <label class="form-check mt-3">
                                 <input name="purchase_allowed" value="1" type="checkbox" class="form-check-input" @checked(old('purchase_allowed', request()->boolean('new') ? false : $selectedStatus?->purchase_allowed))>
-                                <span class="form-check-label">Allow purchase when stock is zero</span>
+                                <span class="form-check-label">Allow Customer Purchase</span>
                             </label>
+                            <div class="form-text">Controls whether customers may purchase products using this availability status. Stock behaviour also depends on the status type.</div>
                             <label class="form-check mt-3">
                                 <input name="status" value="active" type="checkbox" class="form-check-input" @checked($formStatus === 'active')>
                                 <span class="form-check-label">Active</span>

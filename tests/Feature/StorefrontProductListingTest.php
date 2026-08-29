@@ -12,10 +12,14 @@ use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductCategory;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductImage;
+use App\Models\ProductReturnPolicy;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantAttribute;
 use App\Models\Shop;
+use App\Models\ShopSetting;
 use App\Models\User;
+use App\Services\Merchant\ShopSettingsService;
+use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -336,6 +340,182 @@ class StorefrontProductListingTest extends TestCase
         $this->get(url('/category/wrong/path/products/'.$product->slug))
             ->assertMovedPermanently()
             ->assertRedirect($canonicalUrl);
+    }
+
+    public function test_product_detail_shows_default_shop_return_exchange_policy_and_local_delivery_scope(): void
+    {
+        $fixture = $this->fixture();
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_min_order_amount', 5000, ShopSetting::TYPE_DECIMAL);
+        $product = $this->product($fixture, 'Default Policy Product');
+        $this->variant($product);
+
+        $this->get($this->productUrl($product))
+            ->assertOk()
+            ->assertSee('Refund / Exchange')
+            ->assertSee('No Refund')
+            ->assertSee('Exchange within 7 days')
+            ->assertSee('Delivery Coverage')
+            ->assertSee('Local Area Only')
+            ->assertSee('Minimum delivery order:')
+            ->assertSee('5,000.00')
+            ->assertDontSee('Use Shop Policy');
+    }
+
+    public function test_product_detail_shows_product_override_policy_and_nationwide_delivery_scope(): void
+    {
+        $fixture = $this->fixture();
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_scope', 'nationwide', ShopSetting::TYPE_STRING);
+        $product = $this->product($fixture, 'Override Policy Product');
+        $this->variant($product);
+        ProductReturnPolicy::query()->create([
+            'product_id' => $product->getKey(),
+            'refund_allowed' => true,
+            'refund_window_days' => 3,
+            'exchange_allowed' => false,
+            'exchange_window_days' => 0,
+        ]);
+
+        $this->get($this->productUrl($product))
+            ->assertOk()
+            ->assertSee('Refund within 3 days')
+            ->assertSee('No Exchange')
+            ->assertSee('Ships Across India')
+            ->assertDontSee('Exchange within 7 days');
+    }
+
+    public function test_product_detail_quantity_input_uses_selected_variant_stock_as_maximum(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Stock Limited Product');
+        $this->variant($product, sellingPrice: '949.00', overrides: ['stock_quantity' => 7]);
+
+        $this->get($this->productUrl($product))
+            ->assertOk()
+            ->assertSee('data-stock-limit="7"', false)
+            ->assertSee('max="7"', false);
+    }
+
+    public function test_product_detail_does_not_show_in_stock_when_availability_status_is_missing(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Missing Availability Product', overrides: [
+            'availability_status_id' => null,
+        ]);
+        $this->variant($product, sellingPrice: '949.00', overrides: ['stock_quantity' => 7]);
+
+        $this->get($this->productUrl($product))
+            ->assertOk()
+            ->assertSee('data-product-availability-display>Unavailable', false)
+            ->assertSee('Out of Stock')
+            ->assertDontSee('data-product-availability-display>In Stock', false);
+    }
+
+    public function test_product_detail_backorder_has_no_stock_max_and_exposes_confirmation_message_data(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Backorder Product', overrides: [
+            'availability_status_id' => $this->availabilityStatus($fixture['merchant'], ProductAvailabilityStatus::CODE_BACKORDER)->getKey(),
+        ]);
+        $this->variant($product, sellingPrice: '949.00', overrides: ['stock_quantity' => 5]);
+
+        $content = $this->get($this->productUrl($product))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('data-availability-code="BACKORDER"', $content);
+        $this->assertStringContainsString('data-availability-label="In Stock"', $content);
+        $this->assertStringContainsString('data-stock-quantity="5"', $content);
+        $this->assertStringContainsString('data-product-availability-display>In Stock', $content);
+        $this->assertStringNotContainsString('data-stock-limit="5"', $content);
+        $this->assertStringNotContainsString('max="5"', $content);
+        $this->assertStringContainsString("quantityValue() <= stock", $content);
+    }
+
+    public function test_product_detail_backorder_with_zero_stock_initially_displays_backorder(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Zero Stock Backorder Product', overrides: [
+            'availability_status_id' => $this->availabilityStatus($fixture['merchant'], ProductAvailabilityStatus::CODE_BACKORDER)->getKey(),
+        ]);
+        $this->variant($product, sellingPrice: '949.00', overrides: ['stock_quantity' => 0]);
+
+        $content = $this->get($this->productUrl($product))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('data-availability-code="BACKORDER"', $content);
+        $this->assertStringContainsString('data-product-availability-display>Backorder', $content);
+        $this->assertStringContainsString('This item is currently not in stock. Your order requires confirmation from the merchant.', $content);
+    }
+
+    public function test_product_detail_preorder_display_is_not_transformed_when_stock_exists(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Preorder Display Product', overrides: [
+            'availability_status_id' => $this->availabilityStatus($fixture['merchant'], ProductAvailabilityStatus::CODE_PREORDER)->getKey(),
+        ]);
+        $this->variant($product, sellingPrice: '949.00', overrides: ['stock_quantity' => 5]);
+
+        $this->get($this->productUrl($product))
+            ->assertOk()
+            ->assertSee('data-product-availability-display>Pre-Order', false)
+            ->assertDontSee('data-product-availability-display>In Stock', false);
+    }
+
+    public function test_product_detail_disables_plus_button_when_selected_variant_stock_is_one(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Single Stock Product');
+        $this->variant($product, overrides: ['stock_quantity' => 1]);
+
+        $content = $this->get($this->productUrl($product))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('data-stock-limit="1"', $content);
+        $this->assertStringContainsString('btn-increase" type="button"', $content);
+        $this->assertStringContainsString('disabled', $content);
+    }
+
+    public function test_product_detail_variant_options_include_variant_specific_stock_limits(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Variant Stock Product');
+        $size = $this->attributeGroup('Size', ['Small', 'Large']);
+        $small = $this->variant($product, sellingPrice: '949.00', overrides: [
+            'name' => 'Small',
+            'stock_quantity' => 7,
+        ]);
+        $large = ProductVariant::query()->create([
+            'product_id' => $product->getKey(),
+            'shop_id' => $product->shop_id,
+            'name' => 'Large',
+            'mrp' => '100.00',
+            'selling_price' => '949.00',
+            'stock_quantity' => 3,
+            'low_stock_threshold' => 0,
+            'is_sellable' => true,
+            'is_default' => false,
+            'sort_order' => 1,
+            'status' => 'active',
+        ]);
+        $small->attributes()->create([
+            'product_attribute_group_id' => $size->getKey(),
+            'product_attribute_group_value_id' => $size->values->firstWhere('name', 'Small')->getKey(),
+        ]);
+        $large->attributes()->create([
+            'product_attribute_group_id' => $size->getKey(),
+            'product_attribute_group_value_id' => $size->values->firstWhere('name', 'Large')->getKey(),
+        ]);
+
+        $content = $this->get($this->productUrl($product))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('data-variant-id="'.$small->getKey().'"', $content);
+        $this->assertStringContainsString('data-stock-limit="7"', $content);
+        $this->assertStringContainsString('data-variant-id="'.$large->getKey().'"', $content);
+        $this->assertStringContainsString('data-stock-limit="3"', $content);
     }
 
     public function test_nested_category_path_page_resolves_and_redirects_mismatched_paths(): void
@@ -748,12 +928,16 @@ class StorefrontProductListingTest extends TestCase
             'status' => 'active',
         ]);
 
-        return MerchantProfile::query()->create([
+        $merchant = MerchantProfile::query()->create([
             'user_id' => $user->getKey(),
             'business_name' => $name,
             'verification_status' => 'approved',
             'status' => $status,
         ]);
+
+        app(MerchantAvailabilityStatusSeeder::class)->seedDefaultsForMerchant($merchant);
+
+        return $merchant;
     }
 
     private function shop(MerchantProfile $merchant, ProductCategory $root, string $name = 'Listing Shop', string $status = 'active', ?string $pincode = null): Shop
@@ -782,13 +966,17 @@ class StorefrontProductListingTest extends TestCase
             'product_category_id' => $fixture['category']->getKey(),
             'product_name' => $name,
             'slug' => Str::slug($name).'-'.Str::random(6),
+            'availability_status_id' => ProductAvailabilityStatus::query()
+                ->where('merchant_id', $fixture['merchant']->getKey())
+                ->where('code', ProductAvailabilityStatus::CODE_IN_STOCK)
+                ->value('id'),
             'status' => $status,
             'tax_mode' => 'inherit',
             ...$overrides,
         ]);
     }
 
-    private function variant(Product $product, string $mrp = '100.00', string $sellingPrice = '90.00'): ProductVariant
+    private function variant(Product $product, string $mrp = '100.00', string $sellingPrice = '90.00', array $overrides = []): ProductVariant
     {
         return ProductVariant::query()->create([
             'product_id' => $product->getKey(),
@@ -802,6 +990,7 @@ class StorefrontProductListingTest extends TestCase
             'is_default' => true,
             'sort_order' => 0,
             'status' => 'active',
+            ...$overrides,
         ]);
     }
 
@@ -819,6 +1008,14 @@ class StorefrontProductListingTest extends TestCase
         $product->forceFill(['primary_image_id' => $image->getKey()])->save();
 
         return $image;
+    }
+
+    private function availabilityStatus(MerchantProfile $merchant, string $code): ProductAvailabilityStatus
+    {
+        return ProductAvailabilityStatus::query()
+            ->where('merchant_id', $merchant->getKey())
+            ->where('code', $code)
+            ->firstOrFail();
     }
 
     /**
@@ -855,6 +1052,11 @@ class StorefrontProductListingTest extends TestCase
             ['group' => 'currency', 'setting_key' => $key],
             ['setting_value' => $value, 'setting_type' => $type],
         );
+    }
+
+    private function shopSetting(Shop $shop, string $group, string $key, mixed $value, string $type): void
+    {
+        app(ShopSettingsService::class)->setTyped($shop->getKey(), $group, $key, $value, $type);
     }
 
     private function postalCode(string $postalCode, string $latitude, string $longitude): PostalCode

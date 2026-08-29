@@ -9,7 +9,9 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
+use App\Models\ShopSetting;
 use App\Models\User;
+use App\Services\Merchant\ShopSettingsService;
 use App\Services\Storefront\CustomerLocationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -175,6 +177,52 @@ class StorefrontCustomerLocationTest extends TestCase
             ->assertCookie(CustomerLocationService::COOKIE_NAME);
     }
 
+    public function test_product_delivery_check_uses_shop_delivery_scope_for_local_only_rejection(): void
+    {
+        $this->postalCode('422009', officeName: 'Cidco Colony S.O');
+        $this->postalCode(
+            '802301',
+            officeName: 'Arrah H.O',
+            district: 'BHOJPUR',
+            state: 'BIHAR',
+        );
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Local Only Delivery Check Product');
+        $this->variant($product);
+
+        $this->postJson(route('storefront.product.delivery-check', $product->slug), [
+            'postal_code' => '802301',
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'blocked')
+            ->assertJsonPath('postal_code', '802301')
+            ->assertJsonPath('message', 'Delivery is not available to this PIN code.')
+            ->assertSessionHas(CustomerLocationService::SESSION_KEY, '802301')
+            ->assertCookie(CustomerLocationService::COOKIE_NAME);
+    }
+
+    public function test_product_delivery_check_keeps_minimum_order_informational(): void
+    {
+        $this->postalCode('422009', officeName: 'Cidco Colony S.O');
+        $fixture = $this->fixture();
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_min_order_amount', 5000, ShopSetting::TYPE_DECIMAL);
+        $product = $this->product($fixture, 'Minimum Info Delivery Check Product');
+        $this->variant($product);
+
+        $this->postJson(route('storefront.product.delivery-check', $product->slug), [
+            'postal_code' => '422009',
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'available')
+            ->assertJsonPath('postal_code', '422009')
+            ->assertJsonFragment([
+                'product_slug' => $product->slug,
+            ])
+            ->assertJsonFragment([
+                'message' => 'Delivery is available to 422009 (Cidco Colony S.O, NASHIK, MAHARASHTRA). Estimated date will be confirmed by Near Shop.',
+            ]);
+    }
+
     public function test_product_delivery_check_json_validation_errors_do_not_redirect(): void
     {
         $fixture = $this->fixture();
@@ -261,20 +309,23 @@ class StorefrontCustomerLocationTest extends TestCase
         string $latitude = '19.9975000',
         string $longitude = '73.7898000',
         string $officeName = 'WindowShop Test H.O',
+        bool $shippingEnabled = true,
+        string $district = 'NASHIK',
+        string $state = 'MAHARASHTRA',
     ): PostalCode
     {
         return PostalCode::query()->create([
-            'source_key' => sha1($postalCode.'|'.strtolower($officeName).'|ho|nashik|maharashtra'),
-            'circle_name' => 'Maharashtra Circle',
-            'region_name' => 'Mumbai Region',
-            'division_name' => 'Nashik Division',
+            'source_key' => sha1($postalCode.'|'.strtolower($officeName).'|ho|'.strtolower($district).'|'.strtolower($state)),
+            'circle_name' => $state.' Circle',
+            'region_name' => $state.' Region',
+            'division_name' => $district.' Division',
             'office_name' => $officeName,
             'postal_code' => $postalCode,
             'office_type' => 'HO',
             'delivery_status' => 'Delivery',
-            'shipping_enabled' => true,
-            'district' => 'NASHIK',
-            'state' => 'MAHARASHTRA',
+            'shipping_enabled' => $shippingEnabled,
+            'district' => $district,
+            'state' => $state,
             'latitude' => $latitude,
             'longitude' => $longitude,
             'status' => $status,
@@ -375,5 +426,10 @@ class StorefrontCustomerLocationTest extends TestCase
             ['group' => 'currency', 'setting_key' => $key],
             ['setting_value' => $value, 'setting_type' => $type],
         );
+    }
+
+    private function shopSetting(Shop $shop, string $group, string $key, mixed $value, string $type): void
+    {
+        app(ShopSettingsService::class)->setTyped($shop->getKey(), $group, $key, $value, $type);
     }
 }

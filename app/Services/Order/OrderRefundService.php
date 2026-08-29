@@ -3,6 +3,7 @@
 namespace App\Services\Order;
 
 use App\Models\Order;
+use App\Models\OrderExchange;
 use App\Models\OrderItem;
 use App\Models\OrderRefund;
 use App\Models\ProductVariant;
@@ -27,9 +28,22 @@ class OrderRefundService
             ->groupBy('order_refund_items.order_item_id')
             ->pluck('quantity', 'order_item_id');
 
+        $exchanged = DB::table('order_exchange_return_items')
+            ->join('order_exchanges', 'order_exchanges.id', '=', 'order_exchange_return_items.order_exchange_id')
+            ->where('order_exchanges.original_order_id', $order->getKey())
+            ->where('order_exchanges.status', OrderExchange::STATUS_COMPLETED)
+            ->select('order_exchange_return_items.order_item_id', DB::raw('SUM(order_exchange_return_items.quantity) as quantity'))
+            ->groupBy('order_exchange_return_items.order_item_id')
+            ->pluck('quantity', 'order_item_id');
+
         return $order->items
             ->mapWithKeys(fn (OrderItem $item): array => [
-                $item->getKey() => max(0, (int) $item->quantity - (int) ($refunded[$item->getKey()] ?? 0)),
+                $item->getKey() => max(
+                    0,
+                    (int) $item->quantity
+                    - (int) ($refunded[$item->getKey()] ?? 0)
+                    - (int) ($exchanged[$item->getKey()] ?? 0),
+                ),
             ])
             ->all();
     }

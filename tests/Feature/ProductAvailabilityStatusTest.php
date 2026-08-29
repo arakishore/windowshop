@@ -172,14 +172,15 @@ class ProductAvailabilityStatusTest extends TestCase
         $fixture = $this->fixture();
         $resolver = app(ProductAvailabilityResolver::class);
 
-        $inStock = $this->variant($this->product($fixture, ProductAvailabilityStatus::CODE_OUT_OF_STOCK), ['stock_quantity' => 3]);
-        $this->assertTrue($resolver->resolve($inStock)['can_purchase']);
+        $outOfStockWithInventory = $this->variant($this->product($fixture, ProductAvailabilityStatus::CODE_OUT_OF_STOCK), ['stock_quantity' => 3]);
+        $this->assertFalse($resolver->resolve($outOfStockWithInventory)['can_purchase']);
 
         $cases = [
             ProductAvailabilityStatus::CODE_OUT_OF_STOCK => false,
             ProductAvailabilityStatus::CODE_PREORDER => true,
             ProductAvailabilityStatus::CODE_BACKORDER => true,
             ProductAvailabilityStatus::CODE_COMING_SOON => false,
+            ProductAvailabilityStatus::CODE_DISCONTINUED => false,
         ];
 
         foreach ($cases as $code => $expected) {
@@ -212,6 +213,52 @@ class ProductAvailabilityStatusTest extends TestCase
         $guard->assertVariantCanBePurchased($allowed);
         $guard->assertCheckoutCanProceed([$allowed]);
         $this->assertTrue(true);
+    }
+
+    public function test_customer_guard_applies_v1_status_stock_rules(): void
+    {
+        $fixture = $this->fixture();
+        $guard = app(CustomerPurchaseAvailabilityGuard::class);
+
+        $inStock = $this->variant($this->product($fixture, ProductAvailabilityStatus::CODE_IN_STOCK), ['stock_quantity' => 5]);
+        $this->assertTrue($guard->decision($inStock, 5)['allowed']);
+        $this->assertFalse($guard->decision($inStock, 6)['allowed']);
+        $this->assertSame('Only 5 items are currently available.', $guard->decision($inStock, 6)['message']);
+
+        $outOfStock = $this->variant($this->product($fixture, ProductAvailabilityStatus::CODE_OUT_OF_STOCK), ['stock_quantity' => 100]);
+        $this->assertFalse($guard->decision($outOfStock, 1)['allowed']);
+
+        $backorder = $this->variant($this->product($fixture, ProductAvailabilityStatus::CODE_BACKORDER), ['stock_quantity' => 5]);
+        $backorderDecision = $guard->decision($backorder, 7);
+        $this->assertTrue($backorderDecision['allowed']);
+        $this->assertFalse($backorderDecision['stock_limit_applies']);
+        $this->assertSame(2.0, $backorderDecision['short_quantity']);
+        $this->assertSame('5 items are currently in stock. 2 items require confirmation from the merchant.', $backorderDecision['message']);
+
+        $singleShortDecision = $guard->decision($backorder, 6);
+        $this->assertSame('5 items are currently in stock. 1 item requires confirmation from the merchant.', $singleShortDecision['message']);
+
+        $preorder = $this->variant($this->product($fixture, ProductAvailabilityStatus::CODE_PREORDER), ['stock_quantity' => 0]);
+        $this->assertTrue($guard->decision($preorder, 2)['allowed']);
+
+        foreach ([ProductAvailabilityStatus::CODE_COMING_SOON, ProductAvailabilityStatus::CODE_DISCONTINUED] as $code) {
+            $this->assertFalse($guard->decision($this->variant($this->product($fixture, $code), ['stock_quantity' => 10]), 1)['allowed']);
+        }
+    }
+
+    public function test_inactive_product_or_availability_status_rejects_customer_purchase(): void
+    {
+        $fixture = $this->fixture();
+        $guard = app(CustomerPurchaseAvailabilityGuard::class);
+
+        $inactiveProduct = $this->product($fixture, ProductAvailabilityStatus::CODE_IN_STOCK);
+        $inactiveProduct->forceFill(['status' => 'inactive'])->save();
+        $this->assertFalse($guard->decision($this->variant($inactiveProduct, ['stock_quantity' => 5]), 1)['allowed']);
+
+        $inactiveStatus = $this->availabilityStatus($fixture['merchant'], ProductAvailabilityStatus::CODE_IN_STOCK);
+        $inactiveStatus->forceFill(['status' => ProductAvailabilityStatus::STATUS_INACTIVE])->save();
+
+        $this->assertFalse($guard->decision($this->variant($this->product($fixture, ProductAvailabilityStatus::CODE_IN_STOCK), ['stock_quantity' => 5]), 1)['allowed']);
     }
 
     public function test_used_status_cannot_be_deleted_and_unused_status_can_be_restored(): void
@@ -331,7 +378,7 @@ class ProductAvailabilityStatusTest extends TestCase
             'availability_status_id' => $this->availabilityStatus($fixture['merchant'], $statusCode)->getKey(),
             'product_name' => 'Availability Product '.Str::random(4),
             'slug' => 'availability-product-'.Str::random(8),
-            'status' => 'draft',
+            'status' => 'active',
             'tax_mode' => 'inherit',
         ]);
     }

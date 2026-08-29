@@ -2,8 +2,8 @@
 
 namespace App\Services\Checkout;
 
-use App\Models\PostalCodeRestriction;
 use App\Models\Shop;
+use App\Services\Delivery\ShopDeliveryServiceabilityService;
 use App\Services\Merchant\ShopSettingsInitializer;
 use App\Services\Merchant\ShopSettingsService;
 
@@ -12,6 +12,7 @@ class ShopDeliveryQuoteService
     public function __construct(
         private readonly ShopSettingsService $settings,
         private readonly ShopSettingsInitializer $initializer,
+        private readonly ShopDeliveryServiceabilityService $serviceability,
     ) {
     }
 
@@ -41,26 +42,11 @@ class ShopDeliveryQuoteService
             'flat_delivery_charge' => $flatCharge,
         ];
 
-        if (! (bool) $this->settings->get($shopId, 'fulfillment', 'delivery_enabled', true)) {
+        $serviceability = $this->serviceability->check($shop, $postalCode);
+        if (! $serviceability['serviceable']) {
             return [
                 ...$base,
-                'reason' => 'Delivery is not enabled for this shop.',
-            ];
-        }
-
-        $postalCode = trim((string) $postalCode);
-        if ($postalCode === '') {
-            return [
-                ...$base,
-                'reason' => 'Delivery postal code is required.',
-            ];
-        }
-
-        $restriction = $this->restrictionFor($shop, $postalCode);
-        if ($restriction instanceof PostalCodeRestriction) {
-            return [
-                ...$base,
-                'reason' => $restriction->reason ?: 'Delivery is not available for this postal code.',
+                'reason' => $serviceability['reason'] ?: 'Delivery is not available to this PIN code.',
             ];
         }
 
@@ -79,29 +65,6 @@ class ShopDeliveryQuoteService
             'charge' => $charge,
             'reason' => null,
         ];
-    }
-
-    private function restrictionFor(Shop $shop, string $postalCode): ?PostalCodeRestriction
-    {
-        return PostalCodeRestriction::query()
-            ->forPostalCode($postalCode)
-            ->currentlyApplicable()
-            ->where(function ($query) use ($shop): void {
-                $query->where(fn ($query) => $query->whereNull('merchant_id')->whereNull('shop_id'))
-                    ->orWhere(function ($query) use ($shop): void {
-                        $query
-                            ->where('merchant_id', $shop->merchant_id)
-                            ->whereNull('shop_id');
-                    })
-                    ->orWhere(function ($query) use ($shop): void {
-                        $query
-                            ->where('merchant_id', $shop->merchant_id)
-                            ->where('shop_id', $shop->getKey());
-                    });
-            })
-            ->orderByDesc('shop_id')
-            ->orderByDesc('merchant_id')
-            ->first();
     }
 
     private function nullablePositiveMoney(mixed $value): ?float

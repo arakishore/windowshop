@@ -3,13 +3,13 @@
 namespace App\Services\Cart;
 
 use App\Models\ProductVariant;
-use App\Services\ProductAvailability\ProductAvailabilityResolver;
+use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
 use Illuminate\Validation\ValidationException;
 
 class CartItemQuantityValidator
 {
     public function __construct(
-        private readonly ProductAvailabilityResolver $availabilityResolver,
+        private readonly CustomerPurchaseAvailabilityGuard $availabilityGuard,
     ) {
     }
 
@@ -87,6 +87,8 @@ class CartItemQuantityValidator
                 'product_variant_id' => 'This product is currently unavailable.',
             ]);
         }
+
+        $this->availabilityGuard->assertVariantCanBePurchased($variant, null, 'product_variant_id');
     }
 
     public function normalizeQuantity(string $quantity): string
@@ -124,13 +126,13 @@ class CartItemQuantityValidator
 
         if ($finalQuantity < $minimum) {
             throw ValidationException::withMessages([
-                'quantity' => "Minimum quantity is {$this->decimal($minimum, 3)}.",
+                'quantity' => "Minimum quantity is {$this->displayQuantity($minimum, $variant)}.",
             ]);
         }
 
         if ($maximum !== null && $finalQuantity > $maximum) {
             throw ValidationException::withMessages([
-                'quantity' => "Maximum quantity is {$this->decimal($maximum, 3)}.",
+                'quantity' => "Maximum quantity is {$this->displayQuantity($maximum, $variant)}.",
             ]);
         }
 
@@ -143,17 +145,21 @@ class CartItemQuantityValidator
 
     public function validateStock(ProductVariant $variant, float $finalQuantity): void
     {
-        $availability = $this->availabilityResolver->resolve($variant);
-        $stock = (float) $variant->getRawOriginal('stock_quantity');
-        $purchaseAllowedWithoutStock = (bool) ($availability['purchase_allowed'] ?? false) || (bool) $variant->allow_backorder;
+        $this->availabilityGuard->assertVariantCanBePurchased($variant, $finalQuantity, 'quantity');
+    }
 
-        if ($finalQuantity > $stock && ! $purchaseAllowedWithoutStock) {
-            $available = max(0, $stock);
+    public function availabilityDecision(ProductVariant $variant, float $finalQuantity): array
+    {
+        return $this->availabilityGuard->decision($variant, $finalQuantity);
+    }
 
-            throw ValidationException::withMessages([
-                'quantity' => 'Only '.$this->decimal($available, 3).' items are currently available.',
-            ]);
+    public function displayQuantity(float $value, ProductVariant $variant): string
+    {
+        if (! $variant->allow_decimal_quantity) {
+            return (string) (int) floor($value);
         }
+
+        return rtrim(rtrim($this->decimal($value, 3), '0'), '.') ?: '0';
     }
 
     public function decimal(float $value, int $places = 3): string

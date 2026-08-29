@@ -46,7 +46,6 @@ class MerchantSettingsInitializer
                 'order.allow_item_discount' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
             ],
             'inventory' => [
-                'allow_negative_stock' => ['value' => false, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'show_low_stock_warning' => ['value' => true, 'type' => MerchantSetting::TYPE_BOOLEAN],
                 'low_stock_default' => ['value' => 5, 'type' => MerchantSetting::TYPE_INTEGER],
             ],
@@ -85,6 +84,9 @@ class MerchantSettingsInitializer
             'product' => [
                 'barcode.type',
                 'default_visibility',
+            ],
+            'inventory' => [
+                'allow_negative_stock',
             ],
             'payment' => [
                 'allow_bank_transfer',

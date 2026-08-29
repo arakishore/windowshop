@@ -7,8 +7,8 @@ use App\Models\LocCity;
 use App\Models\LocCountry;
 use App\Models\LocState;
 use App\Models\PostalCode;
-use App\Models\PostalCodeRestriction;
 use App\Models\Shop;
+use App\Services\Delivery\ShopDeliveryServiceabilityService;
 use App\Services\Storefront\StorefrontCountryResolver;
 use Illuminate\Support\Collection;
 
@@ -16,6 +16,7 @@ class CheckoutPostalCodeLookupService
 {
     public function __construct(
         private readonly StorefrontCountryResolver $countries,
+        private readonly ShopDeliveryServiceabilityService $shopDeliveryServiceability,
     ) {
     }
 
@@ -151,43 +152,15 @@ class CheckoutPostalCodeLookupService
             return [];
         }
 
-        $shopIds = $shops->pluck('id')->map(fn ($id): int => (int) $id)->all();
-        $merchantIds = $shops->pluck('merchant_id')->map(fn ($id): int => (int) $id)->unique()->all();
-
-        $restrictions = PostalCodeRestriction::query()
-            ->forPostalCode($postalCode)
-            ->currentlyApplicable()
-            ->where(function ($query) use ($shopIds, $merchantIds): void {
-                $query->where(fn ($query) => $query->whereNull('merchant_id')->whereNull('shop_id'))
-                    ->orWhereIn('shop_id', $shopIds)
-                    ->orWhere(function ($query) use ($merchantIds): void {
-                        $query->whereIn('merchant_id', $merchantIds)->whereNull('shop_id');
-                    });
-            })
-            ->orderByDesc('shop_id')
-            ->orderByDesc('merchant_id')
-            ->get();
-
         return $shops
-            ->map(function (Shop $shop) use ($restrictions): array {
-                $restriction = $restrictions->first(function (PostalCodeRestriction $restriction) use ($shop): bool {
-                    if ($restriction->shop_id !== null) {
-                        return (int) $restriction->shop_id === (int) $shop->getKey()
-                            && (int) $restriction->merchant_id === (int) $shop->merchant_id;
-                    }
-
-                    if ($restriction->merchant_id !== null) {
-                        return (int) $restriction->merchant_id === (int) $shop->merchant_id;
-                    }
-
-                    return true;
-                });
+            ->map(function (Shop $shop) use ($postalCode): array {
+                $serviceability = $this->shopDeliveryServiceability->check($shop, $postalCode);
 
                 return [
                     'shop_id' => $shop->getKey(),
                     'shop_name' => $shop->name,
-                    'available' => ! $restriction instanceof PostalCodeRestriction,
-                    'reason' => $restriction?->reason,
+                    'available' => (bool) $serviceability['serviceable'],
+                    'reason' => $serviceability['serviceable'] ? null : $serviceability['reason'],
                 ];
             })
             ->values()

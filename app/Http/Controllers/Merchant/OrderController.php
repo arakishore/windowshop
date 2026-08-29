@@ -12,6 +12,7 @@ use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Order\DeliveryCompletionService;
+use App\Services\Order\MerchantOrderStockShortageService;
 use App\Services\Order\OrderInventoryService;
 use App\Services\Order\OrderStatusService;
 use App\Services\Order\PickupCompletionService;
@@ -32,6 +33,7 @@ class OrderController extends Controller
         private readonly OrderInventoryService $orderInventoryService,
         private readonly PickupCompletionService $pickupCompletionService,
         private readonly DeliveryCompletionService $deliveryCompletionService,
+        private readonly MerchantOrderStockShortageService $stockShortageService,
     ) {
     }
 
@@ -49,7 +51,11 @@ class OrderController extends Controller
         $operationalSources = Order::merchantOperationalSources();
 
         $query = Order::query()
-            ->with(['customer'])
+            ->with([
+                'customer',
+                'items.variant.availabilityStatus',
+                'items.variant.product.availabilityStatus',
+            ])
             ->where('shop_id', $shop->getKey())
             ->where('merchant_id', $shop->merchant_id)
             ->whereIn('created_source', $operationalSources)
@@ -69,6 +75,7 @@ class OrderController extends Controller
             ->latest()
             ->paginate((int) config('admin.pagination.per_page', 15))
             ->withQueryString();
+        $stockShortages = $this->stockShortageService->forOrders($orders->getCollection());
 
         return view('merchant.orders.index', [
             'activeShop' => $shop,
@@ -82,6 +89,7 @@ class OrderController extends Controller
             'sourceLabels' => $this->sourceLabels(),
             'operationalSources' => $operationalSources,
             'posCurrency' => $this->adminSettings->currencyConfig(),
+            'stockShortages' => $stockShortages,
         ]);
     }
 
@@ -90,6 +98,8 @@ class OrderController extends Controller
         $shop = $this->authorizeOrder($request, $order)->loadMissing(['city', 'state', 'country']);
         $order = $order->load([
             'items.product',
+            'items.variant.availabilityStatus',
+            'items.variant.product.availabilityStatus',
             'items.taxComponents',
             'totals',
             'customer',
@@ -97,6 +107,7 @@ class OrderController extends Controller
             'comments.createdBy',
         ]);
         $allowedNextStatuses = $this->orderStatusService->allowedNextStatuses($order);
+        $stockShortage = $this->stockShortageService->forOrder($order);
 
         return view('merchant.orders.show', [
             'activeShop' => $shop,
@@ -110,12 +121,22 @@ class OrderController extends Controller
             'fulfillmentTypes' => $this->fulfillmentTypes(),
             'sourceLabels' => $this->sourceLabels(),
             'posCurrency' => $this->adminSettings->currencyConfig(),
+            'stockShortage' => $stockShortage,
         ]);
     }
 
     public function accept(Request $request, Order $order): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
+        $stockShortage = $this->stockShortageService->forOrder($order);
+
+        if ($stockShortage['has_shortage'] && ! $request->boolean('confirm_stock_shortage')) {
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'stock_shortage' => 'Please confirm the current stock shortage before accepting this order.',
+                ]);
+        }
 
         try {
             $this->orderStatusService->transition(
@@ -123,7 +144,11 @@ class OrderController extends Controller
                 Order::STATUS_CONFIRMED,
                 $request->user(),
                 'Order accepted by merchant.',
-                ['action' => 'merchant_accept'],
+                [
+                    'action' => 'merchant_accept',
+                    'stock_shortage_confirmed' => $stockShortage['has_shortage'],
+                    'stock_shortage' => $stockShortage['has_shortage'] ? $stockShortage['items'] : null,
+                ],
             );
         } catch (ValidationException $exception) {
             return $this->transitionFailed($exception);

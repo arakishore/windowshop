@@ -3,10 +3,12 @@
 namespace App\Services\Storefront;
 
 use App\Models\Product;
+use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Services\Admin\AdminSettingsService;
+use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
 use App\Services\System\SystemSettingService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -26,7 +28,9 @@ class ProductListingService
         private readonly SystemSettingService $systemSettings,
         private readonly CustomerLocationService $location,
         private readonly ProductLocationSorter $locationSorter,
+        private readonly CustomerPurchaseAvailabilityGuard $availabilityGuard,
         private readonly StorefrontUrlService $urls,
+        private readonly StorefrontProductPolicyPresenter $policyPresenter,
     ) {
     }
 
@@ -123,7 +127,9 @@ class ProductListingService
                 'primaryImage' => fn ($query) => $query
                     ->where('status', 'active')
                     ->select('id', 'product_id', 'image_path', 'thumbnail_path', 'alt_text', 'status'),
-                'storefrontCardVariant:id,product_id,mrp,selling_price,stock_quantity,allow_backorder,is_default,status,is_sellable',
+                'availabilityStatus:id,name,code,customer_description,purchase_allowed,badge_type,status,deleted_at',
+                'storefrontCardVariant:id,product_id,mrp,selling_price,stock_quantity,availability_status_id,allow_backorder,is_default,status,is_sellable',
+                'storefrontCardVariant.availabilityStatus:id,name,code,customer_description,purchase_allowed,badge_type,status,deleted_at',
             ])
             ->where('products.status', 'active')
             ->when($categoryIds !== null, fn (Builder $query) => $query->whereIn('products.product_category_id', $categoryIds))
@@ -176,7 +182,9 @@ class ProductListingService
                 'rootProductCategory:id,name,slug,parent_id,product_disclaimer',
                 'shop:id,merchant_id,name,slug,short_description,description,address_line_1,address_line_2,landmark,pincode,mobile,whatsapp_number,website_url,status',
                 'shop.merchant:id,status',
-                'availabilityStatus:id,name,customer_description,status',
+                'shop.settings:id,shop_id,group,setting_key,setting_value,setting_type',
+                'returnPolicy:id,product_id,refund_allowed,refund_window_days,exchange_allowed,exchange_window_days',
+                'availabilityStatus:id,name,code,customer_description,purchase_allowed,badge_type,status,deleted_at',
                 'primaryImage:id,product_id,image_path,thumbnail_path,alt_text,status',
                 'attributes.group:id,name,code',
                 'attributes.value:id,product_attribute_group_id,name,code,status',
@@ -184,6 +192,7 @@ class ProductListingService
                     ->where('status', 'active')
                     ->select('id', 'product_id', 'image_path', 'thumbnail_path', 'alt_text', 'sort_order', 'status'),
                 'storefrontCardVariant:id,product_id,shop_id,availability_status_id,sku,name,mrp,selling_price,stock_quantity,allow_backorder,is_default,status,is_sellable',
+                'storefrontCardVariant.availabilityStatus:id,name,code,customer_description,purchase_allowed,badge_type,status,deleted_at',
                 'variants' => fn ($query) => $query
                     ->where('status', 'active')
                     ->where('is_sellable', true)
@@ -192,6 +201,7 @@ class ProductListingService
                     ->orderBy('sort_order')
                     ->orderBy('id')
                     ->with([
+                        'availabilityStatus:id,name,code,customer_description,purchase_allowed,badge_type,status,deleted_at',
                         'attributes.group:id,name,code',
                         'attributes.value:id,product_attribute_group_id,name,code,swatch_hex,status',
                     ]),
@@ -338,6 +348,7 @@ class ProductListingService
         $hasDiscount = $mrp > $sellingPrice;
         $discountPercent = $hasDiscount ? (int) round((($mrp - $sellingPrice) / $mrp) * 100) : 0;
         $image = $this->imageUrl($product);
+        $availability = $this->availabilityGuard->decision($variant, 1);
 
         return [
             'product_id' => (int) $product->getKey(),
@@ -350,8 +361,12 @@ class ProductListingService
             'image' => $image,
             'hover_image' => $image,
             'price' => $this->money($sellingPrice),
+            'raw_price' => $sellingPrice,
             'selected_variant_id' => $variant->getKey(),
-            'can_add_to_cart' => (float) $variant->stock_quantity > 0 || (bool) $variant->allow_backorder,
+            'selected_variant_stock_quantity' => (int) $variant->stock_quantity,
+            'selected_variant_availability_code' => $availability['status_code'],
+            'selected_variant_stock_limit' => $this->stockLimit($variant),
+            'can_add_to_cart' => (bool) $availability['allowed'],
             'add_to_cart_url' => route('storefront.cart.items.store'),
             'old_price' => $hasDiscount ? $this->money($mrp) : null,
             'badge' => $discountPercent > 0 ? '-'.$discountPercent.'%' : null,
@@ -374,6 +389,7 @@ class ProductListingService
         $discountPercent = $hasDiscount ? (int) round((($mrp - $sellingPrice) / $mrp) * 100) : 0;
         $images = $this->detailImages($product);
         $description = $product->description ?: ($product->short_description ?: 'A local shop product listing with clean catalogue-ready details.');
+        $availability = $this->availabilityGuard->decision($variant, 1);
 
         return [
             'product_id' => (int) $product->getKey(),
@@ -391,9 +407,18 @@ class ProductListingService
             'store_url' => $product->shop?->slug ? route('storefront.store.show', $product->shop->slug) : null,
             'store_address' => $this->shopAddress($product->shop),
             'store_whatsapp_url' => $this->whatsappUrl($product),
+            'return_exchange_policy' => $this->policyPresenter->returnExchange($product),
+            'delivery_scope_label' => $this->policyPresenter->deliveryScope($product),
+            'delivery_minimum_message' => $this->policyPresenter->deliveryMinimumMessage($product),
             'price' => $this->money($sellingPrice),
+            'raw_price' => $sellingPrice,
             'selected_variant_id' => $variant->getKey(),
-            'can_add_to_cart' => (float) $variant->stock_quantity > 0 || (bool) $variant->allow_backorder,
+            'selected_variant_stock_quantity' => (float) $variant->stock_quantity,
+            'selected_variant_availability_code' => $availability['status_code'],
+            'selected_variant_availability_label' => $this->customerAvailabilityLabel($variant, 1),
+            'selected_variant_stock_limit' => $this->stockLimit($variant),
+            'can_add_to_cart' => (bool) $availability['allowed'],
+            'availability_purchase_message' => $availability['message'],
             'add_to_cart_url' => route('storefront.cart.items.store'),
             'old_price' => $hasDiscount ? $this->money($mrp) : null,
             'discount' => $discountPercent > 0 ? '-'.$discountPercent.'%' : null,
@@ -411,8 +436,8 @@ class ProductListingService
             'size_guide' => $this->sizeGuide($product),
             'other_attributes' => $this->otherAttributes($product),
             'disclaimers' => $this->productDisclaimers($product),
-            'availability' => $product->availabilityStatus?->name ?: ((float) $variant->stock_quantity > 0 ? 'In Stock' : 'Check with store'),
-            'availability_note' => $product->availabilityStatus?->customer_description,
+            'availability' => $this->customerAvailabilityLabel($variant, 1),
+            'availability_note' => $this->customerAvailabilityNote($variant, 1),
         ];
     }
 
@@ -443,7 +468,7 @@ class ProductListingService
     }
 
     /**
-     * @return array<int, array{name: string, price: string, raw_price: float, variant_id: int}>
+     * @return array<int, array{name: string, price: string, raw_price: float, variant_id: int, stock_quantity: float, availability_code: string|null, availability_label: string, stock_limit: int|null, availability_message: string|null}>
      */
     private function sizeLabels(Product $product): array
     {
@@ -461,6 +486,11 @@ class ProductListingService
                     'price' => $this->money((float) $variant->selling_price),
                     'raw_price' => (float) $variant->selling_price,
                     'variant_id' => $variant->getKey(),
+                    'stock_quantity' => (int) $variant->stock_quantity,
+                    'availability_code' => $this->availabilityGuard->decision($variant, 1)['status_code'],
+                    'availability_label' => $this->customerAvailabilityLabel($variant, 1),
+                    'stock_limit' => $this->stockLimit($variant),
+                    'availability_message' => $this->availabilityGuard->decision($variant, 1)['message'],
                 ];
             })
             ->filter()
@@ -489,6 +519,11 @@ class ProductListingService
                     'price' => $this->money((float) $variant->selling_price),
                     'raw_price' => (float) $variant->selling_price,
                     'variant_id' => $variant->getKey(),
+                    'stock_quantity' => (int) $variant->stock_quantity,
+                    'availability_code' => $this->availabilityGuard->decision($variant, 1)['status_code'],
+                    'availability_label' => $this->customerAvailabilityLabel($variant, 1),
+                    'stock_limit' => $this->stockLimit($variant),
+                    'availability_message' => $this->availabilityGuard->decision($variant, 1)['message'],
                 ];
             })
             ->filter()
@@ -515,6 +550,57 @@ class ProductListingService
         }
 
         return Str::length($label) <= 20 ? $label : null;
+    }
+
+    private function stockLimit(ProductVariant $variant): ?int
+    {
+        $availability = $this->availabilityGuard->decision($variant, 1);
+
+        if (! (bool) $availability['stock_limit_applies']) {
+            return null;
+        }
+
+        return $availability['stock_limit'];
+    }
+
+    private function customerAvailabilityLabel(ProductVariant $variant, float|int $quantity): string
+    {
+        $decision = $this->availabilityGuard->decision($variant, $quantity);
+        $status = $variant->availabilityStatus ?: $variant->product?->availabilityStatus;
+
+        if (! (bool) ($decision['allowed'] ?? false)) {
+            if (($decision['status_code'] ?? null) === ProductAvailabilityStatus::CODE_IN_STOCK
+                && (float) ($decision['stock_quantity'] ?? 0) <= 0) {
+                return 'Out of Stock';
+            }
+
+            return $status?->name ?: 'Unavailable';
+        }
+
+        if (($decision['status_code'] ?? null) === ProductAvailabilityStatus::CODE_BACKORDER
+            && (float) $quantity <= max(0, (float) ($decision['stock_quantity'] ?? 0))) {
+            return 'In Stock';
+        }
+
+        return $status?->name ?: ((float) ($decision['stock_quantity'] ?? 0) > 0 ? 'In Stock' : 'Check with store');
+    }
+
+    private function customerAvailabilityNote(ProductVariant $variant, float|int $quantity): ?string
+    {
+        $decision = $this->availabilityGuard->decision($variant, $quantity);
+
+        if (! (bool) ($decision['allowed'] ?? false)) {
+            return $decision['message'];
+        }
+
+        if (($decision['status_code'] ?? null) === ProductAvailabilityStatus::CODE_BACKORDER
+            && (float) $quantity <= max(0, (float) ($decision['stock_quantity'] ?? 0))) {
+            return null;
+        }
+
+        $status = $variant->availabilityStatus ?: $variant->product?->availabilityStatus;
+
+        return $status?->customer_description;
     }
 
     /**

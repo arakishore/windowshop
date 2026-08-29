@@ -148,6 +148,18 @@
             gap: .75rem;
         }
 
+        .order-stock-shortage-list {
+            display: grid;
+            gap: .75rem;
+        }
+
+        .order-stock-shortage-item {
+            border: 1px solid rgba(var(--bs-warning-rgb), .45);
+            border-radius: .5rem;
+            padding: .85rem 1rem;
+            background: rgba(var(--bs-warning-rgb), .08);
+        }
+
         @media (max-width: 1199.98px) {
             .order-workspace-grid {
                 grid-template-columns: 1fr;
@@ -326,7 +338,7 @@
 
     @if($errors->any())
         <div class="alert alert-danger">
-            Please review the highlighted order action fields.
+            {{ $errors->has('stock_shortage') ? $errors->first('stock_shortage') : 'Please review the highlighted order action fields.' }}
         </div>
     @endif
 
@@ -356,8 +368,9 @@
                                 </button>
                             @endif
                             @if($canAcceptOrder)
-                                <form method="POST" action="{{ route('merchant.orders.accept', $order) }}" data-submit-once>
+                                <form method="POST" action="{{ route('merchant.orders.accept', $order) }}" data-submit-once data-stock-shortage-accept-form>
                                     @csrf
+                                    <input type="hidden" name="confirm_stock_shortage" value="0" data-stock-shortage-confirmation>
                                     <button type="submit" class="btn btn-primary">{{ $acceptOrderLabel }}</button>
                                 </form>
                             @endif
@@ -450,6 +463,53 @@
                         <button type="submit" class="btn btn-danger" @disabled($cancellationReasons->isEmpty())>{{ $cancelOrderLabel }}</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    @endif
+
+    @if($canAcceptOrder && $stockShortage['has_shortage'])
+        <div class="modal fade" id="acceptStockShortageModal" tabindex="-1" aria-labelledby="acceptStockShortageModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="acceptStockShortageModalLabel">Accept Order with Stock Shortage?</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>This order currently has insufficient stock. By accepting it, you confirm stock will be arranged before fulfilment.</p>
+                        <div class="order-stock-shortage-list">
+                            @foreach($stockShortage['items'] as $shortageItem)
+                                <div class="order-stock-shortage-item">
+                                    <div class="fw-semibold">{{ $shortageItem['product_name'] }}</div>
+                                    @if(filled($shortageItem['variant_name'] ?? null) || filled($shortageItem['sku'] ?? null))
+                                        <div class="text-muted fs-sm">
+                                            {{ collect([$shortageItem['variant_name'] ?? null, $shortageItem['sku'] ?? null])->filter(fn ($value) => filled($value))->implode(' / ') }}
+                                        </div>
+                                    @endif
+                                    <div class="row g-2 mt-2">
+                                        <div class="col-4">
+                                            <div class="text-muted fs-sm">Ordered</div>
+                                            <div class="fw-semibold">{{ rtrim(rtrim(number_format((float) $shortageItem['ordered_quantity'], 3, '.', ''), '0'), '.') }}</div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="text-muted fs-sm">In Stock</div>
+                                            <div class="fw-semibold">{{ rtrim(rtrim(number_format((float) $shortageItem['display_available_stock'], 3, '.', ''), '0'), '.') }}</div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="text-muted fs-sm">Short</div>
+                                            <div class="fw-semibold">{{ $shortageItem['short_quantity'] === null ? 'Outstanding' : rtrim(rtrim(number_format((float) $shortageItem['short_quantity'], 3, '.', ''), '0'), '.') }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-muted fs-sm mt-2">{{ $shortageItem['message'] }}</div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Go Back</button>
+                        <button type="button" class="btn btn-primary" data-confirm-stock-shortage-accept>Accept Order</button>
+                    </div>
+                </div>
             </div>
         </div>
     @endif
@@ -574,6 +634,29 @@
                 <div class="card-header">
                     <h5 class="mb-0">Order Items</h5>
                 </div>
+                @if($stockShortage['has_shortage'])
+                    <div class="card-body border-bottom">
+                        <div class="alert alert-warning mb-0">
+                            <div class="fw-semibold mb-2">
+                                <i class="ph-warning-circle me-1"></i>
+                                Stock Shortage
+                            </div>
+                            <div class="order-stock-shortage-list">
+                                @foreach($stockShortage['items'] as $shortageItem)
+                                    <div>
+                                        <div class="fw-semibold">{{ $shortageItem['product_name'] }}</div>
+                                        <div class="text-muted fs-sm">
+                                            Ordered Qty: {{ rtrim(rtrim(number_format((float) $shortageItem['ordered_quantity'], 3, '.', ''), '0'), '.') }}
+                                            / Currently In Stock: {{ rtrim(rtrim(number_format((float) $shortageItem['display_available_stock'], 3, '.', ''), '0'), '.') }}
+                                            / Short Qty: {{ $shortageItem['short_quantity'] === null ? 'Outstanding' : rtrim(rtrim(number_format((float) $shortageItem['short_quantity'], 3, '.', ''), '0'), '.') }}
+                                        </div>
+                                        <div class="fs-sm">{{ $shortageItem['message'] }}</div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+                @endif
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
@@ -856,6 +939,33 @@
 
 @push('scripts')
     <script>
+        const stockShortageAcceptForm = document.querySelector('[data-stock-shortage-accept-form]');
+        const stockShortageConfirmation = stockShortageAcceptForm?.querySelector('[data-stock-shortage-confirmation]');
+        const stockShortageModal = document.getElementById('acceptStockShortageModal');
+        const confirmStockShortageAccept = document.querySelector('[data-confirm-stock-shortage-accept]');
+
+        stockShortageAcceptForm?.addEventListener('submit', (event) => {
+            if (!stockShortageModal || stockShortageConfirmation?.value === '1') {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            if (window.bootstrap) {
+                bootstrap.Modal.getOrCreateInstance(stockShortageModal).show();
+            }
+        }, true);
+
+        confirmStockShortageAccept?.addEventListener('click', () => {
+            if (!stockShortageAcceptForm || !stockShortageConfirmation) {
+                return;
+            }
+
+            stockShortageConfirmation.value = '1';
+            stockShortageAcceptForm.requestSubmit();
+        });
+
         document.querySelectorAll('[data-submit-once]').forEach((form) => {
             form.addEventListener('submit', () => {
                 form.querySelectorAll('button[type="submit"]').forEach((button) => {

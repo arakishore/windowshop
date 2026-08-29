@@ -152,8 +152,8 @@
                                                     <span class="fw-medium">{{ $attribute['value'] }}</span>
                                                 </div>
                                             @endforeach
-                                            @if (! $item['is_available'])
-                                                <p class="text-caption-01 text-danger mb-0">{{ $item['availability_message'] ?: 'Currently unavailable.' }}</p>
+                                            @if (! empty($item['availability_message']))
+                                                <p class="text-caption-01 {{ $item['is_available'] ? 'cl-text-2' : 'text-danger' }} mb-0">{{ $item['availability_message'] ?: 'Currently unavailable.' }}</p>
                                             @endif
                                         </div>
                                         <div class="tf-mini-cart-price">

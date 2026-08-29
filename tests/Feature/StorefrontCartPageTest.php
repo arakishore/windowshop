@@ -8,12 +8,17 @@ use App\Models\MerchantProfile;
 use App\Models\Product;
 use App\Models\ProductAttributeGroup;
 use App\Models\ProductAttributeGroupValue;
+use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
+use App\Models\ProductReturnPolicy;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantAttribute;
 use App\Models\Shop;
+use App\Models\ShopSetting;
 use App\Models\User;
 use App\Services\Cart\CartResolver;
+use App\Services\Merchant\ShopSettingsService;
+use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -150,6 +155,26 @@ class StorefrontCartPageTest extends TestCase
             ->assertDontSee('each-subtotal-price', false);
     }
 
+    public function test_cart_shows_shop_specific_delivery_minimum_remaining_message(): void
+    {
+        $first = $this->productFixture(name: 'Below Minimum Product', price: 200);
+        $second = $this->productFixture(name: 'Above Minimum Product', price: 500);
+        $this->shopSetting($first['shop'], 'fulfillment', 'delivery_min_order_amount', 500, ShopSetting::TYPE_DECIMAL);
+        $this->shopSetting($second['shop'], 'fulfillment', 'delivery_min_order_amount', 300, ShopSetting::TYPE_DECIMAL);
+        $cart = $this->guestCart('delivery-minimum-token');
+        $this->cartItem($cart, $first['variant']);
+        $this->cartItem($cart, $second['variant']);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'delivery-minimum-token'])
+            ->get(route('storefront.cart'))
+            ->assertOk()
+            ->assertSee('Add')
+            ->assertSee('300.00')
+            ->assertSee('more from this shop to qualify for delivery.')
+            ->assertSee('data-shop-delivery-minimum="'.$first['shop']->getKey().'"', false)
+            ->assertSee('data-shop-delivery-minimum="'.$second['shop']->getKey().'"', false);
+    }
+
     public function test_full_cart_page_keeps_remove_action_behind_confirmation_modal(): void
     {
         $fixture = $this->productFixture(name: 'Confirm Remove Product');
@@ -182,6 +207,62 @@ class StorefrontCartPageTest extends TestCase
             ->assertSee('Size')
             ->assertSee('M')
             ->assertDontSee('Default</span>', false);
+    }
+
+    public function test_cart_page_shows_effective_return_exchange_policy_for_each_item(): void
+    {
+        $defaultPolicy = $this->productFixture(name: 'Default Cart Policy Product');
+        $overridePolicy = $this->productFixture(name: 'Override Cart Policy Product');
+        ProductReturnPolicy::query()->create([
+            'product_id' => $overridePolicy['product']->getKey(),
+            'refund_allowed' => true,
+            'refund_window_days' => 5,
+            'exchange_allowed' => false,
+            'exchange_window_days' => 0,
+        ]);
+        $cart = $this->guestCart('policy-token');
+        $this->cartItem($cart, $defaultPolicy['variant']);
+        $this->cartItem($cart, $overridePolicy['variant']);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'policy-token'])
+            ->get(route('storefront.cart'))
+            ->assertOk()
+            ->assertSee('No Refund · Exchange within 7 days')
+            ->assertSee('Refund within 5 days · No Exchange');
+    }
+
+    public function test_cart_policy_loading_uses_eager_loaded_relationships(): void
+    {
+        $first = $this->productFixture(name: 'First Query Policy Product');
+        $second = $this->productFixture(name: 'Second Query Policy Product');
+        $this->shopSetting($second['shop'], 'returns', 'refund_allowed', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($second['shop'], 'returns', 'refund_window_days', 4, ShopSetting::TYPE_INTEGER);
+        ProductReturnPolicy::query()->create([
+            'product_id' => $first['product']->getKey(),
+            'refund_allowed' => true,
+            'refund_window_days' => 2,
+            'exchange_allowed' => true,
+            'exchange_window_days' => 2,
+        ]);
+        $cart = $this->guestCart('policy-query-token');
+        $this->cartItem($cart, $first['variant']);
+        $this->cartItem($cart, $second['variant']);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'policy-query-token'])
+            ->get(route('storefront.cart'))
+            ->assertOk()
+            ->assertSee('Refund within 2 days · Exchange within 2 days')
+            ->assertSee('Refund within 4 days · Exchange within 7 days');
+
+        $queries = collect(DB::getQueryLog())->pluck('query')->map(fn (string $query): string => strtolower($query));
+
+        $this->assertLessThanOrEqual(1, $queries->filter(fn (string $query): bool => str_contains($query, 'product_return_policies'))->count());
+        $this->assertLessThanOrEqual(1, $queries->filter(fn (string $query): bool => str_contains($query, 'shop_settings'))->count());
+
+        DB::disableQueryLog();
     }
 
     public function test_quantity_update_refreshes_totals_and_header_count(): void
@@ -349,6 +430,22 @@ class StorefrontCartPageTest extends TestCase
             ->assertJsonPath('cart_count', '0');
     }
 
+    public function test_backorder_cart_item_renders_confirmation_warning_but_remains_available(): void
+    {
+        $fixture = $this->productFixture(stock: 5);
+        $fixture['product']->forceFill([
+            'availability_status_id' => $this->availabilityStatus($fixture['merchant'], ProductAvailabilityStatus::CODE_BACKORDER)->getKey(),
+        ])->save();
+        $cart = $this->guestCart('backorder-cart-token');
+        $this->cartItem($cart, $fixture['variant'], 7);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'backorder-cart-token'])
+            ->get(route('storefront.cart'))
+            ->assertOk()
+            ->assertSee('5 items are currently in stock. 2 items require confirmation from the merchant.')
+            ->assertDontSee('Checkout is disabled until unavailable items are removed.');
+    }
+
     /**
      * @param array<string, mixed> $variantOverrides
      * @return array{merchant: MerchantProfile, shop: Shop, product: Product, variant: ProductVariant}
@@ -362,6 +459,7 @@ class StorefrontCartPageTest extends TestCase
             'verification_status' => 'approved',
             'status' => 'active',
         ]);
+        app(MerchantAvailabilityStatusSeeder::class)->seedDefaultsForMerchant($merchant);
         $category = ProductCategory::query()->create([
             'name' => 'Cart Page Category '.Str::random(8),
             'slug' => 'cart-page-category-'.Str::random(8),
@@ -382,6 +480,10 @@ class StorefrontCartPageTest extends TestCase
             'product_category_id' => $category->getKey(),
             'product_name' => $name,
             'slug' => 'cart-page-product-'.Str::random(8),
+            'availability_status_id' => ProductAvailabilityStatus::query()
+                ->where('merchant_id', $merchant->getKey())
+                ->where('code', ProductAvailabilityStatus::CODE_IN_STOCK)
+                ->value('id'),
             'status' => 'active',
             'published_at' => now(),
         ]);
@@ -443,6 +545,14 @@ class StorefrontCartPageTest extends TestCase
         ]);
     }
 
+    private function availabilityStatus(MerchantProfile $merchant, string $code): ProductAvailabilityStatus
+    {
+        return ProductAvailabilityStatus::query()
+            ->where('merchant_id', $merchant->getKey())
+            ->where('code', $code)
+            ->firstOrFail();
+    }
+
     private function userFixture(string $email): User
     {
         $user = User::query()->create([
@@ -491,5 +601,10 @@ class StorefrontCartPageTest extends TestCase
         ]);
 
         return (int) DB::table('auth_roles')->where('slug', $slug)->value('id');
+    }
+
+    private function shopSetting(Shop $shop, string $group, string $key, mixed $value, string $type): void
+    {
+        app(ShopSettingsService::class)->setTyped($shop->getKey(), $group, $key, $value, $type);
     }
 }

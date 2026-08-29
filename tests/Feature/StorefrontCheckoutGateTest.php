@@ -12,6 +12,7 @@ use App\Models\OrderTotal;
 use App\Models\PostalCode;
 use App\Models\PostalCodeRestriction;
 use App\Models\Product;
+use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
@@ -23,6 +24,7 @@ use App\Services\Checkout\CheckoutPageService;
 use App\Services\Checkout\StorefrontDeliveryService;
 use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Storefront\StorefrontCountryResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -1048,6 +1050,33 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertDontSee('Pickup from Shop');
     }
 
+    public function test_checkout_multishop_minimum_uses_each_shop_subtotal_not_whole_cart(): void
+    {
+        $customer = $this->customerUser('delivery-multishop-minimum@example.test');
+        $first = $this->productFixture(price: 2000);
+        $second = $this->productFixture(price: 5000);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $this->cartItem($cart, $first['variant']);
+        $this->cartItem($cart, $second['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $first['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($first['shop'], 'fulfillment', 'delivery_min_order_amount', 5000, ShopSetting::TYPE_DECIMAL);
+        $this->shopSetting($second['shop'], 'fulfillment', 'delivery_min_order_amount', 3000, ShopSetting::TYPE_DECIMAL);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Standard Delivery')
+            ->assertSee('Unavailable')
+            ->assertSee($first['shop']->name.': Minimum order of')
+            ->assertDontSee($second['shop']->name.': Minimum order of');
+    }
+
     public function test_checkout_delivery_shows_selected_cod_when_enabled_without_limits(): void
     {
         $customer = $this->customerUser('payment-cod-enabled@example.test');
@@ -1383,6 +1412,67 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee($fixture['shop']->name);
     }
 
+    public function test_storefront_backorder_checkout_can_deduct_stock_negative(): void
+    {
+        $customer = $this->customerUser('place-backorder@example.test');
+        $fixture = $this->productFixture(
+            price: 700,
+            availabilityCode: ProductAvailabilityStatus::CODE_BACKORDER,
+            stock: 5,
+        );
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $this->cartItem($cart, $fixture['variant'], 7);
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(-2, (int) $fixture['variant']->refresh()->stock_quantity);
+        $this->assertDatabaseHas('orders', [
+            'created_source' => Order::SOURCE_STOREFRONT,
+            'order_status' => Order::STATUS_PENDING,
+        ]);
+    }
+
+    public function test_storefront_out_of_stock_status_blocks_checkout_even_when_stock_exists(): void
+    {
+        $customer = $this->customerUser('place-out-of-stock@example.test');
+        $fixture = $this->productFixture(
+            price: 700,
+            availabilityCode: ProductAvailabilityStatus::CODE_OUT_OF_STOCK,
+            stock: 5,
+        );
+        $item = $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ])
+            ->assertSessionHasErrors('items');
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseHas('cart_items', ['id' => $item->getKey()]);
+        $this->assertSame(5, (int) $fixture['variant']->refresh()->stock_quantity);
+    }
+
     public function test_checkout_place_order_uses_product_variant_id_not_cart_item_id(): void
     {
         $customer = $this->customerUser('place-variant-id@example.test');
@@ -1505,6 +1595,69 @@ class StorefrontCheckoutGateTest extends TestCase
         ]);
         $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
         $this->restriction('422009', $fixture['merchant']->getKey(), $fixture['shop']->getKey(), 'Delivery temporarily unavailable');
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_DELIVERY,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
+            ])
+            ->assertSessionHasErrors('shipping_method');
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_checkout_place_order_revalidates_shop_delivery_minimum(): void
+    {
+        $customer = $this->customerUser('place-delivery-min@example.test');
+        $fixture = $this->productFixture(price: 400);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_min_order_amount', 500, ShopSetting::TYPE_DECIMAL);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_DELIVERY,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
+            ])
+            ->assertSessionHasErrors('shipping_method');
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_checkout_rejects_local_only_delivery_mismatch_and_keeps_pickup_available(): void
+    {
+        $customer = $this->customerUser('checkout-local-mismatch@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009', district: 'Nashik', state: 'Maharashtra');
+        $this->postalCode('802301', district: 'Bhojpur', state: 'Bihar');
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '802301',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Standard Delivery')
+            ->assertSee('Unavailable')
+            ->assertSee('Delivery is not available to this PIN code.')
+            ->assertSee('Pickup from Shop');
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
@@ -1738,7 +1891,7 @@ class StorefrontCheckoutGateTest extends TestCase
     /**
      * @return array{merchant: MerchantProfile, shop: Shop, product: Product, variant: ProductVariant}
      */
-    private function productFixture(int $price = 199): array
+    private function productFixture(int $price = 199, string $availabilityCode = ProductAvailabilityStatus::CODE_IN_STOCK, int $stock = 20): array
     {
         $merchantUser = User::query()->create([
             'name' => 'Checkout Merchant',
@@ -1751,6 +1904,7 @@ class StorefrontCheckoutGateTest extends TestCase
             'verification_status' => 'approved',
             'status' => 'active',
         ]);
+        app(MerchantAvailabilityStatusSeeder::class)->seedDefaultsForMerchant($merchant);
         $category = ProductCategory::query()->create([
             'name' => 'Checkout Category '.Str::random(8),
             'slug' => 'checkout-category-'.Str::random(8),
@@ -1762,6 +1916,7 @@ class StorefrontCheckoutGateTest extends TestCase
             'name' => 'Checkout Shop '.Str::random(8),
             'slug' => 'checkout-shop-'.Str::random(8),
             'address_line_1' => 'Fixture Street',
+            'pincode' => '422009',
             'status' => 'active',
         ]);
         $product = Product::query()->create([
@@ -1771,6 +1926,10 @@ class StorefrontCheckoutGateTest extends TestCase
             'product_category_id' => $category->getKey(),
             'product_name' => 'Checkout Product '.Str::random(8),
             'slug' => 'checkout-product-'.Str::random(8),
+            'availability_status_id' => ProductAvailabilityStatus::query()
+                ->where('merchant_id', $merchant->getKey())
+                ->where('code', $availabilityCode)
+                ->value('id'),
             'status' => 'active',
             'published_at' => now(),
         ]);
@@ -1781,7 +1940,7 @@ class StorefrontCheckoutGateTest extends TestCase
             'name' => 'Default',
             'mrp' => $price + 100,
             'selling_price' => $price,
-            'stock_quantity' => 20,
+            'stock_quantity' => $stock,
             'is_default' => true,
             'is_sellable' => true,
             'status' => 'active',
@@ -1839,20 +1998,25 @@ class StorefrontCheckoutGateTest extends TestCase
         ]);
     }
 
-    private function postalCode(string $postalCode, bool $shippingEnabled = true): PostalCode
+    private function postalCode(
+        string $postalCode,
+        bool $shippingEnabled = true,
+        string $district = 'Nashik',
+        string $state = 'Maharashtra',
+    ): PostalCode
     {
         return PostalCode::query()->create([
-            'source_key' => sha1($postalCode.'|checkout test h.o|ho|nashik|maharashtra'),
-            'circle_name' => 'Maharashtra',
-            'region_name' => 'Nashik',
-            'division_name' => 'Nashik',
+            'source_key' => sha1($postalCode.'|checkout test h.o|ho|'.strtolower($district).'|'.strtolower($state)),
+            'circle_name' => $state,
+            'region_name' => $district,
+            'division_name' => $district,
             'office_name' => 'Checkout Test H.O',
             'postal_code' => $postalCode,
             'office_type' => 'HO',
             'delivery_status' => 'Delivery',
             'shipping_enabled' => $shippingEnabled,
-            'district' => 'Nashik',
-            'state' => 'Maharashtra',
+            'district' => $district,
+            'state' => $state,
             'status' => PostalCode::STATUS_ACTIVE,
         ]);
     }

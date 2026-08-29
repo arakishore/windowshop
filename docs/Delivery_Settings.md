@@ -15,6 +15,7 @@ Do not create a separate delivery/shipping settings table for V1.
 Current delivery and pickup keys:
 
 - `fulfillment.delivery_enabled`
+- `fulfillment.delivery_scope`
 - `fulfillment.delivery_min_order_amount`
 - `fulfillment.delivery_flat_charge`
 - `fulfillment.free_delivery_above`
@@ -28,6 +29,7 @@ Current delivery and pickup keys:
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `delivery_enabled` | `true` | Delivery is available unless the shop turns it off. |
+| `delivery_scope` | `local_only` | Delivery coverage intent: local area only or nationwide. |
 | `delivery_min_order_amount` | `null` | No minimum delivery order. |
 | `delivery_flat_charge` | `0` | Delivery is free unless a merchant sets a charge. |
 | `free_delivery_above` | `null` | No free-delivery threshold. |
@@ -41,6 +43,8 @@ Current delivery and pickup keys:
 ### Minimum Delivery Order
 
 `delivery_min_order_amount` controls the minimum eligible shop subtotal for delivery.
+
+Minimum Delivery Order is evaluated per shop using that shop's item subtotal, not the whole marketplace cart.
 
 - Blank or `NULL` means no minimum.
 - `0` is normalized to `NULL` and also means no minimum.
@@ -89,10 +93,11 @@ Do not calculate calendar delivery dates in V1.
 Delivery availability and charge should be calculated per shop using that shop's subtotal:
 
 1. If delivery is disabled, delivery is unavailable.
-2. If the destination postal code is restricted, delivery is unavailable.
-3. If the minimum delivery order is configured and the shop subtotal is below it, delivery is unavailable.
-4. If free-delivery threshold is configured and the shop subtotal is greater than or equal to it, shipping is `0`.
-5. Otherwise, shipping is the flat delivery charge.
+2. If `delivery_scope` is `local_only`, the destination PIN must resolve to the same normalized state and district as the shop PIN.
+3. If the destination postal code is not active/shipping-enabled or is restricted, delivery is unavailable.
+4. If the minimum delivery order is configured and the shop subtotal is below it, delivery is unavailable.
+5. If free-delivery threshold is configured and the shop subtotal is greater than or equal to it, shipping is `0`.
+6. Otherwise, shipping is the flat delivery charge.
 
 The centralized V1 calculation entry point is:
 

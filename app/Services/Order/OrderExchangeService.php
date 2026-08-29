@@ -89,6 +89,8 @@ class OrderExchangeService
                 ]);
             }
 
+            $replacementRows = $this->withOriginalPolicySnapshot($replacementRows, $returnedRows);
+
             $returnedTotal = $this->money(array_sum(array_column($returnedRows, 'settlement_line_total')));
             $settlementMethod = $this->settlementPaymentMethod((string) ($data['settlement_method'] ?? $order->payment_method));
             $replacementOrder = $this->orderCreationService->create([
@@ -313,6 +315,48 @@ class OrderExchangeService
         }
 
         return $rows;
+    }
+
+    /**
+     * @param array<int, array{product_variant_id: int, quantity: int}> $replacementRows
+     * @param array<int, array{item: OrderItem, quantity: int, unit_return_value: string, line_tax: string, line_total: string, settlement_line_total: string, restocked: bool}> $returnedRows
+     * @return array<int, array{product_variant_id: int, quantity: int, policy_snapshot: array{refund_allowed: bool, refund_window_days: int, exchange_allowed: bool, exchange_window_days: int}}>
+     */
+    private function withOriginalPolicySnapshot(array $replacementRows, array $returnedRows): array
+    {
+        $snapshots = collect($returnedRows)
+            ->map(fn (array $row): array => $this->policySnapshotFromOrderItem($row['item']))
+            ->unique(fn (array $snapshot): string => json_encode($snapshot))
+            ->values();
+
+        if ($snapshots->count() !== 1) {
+            throw ValidationException::withMessages([
+                'replacement_items' => 'Replacement policy snapshot is ambiguous for returned items with different refund/exchange policies.',
+            ]);
+        }
+
+        $snapshot = $snapshots->first();
+
+        return array_map(fn (array $row): array => [
+            ...$row,
+            'policy_snapshot' => $snapshot,
+        ], $replacementRows);
+    }
+
+    /**
+     * @return array{refund_allowed: bool, refund_window_days: int, exchange_allowed: bool, exchange_window_days: int}
+     */
+    private function policySnapshotFromOrderItem(OrderItem $item): array
+    {
+        $refundAllowed = (bool) $item->refund_allowed;
+        $exchangeAllowed = (bool) $item->exchange_allowed;
+
+        return [
+            'refund_allowed' => $refundAllowed,
+            'refund_window_days' => $refundAllowed ? max(0, (int) $item->refund_window_days) : 0,
+            'exchange_allowed' => $exchangeAllowed,
+            'exchange_window_days' => $exchangeAllowed ? max(0, (int) $item->exchange_window_days) : 0,
+        ];
     }
 
     /**

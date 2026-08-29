@@ -32,6 +32,10 @@ return new class extends Migration
             $table->decimal('line_discount', 14, 2)->default(0);
             $table->decimal('line_tax', 14, 2)->default(0);
             $table->decimal('line_total', 14, 2)->default(0);
+            $table->boolean('refund_allowed')->default(false);
+            $table->unsignedInteger('refund_window_days')->default(0);
+            $table->boolean('exchange_allowed')->default(false);
+            $table->unsignedInteger('exchange_window_days')->default(0);
             $table->json('metadata')->nullable();
             $table->timestamps();
 

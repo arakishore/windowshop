@@ -8,10 +8,10 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Shop;
 use App\Models\WishlistItem;
-use App\Services\PostalCodeServiceabilityService;
 use App\Services\Banner\BannerService;
 use App\Services\Cart\CartPageService;
 use App\Services\Checkout\CheckoutFlowService;
+use App\Services\Delivery\ShopDeliveryServiceabilityService;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductListingService;
@@ -22,7 +22,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class StorefrontController extends Controller
@@ -304,7 +303,7 @@ class StorefrontController extends Controller
     public function checkProductDelivery(
         Request $request,
         string $slug,
-        PostalCodeServiceabilityService $serviceability,
+        ShopDeliveryServiceabilityService $serviceability,
         CustomerLocationService $location,
     ): RedirectResponse|JsonResponse {
         $validator = Validator::make($request->all(), [
@@ -312,15 +311,10 @@ class StorefrontController extends Controller
                 'required',
                 'string',
                 'regex:/^\d{6}$/',
-                Rule::exists('postal_codes', 'postal_code')
-                    ->where('status', PostalCode::STATUS_ACTIVE)
-                    ->where('shipping_enabled', true)
-                    ->whereNull('deleted_at'),
             ],
         ], [
             'postal_code.required' => 'Please enter your delivery PIN code.',
             'postal_code.regex' => 'Enter a valid 6-digit PIN code.',
-            'postal_code.exists' => 'Delivery is not available for this PIN code yet.',
         ]);
 
         if ($validator->fails()) {
@@ -338,7 +332,7 @@ class StorefrontController extends Controller
         }
 
         $product = Product::query()
-            ->with(['shop:id,merchant_id,name,status'])
+            ->with(['shop:id,merchant_id,name,status,pincode'])
             ->where('slug', $slug)
             ->where('status', 'active')
             ->whereHas('merchant', fn ($query) => $query->where('status', 'active'))
@@ -348,34 +342,40 @@ class StorefrontController extends Controller
                 ->whereHas('merchant', fn ($query) => $query->where('status', 'active')))
             ->firstOrFail();
 
-        $postalCode = $location->store($request, (string) $validator->validated()['postal_code']);
-        $cookie = cookie(CustomerLocationService::COOKIE_NAME, $postalCode, CustomerLocationService::COOKIE_MINUTES);
+        $requestedPostalCode = (string) $validator->validated()['postal_code'];
+        $result = $serviceability->check($product->shop, $requestedPostalCode);
+        $postalCode = $result['destination_postal_code'] ?? trim($requestedPostalCode);
+        $cookie = null;
+
+        if (($result['destination_location'] ?? null) !== null) {
+            $postalCode = $location->store($request, $postalCode);
+            $cookie = cookie(CustomerLocationService::COOKIE_NAME, $postalCode, CustomerLocationService::COOKIE_MINUTES);
+        }
+
         $record = PostalCode::query()
             ->active()
             ->shippingEnabled()
             ->where('postal_code', $postalCode)
             ->orderBy('office_name')
             ->first();
-        $result = $serviceability->check($postalCode, (int) $product->merchant_id, (int) $product->shop_id);
 
         if (! $result['serviceable']) {
             $payload = [
                 'status' => 'blocked',
                 'product_slug' => $product->slug,
                 'postal_code' => $postalCode,
-                'message' => $result['reason'] ?: 'Delivery is temporarily unavailable for this PIN code.',
+                'message' => $result['message'] ?: 'Delivery is not available to this PIN code.',
             ];
 
-            if ($request->expectsJson()) {
-                return response()
-                    ->json($payload)
-                    ->withCookie($cookie);
+            $response = $request->expectsJson()
+                ? response()->json($payload)
+                : back()->with('delivery_check', $payload)->withInput();
+
+            if ($cookie !== null) {
+                $response->withCookie($cookie);
             }
 
-            return back()
-                ->with('delivery_check', $payload)
-                ->withInput()
-                ->withCookie($cookie);
+            return $response;
         }
 
         $locationText = collect([$record?->office_name, $record?->district, $record?->state])
@@ -391,15 +391,23 @@ class StorefrontController extends Controller
         ];
 
         if ($request->expectsJson()) {
-            return response()
-                ->json($payload)
-                ->withCookie($cookie);
+            $response = response()->json($payload);
+            if ($cookie !== null) {
+                $response->withCookie($cookie);
+            }
+
+            return $response;
         }
 
-        return back()
+        $response = back()
             ->with('delivery_check', $payload)
-            ->withInput()
-            ->withCookie($cookie);
+            ->withInput();
+
+        if ($cookie !== null) {
+            $response->withCookie($cookie);
+        }
+
+        return $response;
     }
 
     public function cart(Request $request, CartPageService $cartPage): View

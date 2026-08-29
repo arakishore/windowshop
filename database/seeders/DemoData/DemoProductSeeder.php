@@ -3,6 +3,7 @@
 namespace Database\Seeders\DemoData;
 
 use App\Models\Product;
+use App\Models\ProductAvailabilityStatus;
 use App\Models\User;
 use App\Services\Product\ProductVariantManagementService;
 use Illuminate\Database\Seeder;
@@ -46,6 +47,7 @@ class DemoProductSeeder extends Seeder
                 foreach ($products as $product) {
                     $productCategoryId = $this->categoryIdForProduct($productCategories, $product['category'], $rootCategoryId);
                     $brandId = $this->brandIdForProduct($brands, $product['brand']);
+                    $availabilityStatusId = $this->availabilityStatusId((int) $shop->merchant_id);
 
                     $existingProductId = DB::table('products')
                         ->where('shop_id', $shop->id)
@@ -60,6 +62,7 @@ class DemoProductSeeder extends Seeder
                             'root_product_category_id' => $rootCategoryId,
                             'product_category_id' => $productCategoryId,
                             'brand_id' => $brandId,
+                            'availability_status_id' => $availabilityStatusId,
                             'product_name' => $product['name'],
                             'slug' => 'pending-'.Str::uuid(),
                             'short_description' => $product['short_description'],
@@ -83,6 +86,7 @@ class DemoProductSeeder extends Seeder
                                 'root_product_category_id' => $rootCategoryId,
                                 'product_category_id' => $productCategoryId,
                                 'brand_id' => $brandId,
+                                'availability_status_id' => $availabilityStatusId,
                                 'short_description' => $product['short_description'],
                                 'description' => $product['description'],
                                 'meta_title' => $product['name'],
@@ -495,6 +499,16 @@ class DemoProductSeeder extends Seeder
         return $brands[Str::lower($name)]
             ?? $brands['other']
             ?? null;
+    }
+
+    private function availabilityStatusId(int $merchantId): ?int
+    {
+        return DB::table('product_availability_statuses')
+            ->where('merchant_id', $merchantId)
+            ->where('code', ProductAvailabilityStatus::CODE_IN_STOCK)
+            ->where('status', ProductAvailabilityStatus::STATUS_ACTIVE)
+            ->whereNull('deleted_at')
+            ->value('id');
     }
 
     private function productSlug(string $name, int $productId): string

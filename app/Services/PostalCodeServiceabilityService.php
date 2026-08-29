@@ -30,20 +30,27 @@ class PostalCodeServiceabilityService
             ];
         }
 
-        $shop = PostalCodeRestriction::query()
+        $merchantOrShop = PostalCodeRestriction::query()
             ->forPostalCode($postalCode)
-            ->forShop($merchantId, $shopId)
             ->currentlyApplicable()
+            ->where(function ($query) use ($merchantId, $shopId): void {
+                $query->where(function ($query) use ($merchantId): void {
+                    $query->where('merchant_id', $merchantId)->whereNull('shop_id');
+                })->orWhere(function ($query) use ($merchantId, $shopId): void {
+                    $query->where('merchant_id', $merchantId)->where('shop_id', $shopId);
+                });
+            })
+            ->orderByDesc('shop_id')
             ->orderByDesc('starts_at')
             ->orderByDesc('id')
             ->first();
 
-        if ($shop instanceof PostalCodeRestriction) {
+        if ($merchantOrShop instanceof PostalCodeRestriction) {
             return [
                 'serviceable' => false,
-                'scope' => 'shop',
-                'reason' => $shop->reason,
-                'restriction' => $shop,
+                'scope' => $merchantOrShop->shop_id === null ? 'merchant' : 'shop',
+                'reason' => $merchantOrShop->reason,
+                'restriction' => $merchantOrShop,
             ];
         }
 

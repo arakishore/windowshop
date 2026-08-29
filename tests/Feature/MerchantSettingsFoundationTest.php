@@ -153,14 +153,14 @@ class MerchantSettingsFoundationTest extends TestCase
     {
         $merchant = $this->merchantFixture('Typed Settings Merchant');
 
-        $this->settings()->set($merchant->getKey(), 'inventory', 'allow_negative_stock', false);
+        $this->settings()->set($merchant->getKey(), 'inventory', 'enabled', false);
         $this->settings()->set($merchant->getKey(), 'payment', 'default_method', 'cash');
         $this->settings()->set($merchant->getKey(), 'invoice', 'copy_count', 2);
         $this->settings()->set($merchant->getKey(), 'invoice', 'rounding_adjustment', 0.5);
         $this->settings()->set($merchant->getKey(), 'invoice', 'options', ['print_logo' => true]);
 
         $this->assertTrue($this->settings()->has($merchant->getKey(), 'invoice', 'copy_count'));
-        $this->assertFalse($this->settings()->get($merchant->getKey(), 'inventory', 'allow_negative_stock'));
+        $this->assertFalse($this->settings()->get($merchant->getKey(), 'inventory', 'enabled'));
         $this->assertSame('cash', $this->settings()->get($merchant->getKey(), 'payment', 'default_method'));
         $this->assertSame(2, $this->settings()->get($merchant->getKey(), 'invoice', 'copy_count'));
         $this->assertSame(0.5, $this->settings()->get($merchant->getKey(), 'invoice', 'rounding_adjustment'));
@@ -313,7 +313,6 @@ class MerchantSettingsFoundationTest extends TestCase
                         'order.allow_item_discount' => '0',
                     ],
                     'inventory' => [
-                        'allow_negative_stock' => '0',
                         'show_low_stock_warning' => '1',
                         'low_stock_default' => '3',
                     ],

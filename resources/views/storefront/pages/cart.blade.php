@@ -145,10 +145,18 @@
                                             <td colspan="4">
                                                 <div class="d-flex justify-content-between align-items-center py-3">
                                                     <h6 class="mb-0">{{ $shopGroup['shop_name'] }}</h6>
-                                                    <span class="text-caption-01 cl-text-2">
-                                                        Shop subtotal:
-                                                        <span data-shop-subtotal="{{ $shopGroup['shop_id'] }}">{{ $shopGroup['subtotal'] }}</span>
-                                                    </span>
+                                                    <div class="text-end">
+                                                        <span class="text-caption-01 cl-text-2">
+                                                            Shop subtotal:
+                                                            <span data-shop-subtotal="{{ $shopGroup['shop_id'] }}">{{ $shopGroup['subtotal'] }}</span>
+                                                        </span>
+                                                        <p
+                                                            class="text-caption-01 text-danger mb-0"
+                                                            data-shop-delivery-minimum="{{ $shopGroup['shop_id'] }}"
+                                                            {{ empty($shopGroup['delivery_minimum']['message']) ? 'hidden' : '' }}>
+                                                            {{ $shopGroup['delivery_minimum']['message'] ?? '' }}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -173,8 +181,13 @@
                                                                 <span class="fw-medium">{{ $attribute['value'] }}</span>
                                                             </div>
                                                         @endforeach
-                                                        @if (! $item['is_available'])
-                                                            <p class="text-caption-01 text-danger mb-0" data-cart-item-warning>
+                                                        @if (! empty($item['return_exchange_policy']))
+                                                            <p class="cart-product-policy text-caption-01 mb-0">
+                                                                {{ $item['return_exchange_policy']['inline'] }}
+                                                            </p>
+                                                        @endif
+                                                        @if (! empty($item['availability_message']))
+                                                            <p class="text-caption-01 {{ $item['is_available'] ? 'cl-text-2' : 'text-danger' }} mb-0" data-cart-item-warning>
                                                                 {{ $item['availability_message'] ?: 'Currently unavailable.' }}
                                                             </p>
                                                         @endif
@@ -331,6 +344,13 @@
 
                     if (shopSubtotal) {
                         shopSubtotal.textContent = shop.subtotal;
+                    }
+
+                    const minimumMessage = page.querySelector(`[data-shop-delivery-minimum="${shop.shop_id}"]`);
+                    if (minimumMessage) {
+                        const message = shop.delivery_minimum?.message || '';
+                        minimumMessage.textContent = message;
+                        minimumMessage.hidden = message === '';
                     }
 
                     (shop.items || []).forEach((item) => {

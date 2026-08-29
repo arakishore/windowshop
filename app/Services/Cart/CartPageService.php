@@ -4,8 +4,10 @@ namespace App\Services\Cart;
 
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\Admin\AdminSettingsService;
+use App\Services\Storefront\StorefrontProductPolicyPresenter;
 use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -14,12 +16,15 @@ use Illuminate\Support\Facades\Storage;
 class CartPageService
 {
     private const FALLBACK_IMAGE = 'assets/storefront/images/no-image-icon.png';
+    private const PAGE_DATA_ATTRIBUTE = 'storefront_cart_page_data';
+    private const CURRENT_CART_ATTRIBUTE = 'storefront_current_cart';
 
     public function __construct(
         private readonly CartResolver $cartResolver,
         private readonly CartItemQuantityValidator $quantityValidator,
         private readonly AdminSettingsService $settings,
         private readonly StorefrontUrlService $urls,
+        private readonly StorefrontProductPolicyPresenter $policyPresenter,
     ) {
     }
 
@@ -28,13 +33,23 @@ class CartPageService
      */
     public function pageData(Request $request): array
     {
+        if ($request->attributes->has(self::PAGE_DATA_ATTRIBUTE)) {
+            return $request->attributes->get(self::PAGE_DATA_ATTRIBUTE);
+        }
+
         $cart = $this->currentCart($request);
 
         if (! $cart instanceof Cart || $cart->items->isEmpty()) {
-            return $this->emptyData();
+            $data = $this->emptyData();
+            $request->attributes->set(self::PAGE_DATA_ATTRIBUTE, $data);
+
+            return $data;
         }
 
-        return $this->dataFromItems($cart->items);
+        $data = $this->dataFromItems($cart->items);
+        $request->attributes->set(self::PAGE_DATA_ATTRIBUTE, $data);
+
+        return $data;
     }
 
     /**
@@ -50,7 +65,11 @@ class CartPageService
 
     public function currentCart(Request $request): ?Cart
     {
-        return $this->cartResolver->current($request)?->load([
+        if ($request->attributes->has(self::CURRENT_CART_ATTRIBUTE)) {
+            return $request->attributes->get(self::CURRENT_CART_ATTRIBUTE);
+        }
+
+        $cart = $this->cartResolver->current($request)?->load([
             'items' => fn ($query) => $query->orderBy('shop_id')->orderBy('id'),
             'items.shop.city',
             'items.shop.merchant',
@@ -58,11 +77,17 @@ class CartPageService
             'items.product.category.parent.parent',
             'items.product.merchant',
             'items.product.shop.merchant',
+            'items.product.shop.settings',
+            'items.product.returnPolicy',
             'items.productVariant.availabilityStatus',
             'items.productVariant.product.availabilityStatus',
             'items.productVariant.attributes.group',
             'items.productVariant.attributes.value',
         ]);
+
+        $request->attributes->set(self::CURRENT_CART_ATTRIBUTE, $cart);
+
+        return $cart;
     }
 
     /**
@@ -83,6 +108,7 @@ class CartPageService
                     'shop_name' => $first['shop_name'],
                     'subtotal_cents' => $subtotalCents,
                     'subtotal' => $this->moneyFromCents($subtotalCents),
+                    'delivery_minimum' => $this->deliveryMinimumData((float) ($first['delivery_minimum_amount'] ?? 0), $subtotalCents),
                     'items' => $shopItems->values()->all(),
                 ];
             })
@@ -114,6 +140,8 @@ class CartPageService
             try {
                 $this->quantityValidator->ensureVariantCanBePurchased($variant);
                 $this->quantityValidator->validateStock($variant, (float) $item->quantity);
+                $decision = $this->quantityValidator->availabilityDecision($variant, (float) $item->quantity);
+                $message = (bool) ($decision['allowed'] ?? false) ? ($decision['message'] ?? null) : null;
             } catch (\Illuminate\Validation\ValidationException $exception) {
                 $isPurchasable = false;
                 $message = collect($exception->errors())->flatten()->first() ?: 'Currently unavailable.';
@@ -138,6 +166,12 @@ class CartPageService
             'product_variant_id' => $variant?->getKey(),
             'product_name' => $product?->product_name ?: 'Unavailable Product',
             'product_url' => $product?->slug ? $this->urls->product($product) : '#',
+            'return_exchange_policy' => $product instanceof Product
+                ? $this->policyPresenter->returnExchange($product)
+                : null,
+            'delivery_minimum_amount' => $product instanceof Product
+                ? $this->policyPresenter->deliveryMinimumAmount($product)
+                : null,
             'image' => $this->imageUrl($item),
             'attributes' => $this->variantAttributes($variant),
             'quantity' => $this->formatQuantity($quantity),
@@ -190,6 +224,23 @@ class CartPageService
     private function lineSubtotalCents(string $quantity, string $unitPrice): int
     {
         return intdiv(($this->quantityToUnits($quantity) * $this->moneyToCents($unitPrice)) + 500, 1000);
+    }
+
+    /**
+     * @return array{minimum_cents: int, remaining_cents: int, message: ?string}
+     */
+    private function deliveryMinimumData(float $minimum, int $subtotalCents): array
+    {
+        $minimumCents = $minimum > 0 ? $this->moneyToCents((string) $minimum) : 0;
+        $remainingCents = max(0, $minimumCents - $subtotalCents);
+
+        return [
+            'minimum_cents' => $minimumCents,
+            'remaining_cents' => $remainingCents,
+            'message' => $remainingCents > 0
+                ? 'Add '.$this->moneyFromCents($remainingCents).' more from this shop to qualify for delivery.'
+                : null,
+        ];
     }
 
     private function quantityToUnits(string $quantity): int

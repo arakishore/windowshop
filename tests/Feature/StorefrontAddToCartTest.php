@@ -6,10 +6,12 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\MerchantProfile;
 use App\Models\Product;
+use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\User;
+use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -307,14 +309,89 @@ class StorefrontAddToCartTest extends TestCase
 
     public function test_quantity_above_available_stock_is_rejected(): void
     {
-        $fixture = $this->productFixture(['stock_quantity' => 2]);
+        $fixture = $this->productFixture(['stock_quantity' => 7]);
 
         $this->postJson(route('storefront.cart.items.store'), [
             'product_variant_id' => $fixture['variant']->getKey(),
-            'quantity' => 3,
+            'quantity' => 8,
         ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors('quantity');
+            ->assertJsonValidationErrors('quantity')
+            ->assertJsonFragment([
+                'quantity' => ['Only 7 items are currently available.'],
+            ])
+            ->assertJsonMissing([
+                'Only 7.000 items are currently available.',
+            ]);
+
+        $this->assertSame(0, CartItem::query()->count());
+    }
+
+    public function test_backorder_can_be_added_beyond_physical_stock(): void
+    {
+        $fixture = $this->productFixture(['stock_quantity' => 5]);
+        $fixture['product']->forceFill([
+            'availability_status_id' => $this->availabilityStatus($fixture['merchant'], ProductAvailabilityStatus::CODE_BACKORDER)->getKey(),
+        ])->save();
+
+        $this->postJson(route('storefront.cart.items.store'), [
+            'product_variant_id' => $fixture['variant']->getKey(),
+            'quantity' => 7,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('cart_count', '7');
+
+        $this->assertSame('7.000', CartItem::query()->firstOrFail()->quantity);
+    }
+
+    public function test_preorder_can_be_added_with_zero_stock(): void
+    {
+        $fixture = $this->productFixture(['stock_quantity' => 0]);
+        $fixture['product']->forceFill([
+            'availability_status_id' => $this->availabilityStatus($fixture['merchant'], ProductAvailabilityStatus::CODE_PREORDER)->getKey(),
+        ])->save();
+
+        $this->postJson(route('storefront.cart.items.store'), [
+            'product_variant_id' => $fixture['variant']->getKey(),
+            'quantity' => 2,
+        ])->assertCreated();
+
+        $this->assertSame('2.000', CartItem::query()->firstOrFail()->quantity);
+    }
+
+    public function test_out_of_stock_status_rejects_add_to_cart_even_when_stock_exists(): void
+    {
+        $fixture = $this->productFixture(['stock_quantity' => 5]);
+        $fixture['product']->forceFill([
+            'availability_status_id' => $this->availabilityStatus($fixture['merchant'], ProductAvailabilityStatus::CODE_OUT_OF_STOCK)->getKey(),
+        ])->save();
+
+        $this->postJson(route('storefront.cart.items.store'), [
+            'product_variant_id' => $fixture['variant']->getKey(),
+            'quantity' => 1,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('product_variant_id');
+
+        $this->assertSame(0, CartItem::query()->count());
+    }
+
+    public function test_decimal_quantity_stock_message_trims_trailing_zeroes(): void
+    {
+        $fixture = $this->productFixture([
+            'allow_decimal_quantity' => true,
+            'stock_quantity' => 1.5,
+        ]);
+
+        $this->postJson(route('storefront.cart.items.store'), [
+            'product_variant_id' => $fixture['variant']->getKey(),
+            'quantity' => 2,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('quantity')
+            ->assertJsonFragment([
+                'quantity' => ['Only 1.5 items are currently available.'],
+            ]);
 
         $this->assertSame(0, CartItem::query()->count());
     }
@@ -432,6 +509,7 @@ class StorefrontAddToCartTest extends TestCase
             'verification_status' => 'approved',
             'status' => 'active',
         ]);
+        app(MerchantAvailabilityStatusSeeder::class)->seedDefaultsForMerchant($merchant);
         $category = ProductCategory::query()->create([
             'name' => 'Cart Category '.Str::random(8),
             'slug' => 'cart-category-'.Str::random(8),
@@ -452,6 +530,10 @@ class StorefrontAddToCartTest extends TestCase
             'product_category_id' => $category->getKey(),
             'product_name' => 'Cart Product '.Str::random(8),
             'slug' => 'cart-product-'.Str::random(8),
+            'availability_status_id' => ProductAvailabilityStatus::query()
+                ->where('merchant_id', $merchant->getKey())
+                ->where('code', ProductAvailabilityStatus::CODE_IN_STOCK)
+                ->value('id'),
             'status' => 'active',
             'published_at' => now(),
         ], $productOverrides));
@@ -524,5 +606,13 @@ class StorefrontAddToCartTest extends TestCase
     private function productUrl(Product $product): string
     {
         return app(StorefrontUrlService::class)->product($product);
+    }
+
+    private function availabilityStatus(MerchantProfile $merchant, string $code): ProductAvailabilityStatus
+    {
+        return ProductAvailabilityStatus::query()
+            ->where('merchant_id', $merchant->getKey())
+            ->where('code', $code)
+            ->firstOrFail();
     }
 }

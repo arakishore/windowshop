@@ -109,7 +109,7 @@
                         <div class="tf-zoom-main sticky-top"></div>
                         <div class="tf-product-info-list other-image-zoom">
                             <div class="tf-product-info-heading">
-                                <p class="product-infor-cate text-caption-01 mb-4">{{ $product['availability'] }}</p>
+                                <p class="product-infor-cate text-caption-01 mb-4" data-product-availability-display>{{ $product['availability'] }}</p>
                                 <div class="product-heading-row mb-12">
                                     <h1 class="product-infor-name mb-0">{{ $product['name'] }}</h1>
                                     @include('storefront.components.wishlist-button', [
@@ -154,6 +154,25 @@
                                     <button type="button" class="product-infor-desc-toggle" data-product-description-toggle hidden>
                                         Read more
                                     </button>
+                                </div>
+
+                                <div class="product-policy-summary">
+                                    <div class="product-policy-summary__item">
+                                        <i class="icon icon-ArrowClockwise"></i>
+                                        <div>
+                                            <span class="product-policy-summary__label">Refund / Exchange</span>
+                                            @foreach ($product['return_exchange_policy']['lines'] as $policyLine)
+                                                <p>{{ $policyLine }}</p>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                    <div class="product-policy-summary__item">
+                                        <i class="icon icon-Truck"></i>
+                                        <div>
+                                            <span class="product-policy-summary__label">Delivery Coverage</span>
+                                            <p>{{ $product['delivery_scope_label'] }}</p>
+                                        </div>
+                                    </div>
                                 </div>
 
                             </div>
@@ -204,7 +223,12 @@
                                                     data-size="{{ $size['name'] }}"
                                                     data-price="{{ $size['raw_price'] }}"
                                                     data-price-label="{{ $size['price'] }}"
-                                                    data-variant-id="{{ $size['variant_id'] }}">{{ $size['name'] }}</span>
+                                                    data-variant-id="{{ $size['variant_id'] }}"
+                                                    data-stock-quantity="{{ $size['stock_quantity'] }}"
+                                                    data-availability-code="{{ $size['availability_code'] }}"
+                                                    data-availability-label="{{ $size['availability_label'] }}"
+                                                    data-availability-message="{{ $size['availability_message'] }}"
+                                                    @if ($size['stock_limit'] !== null) data-stock-limit="{{ $size['stock_limit'] }}" @endif>{{ $size['name'] }}</span>
                                             @endforeach
                                         </div>
                                     </div>
@@ -212,15 +236,25 @@
 
                                 <div class="tf-product-total-quantity">
                                     <p>Quantity:</p>
-                                    <form method="POST" action="{{ $product['add_to_cart_url'] }}" class="group-action" data-add-to-cart-form>
+                                    <form method="POST" action="{{ $product['add_to_cart_url'] }}" class="group-action" data-add-to-cart-form
+                                        data-unit-price="{{ $product['raw_price'] }}"
+                                        data-unit-price-label="{{ $product['price'] }}"
+                                        data-stock-quantity="{{ $product['selected_variant_stock_quantity'] }}"
+                                        data-availability-code="{{ $product['selected_variant_availability_code'] }}"
+                                        data-availability-label="{{ $product['selected_variant_availability_label'] }}"
+                                        data-availability-message="{{ $product['availability_purchase_message'] }}"
+                                        @if ($product['selected_variant_stock_limit'] !== null) data-stock-limit="{{ $product['selected_variant_stock_limit'] }}" @endif>
                                         @csrf
                                         <input type="hidden" name="product_variant_id" value="{{ $product['selected_variant_id'] }}" data-cart-variant-input>
                                         <div class="wg-quantity">
                                             <button class="btn-quantity btn-decrease" type="button">
                                                 <i class="icon icon-minus"></i>
                                             </button>
-                                            <input class="quantity-product" type="text" name="quantity" value="1" inputmode="numeric" data-cart-quantity-input>
-                                            <button class="btn-quantity btn-increase" type="button">
+                                            <input class="quantity-product" type="text" name="quantity" value="1" min="1"
+                                                @if ($product['selected_variant_stock_limit'] !== null) max="{{ $product['selected_variant_stock_limit'] }}" @endif
+                                                inputmode="numeric" data-cart-quantity-input>
+                                            <button class="btn-quantity btn-increase" type="button"
+                                                @disabled($product['selected_variant_stock_limit'] !== null && $product['selected_variant_stock_limit'] <= 1)>
                                                 <i class="icon icon-plus"></i>
                                             </button>
                                         </div>
@@ -236,8 +270,8 @@
                                     <p class="text-caption-01 mt-2 mb-0 {{ $errors->getBag('cart')->any() ? 'text-danger' : 'text-success' }}"
                                         data-add-to-cart-message
                                         role="status"
-                                        {{ $errors->getBag('cart')->any() || session('cart_success') ? '' : 'hidden' }}>
-                                        {{ $errors->getBag('cart')->first('quantity') ?: $errors->getBag('cart')->first('product_variant_id') ?: session('cart_success') }}
+                                        {{ $errors->getBag('cart')->any() || session('cart_success') || $product['availability_purchase_message'] ? '' : 'hidden' }}>
+                                        {{ $errors->getBag('cart')->first('quantity') ?: $errors->getBag('cart')->first('product_variant_id') ?: session('cart_success') ?: $product['availability_purchase_message'] }}
                                     </p>
                                 </div>
                             </div>
@@ -276,6 +310,11 @@
                                     {{ $deliveryCheckMessage !== '' ? '' : 'hidden' }}>
                                     {{ $deliveryCheckMessage }}
                                 </p>
+                                @if (! empty($product['delivery_minimum_message']))
+                                    <p class="product-delivery-check__note text-caption-01 cl-text-2 mb-0">
+                                        {{ $product['delivery_minimum_message'] }}
+                                    </p>
+                                @endif
                             </div>
 
                             <div class="sold-by-card">
@@ -289,7 +328,7 @@
                                         @if ($product['store_address'])
                                             <p class="sold-by-card__meta">{{ $product['store_address'] }}</p>
                                         @endif
-                                        <p class="sold-by-card__meta">Local Availability: {{ $product['availability'] }}</p>
+                                        <p class="sold-by-card__meta">Local Availability: <span data-product-availability-display>{{ $product['availability'] }}</span></p>
                                     </div>
                                     @if ($product['store_url'])
                                         <a href="{{ $product['store_url'] }}" class="tf-btn btn-line sold-by-card__button">View Shop</a>
@@ -322,7 +361,7 @@
                                     <i class="icon icon-Timer"></i>
                                     <p>
                                         Local Availability:
-                                        <span class="fw-semibold">{{ $product['availability'] }}</span>
+                                        <span class="fw-semibold" data-product-availability-display>{{ $product['availability'] }}</span>
                                     </p>
                                 </div>
                                 @if ($product['availability_note'])
@@ -334,9 +373,12 @@
                                 <div class="product-delivery return">
                                     <i class="icon icon-ArrowClockwise"></i>
                                     <p>
-                                        Return details are handled by the listed store and will be shown once live shop
-                                        policies are connected.
+                                        {{ $product['return_exchange_policy']['inline'] }}
                                     </p>
+                                </div>
+                                <div class="product-delivery return">
+                                    <i class="icon icon-Truck"></i>
+                                    <p>Delivery Coverage: {{ $product['delivery_scope_label'] }}</p>
                                 </div>
                             </div>
 
@@ -364,7 +406,14 @@
                     </div>
                 </div>
                 <div class="tf-sticky-atc-infos">
-                    <form method="POST" action="{{ $product['add_to_cart_url'] }}" data-add-to-cart-form>
+                    <form method="POST" action="{{ $product['add_to_cart_url'] }}" data-add-to-cart-form
+                        data-unit-price="{{ $product['raw_price'] }}"
+                        data-unit-price-label="{{ $product['price'] }}"
+                        data-stock-quantity="{{ $product['selected_variant_stock_quantity'] }}"
+                        data-availability-code="{{ $product['selected_variant_availability_code'] }}"
+                        data-availability-label="{{ $product['selected_variant_availability_label'] }}"
+                        data-availability-message="{{ $product['availability_purchase_message'] }}"
+                        @if ($product['selected_variant_stock_limit'] !== null) data-stock-limit="{{ $product['selected_variant_stock_limit'] }}" @endif>
                         @csrf
                         <input type="hidden" name="product_variant_id" value="{{ $product['selected_variant_id'] }}" data-cart-variant-input>
                         @if (! empty($product['sizes']))
@@ -377,6 +426,11 @@
                                                 data-price="{{ $size['raw_price'] }}"
                                                 data-price-label="{{ $size['price'] }}"
                                                 data-variant-id="{{ $size['variant_id'] }}"
+                                                data-stock-quantity="{{ $size['stock_quantity'] }}"
+                                                data-availability-code="{{ $size['availability_code'] }}"
+                                                data-availability-label="{{ $size['availability_label'] }}"
+                                                data-availability-message="{{ $size['availability_message'] }}"
+                                                @if ($size['stock_limit'] !== null) data-stock-limit="{{ $size['stock_limit'] }}" @endif
                                                 {{ $loop->first ? 'selected' : '' }}>{{ $size['name'] }}</option>
                                         @endforeach
                                     </select>
@@ -389,8 +443,11 @@
                                 <button class="btn-quantity minus-btn" type="button">
                                     <i class="icon icon-minus"></i>
                                 </button>
-                                <input class="quantity-product" type="text" name="quantity" value="1" inputmode="numeric" data-cart-quantity-input>
-                                <button class="btn-quantity plus-btn" type="button">
+                                <input class="quantity-product" type="text" name="quantity" value="1" min="1"
+                                    @if ($product['selected_variant_stock_limit'] !== null) max="{{ $product['selected_variant_stock_limit'] }}" @endif
+                                    inputmode="numeric" data-cart-quantity-input>
+                                <button class="btn-quantity plus-btn" type="button"
+                                    @disabled($product['selected_variant_stock_limit'] !== null && $product['selected_variant_stock_limit'] <= 1)>
                                     <i class="icon icon-plus"></i>
                                 </button>
                             </div>
@@ -401,7 +458,9 @@
                             {{ $product['can_add_to_cart'] ? '' : 'disabled' }}>
                             {{ $product['can_add_to_cart'] ? 'Add To Cart' : 'Out of Stock' }} - <span class="sticky-price-add">{{ $product['price'] }}</span>
                         </button>
-                        <p class="text-caption-01 mt-2 mb-0" data-add-to-cart-message role="status" hidden></p>
+                        <p class="text-caption-01 mt-2 mb-0" data-add-to-cart-message role="status" {{ $product['availability_purchase_message'] ? '' : 'hidden' }}>
+                            {{ $product['availability_purchase_message'] }}
+                        </p>
                     </form>
                 </div>
             </div>
@@ -501,7 +560,7 @@
                                             </tr>
                                             <tr>
                                                 <td>Availability</td>
-                                                <td>{{ $product['availability'] }}</td>
+                                                <td data-product-availability-display>{{ $product['availability'] }}</td>
                                             </tr>
                                             @foreach ($product['other_attributes'] as $attribute)
                                                 <tr>
@@ -607,9 +666,9 @@
                                 </div>
                             </div>
                             <div class="box-desc">
-                                <h5 class="desc_title">Store Policies</h5>
+                                <h5 class="desc_title">Delivery Coverage</h5>
                                 <div class="desc_info">
-                                    <p class="cl-text-2">Return and exchange notes will come from each merchant profile.</p>
+                                    <p class="cl-text-2">{{ $product['delivery_scope_label'] }}</p>
                                 </div>
                             </div>
                             <div class="box-desc">
@@ -641,8 +700,8 @@
                             <div class="box-desc">
                                 <h5 class="desc_title">Return Policies</h5>
                                 <p class="desc_info cl-text-2">
-                                    Returns and exchanges depend on each local store policy. WindowShop can show those
-                                    rules here once merchant policy data is connected.
+                                    {{ $product['return_exchange_policy']['refund'] }}<br>
+                                    {{ $product['return_exchange_policy']['exchange'] }}
                                 </p>
                             </div>
                             <div class="box-desc">
@@ -788,6 +847,9 @@
                 const button = form.querySelector('[data-add-to-cart-button]');
                 const message = form.parentElement ? form.parentElement.querySelector('[data-add-to-cart-message]') : null;
                 const defaultButtonText = button ? button.textContent.trim() : 'Add To Cart';
+                const decreaseButton = form.querySelector('.btn-decrease, .minus-btn');
+                const increaseButton = form.querySelector('.btn-increase, .plus-btn');
+                const priceTarget = form.querySelector('.price-add') || form.querySelector('.sticky-price-add');
 
                 const csrfToken = () => {
                     const tokenInput = form.querySelector('input[name="_token"]');
@@ -802,6 +864,7 @@
                     }
 
                     message.textContent = text;
+                    message.dataset.locked = type === 'success' || type === 'error' ? 'true' : 'false';
                     message.hidden = false;
                     message.classList.toggle('text-success', type === 'success');
                     message.classList.toggle('text-danger', type !== 'success');
@@ -817,18 +880,184 @@
                     button.childNodes[0].textContent = isLoading ? 'Adding...' : defaultButtonText.replace(/\s+-\s+.*$/, '');
                 };
 
+                const stockLimit = () => {
+                    if (!form.dataset.stockLimit) {
+                        return null;
+                    }
+
+                    const limit = Number.parseInt(form.dataset.stockLimit, 10);
+
+                    return Number.isFinite(limit) ? Math.max(0, limit) : null;
+                };
+
+                const quantityValue = () => {
+                    const value = Number.parseFloat(quantityInput?.value || '1');
+
+                    return Number.isFinite(value) ? value : 1;
+                };
+
+                const formatMoney = (amount) => {
+                    const sample = form.dataset.unitPriceLabel || '';
+                    const formatted = amount.toLocaleString('en-IN', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                    });
+
+                    if (sample.match(/[\d,]+(?:\.\d+)?/)) {
+                        return sample.replace(/[\d,]+(?:\.\d+)?/, formatted);
+                    }
+
+                    return formatted;
+                };
+
+                const formatQuantity = (amount) => {
+                    const rounded = Math.round(amount * 1000) / 1000;
+
+                    return Number.isInteger(rounded) ? String(rounded) : String(rounded).replace(/0+$/, '').replace(/\.$/, '');
+                };
+
+                const availabilityMessage = () => {
+                    const code = form.dataset.availabilityCode || '';
+                    const fallback = form.dataset.availabilityMessage || '';
+
+                    if (code === 'PREORDER') {
+                        return fallback || 'This is a pre-order item. Availability and fulfilment will be confirmed by the merchant.';
+                    }
+
+                    if (code !== 'BACKORDER') {
+                        return fallback;
+                    }
+
+                    const stock = Number.parseFloat(form.dataset.stockQuantity || '0');
+                    const quantity = quantityValue();
+
+                    if (!Number.isFinite(stock) || quantity <= stock) {
+                        return fallback;
+                    }
+
+                    if (stock > 0) {
+                        return `${formatQuantity(stock)} items are currently in stock. ${formatQuantity(quantity - stock)} items require confirmation from the merchant.`;
+                    }
+
+                    return 'This item is currently not in stock. Your order requires confirmation from the merchant.';
+                };
+
+                const availabilityLabel = () => {
+                    const code = form.dataset.availabilityCode || '';
+                    const fallback = form.dataset.availabilityLabel || '';
+
+                    if (code !== 'BACKORDER') {
+                        return fallback;
+                    }
+
+                    const stock = Number.parseFloat(form.dataset.stockQuantity || '0');
+
+                    if (Number.isFinite(stock) && stock > 0 && quantityValue() <= stock) {
+                        return 'In Stock';
+                    }
+
+                    return 'Backorder';
+                };
+
+                const syncAvailabilityLabel = () => {
+                    const label = availabilityLabel();
+
+                    if (!label) {
+                        return;
+                    }
+
+                    document.querySelectorAll('[data-product-availability-display]').forEach((target) => {
+                        target.textContent = label;
+                    });
+                };
+
+                const syncAvailabilityMessage = () => {
+                    if (!message || message.dataset.locked === 'true') {
+                        return;
+                    }
+
+                    const text = availabilityMessage();
+                    message.textContent = text;
+                    message.hidden = text === '';
+                    message.classList.remove('text-success', 'text-danger');
+                    message.classList.toggle('cl-text-2', text !== '');
+                    syncAvailabilityLabel();
+                };
+
+                const updateTotal = () => {
+                    if (!priceTarget) {
+                        return;
+                    }
+
+                    const unitPrice = Number.parseFloat(form.dataset.unitPrice || '0');
+
+                    if (!Number.isFinite(unitPrice)) {
+                        return;
+                    }
+
+                    priceTarget.textContent = formatMoney(unitPrice * quantityValue());
+                };
+
+                const syncQuantityControls = () => {
+                    if (!quantityInput) {
+                        return;
+                    }
+
+                    const limit = stockLimit();
+                    let quantity = quantityValue();
+
+                    if (limit !== null) {
+                        quantityInput.max = String(limit);
+                        quantity = Math.min(quantity, Math.max(1, limit));
+                    } else {
+                        quantityInput.removeAttribute('max');
+                    }
+
+                    quantity = Math.max(1, quantity);
+                    quantityInput.value = Number.isInteger(quantity) ? String(quantity) : String(quantity);
+
+                    if (decreaseButton) {
+                        decreaseButton.disabled = quantity <= 1;
+                    }
+
+                    if (increaseButton) {
+                        increaseButton.disabled = limit !== null && quantity >= limit;
+                    }
+
+                    updateTotal();
+                    syncAvailabilityMessage();
+                };
+
+                const applyVariantMeta = (source) => {
+                    if (variantInput && source.dataset.variantId) {
+                        variantInput.value = source.dataset.variantId;
+                    }
+
+                    if (source.dataset.price) {
+                        form.dataset.unitPrice = source.dataset.price;
+                    }
+
+                    if (source.dataset.priceLabel) {
+                        form.dataset.unitPriceLabel = source.dataset.priceLabel;
+                    }
+
+                    form.dataset.stockQuantity = source.dataset.stockQuantity || '0';
+                    form.dataset.availabilityCode = source.dataset.availabilityCode || '';
+                    form.dataset.availabilityLabel = source.dataset.availabilityLabel || '';
+                    form.dataset.availabilityMessage = source.dataset.availabilityMessage || '';
+
+                    if (source.dataset.stockLimit) {
+                        form.dataset.stockLimit = source.dataset.stockLimit;
+                    } else {
+                        delete form.dataset.stockLimit;
+                    }
+
+                    syncQuantityControls();
+                };
+
                 document.querySelectorAll('[data-size][data-variant-id]').forEach((sizeButton) => {
                     sizeButton.addEventListener('click', () => {
-                        if (variantInput) {
-                            variantInput.value = sizeButton.dataset.variantId || variantInput.value;
-                        }
-
-                        const price = sizeButton.dataset.priceLabel;
-                        const priceTarget = form.querySelector('.price-add') || form.querySelector('.sticky-price-add');
-
-                        if (price && priceTarget) {
-                            priceTarget.textContent = price;
-                        }
+                        applyVariantMeta(sizeButton);
                     });
                 });
 
@@ -842,15 +1071,7 @@
                             return;
                         }
 
-                        if (variantInput) {
-                            variantInput.value = option.dataset.variantId || variantInput.value;
-                        }
-
-                        const priceTarget = form.querySelector('.sticky-price-add');
-
-                        if (option.dataset.priceLabel && priceTarget) {
-                            priceTarget.textContent = option.dataset.priceLabel;
-                        }
+                        applyVariantMeta(option);
                     });
                 }
 
@@ -860,7 +1081,29 @@
 
                 quantityInput.addEventListener('input', () => {
                     quantityInput.value = quantityInput.value.replace(/[^\d.]/g, '');
+                    syncQuantityControls();
                 });
+
+                quantityInput.addEventListener('change', syncQuantityControls);
+
+                decreaseButton?.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    quantityInput.value = String(Math.max(1, quantityValue() - 1));
+                    syncQuantityControls();
+                }, true);
+
+                increaseButton?.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    const limit = stockLimit();
+                    const next = quantityValue() + 1;
+
+                    quantityInput.value = String(limit !== null ? Math.min(next, limit) : next);
+                    syncQuantityControls();
+                }, true);
+
+                syncQuantityControls();
 
                 form.addEventListener('submit', async (event) => {
                     event.preventDefault();
@@ -891,6 +1134,12 @@
                         });
                         window.WindowShopMiniCart?.sync?.(data);
                         showCartMessage(data.message || 'Product added to cart.', 'success');
+                        setTimeout(() => {
+                            if (message) {
+                                message.dataset.locked = 'false';
+                                syncAvailabilityMessage();
+                            }
+                        }, 2500);
                     } catch (error) {
                         showCartMessage('Could not add this product to cart. Please try again.', 'error');
                     } finally {

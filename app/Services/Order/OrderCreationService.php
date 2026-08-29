@@ -14,6 +14,8 @@ use App\Models\Shop;
 use App\Models\User;
 use App\Services\POS\DiscountService;
 use App\Services\POS\CashRoundingService;
+use App\Services\Product\ProductReturnPolicyResolver;
+use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
 use App\Services\Tax\Exceptions\TaxConfigurationException;
 use App\Services\Tax\OrderTaxSnapshotFactory;
 use App\Services\Tax\PricingEngine;
@@ -32,6 +34,9 @@ class OrderCreationService
         private readonly CashRoundingService $cashRoundingService,
         private readonly PricingEngine $pricingEngine,
         private readonly OrderTaxSnapshotFactory $orderTaxSnapshotFactory,
+        private readonly ProductReturnPolicyResolver $returnPolicyResolver,
+        private readonly CustomerPurchaseAvailabilityGuard $availabilityGuard,
+        private readonly MerchantOrderStockShortageService $stockShortageService,
     ) {
     }
 
@@ -59,7 +64,7 @@ class OrderCreationService
      *     remarks?: string|null,
      *     customer_order_note?: string|null,
      *     status_note?: string|null,
-     *     items: array<int, array{product_variant_id: int, quantity: int}>,
+     *     items: array<int, array{product_variant_id: int, quantity: int, policy_snapshot?: array<string, mixed>}>,
      *     totals?: array<int, array<string, mixed>>
      * } $data
      */
@@ -69,7 +74,11 @@ class OrderCreationService
             $effectiveAt = now();
             $shop = Shop::query()->with('merchant')->findOrFail((int) $data['shop_id']);
             $rows = $this->aggregateItems($data['items'] ?? []);
-            $variants = $this->lockVariants($shop, $rows);
+            $createdSource = (string) ($data['created_source'] ?? Order::SOURCE_POS);
+            $variants = $this->lockVariants($shop, $rows, $createdSource);
+            $originalStockShortages = $createdSource === Order::SOURCE_STOREFRONT
+                ? $this->stockShortageService->originalShortagesForRows($rows, $variants)
+                : [];
             $itemSnapshots = $this->buildItems($rows, $variants, $shop->merchant, $effectiveAt);
             $items = array_map(fn (array $snapshot): OrderItem => $snapshot['item'], $itemSnapshots);
             $orderStatus = (string) ($data['order_status'] ?? Order::STATUS_COMPLETED);
@@ -150,7 +159,13 @@ class OrderCreationService
             $order->forceFill(['payment_status' => $paymentStatus]);
 
             $this->orderTotalsService->save($order, $calculated['summary'], $calculated['rows']);
-            $this->orderStatusService->recordInitial($order, $orderStatus, $actor, $data['status_note'] ?? 'POS cash sale completed');
+            $this->orderStatusService->recordInitial(
+                $order,
+                $orderStatus,
+                $actor,
+                $this->initialStatusNote((string) ($data['status_note'] ?? 'POS cash sale completed'), $originalStockShortages),
+                $originalStockShortages === [] ? null : ['stock_shortages' => $originalStockShortages],
+            );
             $this->deductStock($variants, $rows);
 
             return $order->load(['items', 'totals', 'statusHistories']);
@@ -399,8 +414,8 @@ class OrderCreationService
     }
 
     /**
-     * @param array<int, array{product_variant_id: int, quantity: int, discount_type?: string|null, discount_value?: mixed}> $rows
-     * @return array<int, int>
+     * @param array<int, array{product_variant_id: int, quantity: int, discount_type?: string|null, discount_value?: mixed, policy_snapshot?: array<string, mixed>}> $rows
+     * @return array<int, array{quantity: int, discount_type?: string|null, discount_value?: mixed, policy_snapshot?: array<string, mixed>|null}>
      */
     private function aggregateItems(array $rows): array
     {
@@ -433,7 +448,18 @@ class OrderCreationService
                     'quantity' => 0,
                     'discount_type' => $row['discount_type'] ?? null,
                     'discount_value' => $row['discount_value'] ?? null,
+                    'policy_snapshot' => $this->normalizePolicySnapshot($row['policy_snapshot'] ?? null),
                 ];
+            } else {
+                $policySnapshot = $this->normalizePolicySnapshot($row['policy_snapshot'] ?? null);
+
+                if ($policySnapshot !== null && $aggregated[$variantId]['policy_snapshot'] !== null && $policySnapshot !== $aggregated[$variantId]['policy_snapshot']) {
+                    throw ValidationException::withMessages([
+                        "items.{$index}.policy_snapshot" => 'Conflicting policy snapshots cannot be merged for the same product variant.',
+                    ]);
+                }
+
+                $aggregated[$variantId]['policy_snapshot'] ??= $policySnapshot;
             }
 
             $aggregated[$variantId]['quantity'] += $quantity;
@@ -443,17 +469,24 @@ class OrderCreationService
     }
 
     /**
-     * @param array<int, array{quantity: int, discount_type?: string|null, discount_value?: mixed}> $rows
+     * @param array<int, array{quantity: int, discount_type?: string|null, discount_value?: mixed, policy_snapshot?: array<string, mixed>|null}> $rows
      * @return array<int, ProductVariant>
      */
-    private function lockVariants(Shop $shop, array $rows): array
+    private function lockVariants(Shop $shop, array $rows, string $createdSource): array
     {
         $variants = [];
 
         foreach ($rows as $variantId => $row) {
             $quantity = (int) $row['quantity'];
             $variant = ProductVariant::query()
-                ->with(['product.category', 'product.primaryImage'])
+                ->with([
+                    'availabilityStatus',
+                    'product.availabilityStatus',
+                    'product.category',
+                    'product.primaryImage',
+                    'product.returnPolicy',
+                    'product.shop.settings',
+                ])
                 ->whereKey($variantId)
                 ->where('shop_id', $shop->getKey())
                 ->lockForUpdate()
@@ -466,18 +499,20 @@ class OrderCreationService
                 ]);
             }
 
-            if ((int) $variant->stock_quantity < $quantity) {
-                throw ValidationException::withMessages([
-                    'items' => "Only {$variant->stock_quantity} unit(s) are available for {$variant->product?->product_name}.",
-                ]);
-            }
-
             if (! $product instanceof Product
                 || (int) $product->shop_id !== (int) $shop->getKey()
                 || (int) $product->merchant_id !== (int) $shop->merchant_id
             ) {
                 throw ValidationException::withMessages([
                     'items' => "{$variant->name} is not available for this shop.",
+                ]);
+            }
+
+            if ($createdSource === Order::SOURCE_STOREFRONT) {
+                $this->availabilityGuard->assertVariantCanBePurchased($variant, $quantity);
+            } elseif ((float) $variant->stock_quantity < $quantity) {
+                throw ValidationException::withMessages([
+                    'items' => "Only {$variant->stock_quantity} unit(s) are available for {$variant->product?->product_name}.",
                 ]);
             }
 
@@ -488,7 +523,7 @@ class OrderCreationService
     }
 
     /**
-     * @param array<int, int> $rows
+     * @param array<int, array{quantity: int, discount_type?: string|null, discount_value?: mixed, policy_snapshot?: array<string, mixed>|null}> $rows
      * @param array<int, ProductVariant> $variants
      * @return array<int, array{item: OrderItem, components: array<int, array<string, mixed>>}>
      */
@@ -523,6 +558,8 @@ class OrderCreationService
             }
 
             $taxSnapshot = $this->orderTaxSnapshotFactory->fromPricingResult($pricingResult);
+            $policySnapshot = $row['policy_snapshot']
+                ?? $this->policySnapshotForProduct($product);
 
             $item = new OrderItem(array_merge([
                 'product_id' => $variant->product_id,
@@ -538,6 +575,10 @@ class OrderCreationService
                 'unit_discount' => '0.00',
                 'item_discount_type' => $discount['type'],
                 'item_discount_value' => $discount['value'],
+                'refund_allowed' => $policySnapshot['refund_allowed'],
+                'refund_window_days' => $policySnapshot['refund_window_days'],
+                'exchange_allowed' => $policySnapshot['exchange_allowed'],
+                'exchange_window_days' => $policySnapshot['exchange_window_days'],
                 'metadata' => null,
             ], $taxSnapshot->toOrderItemAttributes()));
 
@@ -552,16 +593,80 @@ class OrderCreationService
 
     /**
      * @param array<int, ProductVariant> $variants
-     * @param array<int, array{quantity: int, discount_type?: string|null, discount_value?: mixed}> $rows
+     * @param array<int, array{quantity: int, discount_type?: string|null, discount_value?: mixed, policy_snapshot?: array<string, mixed>|null}> $rows
      */
     private function deductStock(array $variants, array $rows): void
     {
         foreach ($rows as $variantId => $row) {
             $variant = $variants[$variantId];
             $variant->forceFill([
-                'stock_quantity' => (int) $variant->stock_quantity - (int) $row['quantity'],
+                'stock_quantity' => (float) $variant->stock_quantity - (int) $row['quantity'],
             ])->save();
         }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $originalStockShortages
+     */
+    private function initialStatusNote(string $baseNote, array $originalStockShortages): string
+    {
+        if ($originalStockShortages === []) {
+            return $baseNote;
+        }
+
+        return trim($baseNote).PHP_EOL.PHP_EOL.$this->stockShortageService->originalShortageHistoryNote($originalStockShortages);
+    }
+
+    /**
+     * @return array{refund_allowed: bool, refund_window_days: int, exchange_allowed: bool, exchange_window_days: int}
+     */
+    private function policySnapshotForProduct(?Product $product): array
+    {
+        if (! $product instanceof Product) {
+            return $this->defaultPolicySnapshot();
+        }
+
+        return $this->normalizePolicySnapshot($this->returnPolicyResolver->resolve($product))
+            ?? $this->defaultPolicySnapshot();
+    }
+
+    /**
+     * @return array{refund_allowed: bool, refund_window_days: int, exchange_allowed: bool, exchange_window_days: int}|null
+     */
+    private function normalizePolicySnapshot(mixed $snapshot): ?array
+    {
+        if (! is_array($snapshot)) {
+            return null;
+        }
+
+        foreach (['refund_allowed', 'refund_window_days', 'exchange_allowed', 'exchange_window_days'] as $key) {
+            if (! array_key_exists($key, $snapshot)) {
+                return null;
+            }
+        }
+
+        $refundAllowed = (bool) $snapshot['refund_allowed'];
+        $exchangeAllowed = (bool) $snapshot['exchange_allowed'];
+
+        return [
+            'refund_allowed' => $refundAllowed,
+            'refund_window_days' => $refundAllowed ? max(0, (int) $snapshot['refund_window_days']) : 0,
+            'exchange_allowed' => $exchangeAllowed,
+            'exchange_window_days' => $exchangeAllowed ? max(0, (int) $snapshot['exchange_window_days']) : 0,
+        ];
+    }
+
+    /**
+     * @return array{refund_allowed: false, refund_window_days: 0, exchange_allowed: false, exchange_window_days: 0}
+     */
+    private function defaultPolicySnapshot(): array
+    {
+        return [
+            'refund_allowed' => false,
+            'refund_window_days' => 0,
+            'exchange_allowed' => false,
+            'exchange_window_days' => 0,
+        ];
     }
 
     /**

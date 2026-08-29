@@ -2,7 +2,7 @@
 
 Investigation date: 2026-08-28
 
-Status: investigation only. No implementation has been done for storefront refund or exchange from this document.
+Status: original investigation record. Storefront/customer refund and exchange request flows are not implemented from this document yet; V1 policy snapshot decisions are recorded below.
 
 ## Goal
 
@@ -77,6 +77,21 @@ Replacement orders use:
 - operational paid status
 
 Sales and collection reports exclude exchange replacement orders.
+
+## Frozen V1 Policy Snapshot Rules
+
+Refund/exchange entitlement is snapshotted onto each `order_items` row when the item is purchased:
+
+- `refund_allowed`
+- `refund_window_days`
+- `exchange_allowed`
+- `exchange_window_days`
+
+Later shop-level or product-level policy changes must not alter the entitlement of already purchased order items. Customer-facing refund/exchange eligibility should therefore read the order item snapshot, not the current product/shop policy.
+
+Exchange replacement items preserve the original purchased item's policy snapshot. They must not receive the merchant's current policy just because the replacement order is created later.
+
+Refundable quantity must exclude both quantities already refunded and quantities already completed-exchanged from the original order item.
 
 ## Reusable Tables and Models
 

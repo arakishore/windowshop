@@ -7,8 +7,10 @@ use App\Models\Order;
 use App\Models\OrderComment;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
+use App\Models\ProductAvailabilityStatus;
 use App\Models\User;
 use App\Services\Order\OrderStatusService;
+use App\Services\Order\OrderCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -1659,6 +1661,212 @@ class MerchantOrderActionsTest extends TestCase
             ->assertSee('Added by '.$user->name);
     }
 
+    public function test_backorder_stock_shortage_is_visible_on_merchant_order_list_and_detail(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $variantId = $this->variantForShopWithAvailability($shopId, -2, ProductAvailabilityStatus::CODE_BACKORDER);
+        $order = $this->operationalOrder($shopId);
+        $this->orderItem($order, $variantId, 4);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.index'))
+            ->assertOk()
+            ->assertSee('Stock Shortage')
+            ->assertSee('2 units short');
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Stock Shortage')
+            ->assertSeeText('Ordered Qty: 4')
+            ->assertSeeText('Currently In Stock: 0')
+            ->assertSeeText('Short Qty: 2')
+            ->assertDontSeeText('Currently Available: -2');
+    }
+
+    public function test_restock_makes_live_backorder_shortage_warning_disappear(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $variantId = $this->variantForShopWithAvailability($shopId, -2, ProductAvailabilityStatus::CODE_BACKORDER);
+        $order = $this->operationalOrder($shopId);
+        $this->orderItem($order, $variantId, 4);
+
+        DB::table('product_variants')->where('id', $variantId)->update(['stock_quantity' => 0]);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order))
+            ->assertOk()
+            ->assertDontSee('Stock Shortage');
+    }
+
+    public function test_preorder_insufficient_stock_uses_same_merchant_warning(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $variantId = $this->variantForShopWithAvailability($shopId, -3, ProductAvailabilityStatus::CODE_PREORDER);
+        $order = $this->operationalOrder($shopId);
+        $this->orderItem($order, $variantId, 3);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Stock Shortage')
+            ->assertSeeText('Short Qty: 3');
+    }
+
+    public function test_in_stock_status_does_not_create_merchant_shortage_warning(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $variantId = $this->variantForShopWithAvailability($shopId, -2, ProductAvailabilityStatus::CODE_IN_STOCK);
+        $order = $this->operationalOrder($shopId);
+        $this->orderItem($order, $variantId, 4);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order))
+            ->assertOk()
+            ->assertDontSee('Stock Shortage');
+    }
+
+    public function test_accepting_order_with_live_stock_shortage_requires_confirmation(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $variantId = $this->variantForShopWithAvailability($shopId, -2, ProductAvailabilityStatus::CODE_BACKORDER);
+        $order = $this->operationalOrder($shopId);
+        $this->orderItem($order, $variantId, 4);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->from(route('merchant.orders.show', $order))
+            ->post(route('merchant.orders.accept', $order))
+            ->assertRedirect(route('merchant.orders.show', $order))
+            ->assertSessionHasErrors('stock_shortage');
+
+        $this->assertSame(Order::STATUS_PENDING, $order->refresh()->order_status);
+        $this->assertDatabaseMissing('order_status_histories', [
+            'order_id' => $order->getKey(),
+            'to_status' => Order::STATUS_CONFIRMED,
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.accept', $order), [
+                'confirm_stock_shortage' => '1',
+            ])
+            ->assertRedirect(route('merchant.orders.show', $order))
+            ->assertSessionHas('success', 'Order accepted successfully.');
+
+        $history = DB::table('order_status_histories')
+            ->where('order_id', $order->getKey())
+            ->where('to_status', Order::STATUS_CONFIRMED)
+            ->first();
+
+        $this->assertSame(Order::STATUS_CONFIRMED, $order->refresh()->order_status);
+        $this->assertTrue((bool) (json_decode($history->metadata, true)['stock_shortage_confirmed'] ?? false));
+    }
+
+    public function test_server_side_accept_recheck_allows_order_after_restock_without_confirmation(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $variantId = $this->variantForShopWithAvailability($shopId, -2, ProductAvailabilityStatus::CODE_BACKORDER);
+        $order = $this->operationalOrder($shopId);
+        $this->orderItem($order, $variantId, 4);
+
+        DB::table('product_variants')->where('id', $variantId)->update(['stock_quantity' => 0]);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.accept', $order))
+            ->assertRedirect(route('merchant.orders.show', $order))
+            ->assertSessionHas('success', 'Order accepted successfully.');
+
+        $this->assertSame(Order::STATUS_CONFIRMED, $order->refresh()->order_status);
+    }
+
+    public function test_completed_and_cancelled_orders_do_not_show_live_stock_shortage_alerts(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $completedVariantId = $this->variantForShopWithAvailability($shopId, -2, ProductAvailabilityStatus::CODE_BACKORDER);
+        $completedOrder = $this->operationalOrder($shopId, ['order_status' => Order::STATUS_COMPLETED]);
+        $this->orderItem($completedOrder, $completedVariantId, 4);
+        $cancelledVariantId = $this->variantForShopWithAvailability($shopId, -2, ProductAvailabilityStatus::CODE_BACKORDER);
+        $cancelledOrder = $this->operationalOrder($shopId, ['order_status' => Order::STATUS_CANCELLED]);
+        $this->orderItem($cancelledOrder, $cancelledVariantId, 4);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $completedOrder))
+            ->assertOk()
+            ->assertDontSee('Stock Shortage');
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $cancelledOrder))
+            ->assertOk()
+            ->assertDontSee('Stock Shortage');
+    }
+
+    public function test_multiple_open_backorder_orders_use_safe_ambiguous_shortage_warning(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $variantId = $this->variantForShopWithAvailability($shopId, -2, ProductAvailabilityStatus::CODE_BACKORDER);
+        $firstOrder = $this->operationalOrder($shopId);
+        $secondOrder = $this->operationalOrder($shopId);
+        $this->orderItem($firstOrder, $variantId, 2);
+        $this->orderItem($secondOrder, $variantId, 3);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $firstOrder))
+            ->assertOk()
+            ->assertSee('Stock Shortage')
+            ->assertSee('Outstanding stock demand exists for this item.')
+            ->assertDontSee('2 units short');
+    }
+
+    public function test_storefront_order_creation_records_original_backorder_shortage_history(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $variantId = $this->variantForShopWithAvailability($shopId, 2, ProductAvailabilityStatus::CODE_BACKORDER);
+
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $shopId,
+            'created_source' => Order::SOURCE_STOREFRONT,
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+            'order_status' => Order::STATUS_PENDING,
+            'payment_method' => 'cash_at_shop',
+            'payment_status' => PaymentStatus::CODE_PENDING,
+            'status_note' => 'Storefront order placed',
+            'items' => [
+                ['product_variant_id' => $variantId, 'quantity' => 4],
+            ],
+        ], $user);
+
+        $history = $order->statusHistories()->first();
+        $metadata = $history->metadata;
+
+        $this->assertStringContainsString('Order placed with insufficient stock.', $history->notes);
+        $this->assertStringContainsString('Ordered Qty: 4', $history->notes);
+        $this->assertStringContainsString('Available Stock: 2', $history->notes);
+        $this->assertStringContainsString('Short Qty: 2', $history->notes);
+        $this->assertSame(ProductAvailabilityStatus::CODE_BACKORDER, $metadata['stock_shortages'][0]['availability_status']);
+        $this->assertSame(-2, (int) DB::table('product_variants')->where('id', $variantId)->value('stock_quantity'));
+    }
+
     /**
      * @return array{0: User, 1: int, 2: int}
      */
@@ -1800,6 +2008,56 @@ class MerchantOrderActionsTest extends TestCase
             'stock_quantity' => $stock,
             'is_default' => true,
             'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function variantForShopWithAvailability(int $shopId, int $stock, string $availabilityCode): int
+    {
+        $shop = DB::table('shops')->where('id', $shopId)->first();
+        $statusId = $this->availabilityStatusForMerchant((int) $shop->merchant_id, $availabilityCode);
+        $variantId = $this->variantForShop($shopId, $stock);
+        $productId = (int) DB::table('product_variants')->where('id', $variantId)->value('product_id');
+
+        DB::table('products')->where('id', $productId)->update([
+            'availability_status_id' => $statusId,
+            'updated_at' => now(),
+        ]);
+
+        return $variantId;
+    }
+
+    private function availabilityStatusForMerchant(int $merchantId, string $code): int
+    {
+        $existing = DB::table('product_availability_statuses')
+            ->where('merchant_id', $merchantId)
+            ->where('code', $code)
+            ->value('id');
+
+        if ($existing) {
+            return (int) $existing;
+        }
+
+        $defaults = ProductAvailabilityStatus::defaults();
+        $default = $defaults[$code] ?? [
+            'name' => Str::headline($code),
+            'customer_description' => null,
+            'purchase_allowed' => true,
+            'badge_type' => ProductAvailabilityStatus::BADGE_SECONDARY,
+            'sort_order' => 100,
+        ];
+
+        return (int) DB::table('product_availability_statuses')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'merchant_id' => $merchantId,
+            'code' => $code,
+            'name' => $default['name'],
+            'customer_description' => $default['customer_description'],
+            'purchase_allowed' => $default['purchase_allowed'],
+            'badge_type' => $default['badge_type'],
+            'sort_order' => $default['sort_order'],
+            'status' => ProductAvailabilityStatus::STATUS_ACTIVE,
             'created_at' => now(),
             'updated_at' => now(),
         ]);

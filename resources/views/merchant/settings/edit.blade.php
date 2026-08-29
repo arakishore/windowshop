@@ -611,7 +611,6 @@
                         'title' => 'Inventory',
                         'description' => 'Keep stock control predictable during checkout.',
                         'fields' => [
-                            ['group' => 'inventory', 'key' => 'allow_negative_stock', 'label' => 'Prevent selling when stock reaches zero', 'kind' => 'inverse_boolean'],
                             ['group' => 'inventory', 'key' => 'show_low_stock_warning', 'label' => 'Low stock alert', 'kind' => 'boolean'],
                             ['group' => 'inventory', 'key' => 'low_stock_default', 'label' => 'Notify when stock falls below', 'kind' => 'number'],
                         ],
@@ -988,7 +987,7 @@
                                         <label class="form-label fw-semibold d-block">Coverage Area</label>
                                         <div class="d-flex flex-wrap gap-3" role="radiogroup" aria-label="Delivery coverage">
                                             @foreach ([
-                                                'local_only' => 'Local Area / City Only',
+                                                'local_only' => 'Local Area Only',
                                                 'nationwide' => 'All India',
                                             ] as $scope => $label)
                                                 <div class="form-check form-check-inline mb-0">

@@ -5,11 +5,10 @@ namespace App\Services\Product;
 use App\Models\Product;
 use App\Models\ProductReturnPolicy;
 use App\Models\Shop;
-use App\Services\Merchant\ShopSettingsService;
 
 class ProductReturnPolicyService
 {
-    public function __construct(private readonly ShopSettingsService $shopSettings)
+    public function __construct(private readonly ProductReturnPolicyResolver $resolver)
     {
     }
 
@@ -40,19 +39,7 @@ class ProductReturnPolicyService
      */
     public function shopPolicy(Shop $shop): array
     {
-        $refundAllowed = (bool) $this->shopSettings->get((int) $shop->getKey(), 'returns', 'refund_allowed', false);
-        $exchangeAllowed = (bool) $this->shopSettings->get((int) $shop->getKey(), 'returns', 'exchange_allowed', true);
-
-        return [
-            'refund_allowed' => $refundAllowed,
-            'refund_window_days' => $refundAllowed
-                ? (int) $this->shopSettings->get((int) $shop->getKey(), 'returns', 'refund_window_days', 0)
-                : 0,
-            'exchange_allowed' => $exchangeAllowed,
-            'exchange_window_days' => $exchangeAllowed
-                ? (int) $this->shopSettings->get((int) $shop->getKey(), 'returns', 'exchange_window_days', 7)
-                : 0,
-        ];
+        return $this->resolver->shopPolicy($shop);
     }
 
     /**
