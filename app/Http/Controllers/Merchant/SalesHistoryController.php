@@ -13,9 +13,11 @@ use App\Services\Merchant\MerchantSettingsService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Order\OrderExchangeService;
 use App\Services\Order\OrderRefundService;
+use App\Services\Order\OrderReturnExchangeEligibilityService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class SalesHistoryController extends Controller
@@ -26,6 +28,7 @@ class SalesHistoryController extends Controller
         private readonly MerchantSettingsService $settings,
         private readonly OrderRefundService $refundService,
         private readonly OrderExchangeService $exchangeService,
+        private readonly OrderReturnExchangeEligibilityService $returnExchangeEligibility,
         private readonly BusinessTimeService $businessTime,
     ) {
     }
@@ -177,6 +180,7 @@ class SalesHistoryController extends Controller
             'order' => $order->load(['items.taxComponents', 'createdBy', 'refunds.items', 'exchanges.replacementOrder', 'customer']),
             'refundableQuantities' => $this->refundService->refundableQuantities($order->loadMissing('items')),
             'exchangeableQuantities' => $this->exchangeService->exchangeableQuantities($order->loadMissing('items')),
+            'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
             'posCurrency' => $this->adminSettings->currencyConfig(),
         ]);
     }
@@ -190,6 +194,7 @@ class SalesHistoryController extends Controller
             'activeShop' => $shop,
             'order' => $order,
             'exchangeableQuantities' => $this->exchangeService->exchangeableQuantities($order),
+            'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
             'replacementVariants' => $this->replacementSelector((int) $shop->merchant_id) !== 'search'
                 ? $this->replacementVariants($shop)
                 : collect(),
@@ -212,7 +217,12 @@ class SalesHistoryController extends Controller
             'replacement_items' => ['required', 'array'],
             'replacement_items.*.product_variant_id' => ['nullable', 'integer'],
             'replacement_items.*.quantity' => ['nullable', 'integer', 'min:0'],
+            'policy_override_reason' => ['nullable', 'string', 'max:120'],
+            'policy_override_comment' => ['nullable', 'string', 'max:500'],
         ]);
+
+        $this->requirePolicyOverrideIfNeeded($order, 'exchange', $data, 'returned_items');
+        $data['notes'] = $this->notesWithPolicyOverride($data);
 
         $exchange = $this->exchangeService->create($order, $data, $request->user());
 
@@ -251,6 +261,7 @@ class SalesHistoryController extends Controller
                 ->orderBy('name')
                 ->get(),
             'refundableQuantities' => $this->refundService->refundableQuantities($order),
+            'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
             'paymentMethods' => ['original' => 'Use original method'] + $this->paymentMethods(),
             'posCurrency' => $this->adminSettings->currencyConfig(),
         ]);
@@ -267,7 +278,12 @@ class SalesHistoryController extends Controller
             'items.*.quantity' => ['nullable', 'integer', 'min:0'],
             'items.*.restock' => ['nullable', 'boolean'],
             'items.*.do_not_restock' => ['nullable', 'boolean'],
+            'policy_override_reason' => ['nullable', 'string', 'max:120'],
+            'policy_override_comment' => ['nullable', 'string', 'max:500'],
         ]);
+
+        $this->requirePolicyOverrideIfNeeded($order, 'refund', $data, 'items');
+        $data['notes'] = $this->notesWithPolicyOverride($data);
 
         $this->refundService->create($order, $data, $request->user());
 
@@ -284,6 +300,54 @@ class SalesHistoryController extends Controller
         abort_unless($order->order_status === Order::STATUS_COMPLETED, 404);
 
         return $shop;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function requirePolicyOverrideIfNeeded(Order $order, string $type, array $data, string $itemsKey): void
+    {
+        if ($order->created_source === Order::SOURCE_POS) {
+            return;
+        }
+
+        if (! $this->returnExchangeEligibility->merchantOverrideRequiredForSelected(
+            $order->loadMissing(['items', 'statusHistories']),
+            $type,
+            $data[$itemsKey] ?? [],
+        )) {
+            return;
+        }
+
+        $reason = trim((string) ($data['policy_override_reason'] ?? ''));
+        $comment = trim((string) ($data['policy_override_comment'] ?? ''));
+
+        if ($reason !== '' && $comment !== '') {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'policy_override_comment' => 'Enter a policy override reason and comment to proceed outside the customer policy.',
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function notesWithPolicyOverride(array $data): ?string
+    {
+        $notes = trim((string) ($data['notes'] ?? ''));
+        $reason = trim((string) ($data['policy_override_reason'] ?? ''));
+        $comment = trim((string) ($data['policy_override_comment'] ?? ''));
+
+        if ($reason === '' && $comment === '') {
+            return $notes === '' ? null : $notes;
+        }
+
+        $override = 'Policy override: '.$reason.'. '.$comment;
+        $combined = trim($notes === '' ? $override : $notes."\n\n".$override);
+
+        return $combined === '' ? null : $combined;
     }
 
     private function activeShop(Request $request): Shop

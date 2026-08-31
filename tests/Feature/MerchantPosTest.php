@@ -1925,6 +1925,68 @@ class MerchantPosTest extends TestCase
         $this->assertSame(Order::PAYMENT_REFUNDED, $order->refresh()->payment_status);
     }
 
+    public function test_merchant_refund_for_non_pos_order_outside_customer_policy_requires_override_comment(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $product = $this->createPosProduct($shopId, 'Storefront Refund Exception Product', 'Default', 'SF-REF', 'SF-REF-BAR');
+        $merchantId = $this->merchantIdForShop($shopId);
+        $reasonId = $this->returnReasonId($merchantId);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'counter',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $product['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertOk();
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $order->forceFill(['created_source' => Order::SOURCE_STOREFRONT])->save();
+        $item = $order->items->first();
+        $item->forceFill(['refund_allowed' => false, 'refund_window_days' => 0])->save();
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->from(route('merchant.sales.refund', $order))
+            ->post(route('merchant.sales.refund.process', $order), [
+                'return_reason_id' => $reasonId,
+                'refund_method' => 'cash',
+                'items' => [
+                    $item->getKey() => ['quantity' => 1, 'restock' => 1],
+                ],
+            ])
+            ->assertRedirect(route('merchant.sales.refund', $order))
+            ->assertSessionHasErrors('policy_override_comment');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.refund.process', $order), [
+                'return_reason_id' => $reasonId,
+                'refund_method' => 'cash',
+                'notes' => 'Customer exception approved.',
+                'policy_override_reason' => 'Manager approved exception',
+                'policy_override_comment' => 'Regular customer, accepted as goodwill.',
+                'items' => [
+                    $item->getKey() => ['quantity' => 1, 'restock' => 1],
+                ],
+            ])
+            ->assertRedirect(route('merchant.sales.show', $order));
+
+        $notes = (string) DB::table('order_refunds')
+            ->where('order_id', $order->getKey())
+            ->value('metadata->notes');
+
+        $this->assertStringContainsString('Customer exception approved.', $notes);
+        $this->assertStringContainsString('Policy override: Manager approved exception. Regular customer, accepted as goodwill.', $notes);
+    }
+
     public function test_merchant_can_exchange_sale_using_original_discounted_return_value(): void
     {
         [$userId, $shopId] = $this->merchantShopFixture();

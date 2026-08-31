@@ -52,11 +52,21 @@
                                 @foreach($order->items as $item)
                                     @php
                                         $remaining = $refundableQuantities[$item->getKey()] ?? 0;
+                                        $eligibility = $returnExchangeEligibility['items'][$item->getKey()]['refund'] ?? null;
                                     @endphp
                                     <tr>
                                         <td>
                                             <div class="fw-semibold">{{ $item->product_name }}</div>
                                             <code>{{ $item->sku ?: $item->barcode ?: '-' }}</code>
+                                            @if($eligibility)
+                                                <div class="small mt-2">
+                                                    <span class="badge bg-light text-dark border">Customer Policy: {{ $eligibility['policy_label'] }}</span>
+                                                </div>
+                                                <div class="small {{ $eligibility['customer_eligible'] ? 'text-success' : 'text-warning' }}">
+                                                    {{ $eligibility['customer_eligible'] ? 'Within customer self-service policy.' : $eligibility['reason'] }}
+                                                </div>
+                                                <div class="small text-muted">Remaining eligible quantity: {{ $eligibility['remaining_quantity'] }}</div>
+                                            @endif
                                         </td>
                                         <td>
                                             <input
@@ -117,6 +127,21 @@
                             <label for="refund_notes" class="form-label">Notes <span class="text-muted">(optional)</span></label>
                             <textarea id="refund_notes" name="notes" rows="3" maxlength="500" class="form-control @error('notes') is-invalid @enderror" placeholder="Manager note, customer comment, or item condition">{{ old('notes') }}</textarea>
                             @error('notes')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="border rounded p-3 mb-3 bg-light">
+                            <div class="fw-semibold mb-2">Policy override</div>
+                            <p class="text-muted small mb-3">Required only when processing outside the customer self-service policy.</p>
+                            <div class="mb-3">
+                                <label for="policy_override_reason" class="form-label">Override reason</label>
+                                <input id="policy_override_reason" name="policy_override_reason" type="text" maxlength="120" class="form-control @error('policy_override_reason') is-invalid @enderror" value="{{ old('policy_override_reason') }}" placeholder="Manager approved exception">
+                                @error('policy_override_reason')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div>
+                                <label for="policy_override_comment" class="form-label">Override comment</label>
+                                <textarea id="policy_override_comment" name="policy_override_comment" rows="3" maxlength="500" class="form-control @error('policy_override_comment') is-invalid @enderror" placeholder="Why this refund is being accepted outside policy">{{ old('policy_override_comment') }}</textarea>
+                                @error('policy_override_comment')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
                         </div>
 
                         <hr>

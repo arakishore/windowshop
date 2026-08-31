@@ -281,6 +281,19 @@ Reason:
 
 POS is a staff workflow. A merchant may intentionally make an exception for an in-store customer.
 
+V1 implementation rule layer:
+
+- `OrderReturnExchangeEligibilityService` reads only the `order_items` policy snapshot for purchased items.
+- Current shop/product policy changes do not affect old order eligibility.
+- Delivery order policy windows start from the delivered status history.
+- Pickup order policy windows start from the `merchant_complete_pickup` completion history.
+- COD orders can be policy-eligible for future pickup support, but reverse pickup is not implemented in V1.
+- Cash at Shop remains shop-visit based and never offers customer pickup in V1.
+- Expired policy windows block customer self-service but do not mean the merchant cannot make an exception.
+- Remaining quantities reuse the completed refund/exchange subtraction already in the POS services.
+- Customer order detail should prefer valid-until/expired/not-started wording over internal window-start details.
+- Merchant order detail should show the same eligibility facts as advisory information, including policy snapshot, current customer eligibility, expiry, remaining quantities, and handling guidance.
+
 ## Recommended Storefront Support Path
 
 Do not duplicate the module.

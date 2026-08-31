@@ -124,6 +124,14 @@
                                     @if ($item->sku)
                                         <p class="text-caption-01 cl-text-3 mb-0">SKU: {{ $item->sku }}</p>
                                     @endif
+                                    @php($itemEligibility = $returnExchangeEligibility['items'][$item->getKey()] ?? null)
+                                    @if ($itemEligibility)
+                                        <div class="account-return-policy">
+                                            <span>{{ $itemEligibility['refund']['policy_label'] }}</span>
+                                            <span>{{ $itemEligibility['exchange']['policy_label'] }}</span>
+                                            <span>{{ $itemEligibility['exchange']['remaining_quantity'] }} remaining for exchange</span>
+                                        </div>
+                                    @endif
                                 </div>
                                 <div class="account-order-item-money">
                                     <div>{{ $presenter->money($item->unit_price) }} x {{ $item->quantity }}</div>
@@ -136,6 +144,26 @@
                         @endforeach
                     </div>
                 </section>
+
+                @if (! empty($returnExchangeEligibility['items']))
+                    <section class="account-order-section">
+                        <h6 class="mb-16">Return / Exchange</h6>
+                        <div class="account-return-summary">
+                            <p class="mb-0">{{ $returnExchangeEligibility['return_method']['customer_message'] }}</p>
+                            @foreach ($order->items as $item)
+                                @php($itemEligibility = $returnExchangeEligibility['items'][$item->getKey()] ?? null)
+                                @continue(! $itemEligibility)
+                                <div class="account-return-row">
+                                    <strong>{{ $item->product_name }}</strong>
+                                    <div>
+                                        <span @class(['is-muted' => ! $itemEligibility['refund']['customer_eligible']])>{{ $itemEligibility['refund']['customer_message'] }}</span>
+                                        <span @class(['is-muted' => ! $itemEligibility['exchange']['customer_eligible']])>{{ $itemEligibility['exchange']['customer_message'] }}</span>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </section>
+                @endif
 
                 @if ($activityItems->isNotEmpty())
                     <section class="account-order-section">
@@ -483,6 +511,7 @@
         }
 
         .account-order-items,
+        .account-return-summary,
         .account-activity-list,
         .account-total-list,
         .account-info-list,
@@ -524,6 +553,42 @@
             gap: 4px;
             justify-items: end;
             text-align: right;
+        }
+
+        .account-return-policy {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .account-return-policy span {
+            display: inline-flex;
+            align-items: center;
+            min-height: 24px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        .account-return-row {
+            display: grid;
+            gap: 6px;
+            padding-top: 12px;
+            border-top: 1px solid #eef0f3;
+        }
+
+        .account-return-row > div {
+            display: grid;
+            gap: 4px;
+            color: #198754;
+        }
+
+        .account-return-row .is-muted {
+            color: #64748b;
         }
 
         .account-total-row,

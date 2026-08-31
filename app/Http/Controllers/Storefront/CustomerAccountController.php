@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\WishlistItem;
 use App\Services\Checkout\CheckoutPageService;
 use App\Services\Order\CustomerOrderCancellationService;
+use App\Services\Order\OrderReturnExchangeEligibilityService;
 use App\Services\Storefront\CustomerOrderPresenter;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductListingService;
@@ -32,6 +33,7 @@ class CustomerAccountController extends Controller
         private readonly ProductListingService $productListings,
         private readonly CustomerOrderPresenter $ordersPresenter,
         private readonly CustomerOrderCancellationService $customerCancellation,
+        private readonly OrderReturnExchangeEligibilityService $returnExchangeEligibility,
     ) {
     }
 
@@ -169,6 +171,7 @@ class CustomerAccountController extends Controller
             'presenter' => $this->ordersPresenter,
             'canCancelOrder' => $this->customerCancellation->canCancel($order),
             'cancellationReasons' => $this->customerCancellation->reasonOptions(),
+            'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
         ]));
     }
 

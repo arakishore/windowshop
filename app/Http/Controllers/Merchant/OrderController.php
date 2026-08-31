@@ -14,6 +14,7 @@ use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Order\DeliveryCompletionService;
 use App\Services\Order\MerchantOrderStockShortageService;
 use App\Services\Order\OrderInventoryService;
+use App\Services\Order\OrderReturnExchangeEligibilityService;
 use App\Services\Order\OrderStatusService;
 use App\Services\Order\PickupCompletionService;
 use Illuminate\Http\RedirectResponse;
@@ -34,6 +35,7 @@ class OrderController extends Controller
         private readonly PickupCompletionService $pickupCompletionService,
         private readonly DeliveryCompletionService $deliveryCompletionService,
         private readonly MerchantOrderStockShortageService $stockShortageService,
+        private readonly OrderReturnExchangeEligibilityService $returnExchangeEligibility,
     ) {
     }
 
@@ -122,6 +124,7 @@ class OrderController extends Controller
             'sourceLabels' => $this->sourceLabels(),
             'posCurrency' => $this->adminSettings->currencyConfig(),
             'stockShortage' => $stockShortage,
+            'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
         ]);
     }
 

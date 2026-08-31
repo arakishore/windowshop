@@ -103,11 +103,21 @@
                                     @php
                                         $remaining = $exchangeableQuantities[$item->getKey()] ?? 0;
                                         $unitReturnValue = (float) $item->line_total / max(1, (int) $item->quantity);
+                                        $eligibility = $returnExchangeEligibility['items'][$item->getKey()]['exchange'] ?? null;
                                     @endphp
                                     <tr>
                                         <td>
                                             <div class="fw-semibold">{{ $item->product_name }}</div>
                                             <code>{{ $item->sku ?: $item->barcode ?: '-' }}</code>
+                                            @if($eligibility)
+                                                <div class="small mt-2">
+                                                    <span class="badge bg-light text-dark border">Customer Policy: {{ $eligibility['policy_label'] }}</span>
+                                                </div>
+                                                <div class="small {{ $eligibility['customer_eligible'] ? 'text-success' : 'text-warning' }}">
+                                                    {{ $eligibility['customer_eligible'] ? 'Within customer self-service policy.' : $eligibility['reason'] }}
+                                                </div>
+                                                <div class="small text-muted">Remaining eligible quantity: {{ $eligibility['remaining_quantity'] }}</div>
+                                            @endif
                                         </td>
                                         <td class="text-end">
                                             <div class="small text-muted">MRP {{ $money($item->unit_mrp) }}</div>
@@ -220,6 +230,20 @@
                         <div class="mb-3">
                             <label for="exchange_notes" class="form-label">Notes <span class="text-muted">(optional)</span></label>
                             <textarea id="exchange_notes" name="notes" rows="3" maxlength="500" class="form-control" placeholder="Reason, approval note, or item condition">{{ old('notes') }}</textarea>
+                        </div>
+                        <div class="border rounded p-3 mb-3 bg-light">
+                            <div class="fw-semibold mb-2">Policy override</div>
+                            <p class="text-muted small mb-3">Required only when processing outside the customer self-service policy.</p>
+                            <div class="mb-3">
+                                <label for="policy_override_reason" class="form-label">Override reason</label>
+                                <input id="policy_override_reason" name="policy_override_reason" type="text" maxlength="120" class="form-control @error('policy_override_reason') is-invalid @enderror" value="{{ old('policy_override_reason') }}" placeholder="Manager approved exception">
+                                @error('policy_override_reason')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div>
+                                <label for="policy_override_comment" class="form-label">Override comment</label>
+                                <textarea id="policy_override_comment" name="policy_override_comment" rows="3" maxlength="500" class="form-control @error('policy_override_comment') is-invalid @enderror" placeholder="Why this exchange is being accepted outside policy">{{ old('policy_override_comment') }}</textarea>
+                                @error('policy_override_comment')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
                         </div>
                         <hr>
                         <div class="d-flex justify-content-between mb-2">

@@ -248,10 +248,10 @@ class CustomerOrderPresenter
             ->sortBy('created_at')
             ->map(fn ($history): array => [
                 'type' => 'status',
-                'tone' => $this->activityStatusTone($history->to_status),
+                'tone' => $this->activityStatusTone($history),
                 'timestamp' => $history->created_at,
                 'display_time' => app_datetime($history->created_at),
-                'title' => $this->activityStatusLabel($history->to_status),
+                'title' => $this->activityStatusLabel($history),
                 'description' => $this->activityStatusDescription($history),
             ]);
 
@@ -301,8 +301,14 @@ class CustomerOrderPresenter
         return $statuses;
     }
 
-    private function activityStatusLabel(?string $code): string
+    private function activityStatusLabel($history): string
     {
+        if ($this->isCodPaymentActivity($history)) {
+            return 'Payment Received';
+        }
+
+        $code = $history->to_status;
+
         return $code === Order::STATUS_PENDING
             ? 'Order Placed'
             : $this->statusLabel($code);
@@ -310,6 +316,10 @@ class CustomerOrderPresenter
 
     private function activityStatusDescription($history): ?string
     {
+        if (($history->metadata['action'] ?? null) === 'merchant_cod_payment_received') {
+            return 'Payment received for this order.';
+        }
+
         $code = $history->to_status;
         $status = $this->orderStatuses()[$code ?? ''] ?? null;
         $description = null;
@@ -339,8 +349,14 @@ class CustomerOrderPresenter
         return $description;
     }
 
-    private function activityStatusTone(?string $code): string
+    private function activityStatusTone($history): string
     {
+        if ($this->isCodPaymentActivity($history)) {
+            return 'success';
+        }
+
+        $code = $history->to_status;
+
         return match ($code) {
             Order::STATUS_COMPLETED,
             OrderStatus::CODE_DELIVERED => 'success',
@@ -350,6 +366,11 @@ class CustomerOrderPresenter
             OrderStatus::CODE_EXCHANGE_REJECTED => 'danger',
             default => 'neutral',
         };
+    }
+
+    private function isCodPaymentActivity($history): bool
+    {
+        return ($history->metadata['action'] ?? null) === 'merchant_cod_payment_received';
     }
 
     /**

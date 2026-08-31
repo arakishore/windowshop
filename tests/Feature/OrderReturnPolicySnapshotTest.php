@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderExchange;
 use App\Models\OrderItem;
 use App\Models\OrderRefund;
+use App\Models\OrderStatus;
 use App\Models\Product;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
@@ -21,7 +23,9 @@ use App\Services\Merchant\ShopSettingsService;
 use App\Services\Order\OrderCreationService;
 use App\Services\Order\OrderExchangeService;
 use App\Services\Order\OrderRefundService;
+use App\Services\Order\OrderReturnExchangeEligibilityService;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
+use Illuminate\Support\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -256,6 +260,239 @@ class OrderReturnPolicySnapshotTest extends TestCase
         ], app(OrderExchangeService::class)->exchangeableQuantities($order->load('items')));
     }
 
+    public function test_cod_delivery_policy_eligibility_uses_order_item_snapshot_and_delivered_start_date(): void
+    {
+        [$user, $shop, $variant] = $this->fixture();
+        $deliveredAt = Carbon::parse('2026-08-20 10:00:00');
+        $order = $this->createOrder($user, $shop, $variant, [
+            'quantity' => 2,
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+            'payment_method' => 'cash_on_delivery',
+            'order_status' => Order::STATUS_COMPLETED,
+            'completed_at' => $deliveredAt->copy()->addHour(),
+        ]);
+        $item = $order->items->first();
+        $item->forceFill([
+            'refund_allowed' => false,
+            'refund_window_days' => 0,
+            'exchange_allowed' => true,
+            'exchange_window_days' => 7,
+        ])->save();
+        $this->history($order, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, $deliveredAt);
+
+        $this->setShopPolicy($shop, true, 30, false, 0);
+        ProductReturnPolicy::query()->create([
+            'product_id' => $variant->product_id,
+            'refund_allowed' => true,
+            'refund_window_days' => 30,
+            'exchange_allowed' => false,
+            'exchange_window_days' => 0,
+        ]);
+
+        $eligibility = app(OrderReturnExchangeEligibilityService::class)
+            ->forOrder($order->fresh(['items', 'statusHistories']), Carbon::parse('2026-08-25 10:00:00'));
+        $facts = $eligibility['items'][$item->getKey()];
+
+        $this->assertSame(OrderReturnExchangeEligibilityService::REASON_REFUND_NOT_ALLOWED, $facts['refund']['reason_code']);
+        $this->assertFalse($facts['refund']['customer_eligible']);
+        $this->assertNull($facts['refund']['window_expires_at']);
+        $this->assertNull($facts['refund']['window_expires_label']);
+        $this->assertFalse($facts['refund']['window_expired']);
+        $this->assertSame(0, $facts['refund']['expired_by_days']);
+        $this->assertSame('Exchange within 7 days', $facts['exchange']['policy_label']);
+        $this->assertTrue($facts['exchange']['customer_eligible']);
+        $this->assertNotNull($facts['exchange']['window_expires_at']);
+        $this->assertSame($deliveredAt->toDateTimeString(), $eligibility['order']['eligibility_starts_at']->toDateTimeString());
+        $this->assertTrue($eligibility['return_method']['shop_visit_allowed']);
+        $this->assertFalse($eligibility['return_method']['pickup_allowed']);
+        $this->assertTrue($eligibility['return_method']['pickup_policy_eligible']);
+    }
+
+    public function test_refund_and_exchange_deadlines_are_calculated_independently_when_both_are_allowed(): void
+    {
+        [$user, $shop, $variant] = $this->fixture();
+        $deliveredAt = Carbon::parse('2026-08-20 10:00:00');
+        $order = $this->createOrder($user, $shop, $variant, [
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+            'payment_method' => 'cash_on_delivery',
+            'order_status' => Order::STATUS_COMPLETED,
+            'completed_at' => $deliveredAt,
+        ]);
+        $item = $order->items->first();
+        $item->forceFill([
+            'refund_allowed' => true,
+            'refund_window_days' => 7,
+            'exchange_allowed' => true,
+            'exchange_window_days' => 7,
+        ])->save();
+        $this->history($order, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, $deliveredAt);
+
+        $facts = app(OrderReturnExchangeEligibilityService::class)
+            ->forOrder($order->fresh(['items', 'statusHistories']), Carbon::parse('2026-08-25 10:00:00'))['items'][$item->getKey()];
+
+        $this->assertTrue($facts['refund']['customer_eligible']);
+        $this->assertTrue($facts['exchange']['customer_eligible']);
+        $this->assertSame($deliveredAt->copy()->addDays(7)->toDateTimeString(), $facts['refund']['window_expires_at']->toDateTimeString());
+        $this->assertSame($deliveredAt->copy()->addDays(7)->toDateTimeString(), $facts['exchange']['window_expires_at']->toDateTimeString());
+    }
+
+    public function test_allowed_refund_can_expire_without_affecting_exchange(): void
+    {
+        [$user, $shop, $variant] = $this->fixture();
+        $deliveredAt = Carbon::parse('2026-08-20 10:00:00');
+        $order = $this->createOrder($user, $shop, $variant, [
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+            'payment_method' => 'cash_on_delivery',
+            'order_status' => Order::STATUS_COMPLETED,
+            'completed_at' => $deliveredAt,
+        ]);
+        $item = $order->items->first();
+        $item->forceFill([
+            'refund_allowed' => true,
+            'refund_window_days' => 3,
+            'exchange_allowed' => true,
+            'exchange_window_days' => 15,
+        ])->save();
+        $this->history($order, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, $deliveredAt);
+
+        $facts = app(OrderReturnExchangeEligibilityService::class)
+            ->forOrder($order->fresh(['items', 'statusHistories']), Carbon::parse('2026-08-25 10:00:00'))['items'][$item->getKey()];
+
+        $this->assertSame(OrderReturnExchangeEligibilityService::REASON_WINDOW_EXPIRED, $facts['refund']['reason_code']);
+        $this->assertSame(2, $facts['refund']['expired_by_days']);
+        $this->assertFalse($facts['refund']['customer_eligible']);
+        $this->assertTrue($facts['exchange']['customer_eligible']);
+        $this->assertFalse($facts['exchange']['window_expired']);
+    }
+
+    public function test_no_refund_and_no_exchange_do_not_create_deadlines_or_expiry(): void
+    {
+        [$user, $shop, $variant] = $this->fixture();
+        $deliveredAt = Carbon::parse('2026-08-20 10:00:00');
+        $order = $this->createOrder($user, $shop, $variant, [
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+            'payment_method' => 'cash_on_delivery',
+            'order_status' => Order::STATUS_COMPLETED,
+            'completed_at' => $deliveredAt,
+        ]);
+        $item = $order->items->first();
+        $item->forceFill([
+            'refund_allowed' => false,
+            'refund_window_days' => 0,
+            'exchange_allowed' => false,
+            'exchange_window_days' => 0,
+        ])->save();
+        $this->history($order, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, $deliveredAt);
+
+        $facts = app(OrderReturnExchangeEligibilityService::class)
+            ->forOrder($order->fresh(['items', 'statusHistories']), Carbon::parse('2026-08-25 10:00:00'))['items'][$item->getKey()];
+
+        foreach (['refund', 'exchange'] as $type) {
+            $this->assertFalse($facts[$type]['customer_eligible']);
+            $this->assertNull($facts[$type]['window_expires_at']);
+            $this->assertNull($facts[$type]['window_expires_label']);
+            $this->assertFalse($facts[$type]['window_expired']);
+            $this->assertSame(0, $facts[$type]['expired_by_days']);
+        }
+    }
+
+    public function test_expired_cod_delivery_window_blocks_customer_self_service_but_keeps_shop_visit_guidance(): void
+    {
+        [$user, $shop, $variant] = $this->fixture();
+        $deliveredAt = Carbon::parse('2026-08-20 10:00:00');
+        $order = $this->createOrder($user, $shop, $variant, [
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+            'payment_method' => 'cash_on_delivery',
+            'order_status' => Order::STATUS_COMPLETED,
+            'completed_at' => $deliveredAt,
+        ]);
+        $item = $order->items->first();
+        $item->forceFill(['exchange_allowed' => true, 'exchange_window_days' => 7])->save();
+        $this->history($order, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, $deliveredAt);
+
+        $eligibility = app(OrderReturnExchangeEligibilityService::class)
+            ->forOrder($order->fresh(['items', 'statusHistories']), Carbon::parse('2026-08-29 10:00:00'));
+        $exchange = $eligibility['items'][$item->getKey()]['exchange'];
+
+        $this->assertSame(OrderReturnExchangeEligibilityService::REASON_WINDOW_EXPIRED, $exchange['reason_code']);
+        $this->assertSame(2, $exchange['expired_by_days']);
+        $this->assertFalse($exchange['customer_eligible']);
+        $this->assertTrue($eligibility['return_method']['shop_visit_allowed']);
+        $this->assertFalse($eligibility['return_method']['pickup_allowed']);
+        $this->assertSame(OrderReturnExchangeEligibilityService::REASON_PICKUP_NOT_ALLOWED_EXPIRED, $eligibility['return_method']['pickup_reason']);
+    }
+
+    public function test_cash_at_shop_uses_pickup_completion_start_date_and_never_allows_customer_pickup_method(): void
+    {
+        [$user, $shop, $variant] = $this->fixture();
+        $collectedAt = Carbon::parse('2026-08-25 12:00:00');
+        $order = $this->createOrder($user, $shop, $variant, [
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+            'payment_method' => 'cash_at_shop',
+            'order_status' => Order::STATUS_COMPLETED,
+            'completed_at' => $collectedAt,
+        ]);
+        $item = $order->items->first();
+        $item->forceFill(['exchange_allowed' => true, 'exchange_window_days' => 7])->save();
+        $this->history($order, Order::STATUS_READY_FOR_PICKUP, Order::STATUS_COMPLETED, $collectedAt, [
+            'action' => 'merchant_complete_pickup',
+        ]);
+
+        $eligibility = app(OrderReturnExchangeEligibilityService::class)
+            ->forOrder($order->fresh(['items', 'statusHistories']), Carbon::parse('2026-08-27 12:00:00'));
+
+        $this->assertTrue($eligibility['items'][$item->getKey()]['exchange']['customer_eligible']);
+        $this->assertSame($collectedAt->toDateTimeString(), $eligibility['order']['eligibility_starts_at']->toDateTimeString());
+        $this->assertTrue($eligibility['return_method']['shop_visit_allowed']);
+        $this->assertFalse($eligibility['return_method']['pickup_allowed']);
+        $this->assertSame(OrderReturnExchangeEligibilityService::REASON_PICKUP_NOT_ALLOWED_CASH_AT_SHOP, $eligibility['return_method']['pickup_reason']);
+    }
+
+    public function test_no_remaining_quantity_blocks_customer_self_service_and_merchant_override_detects_policy_exceptions(): void
+    {
+        [$user, $shop, $variant] = $this->fixture();
+        $deliveredAt = Carbon::parse('2026-08-20 10:00:00');
+        $order = $this->createOrder($user, $shop, $variant, [
+            'quantity' => 1,
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+            'payment_method' => 'cash_on_delivery',
+            'order_status' => Order::STATUS_COMPLETED,
+            'completed_at' => $deliveredAt,
+        ]);
+        $item = $order->items->first();
+        $item->forceFill([
+            'refund_allowed' => true,
+            'refund_window_days' => 7,
+            'exchange_allowed' => false,
+            'exchange_window_days' => 0,
+        ])->save();
+        $this->history($order, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, $deliveredAt);
+        $refund = $this->refund($order);
+        $refund->items()->create([
+            'order_item_id' => $item->getKey(),
+            'product_variant_id' => $item->product_variant_id,
+            'quantity' => 1,
+            'unit_price' => $item->unit_price,
+            'line_tax' => '0.00',
+            'line_total' => '150.00',
+            'restocked' => true,
+        ]);
+
+        $service = app(OrderReturnExchangeEligibilityService::class);
+        Carbon::setTestNow(Carbon::parse('2026-08-22 10:00:00'));
+        $eligibility = $service->forOrder($order->fresh(['items', 'statusHistories']));
+
+        $this->assertSame(OrderReturnExchangeEligibilityService::REASON_NO_REMAINING_QUANTITY, $eligibility['items'][$item->getKey()]['refund']['reason_code']);
+        $this->assertFalse($eligibility['items'][$item->getKey()]['refund']['customer_eligible']);
+        $this->assertFalse($service->merchantOverrideRequiredForSelected($order->fresh(['items', 'statusHistories']), 'refund', [
+            $item->getKey() => ['quantity' => 1],
+        ]));
+        $this->assertTrue($service->merchantOverrideRequiredForSelected($order->fresh(['items', 'statusHistories']), 'exchange', [
+            $item->getKey() => ['quantity' => 1],
+        ]));
+        Carbon::setTestNow();
+    }
+
     private function createOrder(User $user, Shop $shop, ProductVariant $variant, array $overrides = []): Order
     {
         $items = $overrides['items'] ?? [[
@@ -263,6 +500,38 @@ class OrderReturnPolicySnapshotTest extends TestCase
             'quantity' => $overrides['quantity'] ?? 1,
         ]];
         unset($overrides['items'], $overrides['quantity']);
+
+        if (! array_key_exists('customer_id', $overrides)) {
+            $mobile = '91'.random_int(10000000, 99999999);
+            $customer = Customer::query()->firstOrCreate(
+                ['user_id' => $user->getKey()],
+                [
+                    'name' => 'Snapshot Customer',
+                    'mobile_country_code' => '+91',
+                    'mobile' => $mobile,
+                    'mobile_normalized' => $mobile,
+                    'email' => 'snapshot-customer-'.Str::random(8).'@example.test',
+                    'status' => Customer::STATUS_ACTIVE,
+                ],
+            );
+            $overrides['customer_id'] = $customer->getKey();
+        }
+
+        if (($overrides['fulfilment_type'] ?? Order::FULFILMENT_COUNTER) === Order::FULFILMENT_DELIVERY
+            && ! array_key_exists('shipping_address_snapshot', $overrides)) {
+            $overrides['shipping_address_snapshot'] = [
+                'recipient_name' => 'Snapshot Customer',
+                'mobile_country_code' => '+91',
+                'mobile' => '9422945125',
+                'address_line_1' => 'Snapshot Road',
+                'address_line_2' => null,
+                'landmark' => null,
+                'city' => 'Nashik',
+                'state' => 'Maharashtra',
+                'country' => 'India',
+                'postal_code' => '422009',
+            ];
+        }
 
         return app(OrderCreationService::class)->create([
             'shop_id' => $shop->getKey(),
@@ -302,6 +571,17 @@ class OrderReturnPolicySnapshotTest extends TestCase
             'merchant_id' => $order->merchant_id,
             'shop_id' => $order->shop_id,
             'status' => OrderExchange::STATUS_COMPLETED,
+        ]);
+    }
+
+    private function history(Order $order, ?string $fromStatus, string $toStatus, Carbon $createdAt, array $metadata = []): void
+    {
+        $order->statusHistories()->create([
+            'from_status' => $fromStatus,
+            'to_status' => $toStatus,
+            'notes' => 'Status changed',
+            'metadata' => $metadata,
+            'created_at' => $createdAt,
         ]);
     }
 

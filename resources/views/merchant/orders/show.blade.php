@@ -160,6 +160,36 @@
             background: rgba(var(--bs-warning-rgb), .08);
         }
 
+        .order-return-exchange-list {
+            display: grid;
+            gap: .85rem;
+        }
+
+        .order-return-exchange-item {
+            border: 1px solid var(--bs-border-color);
+            border-radius: .5rem;
+            padding: 1rem;
+            background: var(--bs-body-bg);
+        }
+
+        .order-return-exchange-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .85rem;
+        }
+
+        .order-return-exchange-label {
+            color: var(--bs-secondary-color);
+            font-size: var(--body-font-size-sm);
+            margin-bottom: .2rem;
+        }
+
+        @media (max-width: 991.98px) {
+            .order-return-exchange-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
         @media (max-width: 1199.98px) {
             .order-workspace-grid {
                 grid-template-columns: 1fr;
@@ -704,6 +734,96 @@
                     </table>
                 </div>
             </div>
+
+            @if(! empty($returnExchangeEligibility['items']))
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Return / Exchange</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="order-return-exchange-list">
+                            @foreach($order->items as $item)
+                                @php
+                                    $itemEligibility = $returnExchangeEligibility['items'][$item->getKey()] ?? null;
+                                    $refund = $itemEligibility['refund'] ?? null;
+                                    $exchange = $itemEligibility['exchange'] ?? null;
+                                    $refundExceptionAvailable = (bool) ($refund['merchant_exception_available'] ?? false);
+                                    $exchangeExceptionAvailable = (bool) ($exchange['merchant_exception_available'] ?? false);
+                                    $policyTextClass = static fn (array $facts): string => $facts['allowed_by_policy'] ? '' : 'text-danger fw-semibold';
+                                    $eligibilityTextClass = static fn (array $facts): string => $facts['customer_eligible']
+                                        ? 'text-success fw-semibold'
+                                        : (in_array($facts['merchant_status'], ['Not Eligible', 'Expired'], true) ? 'text-danger fw-semibold' : 'text-warning fw-semibold');
+                                @endphp
+                                @continue(! $itemEligibility || ! $refund || ! $exchange)
+
+                                <div class="order-return-exchange-item">
+                                    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+                                        <div>
+                                            <div class="fw-semibold">{{ $item->product_name }}</div>
+                                            @if($item->sku || $item->variant_name)
+                                                <div class="text-muted fs-sm">{{ $item->sku ?: '-' }}{{ $item->variant_name ? ' / '.$item->variant_name : '' }}</div>
+                                            @endif
+                                        </div>
+                                        @if($refundExceptionAvailable || $exchangeExceptionAvailable)
+                                            <span class="badge bg-warning bg-opacity-10 text-warning">Merchant exception available</span>
+                                        @endif
+                                    </div>
+
+                                    <div class="order-return-exchange-grid">
+                                        <div>
+                                            <div class="order-return-exchange-label">Customer Policy</div>
+                                            <div @class([$policyTextClass($refund)])>Refund: {{ $refund['allowed_by_policy'] ? 'Within '.$refund['window_days'].' '.Str::plural('day', $refund['window_days']) : 'Not Allowed' }}</div>
+                                            <div @class([$policyTextClass($exchange)])>Exchange: {{ $exchange['allowed_by_policy'] ? 'Within '.$exchange['window_days'].' '.Str::plural('day', $exchange['window_days']) : 'Not Allowed' }}</div>
+                                        </div>
+                                        <div>
+                                            <div class="order-return-exchange-label">Current Eligibility</div>
+                                            <div @class([$eligibilityTextClass($refund)])>Refund: {{ $refund['merchant_status'] }}</div>
+                                            <div @class([$eligibilityTextClass($exchange)])>Exchange: {{ $exchange['merchant_status'] }}</div>
+                                        </div>
+                                        <div>
+                                            <div class="order-return-exchange-label">Relevant Dates</div>
+                                            @if($returnExchangeEligibility['order']['eligibility_start_label'])
+                                                <div>Start: {{ $returnExchangeEligibility['order']['eligibility_start_label'] }}</div>
+                                            @else
+                                                <div>Window not started</div>
+                                            @endif
+                                            @if($refund['allowed_by_policy'] && $refund['window_expires_label'])
+                                                <div>Refund until: {{ $refund['window_expires_label'] }}</div>
+                                            @endif
+                                            @if($exchange['allowed_by_policy'] && $exchange['window_expires_label'])
+                                                <div>Exchange until: {{ $exchange['window_expires_label'] }}</div>
+                                            @endif
+                                            @if($refund['window_expired'])
+                                                <div class="text-warning">Refund expired by {{ $refund['expired_by_days'] }} {{ Str::plural('day', $refund['expired_by_days']) }}</div>
+                                            @endif
+                                            @if($exchange['window_expired'])
+                                                <div class="text-warning">Exchange expired by {{ $exchange['expired_by_days'] }} {{ Str::plural('day', $exchange['expired_by_days']) }}</div>
+                                            @endif
+                                        </div>
+                                        <div>
+                                            <div class="order-return-exchange-label">Remaining</div>
+                                            <div>Refund: {{ $refund['remaining_quantity'] }} {{ Str::plural('item', $refund['remaining_quantity']) }}</div>
+                                            <div>Exchange: {{ $exchange['remaining_quantity'] }} {{ Str::plural('item', $exchange['remaining_quantity']) }}</div>
+                                        </div>
+                                    </div>
+
+                                    @if($refundExceptionAvailable || $exchangeExceptionAvailable)
+                                        <div class="border-top mt-3 pt-3">
+                                            <div class="order-return-exchange-label">Merchant Exception</div>
+                                            @if($refundExceptionAvailable)
+                                                <div class="text-muted fs-sm">{{ $refund['merchant_message'] }}</div>
+                                            @endif
+                                            @if($exchangeExceptionAvailable)
+                                                <div class="text-muted fs-sm">{{ $exchange['merchant_message'] }}</div>
+                                            @endif
+                                        </div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            @endif
 
             @if(filled($order->customer_order_note))
                 <div class="card">
