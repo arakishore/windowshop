@@ -9,6 +9,7 @@ use App\Http\Controllers\Merchant\BannerLibraryController;
 use App\Http\Controllers\Merchant\BarcodeLabelController;
 use App\Http\Controllers\Merchant\CancellationReasonController;
 use App\Http\Controllers\Merchant\CatalogueMasterController;
+use App\Http\Controllers\Merchant\CollectionController;
 use App\Http\Controllers\Merchant\CustomerAddressController;
 use App\Http\Controllers\Merchant\CustomerController;
 use App\Http\Controllers\Merchant\MerchantDetailsController;
@@ -100,6 +101,16 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
             ->name('availability-statuses.restore');
         Route::resource('availability-statuses', AvailabilityStatusController::class)
             ->only(['index', 'store', 'update', 'destroy']);
+        Route::patch('collections/{collection}/toggle-status', [CollectionController::class, 'toggleStatus'])
+            ->name('collections.toggle-status');
+        Route::get('collections/{collection}/products', [CollectionController::class, 'products'])
+            ->name('collections.products');
+        Route::post('collections/{collection}/products', [CollectionController::class, 'attachProducts'])
+            ->name('collections.products.attach');
+        Route::delete('collections/{collection}/products/{product}', [CollectionController::class, 'detachProduct'])
+            ->name('collections.products.detach');
+        Route::resource('collections', CollectionController::class)
+            ->except(['show']);
         Route::post('postal-code-restrictions/{postalCodeRestriction}/restore', [PostalCodeRestrictionController::class, 'restore'])
             ->withTrashed()
             ->name('postal-code-restrictions.restore');
