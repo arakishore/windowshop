@@ -14,6 +14,7 @@ class DemoSeeder extends Seeder
         $this->call(DemoMerchantSeeder::class);
         $this->call(DemoShopSeeder::class);
         $this->call(DemoProductSeeder::class);
+        $this->call(DemoCollectionSeeder::class);
         $this->call(DemoCustomerSeeder::class);
         $this->call(DemoOrderSeeder::class);
     }
