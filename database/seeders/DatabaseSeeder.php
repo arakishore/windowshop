@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use Database\Seeders\DemoData\DemoSeeder;
+use Database\Seeders\MasterData\PromotionStarterSeeder;
 use Database\Seeders\MasterData\SystemFoundationSeeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -26,6 +27,7 @@ class DatabaseSeeder extends Seeder
 
         // Uncomment to seed demo data in development only.
         $this->call(DemoSeeder::class);
+        $this->call(PromotionStarterSeeder::class);
         $this->call(MerchantSettingsSeeder::class);
         $this->call(ShopSettingsSeeder::class);
         $this->call(ProductAvailabilityStatusSeeder::class);

@@ -21,6 +21,7 @@ class SystemFoundationSeeder extends Seeder
         $this->call(BrandSeeder::class);
         $this->call(ProductAttributeSeeder::class);
         $this->call(ProductDescriptionTemplateSeeder::class);
+        $this->call(PromotionTemplateSeeder::class);
 
         $now = now();
 

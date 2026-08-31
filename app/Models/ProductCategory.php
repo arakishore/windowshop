@@ -74,6 +74,12 @@ class ProductCategory extends Model
         return $this->hasMany(Product::class, 'root_product_category_id');
     }
 
+    public function promotionTargets(): HasMany
+    {
+        return $this->hasMany(PromotionTarget::class, 'target_id')
+            ->where('target_type', PromotionTarget::TYPE_CATEGORY);
+    }
+
     public function descriptionTemplates(): HasMany
     {
         return $this->hasMany(ProductDescriptionTemplate::class);

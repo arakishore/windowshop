@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Traits\HasUuid;
 use App\Services\Merchant\ShopSettingsInitializer;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\Promotion\ShopPromotionStarterService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -56,6 +57,7 @@ class Shop extends Model
     {
         static::created(function (Shop $shop): void {
             app(ShopSettingsInitializer::class)->initialize((int) $shop->getKey());
+            app(ShopPromotionStarterService::class)->createMissingSystemStartersForShop($shop);
         });
     }
 
@@ -93,6 +95,11 @@ class Shop extends Model
     public function banners(): HasMany
     {
         return $this->hasMany(Banner::class);
+    }
+
+    public function promotions(): HasMany
+    {
+        return $this->hasMany(Promotion::class);
     }
 
     public function settings(): HasMany

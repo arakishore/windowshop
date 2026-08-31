@@ -235,6 +235,12 @@ class Product extends Model
             ->withTimestamps();
     }
 
+    public function promotionTargets(): HasMany
+    {
+        return $this->hasMany(PromotionTarget::class, 'target_id')
+            ->where('target_type', PromotionTarget::TYPE_PRODUCT);
+    }
+
     public function deletedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'deleted_by')->withTrashed();
