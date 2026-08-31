@@ -85,6 +85,12 @@ class ProductVariant extends Model
         return $this->hasMany(ProductVariantAttribute::class);
     }
 
+    public function promotionTargets(): HasMany
+    {
+        return $this->hasMany(PromotionTarget::class, 'target_id')
+            ->where('target_type', PromotionTarget::TYPE_VARIANT);
+    }
+
     public function scopeDefault($query)
     {
         return $query->where('is_default', true);

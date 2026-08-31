@@ -117,6 +117,13 @@
                     </a>
                 </li>
 
+                <li class="nav-item">
+                    <a href="{{ route('merchant.promotions.index') }}" class="nav-link {{ request()->routeIs('merchant.promotions.*') ? 'active' : '' }}">
+                        <i class="ph-percent"></i>
+                        <span>Offers & Coupons</span>
+                    </a>
+                </li>
+
                 <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.banners.*') || request()->routeIs('merchant.banner-library.*') ? 'nav-item-expanded nav-item-open' : '' }}">
                     <a href="#" class="nav-link {{ request()->routeIs('merchant.banners.*') || request()->routeIs('merchant.banner-library.*') ? 'active' : '' }}">
                         <i class="ph-browser"></i>

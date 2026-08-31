@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -67,6 +68,12 @@ class Collection extends Model
             ->orderBy('collection_products.sort_order')
             ->orderBy('products.product_name')
             ->orderBy('products.id');
+    }
+
+    public function promotionTargets(): HasMany
+    {
+        return $this->hasMany(PromotionTarget::class, 'target_id')
+            ->where('target_type', PromotionTarget::TYPE_COLLECTION);
     }
 
     public function createdBy(): BelongsTo

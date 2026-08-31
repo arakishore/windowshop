@@ -44,6 +44,12 @@ class Brand extends Model
         return $this->hasMany('App\Models\Product');
     }
 
+    public function promotionTargets(): HasMany
+    {
+        return $this->hasMany(PromotionTarget::class, 'target_id')
+            ->where('target_type', PromotionTarget::TYPE_BRAND);
+    }
+
     public function rootProductCategories(): BelongsToMany
     {
         return $this->belongsToMany(
