@@ -23,6 +23,7 @@ use App\Models\User;
 use Database\Seeders\OrderStatusSeeder;
 use Database\Seeders\PaymentStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -297,6 +298,159 @@ class StorefrontCustomerOrdersTest extends TestCase
             ->assertSee('Your order has been cancelled.')
             ->assertSee('Order was cancelled')
             ->assertSee('Shop could not fulfil this order.');
+    }
+
+    public function test_customer_activity_labels_cod_payment_history_without_duplicate_delivered_entry(): void
+    {
+        $customer = $this->customerUser('orders-cod-payment@example.test', 'COD Customer', '9422945111');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $fixture = $this->fixture('COD Payment Shop');
+        $product = $this->product($fixture, 'COD Payment Product');
+        $this->variant($product);
+        $order = $this->order($globalCustomer, $fixture, [
+            'order_number' => 'ORD-COD-PAYMENT-001',
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+            'order_status' => Order::STATUS_COMPLETED,
+            'payment_method' => 'cash_on_delivery',
+            'payment_status' => PaymentStatus::CODE_PAID,
+            'amount_paid' => 2239.64,
+            'completed_at' => now(),
+        ]);
+        $this->item($order, $product, ['product_name' => 'COD Payment Snapshot Product']);
+        $deliveredAt = now()->subMinute();
+        $this->history($order, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, $deliveredAt, [
+            'action' => 'merchant_mark_delivered',
+        ]);
+        $this->history($order, OrderStatus::CODE_DELIVERED, OrderStatus::CODE_DELIVERED, $deliveredAt, [
+            'action' => 'merchant_cod_payment_received',
+            'payment_method' => 'cash_on_delivery',
+            'payment_collected' => true,
+            'amount_collected' => '2239.64',
+        ]);
+        $this->history($order, OrderStatus::CODE_DELIVERED, Order::STATUS_COMPLETED, $deliveredAt, [
+            'action' => 'merchant_complete_delivery',
+        ]);
+
+        $response = $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.orders.show', $order));
+
+        $response->assertOk()
+            ->assertSee('Payment Received')
+            ->assertSee('Payment received for this order.');
+
+        $activity = $this->orderActivitySection($response->getContent());
+        $this->assertSame(1, substr_count($activity, '<p class="fw-semibold mb-4">Delivered</p>'));
+    }
+
+    public function test_customer_return_exchange_copy_prefers_valid_until_and_cash_at_shop_visit_guidance(): void
+    {
+        $customer = $this->customerUser('orders-return-copy@example.test', 'Return Copy Customer', '9422945112');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $fixture = $this->fixture('Return Copy Shop');
+        $product = $this->product($fixture, 'Exchange Window Product');
+        $this->variant($product);
+        $collectedAt = Carbon::parse('2026-08-29 17:09:00');
+        $order = $this->order($globalCustomer, $fixture, [
+            'order_number' => 'ORD-RETURN-COPY-001',
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+            'order_status' => Order::STATUS_COMPLETED,
+            'payment_method' => 'cash_at_shop',
+            'payment_status' => PaymentStatus::CODE_PAID,
+            'completed_at' => $collectedAt,
+        ]);
+        $this->item($order, $product, [
+            'product_name' => 'White Slim Classic Casual Shirt 1',
+            'refund_allowed' => false,
+            'refund_window_days' => 0,
+            'exchange_allowed' => true,
+            'exchange_window_days' => 7,
+        ]);
+        $this->history($order, Order::STATUS_READY_FOR_PICKUP, Order::STATUS_COMPLETED, $collectedAt, [
+            'action' => 'merchant_complete_pickup',
+        ]);
+
+        $response = $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.orders.show', $order));
+
+        $response->assertOk()
+            ->assertSee('Visit the shop for exchange handling.')
+            ->assertSee('Refund is not available for this item.')
+            ->assertSee('Exchange available until '.app_datetime($collectedAt->copy()->addDays(7)).'.')
+            ->assertDontSee('Policy window started')
+            ->assertDontSee('Request Pickup');
+    }
+
+    public function test_customer_return_exchange_copy_handles_expired_and_not_started_windows(): void
+    {
+        $customer = $this->customerUser('orders-return-expired@example.test', 'Return Expired Customer', '9422945113');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $fixture = $this->fixture('Return Expired Shop');
+        $product = $this->product($fixture, 'Expired Exchange Product');
+        $this->variant($product);
+        $deliveredAt = Carbon::parse('2026-08-20 10:00:00');
+        Carbon::setTestNow(Carbon::parse('2026-08-29 10:00:00'));
+        try {
+            $expired = $this->order($globalCustomer, $fixture, [
+                'order_number' => 'ORD-RETURN-EXPIRED-001',
+                'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+                'order_status' => Order::STATUS_COMPLETED,
+                'payment_method' => 'cash_on_delivery',
+                'completed_at' => $deliveredAt,
+            ]);
+            $this->item($expired, $product, [
+                'exchange_allowed' => true,
+                'exchange_window_days' => 7,
+            ]);
+            $this->history($expired, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, $deliveredAt);
+
+            $pickupNotStarted = $this->order($globalCustomer, $fixture, [
+                'order_number' => 'ORD-RETURN-PICKUP-NOT-STARTED',
+                'fulfilment_type' => Order::FULFILMENT_PICKUP,
+                'order_status' => Order::STATUS_READY_FOR_PICKUP,
+                'payment_method' => 'cash_at_shop',
+            ]);
+            $this->item($pickupNotStarted, $product, [
+                'exchange_allowed' => true,
+                'exchange_window_days' => 7,
+            ]);
+
+            $deliveryNotStarted = $this->order($globalCustomer, $fixture, [
+                'order_number' => 'ORD-RETURN-DELIVERY-NOT-STARTED',
+                'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+                'order_status' => OrderStatus::CODE_OUT_FOR_DELIVERY,
+                'payment_method' => 'cash_on_delivery',
+            ]);
+            $this->item($deliveryNotStarted, $product, [
+                'exchange_allowed' => true,
+                'exchange_window_days' => 7,
+            ]);
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->get(route('storefront.account.orders.show', $expired))
+                ->assertOk()
+                ->assertSee('Your online return/exchange window has expired. You may contact or visit the shop for assistance.')
+                ->assertSee('The online exchange window has expired.');
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->get(route('storefront.account.orders.show', $pickupNotStarted))
+                ->assertOk()
+                ->assertSee('The return/exchange window will start after the order is collected.');
+
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->get(route('storefront.account.orders.show', $deliveryNotStarted))
+                ->assertOk()
+                ->assertSee('The return/exchange window will start after delivery.');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_order_detail_is_owned_by_authenticated_global_customer_and_guest_uses_login_flow(): void

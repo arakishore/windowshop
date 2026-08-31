@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\MerchantCancellationReason;
 use App\Models\Order;
 use App\Models\OrderComment;
+use App\Models\OrderItem;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\ProductAvailabilityStatus;
@@ -1122,6 +1123,125 @@ class MerchantOrderActionsTest extends TestCase
         $this->assertSame(1, DB::table('order_status_histories')->where('order_id', $order->getKey())->count());
     }
 
+    public function test_merchant_order_detail_shows_return_exchange_policy_eligibility_and_remaining_quantities(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $collectedAt = Carbon::parse('2026-08-29 17:09:00');
+        $order = $this->operationalOrder($shopId, [
+            'order_status' => Order::STATUS_COMPLETED,
+            'fulfilment_type' => Order::FULFILMENT_PICKUP,
+            'payment_method' => 'cash_at_shop',
+            'payment_status' => PaymentStatus::CODE_PAID,
+            'amount_paid' => 1998,
+            'completed_at' => $collectedAt,
+        ]);
+        $exchangeVariantId = $this->variantForShop($shopId, 8);
+        $refundVariantId = $this->variantForShop($shopId, 8);
+        $this->orderItem($order, $exchangeVariantId, 1, [
+            'product_name' => 'Exchange Policy Item',
+            'refund_allowed' => false,
+            'refund_window_days' => 0,
+            'exchange_allowed' => true,
+            'exchange_window_days' => 7,
+        ]);
+        $this->orderItem($order, $refundVariantId, 2, [
+            'product_name' => 'Refund Policy Item',
+            'refund_allowed' => true,
+            'refund_window_days' => 3,
+            'exchange_allowed' => false,
+            'exchange_window_days' => 0,
+        ]);
+        $this->statusHistory($order, Order::STATUS_READY_FOR_PICKUP, Order::STATUS_COMPLETED, 'Customer collected the order from the shop.', [
+            'action' => 'merchant_complete_pickup',
+        ], $collectedAt);
+
+        $response = $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order));
+
+        $response->assertOk()
+            ->assertSee('Return / Exchange')
+            ->assertSee('Exchange Policy Item')
+            ->assertSee('Refund Policy Item')
+            ->assertSee('Refund: Not Allowed')
+            ->assertSee('Exchange: Within 7 days')
+            ->assertSee('Refund: Within 3 days')
+            ->assertSee('Exchange: Not Allowed')
+            ->assertSee('Refund: Not Eligible')
+            ->assertSee('Exchange: Eligible')
+            ->assertSee('Start: '.app_datetime($collectedAt))
+            ->assertSee('Exchange until: '.app_datetime($collectedAt->copy()->addDays(7)))
+            ->assertSee('Refund until: '.app_datetime($collectedAt->copy()->addDays(3)))
+            ->assertSee('Refund: 2 items')
+            ->assertSee('Exchange: 1 item')
+            ->assertSee('Merchant Exception')
+            ->assertSee('Shop policy does not allow a refund, but you may approve one as an exception.')
+            ->assertDontSee('Shop Visit Only')
+            ->assertDontSee('Cash at Shop orders do not support pickup.')
+            ->assertDontSee('Refund expired by');
+    }
+
+    public function test_merchant_order_detail_shows_expired_and_not_started_return_exchange_states(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $deliveredAt = Carbon::parse('2026-08-20 10:00:00');
+        Carbon::setTestNow(Carbon::parse('2026-08-29 10:00:00'));
+        try {
+            $expired = $this->operationalOrder($shopId, [
+                'order_status' => Order::STATUS_COMPLETED,
+                'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+                'payment_method' => 'cash_on_delivery',
+                'payment_status' => PaymentStatus::CODE_PAID,
+                'amount_paid' => 999,
+                'completed_at' => $deliveredAt,
+            ]);
+            $expiredVariantId = $this->variantForShop($shopId, 8);
+            $this->orderItem($expired, $expiredVariantId, 1, [
+                'product_name' => 'Expired Exchange Item',
+                'exchange_allowed' => true,
+                'exchange_window_days' => 7,
+            ]);
+            $this->statusHistory($expired, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, 'Order delivered to customer.', [
+                'action' => 'merchant_mark_delivered',
+            ], $deliveredAt);
+
+            $notStarted = $this->operationalOrder($shopId, [
+                'order_status' => Order::STATUS_PROCESSING,
+                'fulfilment_type' => Order::FULFILMENT_PICKUP,
+                'payment_method' => 'cash_at_shop',
+            ]);
+            $notStartedVariantId = $this->variantForShop($shopId, 8);
+            $this->orderItem($notStarted, $notStartedVariantId, 1, [
+                'product_name' => 'Not Started Exchange Item',
+                'exchange_allowed' => true,
+                'exchange_window_days' => 7,
+            ]);
+
+            $this
+                ->actingAs($user)
+                ->withSession(['active_shop_id' => $shopId])
+                ->get(route('merchant.orders.show', $expired))
+                ->assertOk()
+                ->assertSee('Expired Exchange Item')
+                ->assertSee('Exchange: Expired')
+                ->assertSee('Exchange expired by 2 days')
+                ->assertSee('Merchant exception available')
+                ->assertSee('Exchange window has expired, but you may approve one as an exception.');
+
+            $this
+                ->actingAs($user)
+                ->withSession(['active_shop_id' => $shopId])
+                ->get(route('merchant.orders.show', $notStarted))
+                ->assertOk()
+                ->assertSee('Not Started Exchange Item')
+                ->assertSee('Window not started')
+                ->assertSee('Exchange: Not Started');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_packed_delivery_order_cannot_be_cancelled_or_restore_stock_through_simple_cancellation(): void
     {
         [$user, $merchantId, $shopId] = $this->merchantShopFixture();
@@ -2063,11 +2183,14 @@ class MerchantOrderActionsTest extends TestCase
         ]);
     }
 
-    private function orderItem(Order $order, int $variantId, int $quantity): void
+    /**
+     * @param array<string, mixed> $overrides
+     */
+    private function orderItem(Order $order, int $variantId, int $quantity, array $overrides = []): OrderItem
     {
         $variant = DB::table('product_variants')->where('id', $variantId)->first();
 
-        DB::table('order_items')->insert([
+        return OrderItem::query()->create(array_merge([
             'order_id' => $order->getKey(),
             'product_id' => $variant->product_id,
             'product_variant_id' => $variantId,
@@ -2082,19 +2205,21 @@ class MerchantOrderActionsTest extends TestCase
             'line_discount' => 0,
             'line_tax' => 0,
             'line_total' => 999 * $quantity,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        ], $overrides));
     }
 
-    private function statusHistory(Order $order, ?string $fromStatus, string $toStatus, string $notes): void
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    private function statusHistory(Order $order, ?string $fromStatus, string $toStatus, string $notes, array $metadata = [], mixed $createdAt = null): void
     {
         DB::table('order_status_histories')->insert([
             'order_id' => $order->getKey(),
             'from_status' => $fromStatus,
             'to_status' => $toStatus,
             'notes' => $notes,
-            'created_at' => now(),
+            'metadata' => $metadata === [] ? null : json_encode($metadata),
+            'created_at' => $createdAt ?? now(),
         ]);
     }
 }
