@@ -13,12 +13,16 @@ use App\Models\ProductCategory;
 use App\Models\ProductReturnPolicy;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantAttribute;
+use App\Models\Promotion;
+use App\Models\PromotionTarget;
+use App\Models\PromotionTemplate;
 use App\Models\Shop;
 use App\Models\ShopSetting;
 use App\Models\User;
 use App\Services\Cart\CartResolver;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
+use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -410,6 +414,33 @@ class StorefrontCartPageTest extends TestCase
         $this->assertSame('250.00', $item->refresh()->unit_price);
     }
 
+    public function test_cart_totals_include_automatic_promotion_without_mutating_stored_unit_price(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 500, stock: 10);
+        $promotion = $this->cartPromotion($fixture, 'fixed_discount', ['value_amount' => '100.00']);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'target_id' => null,
+            'sort_order' => 10,
+        ]);
+        $cart = $this->guestCart('promotion-cart-token');
+        $item = $this->cartItem($cart, $fixture['variant'], 2);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'promotion-cart-token'])
+            ->patchJson(route('storefront.cart.items.update', $item), [
+                'quantity' => 2,
+            ])
+            ->assertOk()
+            ->assertJsonPath('base_subtotal_cents', 100000)
+            ->assertJsonPath('promotion_discount_cents', 20000)
+            ->assertJsonPath('subtotal_cents', 80000)
+            ->assertJsonPath('shop_groups.0.items.0.promotion.id', $promotion->getKey());
+
+        $this->assertSame('500.00', $item->refresh()->unit_price);
+    }
+
     public function test_unavailable_item_renders_warning_and_can_be_removed(): void
     {
         $fixture = $this->productFixture(name: 'Unavailable Product');
@@ -521,6 +552,29 @@ class StorefrontCartPageTest extends TestCase
             'user_id' => null,
             'session_token' => $token,
         ]);
+    }
+
+    private function cartPromotion(array $fixture, string $templateCode, array $reward): Promotion
+    {
+        $template = PromotionTemplate::query()->where('code', $templateCode)->firstOrFail();
+        $promotion = Promotion::query()->create([
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'promotion_template_id' => $template->getKey(),
+            'name' => 'Cart Promotion '.Str::random(6),
+            'slug' => 'cart-promotion-'.Str::random(8),
+            'status' => Promotion::STATUS_ACTIVE,
+            'activation_type' => Promotion::ACTIVATION_AUTOMATIC,
+            'origin' => Promotion::ORIGIN_MERCHANT,
+            'refund_policy_mode' => Promotion::POLICY_INHERIT,
+            'exchange_policy_mode' => Promotion::POLICY_INHERIT,
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => $template->reward_type,
+            ...$reward,
+        ]);
+
+        return $promotion;
     }
 
     private function attachVariantAttribute(ProductVariant $variant, string $groupName, string $valueName): void

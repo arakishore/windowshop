@@ -6,7 +6,10 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
+use App\Services\Promotion\Engine\PromotionCalculator;
+use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
 use App\Services\Storefront\StorefrontProductPolicyPresenter;
 use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Http\Request;
@@ -25,6 +28,7 @@ class CartPageService
         private readonly AdminSettingsService $settings,
         private readonly StorefrontUrlService $urls,
         private readonly StorefrontProductPolicyPresenter $policyPresenter,
+        private readonly PromotionCalculator $promotions,
     ) {
     }
 
@@ -97,33 +101,83 @@ class CartPageService
     private function dataFromItems(Collection $items): array
     {
         $groups = $items
-            ->map(fn (CartItem $item): array => $this->itemData($item))
             ->groupBy('shop_id')
-            ->map(function (Collection $shopItems): array {
+            ->map(function (Collection $cartItems): array {
+                $shopItems = $cartItems->map(fn (CartItem $item): array => $this->itemData($item));
                 $first = $shopItems->first();
+                $baseSubtotalCents = (int) $shopItems->sum('line_subtotal_cents');
+                $promotionResult = $cartItems->first()?->shop instanceof Shop
+                    ? $this->promotions->calculateForShop(
+                        $cartItems->first()->shop,
+                        $shopItems
+                            ->filter(fn (array $item): bool => (bool) ($item['is_available'] ?? false))
+                            ->map(fn (array $item): array => [
+                                'product_variant_id' => (int) $item['product_variant_id'],
+                                'quantity' => $item['quantity_value'],
+                            ])
+                            ->values()
+                            ->all(),
+                    )
+                    : new PromotionCalculationResult((int) ($first['shop_id'] ?? 0), []);
+                $shopItems = $this->applyPromotionsToItems($shopItems, $promotionResult);
+                $promotionDiscountCents = (int) $shopItems->sum('promotion_discount_cents');
                 $subtotalCents = (int) $shopItems->sum('line_subtotal_cents');
 
                 return [
                     'shop_id' => $first['shop_id'],
                     'shop_name' => $first['shop_name'],
+                    'base_subtotal_cents' => $baseSubtotalCents,
+                    'base_subtotal' => $this->moneyFromCents($baseSubtotalCents),
+                    'promotion_discount_cents' => $promotionDiscountCents,
+                    'promotion_discount' => $promotionDiscountCents > 0 ? '-'.$this->moneyFromCents($promotionDiscountCents) : $this->moneyFromCents(0),
                     'subtotal_cents' => $subtotalCents,
                     'subtotal' => $this->moneyFromCents($subtotalCents),
+                    'applied_promotions' => $promotionResult->appliedPromotions(),
                     'delivery_minimum' => $this->deliveryMinimumData((float) ($first['delivery_minimum_amount'] ?? 0), $subtotalCents),
                     'items' => $shopItems->values()->all(),
                 ];
             })
             ->values();
 
+        $baseSubtotalCents = (int) $groups->sum('base_subtotal_cents');
+        $promotionDiscountCents = (int) $groups->sum('promotion_discount_cents');
         $subtotalCents = (int) $groups->sum('subtotal_cents');
 
         return [
             'is_empty' => false,
             'shop_groups' => $groups->all(),
+            'base_subtotal_cents' => $baseSubtotalCents,
+            'base_subtotal' => $this->moneyFromCents($baseSubtotalCents),
+            'promotion_discount_cents' => $promotionDiscountCents,
+            'promotion_discount' => $promotionDiscountCents > 0 ? '-'.$this->moneyFromCents($promotionDiscountCents) : $this->moneyFromCents(0),
+            'discount' => $promotionDiscountCents > 0 ? '-'.$this->moneyFromCents($promotionDiscountCents) : 'None',
+            'applied_promotions' => $groups->flatMap(fn (array $group): array => $group['applied_promotions'] ?? [])->values()->all(),
             'subtotal_cents' => $subtotalCents,
             'subtotal' => $this->moneyFromCents($subtotalCents),
             'total_cents' => $subtotalCents,
             'total' => $this->moneyFromCents($subtotalCents),
         ];
+    }
+
+    private function applyPromotionsToItems(Collection $shopItems, PromotionCalculationResult $promotionResult): Collection
+    {
+        return $shopItems->map(function (array $item) use ($promotionResult): array {
+            $adjustment = $promotionResult->line((int) ($item['product_variant_id'] ?? 0));
+            $baseLineSubtotalCents = (int) $item['line_subtotal_cents'];
+            $promotionDiscountCents = $adjustment?->promotionDiscountCents ?? 0;
+            $finalLineSubtotalCents = max(0, $baseLineSubtotalCents - $promotionDiscountCents);
+
+            return [
+                ...$item,
+                'base_line_subtotal_cents' => $baseLineSubtotalCents,
+                'base_line_subtotal' => $this->moneyFromCents($baseLineSubtotalCents),
+                'promotion_discount_cents' => $promotionDiscountCents,
+                'promotion_discount' => $promotionDiscountCents > 0 ? '-'.$this->moneyFromCents($promotionDiscountCents) : $this->moneyFromCents(0),
+                'promotion' => $adjustment?->winningPromotion?->toMetadata(),
+                'line_subtotal_cents' => $finalLineSubtotalCents,
+                'line_subtotal' => $this->moneyFromCents($finalLineSubtotalCents),
+            ];
+        });
     }
 
     /**
@@ -282,6 +336,12 @@ class CartPageService
         return [
             'is_empty' => true,
             'shop_groups' => [],
+            'base_subtotal_cents' => 0,
+            'base_subtotal' => $this->moneyFromCents(0),
+            'promotion_discount_cents' => 0,
+            'promotion_discount' => $this->moneyFromCents(0),
+            'discount' => 'None',
+            'applied_promotions' => [],
             'subtotal_cents' => 0,
             'subtotal' => $this->moneyFromCents(0),
             'total_cents' => 0,

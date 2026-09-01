@@ -16,6 +16,8 @@ use App\Services\POS\DiscountService;
 use App\Services\POS\CashRoundingService;
 use App\Services\Product\ProductReturnPolicyResolver;
 use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
+use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
+use App\Services\Promotion\Engine\PromotionCalculator;
 use App\Services\Tax\Exceptions\TaxConfigurationException;
 use App\Services\Tax\OrderTaxSnapshotFactory;
 use App\Services\Tax\PricingEngine;
@@ -37,6 +39,7 @@ class OrderCreationService
         private readonly ProductReturnPolicyResolver $returnPolicyResolver,
         private readonly CustomerPurchaseAvailabilityGuard $availabilityGuard,
         private readonly MerchantOrderStockShortageService $stockShortageService,
+        private readonly PromotionCalculator $promotions,
     ) {
     }
 
@@ -79,12 +82,18 @@ class OrderCreationService
             $originalStockShortages = $createdSource === Order::SOURCE_STOREFRONT
                 ? $this->stockShortageService->originalShortagesForRows($rows, $variants)
                 : [];
-            $itemSnapshots = $this->buildItems($rows, $variants, $shop->merchant, $effectiveAt);
-            $items = array_map(fn (array $snapshot): OrderItem => $snapshot['item'], $itemSnapshots);
             $orderStatus = (string) ($data['order_status'] ?? Order::STATUS_COMPLETED);
             $requestedPaymentStatus = isset($data['payment_status']) ? (string) $data['payment_status'] : null;
             $paymentStatus = $requestedPaymentStatus ?? Order::PAYMENT_UNPAID;
             $customerSnapshot = $this->customerSnapshot($shop, $data);
+            $customer = $customerSnapshot['customer_id']
+                ? Customer::query()->find((int) $customerSnapshot['customer_id'])
+                : null;
+            $promotionResult = $this->shouldApplyAutomaticPromotions($createdSource)
+                ? $this->promotions->calculateForVariantRows($shop, $rows, $variants, $customer, $effectiveAt)
+                : new PromotionCalculationResult((int) $shop->getKey(), []);
+            $itemSnapshots = $this->buildItems($rows, $variants, $shop->merchant, $effectiveAt, $promotionResult);
+            $items = array_map(fn (array $snapshot): OrderItem => $snapshot['item'], $itemSnapshots);
             $shippingSnapshot = $this->shippingSnapshot($shop, $data, $customerSnapshot['customer_id']);
             $billingSnapshot = $this->billingSnapshot($shop, $data, $customerSnapshot['customer_id']);
             $orderDiscount = $this->orderDiscount($items, $data['order_discount'] ?? []);
@@ -141,7 +150,7 @@ class OrderCreationService
             ]);
 
             foreach ($itemSnapshots as $snapshot) {
-                $createdItem = $order->items()->create($snapshot['item']->getAttributes());
+                $createdItem = $order->items()->create($this->orderItemAttributes($snapshot['item']));
 
                 foreach ($snapshot['components'] as $componentAttributes) {
                     $createdItem->taxComponents()->create($componentAttributes);
@@ -151,7 +160,7 @@ class OrderCreationService
             $createdItems = $order->items()->get();
             $calculated = $this->orderTotalsService->calculate(
                 $createdItems,
-                $this->totalsRows($createdItems, $orderDiscount, $data['totals'] ?? [], $data),
+                $this->totalsRows($createdItems, $orderDiscount, $data['totals'] ?? [], $data, $createdSource),
                 $data['amount_paid'] ?? 0,
             );
 
@@ -482,7 +491,9 @@ class OrderCreationService
                 ->with([
                     'availabilityStatus',
                     'product.availabilityStatus',
-                    'product.category',
+                    'product.brand',
+                    'product.category.parent.parent',
+                    'product.collections',
                     'product.primaryImage',
                     'product.returnPolicy',
                     'product.shop.settings',
@@ -527,7 +538,7 @@ class OrderCreationService
      * @param array<int, ProductVariant> $variants
      * @return array<int, array{item: OrderItem, components: array<int, array<string, mixed>>}>
      */
-    private function buildItems(array $rows, array $variants, MerchantProfile $merchant, CarbonInterface $effectiveAt): array
+    private function buildItems(array $rows, array $variants, MerchantProfile $merchant, CarbonInterface $effectiveAt, ?PromotionCalculationResult $promotionResult = null): array
     {
         $items = [];
 
@@ -536,10 +547,17 @@ class OrderCreationService
             $variant = $variants[$variantId];
             $unitPrice = $this->money($variant->selling_price);
             $lineSubtotal = $this->money((float) $unitPrice * $quantity);
-            $discount = $this->discountService->calculateLineDiscount($lineSubtotal, [
-                'discount_type' => $row['discount_type'] ?? null,
-                'discount_value' => $row['discount_value'] ?? null,
-            ]);
+            $promotionAdjustment = $promotionResult?->line((int) $variantId);
+            $discount = $promotionAdjustment?->hasPromotion()
+                ? [
+                    'type' => $promotionAdjustment->winningPromotion?->rewardType,
+                    'value' => $promotionAdjustment->discountAmount(),
+                    'amount' => $promotionAdjustment->discountAmount(),
+                ]
+                : $this->discountService->calculateLineDiscount($lineSubtotal, [
+                    'discount_type' => $row['discount_type'] ?? null,
+                    'discount_value' => $row['discount_value'] ?? null,
+                ]);
             $product = $variant->product;
 
             try {
@@ -572,14 +590,14 @@ class OrderCreationService
                 'quantity' => $quantity,
                 'unit_mrp' => $this->money($variant->mrp),
                 'unit_price' => $unitPrice,
-                'unit_discount' => '0.00',
+                'unit_discount' => $quantity > 0 ? $this->money((float) $discount['amount'] / $quantity) : '0.00',
                 'item_discount_type' => $discount['type'],
                 'item_discount_value' => $discount['value'],
                 'refund_allowed' => $policySnapshot['refund_allowed'],
                 'refund_window_days' => $policySnapshot['refund_window_days'],
                 'exchange_allowed' => $policySnapshot['exchange_allowed'],
                 'exchange_window_days' => $policySnapshot['exchange_window_days'],
-                'metadata' => null,
+                'metadata' => $promotionAdjustment?->metadata(),
             ], $taxSnapshot->toOrderItemAttributes()));
 
             $items[] = [
@@ -603,6 +621,24 @@ class OrderCreationService
                 'stock_quantity' => (float) $variant->stock_quantity - (int) $row['quantity'],
             ])->save();
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function orderItemAttributes(OrderItem $item): array
+    {
+        $attributes = $item->getAttributes();
+
+        if (isset($attributes['metadata']) && is_string($attributes['metadata'])) {
+            $decoded = json_decode($attributes['metadata'], true);
+
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $attributes['metadata'] = $decoded;
+            }
+        }
+
+        return $attributes;
     }
 
     /**
@@ -690,7 +726,7 @@ class OrderCreationService
      * @param array<string, mixed> $data
      * @return array<int, array<string, mixed>>
      */
-    private function totalsRows(Collection $items, array $orderDiscount, array $extraRows, array $data): array
+    private function totalsRows(Collection $items, array $orderDiscount, array $extraRows, array $data, string $createdSource): array
     {
         $rows = [];
         $itemDiscount = $this->money($items->sum(fn (OrderItem $item): float => (float) $item->line_discount));
@@ -698,10 +734,10 @@ class OrderCreationService
         if ((float) $itemDiscount > 0) {
             $rows[] = [
                 'code' => OrderTotal::CODE_ITEM_DISCOUNT,
-                'title' => 'Item Discount',
+                'title' => $this->shouldApplyAutomaticPromotions($createdSource) ? 'Offer Discount' : 'Item Discount',
                 'amount' => -1 * (float) $itemDiscount,
                 'sort_order' => 20,
-                'source' => 'pos',
+                'source' => $this->shouldApplyAutomaticPromotions($createdSource) ? 'promotion' : 'pos',
             ];
         }
 
@@ -766,5 +802,10 @@ class OrderCreationService
     private function money(float|string|int $value): string
     {
         return number_format(round((float) $value, 2), 2, '.', '');
+    }
+
+    private function shouldApplyAutomaticPromotions(string $createdSource): bool
+    {
+        return in_array($createdSource, [Order::SOURCE_STOREFRONT, Order::SOURCE_CUSTOMER_APP], true);
     }
 }
