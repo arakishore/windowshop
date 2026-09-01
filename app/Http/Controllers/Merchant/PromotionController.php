@@ -322,12 +322,12 @@ class PromotionController extends Controller
 
         if ($template->reward_type === PromotionReward::TYPE_FREE_GIFT) {
             return [
-                ...$this->targetsForRole(PromotionTarget::ROLE_ELIGIBLE, $data['target_scope'], $data),
+                ...$this->targetsForRole(PromotionTarget::ROLE_ELIGIBLE, $data['target_scope'] ?? 'all', $data),
                 ...$this->targetsForRole(PromotionTarget::ROLE_GIFT, 'products', $data, 'gift_'),
             ];
         }
 
-        return $this->targetsForRole(PromotionTarget::ROLE_ELIGIBLE, $data['target_scope'], $data);
+        return $this->targetsForRole(PromotionTarget::ROLE_ELIGIBLE, $data['target_scope'] ?? 'all', $data);
     }
 
     private function targetsForRole(string $role, string $scope, array $data, string $prefix = ''): array

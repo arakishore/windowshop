@@ -548,7 +548,7 @@ class OrderCreationService
             $unitPrice = $this->money($variant->selling_price);
             $lineSubtotal = $this->money((float) $unitPrice * $quantity);
             $promotionAdjustment = $promotionResult?->line((int) $variantId);
-            $discount = $promotionAdjustment?->hasPromotion()
+            $discount = $promotionAdjustment?->hasPromotionParticipation()
                 ? [
                     'type' => $promotionAdjustment->winningPromotion?->rewardType,
                     'value' => $promotionAdjustment->discountAmount(),

@@ -7,6 +7,8 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Promotion;
+use App\Models\PromotionCondition;
+use App\Models\PromotionReward;
 use App\Models\PromotionTarget;
 use App\Models\Shop;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
@@ -45,18 +47,15 @@ class PromotionCalculator
     {
         $effectiveAt ??= now();
         $promotions = $this->promotions->automaticActiveForShop((int) $shop->getKey(), $effectiveAt);
+        $lines = $this->lineInputs($rows, $variants);
+        $candidatesByVariant = $this->candidatesByVariant($promotions, $lines, $customer);
         $lineAdjustments = [];
 
-        foreach ($rows as $variantId => $row) {
-            $variant = $variants[$variantId] ?? null;
-            if (! $variant instanceof ProductVariant || ! $variant->product instanceof Product) {
-                continue;
-            }
-
-            $line = $this->lineInput($variant, (string) $row['quantity']);
+        foreach ($lines as $line) {
             $baseLineSubtotalCents = $this->lineSubtotalCents($line);
-            $candidates = $this->candidates($promotions, $line, $customer);
-            $winner = $this->resolver->winningPromotion($candidates);
+            $candidates = $candidatesByVariant[$line->variantId] ?? [];
+            $winner = $this->resolver->winningPromotion($candidates)
+                ?? $this->resolver->participationPromotion($candidates);
             $discountCents = $winner?->discountCents ?? 0;
 
             $lineAdjustments[$line->variantId] = new PromotionLineAdjustment(
@@ -74,13 +73,75 @@ class PromotionCalculator
 
     /**
      * @param Collection<int, Promotion> $promotions
-     * @return array<int, array{promotion: Promotion, discount_cents: int}>
+     * @param array<int, PromotionLineInput> $lines
+     * @return array<int, array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>>
      */
-    private function candidates(Collection $promotions, PromotionLineInput $line, ?Customer $customer): array
+    private function candidatesByVariant(Collection $promotions, array $lines, ?Customer $customer): array
     {
         $candidates = [];
+        $bundlePromotions = [];
+        $bogoPromotions = [];
 
         foreach ($promotions as $promotion) {
+            $rewardType = (string) $promotion->rewards->first()?->reward_type;
+
+            if ($rewardType === PromotionReward::TYPE_FIXED_BUNDLE_PRICE) {
+                $bundlePromotions[] = $promotion;
+                continue;
+            }
+
+            if ($rewardType === PromotionReward::TYPE_BUY_X_GET_Y_FREE) {
+                $bogoPromotions[] = $promotion;
+                continue;
+            }
+
+            foreach ($lines as $line) {
+                if (! $this->targets->matches($promotion, $line, PromotionTarget::ROLE_ELIGIBLE)) {
+                    continue;
+                }
+
+                if (! $this->conditions->passes($promotion, $line, $customer)) {
+                    continue;
+                }
+
+                $discountCents = $this->rewards->discountCents($promotion, $line);
+                if ($discountCents <= 0) {
+                    continue;
+                }
+
+                $candidates[$line->variantId][] = [
+                    'promotion' => $promotion,
+                    'discount_cents' => $discountCents,
+                    'details' => $this->linePromotionDetails($promotion, $line),
+                ];
+            }
+        }
+
+        foreach ($bundlePromotions as $promotion) {
+            foreach ($this->fixedBundleCandidates($promotion, $lines, $customer, $candidates) as $variantId => $candidate) {
+                $candidates[$variantId][] = $candidate;
+            }
+        }
+
+        foreach ($bogoPromotions as $promotion) {
+            foreach ($this->buyXGetYFreeCandidates($promotion, $lines, $customer, $candidates) as $variantId => $candidate) {
+                $candidates[$variantId][] = $candidate;
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * @param array<int, PromotionLineInput> $lines
+     * @param array<int, array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>> $existingCandidates
+     * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
+     */
+    private function fixedBundleCandidates(Promotion $promotion, array $lines, ?Customer $customer, array $existingCandidates): array
+    {
+        $eligibleLines = [];
+
+        foreach ($lines as $line) {
             if (! $this->targets->matches($promotion, $line, PromotionTarget::ROLE_ELIGIBLE)) {
                 continue;
             }
@@ -89,18 +150,339 @@ class PromotionCalculator
                 continue;
             }
 
-            $discountCents = $this->rewards->discountCents($promotion, $line);
-            if ($discountCents <= 0) {
+            $eligibleLines[$line->variantId] = $line;
+        }
+
+        $allocations = $this->rewards->fixedBundleAllocations($promotion, $eligibleLines);
+        $candidates = [];
+
+        foreach ($allocations as $variantId => $allocation) {
+            if ((int) $allocation['discount_cents'] <= 0) {
                 continue;
             }
 
-            $candidates[] = [
+            $candidates[$variantId] = [
                 'promotion' => $promotion,
-                'discount_cents' => $discountCents,
+                'discount_cents' => (int) $allocation['discount_cents'],
+                'details' => $allocation['details'] ?? [],
             ];
         }
 
+        foreach ($candidates as $variantId => $candidate) {
+            $winner = $this->resolver->winningPromotion([
+                ...($existingCandidates[$variantId] ?? []),
+                $candidate,
+            ]);
+
+            if ($winner?->promotionId !== (int) $promotion->getKey()) {
+                return [];
+            }
+        }
+
         return $candidates;
+    }
+
+    /**
+     * @param array<int, PromotionLineInput> $lines
+     * @param array<int, array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>> $existingCandidates
+     * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
+     */
+    private function buyXGetYFreeCandidates(Promotion $promotion, array $lines, ?Customer $customer, array $existingCandidates): array
+    {
+        $reward = $promotion->rewards->first();
+        $buyQuantity = (int) ($reward?->buy_quantity ?? 0);
+        $getQuantity = (int) ($reward?->get_quantity ?? 0);
+
+        if (! $reward instanceof PromotionReward
+            || $reward->reward_type !== PromotionReward::TYPE_BUY_X_GET_Y_FREE
+            || $buyQuantity < 1
+            || $getQuantity < 1
+        ) {
+            return [];
+        }
+
+        $eligibleLines = [];
+        $buyUnits = [];
+        $getUnits = [];
+
+        foreach ($lines as $line) {
+            if (! $this->conditions->passes($promotion, $line, $customer)) {
+                continue;
+            }
+
+            $eligibleLines[$line->variantId] = $line;
+            $lineUnits = $this->expandedBogoUnits($line);
+
+            if ($this->targets->matches($promotion, $line, PromotionTarget::ROLE_BUY)) {
+                $buyUnits = [...$buyUnits, ...$lineUnits];
+            }
+
+            if ($this->targets->matches($promotion, $line, PromotionTarget::ROLE_GET)) {
+                $getUnits = [...$getUnits, ...$lineUnits];
+            }
+        }
+
+        $allocation = $this->buyXGetYFreeAllocation($buyUnits, $getUnits, $buyQuantity, $getQuantity);
+        if ($allocation === null) {
+            return [];
+        }
+
+        $candidates = $this->bogoCandidatesFromAllocation($promotion, $allocation);
+
+        foreach ($candidates as $variantId => $candidate) {
+            if (! isset($eligibleLines[$variantId])) {
+                return [];
+            }
+
+            if (! $this->groupCandidateCanSurvive($promotion, $candidate, $existingCandidates[$variantId] ?? [])) {
+                return $this->buyXGetYFreeReducedCandidates($promotion, $buyUnits, $getUnits, $buyQuantity, $getQuantity, $existingCandidates, (int) $allocation['completed_groups'] - 1);
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $buyUnits
+     * @param array<int, array<string, mixed>> $getUnits
+     * @param array<int, array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>> $existingCandidates
+     * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
+     */
+    private function buyXGetYFreeReducedCandidates(Promotion $promotion, array $buyUnits, array $getUnits, int $buyQuantity, int $getQuantity, array $existingCandidates, int $maxGroups): array
+    {
+        for ($groups = $maxGroups; $groups >= 1; $groups--) {
+            $allocation = $this->buyXGetYFreeAllocation($buyUnits, $getUnits, $buyQuantity, $getQuantity, $groups);
+            if ($allocation === null) {
+                continue;
+            }
+
+            $candidates = $this->bogoCandidatesFromAllocation($promotion, $allocation);
+
+            foreach ($candidates as $variantId => $candidate) {
+                if (! $this->groupCandidateCanSurvive($promotion, $candidate, $existingCandidates[$variantId] ?? [])) {
+                    continue 2;
+                }
+            }
+
+            return $candidates;
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $buyUnits
+     * @param array<int, array<string, mixed>> $getUnits
+     * @return array{completed_groups: int, buy_quantity: int, get_quantity: int, buy_units: array<int, array<string, mixed>>, get_units: array<int, array<string, mixed>>, pool_type: string}|null
+     */
+    private function buyXGetYFreeAllocation(array $buyUnits, array $getUnits, int $buyQuantity, int $getQuantity, ?int $maxGroups = null): ?array
+    {
+        $buyByKey = $this->unitsByKey($buyUnits);
+        $getByKey = $this->unitsByKey($getUnits);
+
+        if ($buyByKey === [] || $getByKey === []) {
+            return null;
+        }
+
+        $overlapKeys = array_intersect(array_keys($buyByKey), array_keys($getByKey));
+        $poolType = match (true) {
+            count($overlapKeys) === 0 => 'different',
+            count($overlapKeys) === count($buyByKey) && count($overlapKeys) === count($getByKey) => 'same',
+            default => 'partial_overlap',
+        };
+        $theoreticalGroups = match ($poolType) {
+            'same' => intdiv(count($getByKey), $buyQuantity + $getQuantity),
+            default => min(intdiv(count($buyByKey), $buyQuantity), intdiv(count($getByKey), $getQuantity)),
+        };
+
+        for ($groups = min($maxGroups ?? $theoreticalGroups, $theoreticalGroups); $groups >= 1; $groups--) {
+            $freeUnits = array_slice($this->sortedGetUnits(array_values($getByKey)), 0, $groups * $getQuantity);
+            $freeKeys = array_fill_keys(array_column($freeUnits, 'unit_key'), true);
+            $availableBuyUnits = array_values(array_filter(
+                array_values($buyByKey),
+                fn (array $unit): bool => ! isset($freeKeys[$unit['unit_key']])
+            ));
+
+            if (count($availableBuyUnits) < $groups * $buyQuantity) {
+                continue;
+            }
+
+            $consumedBuyUnits = array_slice($this->sortedBuyUnits($availableBuyUnits), 0, $groups * $buyQuantity);
+
+            return [
+                'completed_groups' => $groups,
+                'buy_quantity' => $buyQuantity,
+                'get_quantity' => $getQuantity,
+                'buy_units' => $consumedBuyUnits,
+                'get_units' => $freeUnits,
+                'pool_type' => $poolType,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{completed_groups: int, buy_quantity: int, get_quantity: int, buy_units: array<int, array<string, mixed>>, get_units: array<int, array<string, mixed>>, pool_type: string} $allocation
+     * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
+     */
+    private function bogoCandidatesFromAllocation(Promotion $promotion, array $allocation): array
+    {
+        $buyByVariant = $this->summarizeBogoUnits($allocation['buy_units']);
+        $getByVariant = $this->summarizeBogoUnits($allocation['get_units']);
+        $variantIds = array_values(array_unique([
+            ...array_keys($buyByVariant),
+            ...array_keys($getByVariant),
+        ]));
+        $candidates = [];
+
+        foreach ($variantIds as $variantId) {
+            $buy = $buyByVariant[$variantId] ?? ['quantity' => 0, 'discount_cents' => 0, 'units' => []];
+            $get = $getByVariant[$variantId] ?? ['quantity' => 0, 'discount_cents' => 0, 'units' => []];
+            $roles = [];
+
+            if ($buy['quantity'] > 0) {
+                $roles[] = 'buy';
+            }
+
+            if ($get['quantity'] > 0) {
+                $roles[] = 'get';
+            }
+
+            $candidates[$variantId] = [
+                'promotion' => $promotion,
+                'discount_cents' => (int) $get['discount_cents'],
+                'details' => [
+                    'reward_type' => PromotionReward::TYPE_BUY_X_GET_Y_FREE,
+                    'roles' => $roles,
+                    'role' => count($roles) === 1 ? $roles[0] : 'buy_get',
+                    'buy_quantity' => (int) $allocation['buy_quantity'],
+                    'get_quantity' => (int) $allocation['get_quantity'],
+                    'completed_groups' => (int) $allocation['completed_groups'],
+                    'pool_type' => $allocation['pool_type'],
+                    'participating_buy_quantity' => (int) $buy['quantity'],
+                    'participating_get_quantity' => (int) $get['quantity'],
+                    'participating_quantity' => (int) $buy['quantity'] + (int) $get['quantity'],
+                    'free_quantity' => (int) $get['quantity'],
+                    'free_unit_value' => $get['quantity'] > 0 ? $this->moneyFromCents(intdiv((int) $get['discount_cents'], (int) $get['quantity'])) : '0.00',
+                    'promotion_discount' => $this->moneyFromCents((int) $get['discount_cents']),
+                    'buy_units' => $buy['units'],
+                    'get_units' => $get['units'],
+                    'unit_selection' => 'cheapest_eligible_get_whole_units',
+                    'quantity_rule' => 'whole_units_only_fractional_remainder_base_price',
+                ],
+            ];
+        }
+
+        ksort($candidates);
+
+        return $candidates;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $units
+     * @return array<int, array{quantity: int, discount_cents: int, units: array<int, array<string, mixed>>}>
+     */
+    private function summarizeBogoUnits(array $units): array
+    {
+        $summary = [];
+
+        foreach ($units as $unit) {
+            $variantId = (int) $unit['variant_id'];
+            $summary[$variantId] ??= ['quantity' => 0, 'discount_cents' => 0, 'units' => []];
+            $summary[$variantId]['quantity']++;
+            $summary[$variantId]['discount_cents'] += (int) $unit['unit_cents'];
+            $summary[$variantId]['units'][] = [
+                'variant_id' => $variantId,
+                'product_id' => (int) $unit['product_id'],
+                'unit_index' => (int) $unit['unit_index'],
+                'unit_price' => $this->moneyFromCents((int) $unit['unit_cents']),
+            ];
+        }
+
+        ksort($summary);
+
+        return $summary;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $units
+     * @return array<string, array<string, mixed>>
+     */
+    private function unitsByKey(array $units): array
+    {
+        $byKey = [];
+
+        foreach ($units as $unit) {
+            $byKey[(string) $unit['unit_key']] = $unit;
+        }
+
+        ksort($byKey);
+
+        return $byKey;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function expandedBogoUnits(PromotionLineInput $line): array
+    {
+        $units = [];
+        $wholeUnits = intdiv($this->quantityToUnits($line->quantity), 1000);
+        $unitCents = $this->moneyToCents($line->baseUnitPrice);
+
+        for ($index = 0; $index < $wholeUnits; $index++) {
+            $units[] = [
+                'unit_key' => $line->variantId.':'.$index,
+                'variant_id' => $line->variantId,
+                'product_id' => $line->productId,
+                'unit_index' => $index,
+                'unit_cents' => $unitCents,
+            ];
+        }
+
+        return $units;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $units
+     * @return array<int, array<string, mixed>>
+     */
+    private function sortedGetUnits(array $units): array
+    {
+        usort($units, fn (array $left, array $right): int => ((int) $left['unit_cents'] <=> (int) $right['unit_cents'])
+            ?: ((int) $left['variant_id'] <=> (int) $right['variant_id'])
+            ?: ((int) $left['unit_index'] <=> (int) $right['unit_index']));
+
+        return $units;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $units
+     * @return array<int, array<string, mixed>>
+     */
+    private function sortedBuyUnits(array $units): array
+    {
+        usort($units, fn (array $left, array $right): int => ((int) $right['unit_cents'] <=> (int) $left['unit_cents'])
+            ?: ((int) $left['variant_id'] <=> (int) $right['variant_id'])
+            ?: ((int) $left['unit_index'] <=> (int) $right['unit_index']));
+
+        return $units;
+    }
+
+    /**
+     * @param array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>} $candidate
+     * @param array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}> $existingCandidates
+     */
+    private function groupCandidateCanSurvive(Promotion $promotion, array $candidate, array $existingCandidates): bool
+    {
+        if ((int) $candidate['discount_cents'] <= 0) {
+            return $this->resolver->winningPromotion($existingCandidates) === null;
+        }
+
+        $winner = $this->resolver->winningPromotion([...$existingCandidates, $candidate]);
+
+        return $winner?->promotionId === (int) $promotion->getKey();
     }
 
     /**
@@ -121,8 +503,55 @@ class PromotionCalculator
                 'reward_type' => (string) $promotion->rewards->first()?->reward_type,
                 'priority' => (int) $promotion->priority,
                 'discount_amount' => $this->moneyFromCents((int) $candidate['discount_cents']),
+                'details' => $candidate['details'] ?? [],
             ];
         }, $candidates);
+    }
+
+    /**
+     * @param array<int, array{quantity: int|float|string}> $rows
+     * @param array<int, ProductVariant> $variants
+     * @return array<int, PromotionLineInput>
+     */
+    private function lineInputs(array $rows, array $variants): array
+    {
+        $lines = [];
+
+        foreach ($rows as $variantId => $row) {
+            $variant = $variants[$variantId] ?? null;
+            if (! $variant instanceof ProductVariant || ! $variant->product instanceof Product) {
+                continue;
+            }
+
+            $lines[(int) $variantId] = $this->lineInput($variant, (string) $row['quantity']);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function linePromotionDetails(Promotion $promotion, PromotionLineInput $line): array
+    {
+        $reward = $promotion->rewards->first();
+
+        return match ((string) $reward?->reward_type) {
+            PromotionReward::TYPE_QUANTITY_DISCOUNT => [
+                'eligible_quantity' => $line->quantity,
+                'minimum_quantity' => (string) $promotion->conditions
+                    ->first(fn ($condition): bool => $condition->condition_type === PromotionCondition::TYPE_MINIMUM_QUANTITY)?->value_numeric,
+                'value_type' => $reward?->value_type,
+                'value_amount' => $reward?->value_amount ? (string) $reward->value_amount : null,
+                'value_percent' => $reward?->value_percent ? (string) $reward->value_percent : null,
+            ],
+            PromotionReward::TYPE_TIER_PRICING => [
+                'eligible_quantity' => $line->quantity,
+                'tier_model' => 'volume',
+                'tier_config' => $reward?->tier_config,
+            ],
+            default => [],
+        };
     }
 
     private function lineInput(ProductVariant $variant, string $quantity): PromotionLineInput

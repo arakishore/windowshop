@@ -12,6 +12,7 @@ class AppliedPromotion
         public readonly string $rewardType,
         public readonly int $priority,
         public readonly int $discountCents,
+        public readonly array $details = [],
     ) {
     }
 
@@ -28,6 +29,7 @@ class AppliedPromotion
             'reward_type' => $this->rewardType,
             'priority' => $this->priority,
             'discount_amount' => $this->moneyFromCents($this->discountCents),
+            'details' => $this->details,
         ];
     }
 

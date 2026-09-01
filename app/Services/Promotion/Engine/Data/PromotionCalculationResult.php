@@ -50,13 +50,18 @@ class PromotionCalculationResult
         $applied = [];
 
         foreach ($this->lineAdjustments as $adjustment) {
-            if (! $adjustment->hasPromotion()) {
+            if (! $adjustment->hasPromotionParticipation()) {
                 continue;
             }
 
             $metadata = $adjustment->winningPromotion?->toMetadata();
             if ($metadata !== null) {
-                $applied[$metadata['id']] = $metadata;
+                $existingDiscount = (float) ($applied[$metadata['id']]['discount_amount'] ?? 0);
+                $currentDiscount = (float) $metadata['discount_amount'];
+
+                if (! isset($applied[$metadata['id']]) || $currentDiscount > $existingDiscount) {
+                    $applied[$metadata['id']] = $metadata;
+                }
             }
         }
 

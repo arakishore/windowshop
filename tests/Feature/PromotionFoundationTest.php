@@ -362,6 +362,66 @@ class PromotionFoundationTest extends TestCase
         ]);
         $this->assertDatabaseHas('promotion_targets', ['promotion_id' => $promotion->getKey(), 'target_role' => 'buy', 'target_id' => $buyCategory->getKey()]);
         $this->assertDatabaseHas('promotion_targets', ['promotion_id' => $promotion->getKey(), 'target_role' => 'get', 'target_id' => $getCategory->getKey()]);
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->get(route('merchant.promotions.edit', $promotion))
+            ->assertOk()
+            ->assertSee('id="buy_target_scope"', false)
+            ->assertSee('value="categories" selected', false)
+            ->assertSee('Selected: '.$buyCategory->full_path)
+            ->assertSee('Selected: '.$getCategory->full_path);
+    }
+
+    public function test_buy_get_offer_update_saves_when_browser_omits_hidden_eligible_target_scope(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-buy-get-update@example.test');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->post(route('merchant.promotions.store'), $this->payload('buy_x_get_y_free', [
+                'name' => 'Browser BOGO Save',
+                'buy_quantity' => 1,
+                'get_quantity' => 1,
+                'buy_target_scope' => 'all',
+                'get_target_scope' => 'all',
+            ]))
+            ->assertRedirect();
+
+        $promotion = Promotion::query()->where('slug', 'browser-bogo-save')->firstOrFail();
+        $payload = $this->payload('buy_x_get_y_free', [
+            'name' => 'Browser BOGO Save',
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+            'buy_target_scope' => 'all',
+            'get_target_scope' => 'all',
+        ]);
+        unset($payload['promotion_template_id'], $payload['target_scope']);
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->from(route('merchant.promotions.edit', $promotion))
+            ->put(route('merchant.promotions.update', $promotion), $payload)
+            ->assertRedirect(route('merchant.promotions.edit', $promotion))
+            ->assertSessionHasNoErrors();
+
+        $reward = $promotion->refresh()->rewards()->firstOrFail();
+        $this->assertSame(PromotionReward::TYPE_BUY_X_GET_Y_FREE, $reward->reward_type);
+        $this->assertSame(2, $reward->buy_quantity);
+        $this->assertSame(1, $reward->get_quantity);
+        $this->assertDatabaseHas('promotion_targets', [
+            'promotion_id' => $promotion->getKey(),
+            'target_role' => PromotionTarget::ROLE_BUY,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'target_id' => null,
+        ]);
+        $this->assertDatabaseHas('promotion_targets', [
+            'promotion_id' => $promotion->getKey(),
+            'target_role' => PromotionTarget::ROLE_GET,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'target_id' => null,
+        ]);
     }
 
     public function test_reward_types_store_expected_configuration(): void
@@ -652,6 +712,7 @@ class PromotionFoundationTest extends TestCase
             ->assertSee('EDIT500')
             ->assertSee('value="brands" selected', false)
             ->assertSee('Editable Brand')
+            ->assertSee('Selected: Editable Brand')
             ->assertSee('value="'.$brand->getKey().'" selected', false)
             ->assertSee('value="500.00"', false)
             ->assertSee('value="3"', false);

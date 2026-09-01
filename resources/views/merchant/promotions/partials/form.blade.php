@@ -11,7 +11,13 @@
             return $default;
         }
         $type = $targets->first()->target_type;
-        return $type === 'all' ? 'all' : $type.'s';
+        return match ($type) {
+            'product' => 'products',
+            'category' => 'categories',
+            'brand' => 'brands',
+            'collection' => 'collections',
+            default => 'all',
+        };
     };
     $isEdit = $promotion->exists;
     $currentTemplate = $isEdit

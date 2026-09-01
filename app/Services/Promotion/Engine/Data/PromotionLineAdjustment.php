@@ -19,6 +19,11 @@ class PromotionLineAdjustment
         return $this->winningPromotion !== null && $this->promotionDiscountCents > 0;
     }
 
+    public function hasPromotionParticipation(): bool
+    {
+        return $this->winningPromotion !== null;
+    }
+
     public function discountAmount(): string
     {
         return $this->moneyFromCents($this->promotionDiscountCents);
@@ -34,7 +39,7 @@ class PromotionLineAdjustment
      */
     public function metadata(): ?array
     {
-        if (! $this->hasPromotion()) {
+        if (! $this->hasPromotionParticipation()) {
             return null;
         }
 
