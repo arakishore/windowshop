@@ -66,6 +66,35 @@ class PromotionCombinationResolver
     }
 
     /**
+     * @param array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}> $candidates
+     */
+    public function winningPromotionByConflictBenefit(array $candidates): ?AppliedPromotion
+    {
+        $winner = collect($candidates)
+            ->filter(fn (array $candidate): bool => $this->conflictBenefitCents($candidate) > 0)
+            ->sort(function (array $left, array $right): int {
+                $benefit = $this->conflictBenefitCents($right) <=> $this->conflictBenefitCents($left);
+                if ($benefit !== 0) {
+                    return $benefit;
+                }
+
+                $priority = (int) $right['promotion']->priority <=> (int) $left['promotion']->priority;
+                if ($priority !== 0) {
+                    return $priority;
+                }
+
+                return (int) $left['promotion']->getKey() <=> (int) $right['promotion']->getKey();
+            })
+            ->first();
+
+        if (! is_array($winner)) {
+            return null;
+        }
+
+        return $this->appliedPromotionFromCandidate($winner);
+    }
+
+    /**
      * @param array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>} $winner
      */
     private function appliedPromotionFromCandidate(array $winner): AppliedPromotion
@@ -81,6 +110,17 @@ class PromotionCombinationResolver
             priority: (int) $promotion->priority,
             discountCents: (int) $winner['discount_cents'],
             details: $winner['details'] ?? [],
+        );
+    }
+
+    /**
+     * @param array{discount_cents: int, details?: array<string, mixed>} $candidate
+     */
+    private function conflictBenefitCents(array $candidate): int
+    {
+        return max(
+            (int) $candidate['discount_cents'],
+            (int) ($candidate['details']['conflict_benefit_cents'] ?? 0),
         );
     }
 }

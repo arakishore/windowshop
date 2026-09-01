@@ -175,6 +175,9 @@
                                                             class="prd_name fw-medium link lh-24">
                                                             {{ $item['product_name'] }}
                                                         </a>
+                                                        @if (! empty($item['is_generated_gift']))
+                                                            <div class="badge bg-success-subtle text-success border border-success-subtle mb-1">Free Gift</div>
+                                                        @endif
                                                         @foreach ($item['attributes'] as $attribute)
                                                             <div class="prd_select text-caption-01">
                                                                 <span class="type-text cl-text-3">{{ $attribute['label'] }}:&nbsp;</span>
@@ -191,11 +194,13 @@
                                                                 {{ $item['availability_message'] ?: 'Currently unavailable.' }}
                                                             </p>
                                                         @endif
-                                                        <button type="button"
-                                                            class="cart_remove tf-btn-line-3 type-primary remove"
-                                                            data-cart-remove-url="{{ $item['remove_url'] }}">
-                                                            <span class="text-caption-01 fw-semibold">Remove</span>
-                                                        </button>
+                                                        @empty($item['is_generated_gift'])
+                                                            <button type="button"
+                                                                class="cart_remove tf-btn-line-3 type-primary remove"
+                                                                data-cart-remove-url="{{ $item['remove_url'] }}">
+                                                                <span class="text-caption-01 fw-semibold">Remove</span>
+                                                            </button>
+                                                        @endempty
                                                         <p class="text-caption-01 mt-2 mb-0" data-cart-item-message role="status" hidden></p>
                                                     </div>
                                                 </td>
@@ -203,6 +208,9 @@
                                                     <span data-cart-item-price>{{ $item['unit_price'] }}</span>
                                                 </td>
                                                 <td class="cart_quantity" data-cart-title="Quantity">
+                                                    @if (! empty($item['is_generated_gift']))
+                                                        <span class="text-caption-01 fw-semibold">{{ $item['quantity'] }}</span>
+                                                    @else
                                                     <div class="wg-quantity">
                                                         <button type="button"
                                                             class="btn-quantity minus-quantity"
@@ -223,11 +231,15 @@
                                                             <i class="icon icon-plus"></i>
                                                         </button>
                                                     </div>
+                                                    @endif
                                                 </td>
                                                 <td>
                                                     <div class="cart_total fw-semibold text-primary" data-cart-item-subtotal>
                                                         {{ $item['line_subtotal'] }}
                                                     </div>
+                                                    @if (($item['promotion_discount_cents'] ?? 0) > 0)
+                                                        <div class="text-caption-01 text-success">{{ $item['promotion_discount'] }} offer</div>
+                                                    @endif
                                                 </td>
                                             </tr>
                                         @endforeach

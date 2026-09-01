@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
+use App\Services\Promotion\Engine\Data\GeneratedPromotionGift;
 use App\Services\Promotion\Engine\PromotionCalculator;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
 use App\Services\Storefront\StorefrontProductPolicyPresenter;
@@ -120,21 +121,26 @@ class CartPageService
                     )
                     : new PromotionCalculationResult((int) ($first['shop_id'] ?? 0), []);
                 $shopItems = $this->applyPromotionsToItems($shopItems, $promotionResult);
+                $giftItems = collect($promotionResult->generatedGifts)
+                    ->map(fn (GeneratedPromotionGift $gift): array => $this->giftItemData($gift, (int) $first['shop_id'], (string) $first['shop_name']));
+                $displayItems = $shopItems->concat($giftItems);
                 $promotionDiscountCents = (int) $shopItems->sum('promotion_discount_cents');
-                $subtotalCents = (int) $shopItems->sum('line_subtotal_cents');
+                $giftDiscountCents = (int) $giftItems->sum('promotion_discount_cents');
+                $subtotalCents = (int) $displayItems->sum('line_subtotal_cents');
+                $baseSubtotalCents = (int) $displayItems->sum('base_line_subtotal_cents');
 
                 return [
                     'shop_id' => $first['shop_id'],
                     'shop_name' => $first['shop_name'],
                     'base_subtotal_cents' => $baseSubtotalCents,
                     'base_subtotal' => $this->moneyFromCents($baseSubtotalCents),
-                    'promotion_discount_cents' => $promotionDiscountCents,
-                    'promotion_discount' => $promotionDiscountCents > 0 ? '-'.$this->moneyFromCents($promotionDiscountCents) : $this->moneyFromCents(0),
+                    'promotion_discount_cents' => $promotionDiscountCents + $giftDiscountCents,
+                    'promotion_discount' => ($promotionDiscountCents + $giftDiscountCents) > 0 ? '-'.$this->moneyFromCents($promotionDiscountCents + $giftDiscountCents) : $this->moneyFromCents(0),
                     'subtotal_cents' => $subtotalCents,
                     'subtotal' => $this->moneyFromCents($subtotalCents),
                     'applied_promotions' => $promotionResult->appliedPromotions(),
                     'delivery_minimum' => $this->deliveryMinimumData((float) ($first['delivery_minimum_amount'] ?? 0), $subtotalCents),
-                    'items' => $shopItems->values()->all(),
+                    'items' => $displayItems->values()->all(),
                 ];
             })
             ->values();
@@ -239,6 +245,50 @@ class CartPageService
             'is_available' => $isPurchasable,
             'availability_message' => $message,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function giftItemData(GeneratedPromotionGift $gift, int $shopId, string $shopName): array
+    {
+        return [
+            'id' => 'gift-'.$gift->promotion->promotionId.'-'.$gift->variantId,
+            'shop_id' => $shopId,
+            'shop_name' => $shopName,
+            'product_variant_id' => $gift->variantId,
+            'product_name' => $gift->productName,
+            'product_url' => '#',
+            'return_exchange_policy' => null,
+            'delivery_minimum_amount' => null,
+            'image' => $this->giftImageUrl($gift),
+            'attributes' => $gift->attributes,
+            'quantity' => $gift->quantity,
+            'quantity_value' => $gift->quantity,
+            'unit_price_cents' => $this->moneyToCents($gift->unitPrice),
+            'unit_price' => $this->moneyFromCents($this->moneyToCents($gift->unitPrice)),
+            'base_line_subtotal_cents' => $gift->baseLineSubtotalCents,
+            'base_line_subtotal' => $this->moneyFromCents($gift->baseLineSubtotalCents),
+            'promotion_discount_cents' => $gift->promotionDiscountCents,
+            'promotion_discount' => '-'.$this->moneyFromCents($gift->promotionDiscountCents),
+            'promotion' => $gift->promotion->toMetadata(),
+            'line_subtotal_cents' => $gift->finalLineSubtotalCents,
+            'line_subtotal' => $this->moneyFromCents($gift->finalLineSubtotalCents),
+            'update_url' => null,
+            'remove_url' => null,
+            'is_available' => true,
+            'availability_message' => null,
+            'is_generated_gift' => true,
+        ];
+    }
+
+    private function giftImageUrl(GeneratedPromotionGift $gift): string
+    {
+        if ($gift->productImage && Storage::disk('public')->exists($gift->productImage)) {
+            return asset('storage/'.$gift->productImage);
+        }
+
+        return asset(self::FALLBACK_IMAGE);
     }
 
     /**

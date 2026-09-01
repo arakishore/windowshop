@@ -26,6 +26,7 @@ use App\Models\TaxRate;
 use App\Models\TaxRateComponent;
 use App\Models\User;
 use App\Services\Order\OrderCreationService;
+use App\Services\Order\OrderInventoryService;
 use App\Services\Promotion\Engine\PromotionCalculator;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use Database\Seeders\MasterData\LocationSeeder;
@@ -239,6 +240,221 @@ class PromotionCalculationEngineTest extends TestCase
 
         $this->assertSame(0, $line?->promotionDiscountCents);
         $this->assertNull($line?->winningPromotion);
+    }
+
+    public function test_free_gift_uses_combined_eligible_subtotal_and_generates_one_virtual_gift(): void
+    {
+        $fixture = $this->fixture(price: 1200);
+        $secondProduct = $this->product($fixture, 'Second Qualifier');
+        $secondVariant = $this->variant($fixture, $secondProduct, 900, 'Default');
+        $giftProduct = $this->product($fixture, 'Gift Product');
+        $giftVariant = $this->variant($fixture, $giftProduct, 600, 'Gift');
+        $promotion = $this->promotion($fixture, 'free_gift', [
+            'name' => 'Spend 2000 Gift',
+            'status' => Promotion::STATUS_ACTIVE,
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_ALL);
+        $this->target($promotion, PromotionTarget::TYPE_VARIANT, $giftVariant->getKey(), PromotionTarget::ROLE_GIFT);
+        $this->condition($promotion, PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, '2000.00');
+
+        $below = $this->calculateRows($fixture['shop'], [
+            ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 1],
+        ]);
+        $this->assertCount(0, $below->generatedGifts);
+
+        $result = $this->calculateRows($fixture['shop'], [
+            ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $secondVariant->getKey(), 'quantity' => 1],
+        ]);
+
+        $this->assertCount(1, $result->generatedGifts);
+        $gift = $result->generatedGifts[0];
+        $this->assertSame($giftVariant->getKey(), $gift->variantId);
+        $this->assertSame(60000, $gift->promotionDiscountCents);
+        $this->assertSame(0, $gift->finalLineSubtotalCents);
+        $this->assertSame($promotion->getKey(), $result->line($fixture['variant']->getKey())?->winningPromotion?->promotionId);
+        $this->assertSame('free_gift', $result->line($secondVariant->getKey())?->winningPromotion?->rewardType);
+
+        $above = $this->calculateRows($fixture['shop'], [
+            ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 3.75],
+        ]);
+        $this->assertCount(1, $above->generatedGifts);
+    }
+
+    public function test_free_gift_supports_existing_eligible_target_types(): void
+    {
+        foreach ([
+            PromotionTarget::TYPE_ALL => null,
+            PromotionTarget::TYPE_PRODUCT => 'product',
+            PromotionTarget::TYPE_VARIANT => 'variant',
+            PromotionTarget::TYPE_CATEGORY => 'category',
+            PromotionTarget::TYPE_BRAND => 'brand',
+            PromotionTarget::TYPE_COLLECTION => 'collection',
+        ] as $type => $idSource) {
+            $fixture = $this->fixture(price: 2000);
+            $collection = $this->collection($fixture);
+            $fixture['product']->collections()->attach($collection->getKey());
+            $giftProduct = $this->product($fixture, 'Gift '.$type);
+            $giftVariant = $this->variant($fixture, $giftProduct, 300, 'Gift');
+            $promotion = $this->promotion($fixture, 'free_gift', ['status' => Promotion::STATUS_ACTIVE]);
+            $this->target($promotion, $type, match ($idSource) {
+                'product' => $fixture['product']->getKey(),
+                'variant' => $fixture['variant']->getKey(),
+                'category' => $fixture['category']->getKey(),
+                'brand' => $fixture['brand']->getKey(),
+                'collection' => $collection->getKey(),
+                default => null,
+            });
+            $this->target($promotion, PromotionTarget::TYPE_VARIANT, $giftVariant->getKey(), PromotionTarget::ROLE_GIFT);
+            $this->condition($promotion, PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, '2000.00');
+
+            $this->assertCount(1, $this->calculate($fixture)->generatedGifts, "Failed Free Gift target {$type}.");
+        }
+    }
+
+    public function test_free_gift_conflicts_by_complete_gift_benefit(): void
+    {
+        $fixture = $this->fixture(price: 2000);
+        $giftProduct = $this->product($fixture, 'Gift Product');
+        $giftVariant = $this->variant($fixture, $giftProduct, 600, 'Gift');
+        $freeGift = $this->promotion($fixture, 'free_gift', ['status' => Promotion::STATUS_ACTIVE]);
+        $this->target($freeGift, PromotionTarget::TYPE_ALL);
+        $this->target($freeGift, PromotionTarget::TYPE_VARIANT, $giftVariant->getKey(), PromotionTarget::ROLE_GIFT);
+        $this->condition($freeGift, PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, '2000.00');
+        $smallDiscount = $this->promotion($fixture, 'percentage_discount', ['status' => Promotion::STATUS_ACTIVE], ['value_percent' => '20.00']);
+        $this->target($smallDiscount, PromotionTarget::TYPE_ALL);
+
+        $result = $this->calculate($fixture);
+        $this->assertCount(1, $result->generatedGifts);
+        $this->assertSame($freeGift->getKey(), $result->line($fixture['variant']->getKey())?->winningPromotion?->promotionId);
+        $this->assertSame(0, $result->line($fixture['variant']->getKey())?->promotionDiscountCents);
+
+        $largeDiscount = $this->promotion($fixture, 'percentage_discount', ['status' => Promotion::STATUS_ACTIVE], ['value_percent' => '50.00']);
+        $this->target($largeDiscount, PromotionTarget::TYPE_ALL);
+
+        $result = $this->calculate($fixture);
+        $this->assertCount(0, $result->generatedGifts);
+        $this->assertSame($largeDiscount->getKey(), $result->line($fixture['variant']->getKey())?->winningPromotion?->promotionId);
+        $this->assertSame(100000, $result->line($fixture['variant']->getKey())?->promotionDiscountCents);
+    }
+
+    public function test_best_overlapping_free_gift_wins_by_value_priority_and_id(): void
+    {
+        $fixture = $this->fixture(price: 5000);
+        $smallGift = $this->variant($fixture, $this->product($fixture, 'Small Gift'), 300, 'Gift');
+        $largeGift = $this->variant($fixture, $this->product($fixture, 'Large Gift'), 700, 'Gift');
+        $small = $this->freeGiftPromotion($fixture, $smallGift, '2000.00', ['status' => Promotion::STATUS_ACTIVE, 'priority' => 100]);
+        $large = $this->freeGiftPromotion($fixture, $largeGift, '5000.00', ['status' => Promotion::STATUS_ACTIVE, 'priority' => 1]);
+
+        $result = $this->calculate($fixture);
+        $this->assertCount(1, $result->generatedGifts);
+        $this->assertSame($large->getKey(), $result->generatedGifts[0]->promotion->promotionId);
+
+        $sameValueLater = $this->freeGiftPromotion($fixture, $largeGift, '5000.00', ['status' => Promotion::STATUS_ACTIVE, 'priority' => 1]);
+        $result = $this->calculate($fixture);
+        $this->assertSame($large->getKey(), $result->generatedGifts[0]->promotion->promotionId);
+
+        $higherPriority = $this->freeGiftPromotion($fixture, $largeGift, '5000.00', ['status' => Promotion::STATUS_ACTIVE, 'priority' => 200]);
+        $result = $this->calculate($fixture);
+        $this->assertSame($higherPriority->getKey(), $result->generatedGifts[0]->promotion->promotionId);
+        $this->assertNotSame($small->getKey(), $result->generatedGifts[0]->promotion->promotionId);
+        $this->assertNotSame($sameValueLater->getKey(), $result->generatedGifts[0]->promotion->promotionId);
+    }
+
+    public function test_free_gift_order_creation_generates_real_discounted_order_item_and_deducts_stock(): void
+    {
+        $fixture = $this->fixture(price: 2000, withTax: true);
+        $giftProduct = $this->product($fixture, 'Taxed Gift');
+        $giftVariant = $this->variant($fixture, $giftProduct, 600, 'Gift');
+        $giftVariant->forceFill(['stock_quantity' => 2])->save();
+        $promotion = $this->freeGiftPromotion($fixture, $giftVariant, '2000.00', ['status' => Promotion::STATUS_ACTIVE]);
+
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $fixture['shop']->getKey(),
+            'created_source' => Order::SOURCE_STOREFRONT,
+            'order_status' => Order::STATUS_PENDING,
+            'payment_status' => Order::PAYMENT_PENDING,
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+            'amount_paid' => 0,
+            'items' => [
+                ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 1],
+            ],
+        ], $fixture['user'])->load(['items']);
+
+        $giftItem = $order->items->first(fn ($item): bool => (int) $item->product_variant_id === (int) $giftVariant->getKey());
+        $this->assertNotNull($giftItem);
+        $this->assertSame('600.00', $giftItem->unit_price);
+        $this->assertSame('600.00', $giftItem->line_discount);
+        $this->assertSame('0.00', $giftItem->taxable_amount);
+        $this->assertSame('0.00', $giftItem->line_tax);
+        $this->assertSame('0.00', $giftItem->line_total);
+        $this->assertSame($promotion->getKey(), $giftItem->metadata['promotion']['id']);
+        $this->assertTrue($giftItem->metadata['promotion']['details']['generated_by_promotion']);
+        $this->assertSame($giftVariant->getKey(), $giftItem->metadata['promotion']['details']['gift_variant_id']);
+        $this->assertSame(1, (int) $giftVariant->refresh()->stock_quantity);
+        $this->assertSame(19, (int) $fixture['variant']->refresh()->stock_quantity);
+    }
+
+    public function test_free_gift_stock_is_restored_by_generic_order_inventory_service(): void
+    {
+        $fixture = $this->fixture(price: 2000);
+        $giftProduct = $this->product($fixture, 'Restored Gift');
+        $giftVariant = $this->variant($fixture, $giftProduct, 600, 'Gift');
+        $giftVariant->forceFill(['stock_quantity' => 2])->save();
+        $this->freeGiftPromotion($fixture, $giftVariant, '2000.00', ['status' => Promotion::STATUS_ACTIVE]);
+
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $fixture['shop']->getKey(),
+            'created_source' => Order::SOURCE_STOREFRONT,
+            'order_status' => Order::STATUS_PENDING,
+            'payment_status' => Order::PAYMENT_PENDING,
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+            'amount_paid' => 0,
+            'items' => [
+                ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 1],
+            ],
+        ], $fixture['user']);
+
+        $this->assertSame(1, (int) $giftVariant->refresh()->stock_quantity);
+
+        app(OrderInventoryService::class)->restoreForCancellation($order->load('items'));
+
+        $this->assertSame(2, (int) $giftVariant->refresh()->stock_quantity);
+        $this->assertSame(20, (int) $fixture['variant']->refresh()->stock_quantity);
+    }
+
+    public function test_free_gift_ignores_unavailable_gift_coupon_runtime_and_pos(): void
+    {
+        $fixture = $this->fixture(price: 2000);
+        $giftVariant = $this->variant($fixture, $this->product($fixture, 'Unavailable Gift'), 600, 'Gift');
+        $giftVariant->forceFill(['stock_quantity' => 0])->save();
+        $this->freeGiftPromotion($fixture, $giftVariant, '2000.00', ['status' => Promotion::STATUS_ACTIVE]);
+
+        $this->assertCount(0, $this->calculate($fixture)->generatedGifts);
+
+        $giftVariant->forceFill(['stock_quantity' => 5])->save();
+        $couponGift = $this->freeGiftPromotion($fixture, $giftVariant, '2000.00', [
+            'status' => Promotion::STATUS_ACTIVE,
+            'activation_type' => Promotion::ACTIVATION_COUPON,
+            'priority' => 100,
+        ]);
+
+        $result = $this->calculate($fixture);
+        $this->assertNotSame($couponGift->getKey(), $result->generatedGifts[0]->promotion->promotionId);
+
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $fixture['shop']->getKey(),
+            'created_source' => Order::SOURCE_POS,
+            'order_status' => Order::STATUS_COMPLETED,
+            'payment_status' => Order::PAYMENT_PAID,
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+            'amount_paid' => 2000,
+            'items' => [
+                ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 1],
+            ],
+        ], $fixture['user'])->load(['items']);
+
+        $this->assertCount(1, $order->items);
     }
 
     public function test_buy_x_get_y_free_same_pool_repeats_by_complete_whole_groups(): void
@@ -1777,5 +1993,25 @@ class PromotionCalculationEngineTest extends TestCase
             'target_id' => $id,
             'sort_order' => 10,
         ]);
+    }
+
+    private function condition(Promotion $promotion, string $type, string $value): void
+    {
+        $promotion->conditions()->create([
+            'condition_type' => $type,
+            'operator' => '>=',
+            'value_numeric' => $value,
+            'sort_order' => 10,
+        ]);
+    }
+
+    private function freeGiftPromotion(array $fixture, ProductVariant $giftVariant, string $threshold, array $overrides = []): Promotion
+    {
+        $promotion = $this->promotion($fixture, 'free_gift', $overrides);
+        $this->target($promotion, PromotionTarget::TYPE_ALL);
+        $this->target($promotion, PromotionTarget::TYPE_VARIANT, $giftVariant->getKey(), PromotionTarget::ROLE_GIFT);
+        $this->condition($promotion, PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, $threshold);
+
+        return $promotion;
     }
 }

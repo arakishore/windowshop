@@ -3,7 +3,7 @@
 ## Phase 3A/3B/3C Scope
 
 Phase 3A added the first reusable runtime promotion calculation engine for WindowShop. Phase 3B extends that same engine with quantity-based automatic rewards.
-Phase 3C adds automatic Buy X Get Y Free and Buy X Get Y at Discount runtime support.
+Phase 3C adds automatic Buy X Get Y Free, Buy X Get Y at Discount, and Free Gift runtime support.
 
 Supported automatic promotion rewards:
 
@@ -14,6 +14,7 @@ Supported automatic promotion rewards:
 - Fixed Bundle Price
 - Buy X Get Y Free
 - Buy X Get Y at Discount
+- Free Gift
 - Tier Pricing
 
 The base sellable price remains `product_variants.selling_price`. Promotions never update `selling_price`, do not add `offer_price`, and do not store temporary promotional prices on product variants.
@@ -125,6 +126,32 @@ Once a tier matches:
 
 Example for a Rs. 1,000 item with a 3+ tier at Rs. 900: quantity 3.75 has a Rs. 3,750 base subtotal, Rs. 375 discount, and Rs. 3,375 final pre-tax subtotal.
 
+### Free Gift
+
+`free_gift` gives one selected gift variant when the shop order reaches a configured eligible subtotal threshold.
+
+V1 rules:
+
+- One Free Gift promotion generates exactly one gift variant.
+- Gift quantity is always 1.
+- A Free Gift promotion can apply at most once per shop order.
+- Repeated threshold gifts are not supported; Rs. 4,500 on a Rs. 2,000 threshold still generates one gift.
+- The gift is virtual in the cart and is not persisted to `cart_items`.
+- Checkout recreates the gift from authoritative current promotion, product, variant, selling price, and stock data.
+- The generated order item keeps the real variant selling price and receives a full promotion discount.
+- Coupon Free Gift runtime remains deferred.
+- POS automatic Free Gift application remains disabled.
+
+Qualification uses the combined subtotal of eligible paid lines for the current shop, before promotion discounts. It is not evaluated independently per line. Eligible targets use the existing target types: all, product, variant, category, brand, and collection.
+
+Gift targets are stored with `target_role = gift`, `target_type = variant`, and `target_id = product_variant_id`. Legacy product-only gift targets are not silently resolved to a variant; merchants must choose an explicit gift variant to complete setup.
+
+Free Gift is treated as a group promotion for V1 no-stacking. The qualifying paid lines are promotion participants even though their monetary discount is zero. The generated gift and its qualifying-line participation apply atomically: if the qualifying lines lose conflict resolution to a better promotion, no gift is generated. Free Gift conflict benefit is the actual value of the generated gift discount. Ties use the standard priority and promotion id ordering.
+
+If multiple Free Gift promotions qualify on overlapping paid lines, the best valid promotion wins by gift benefit, priority, then promotion id. Genuinely non-overlapping Free Gift groups may both apply if their qualifying paid lines do not participate in another winning promotion.
+
+Gift stock is not reserved while the gift is virtual in the cart. During calculation the gift is shown only when the configured gift variant is active, sellable, purchasable, in stock, and belongs to the same shop. During checkout the gift variant is locked and stock is validated before creating the order item. If the gift is no longer available, it is not created and its qualifying-line metadata is removed from the authoritative order snapshot.
+
 ## Shop Isolation
 
 Promotion calculation is shop-scoped. Cart groups are evaluated independently per shop. Checkout and order creation evaluate only the shop being ordered. A promotion from one shop must not affect products from another shop.
@@ -145,6 +172,8 @@ Category targets match the product category, root category, and loaded parent an
 ## Cart And Checkout
 
 Cart item `unit_price` continues to store the current variant selling price. Cart promotion data is an effective calculation result for display and totals only.
+
+Generated Free Gift rows are derived from `PromotionCalculationResult`. Cart totals include the gift base value and the matching full promotion discount, so the customer payable subtotal is not inflated.
 
 Checkout/order placement re-evaluates promotions server-side from authoritative product variant data. Browser totals and previously displayed cart promotion totals are not trusted for final order pricing.
 
@@ -169,6 +198,8 @@ Quantity-based metadata also includes calculation details such as quantity thres
 
 Buy-X-Get-Y metadata is stored on both BUY qualification lines and GET reward lines. Same-line participation can include both roles in one metadata payload. The details preserve completed groups, buy/get quantities, participating BUY quantity, rewarded GET quantity, free quantity for free offers, reward value/unit, unit-level BUY and GET allocation, pool type, selection rule, and promotion discount so future bill, invoice, refund, exchange, and audit flows can reconstruct historical participation without reading current promotion configuration.
 
+Free Gift metadata is stored on both the generated gift order item and the qualifying paid lines. The gift line stores role `gift`, `generated_by_promotion = true`, gift product/variant ids, gift quantity, minimum eligible subtotal, eligible subtotal, original unit price, full promotion discount, and qualifying line snapshots. Qualifying paid lines store role `qualifying`, `generated_by_promotion = false`, the gift variant id, gift quantity, threshold, eligible subtotal, and their qualification line snapshot.
+
 Refund and exchange services continue to use historical order snapshots.
 
 ## Deferred
@@ -176,8 +207,11 @@ Refund and exchange services continue to use historical order snapshots.
 Phase 3 does not implement:
 
 - promotion stacking
-- free gift
 - coupon UI/application/session storage
 - promotion redemption locking or usage-limit enforcement
 - merchant conflict advisory
 - promotion analytics
+- customer gift choice
+- multiple gifts per promotion
+- repeated Free Gift thresholds
+- Free Gift refund/exchange business rules

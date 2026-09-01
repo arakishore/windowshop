@@ -323,7 +323,12 @@ class PromotionController extends Controller
         if ($template->reward_type === PromotionReward::TYPE_FREE_GIFT) {
             return [
                 ...$this->targetsForRole(PromotionTarget::ROLE_ELIGIBLE, $data['target_scope'] ?? 'all', $data),
-                ...$this->targetsForRole(PromotionTarget::ROLE_GIFT, 'products', $data, 'gift_'),
+                [
+                    'target_role' => PromotionTarget::ROLE_GIFT,
+                    'target_type' => PromotionTarget::TYPE_VARIANT,
+                    'target_id' => (int) ($data['gift_variant_id'] ?? 0),
+                    'sort_order' => 10,
+                ],
             ];
         }
 
@@ -383,6 +388,7 @@ class PromotionController extends Controller
 
     private function validateTargets(Shop $shop, array $data, PromotionTemplate $template): void
     {
+        $errors = [];
         $targetGroups = in_array($template->reward_type, [PromotionReward::TYPE_BUY_X_GET_Y_FREE, PromotionReward::TYPE_BUY_X_GET_Y_DISCOUNT], true)
             ? [
                 ['scope' => $data['buy_target_scope'] ?? 'all', 'prefix' => 'buy_'],
@@ -393,10 +399,8 @@ class PromotionController extends Controller
             ];
 
         if ($template->reward_type === PromotionReward::TYPE_FREE_GIFT) {
-            $targetGroups[] = ['scope' => 'products', 'prefix' => 'gift_'];
+            $this->validateGiftVariantTarget($shop, $data, $errors);
         }
-
-        $errors = [];
 
         foreach ($targetGroups as $group) {
             if (! $group['scope']) {
@@ -427,6 +431,39 @@ class PromotionController extends Controller
 
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function validateGiftVariantTarget(Shop $shop, array $data, array &$errors): void
+    {
+        $productId = (int) ($data['gift_product_id'] ?? 0);
+        $variantId = (int) ($data['gift_variant_id'] ?? 0);
+
+        if ($productId < 1) {
+            $errors['gift_product_id'] = 'Choose a gift product.';
+        }
+
+        if ($variantId < 1) {
+            $errors['gift_variant_id'] = 'Choose a gift variant.';
+        }
+
+        if ($productId < 1 || $variantId < 1) {
+            return;
+        }
+
+        $valid = ProductVariant::query()
+            ->whereKey($variantId)
+            ->where('product_id', $productId)
+            ->where('shop_id', $shop->getKey())
+            ->whereNull('deleted_at')
+            ->whereHas('product', fn ($query) => $query
+                ->where('merchant_id', $shop->merchant_id)
+                ->where('shop_id', $shop->getKey())
+                ->whereNull('deleted_at'))
+            ->exists();
+
+        if (! $valid) {
+            $errors['gift_variant_id'] = 'Selected gift variant must belong to the selected product and active shop.';
         }
     }
 
@@ -542,6 +579,21 @@ class PromotionController extends Controller
                 ->where('status', '!=', 'archived')
                 ->orderBy('product_name')
                 ->get(['id', 'product_name', 'slug']),
+            'productVariants' => ProductVariant::query()
+                ->with('product:id,product_name')
+                ->where('shop_id', $shop->getKey())
+                ->whereNull('deleted_at')
+                ->where('status', 'active')
+                ->whereHas('product', fn ($query) => $query
+                    ->where('merchant_id', $shop->merchant_id)
+                    ->where('shop_id', $shop->getKey())
+                    ->whereNull('deleted_at')
+                    ->where('status', '!=', 'archived'))
+                ->orderBy('product_id')
+                ->orderByDesc('is_default')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'product_id', 'name', 'sku', 'selling_price']),
             'categories' => $this->categoryOptions($shop),
             'brands' => $this->brandOptions($shop),
             'collections' => ProductCollection::query()

@@ -225,6 +225,7 @@ class StorefrontCheckoutOrderService
     private function orderItems(array $items): array
     {
         $rows = collect($items)
+            ->reject(fn (array $item): bool => (bool) ($item['is_generated_gift'] ?? false))
             ->map(fn (array $item): array => [
                 'product_variant_id' => (int) ($item['product_variant_id'] ?? $item['id'] ?? 0),
                 'quantity' => (int) ($item['quantity_value'] ?? $item['quantity'] ?? 0),

@@ -14,6 +14,7 @@ use App\Models\ProductReturnPolicy;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantAttribute;
 use App\Models\Promotion;
+use App\Models\PromotionCondition;
 use App\Models\PromotionTarget;
 use App\Models\PromotionTemplate;
 use App\Models\Shop;
@@ -439,6 +440,78 @@ class StorefrontCartPageTest extends TestCase
             ->assertJsonPath('shop_groups.0.items.0.promotion.id', $promotion->getKey());
 
         $this->assertSame('500.00', $item->refresh()->unit_price);
+    }
+
+    public function test_cart_exposes_free_gift_virtually_and_removes_it_when_qualification_is_lost(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 1000, stock: 10);
+        $giftProduct = Product::query()->create([
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'root_product_category_id' => $fixture['shop']->root_product_category_id,
+            'product_category_id' => $fixture['product']->product_category_id,
+            'product_name' => 'Cart Gift Product',
+            'slug' => 'cart-gift-product-'.Str::random(8),
+            'availability_status_id' => $fixture['product']->availability_status_id,
+            'status' => 'active',
+            'published_at' => now(),
+        ]);
+        $giftVariant = ProductVariant::query()->create([
+            'product_id' => $giftProduct->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'availability_status_id' => $giftProduct->availability_status_id,
+            'sku' => 'SKU-'.Str::random(8),
+            'name' => 'Gift',
+            'mrp' => 700,
+            'selling_price' => 600,
+            'stock_quantity' => 3,
+            'is_default' => true,
+            'is_sellable' => true,
+            'status' => 'active',
+        ]);
+        $promotion = $this->cartPromotion($fixture, 'free_gift', []);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'target_id' => null,
+            'sort_order' => 10,
+        ]);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_GIFT,
+            'target_type' => PromotionTarget::TYPE_VARIANT,
+            'target_id' => $giftVariant->getKey(),
+            'sort_order' => 20,
+        ]);
+        $promotion->conditions()->create([
+            'condition_type' => PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL,
+            'operator' => '>=',
+            'value_numeric' => '2000.00',
+            'sort_order' => 10,
+        ]);
+        $cart = $this->guestCart('free-gift-cart-token');
+        $item = $this->cartItem($cart, $fixture['variant'], 2);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'free-gift-cart-token'])
+            ->patchJson(route('storefront.cart.items.update', $item), [
+                'quantity' => 2,
+            ])
+            ->assertOk()
+            ->assertJsonPath('base_subtotal_cents', 260000)
+            ->assertJsonPath('promotion_discount_cents', 60000)
+            ->assertJsonPath('subtotal_cents', 200000)
+            ->assertJsonPath('shop_groups.0.items.1.is_generated_gift', true)
+            ->assertJsonPath('shop_groups.0.items.1.product_variant_id', $giftVariant->getKey());
+
+        $this->assertSame(1, CartItem::query()->where('cart_id', $cart->getKey())->count());
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'free-gift-cart-token'])
+            ->patchJson(route('storefront.cart.items.update', $item), [
+                'quantity' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonCount(1, 'shop_groups.0.items')
+            ->assertJsonPath('promotion_discount_cents', 0);
     }
 
     public function test_unavailable_item_renders_warning_and_can_be_removed(): void

@@ -14,6 +14,7 @@ use App\Models\Shop;
 use App\Models\User;
 use App\Services\POS\DiscountService;
 use App\Services\POS\CashRoundingService;
+use App\Services\Promotion\Engine\Data\GeneratedPromotionGift;
 use App\Services\Product\ProductReturnPolicyResolver;
 use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
@@ -92,7 +93,16 @@ class OrderCreationService
             $promotionResult = $this->shouldApplyAutomaticPromotions($createdSource)
                 ? $this->promotions->calculateForVariantRows($shop, $rows, $variants, $customer, $effectiveAt)
                 : new PromotionCalculationResult((int) $shop->getKey(), []);
+            $giftVariants = $this->lockGiftVariants($shop, $promotionResult->generatedGifts);
+            $generatedGifts = $this->availableGeneratedGifts($promotionResult->generatedGifts, $giftVariants);
+            $promotionResult = $this->promotionResultForAvailableGifts($promotionResult, $generatedGifts);
+            $giftRows = $this->giftDeductionRows($generatedGifts);
+            $this->validateGiftStockForDeductions($variants + $giftVariants, $rows, $giftRows);
             $itemSnapshots = $this->buildItems($rows, $variants, $shop->merchant, $effectiveAt, $promotionResult);
+            $itemSnapshots = [
+                ...$itemSnapshots,
+                ...$this->buildGiftItems($generatedGifts, $giftVariants, $shop->merchant, $effectiveAt),
+            ];
             $items = array_map(fn (array $snapshot): OrderItem => $snapshot['item'], $itemSnapshots);
             $shippingSnapshot = $this->shippingSnapshot($shop, $data, $customerSnapshot['customer_id']);
             $billingSnapshot = $this->billingSnapshot($shop, $data, $customerSnapshot['customer_id']);
@@ -175,7 +185,7 @@ class OrderCreationService
                 $this->initialStatusNote((string) ($data['status_note'] ?? 'POS cash sale completed'), $originalStockShortages),
                 $originalStockShortages === [] ? null : ['stock_shortages' => $originalStockShortages],
             );
-            $this->deductStock($variants, $rows);
+            $this->deductStock($variants + $giftVariants, $this->mergeDeductionRows($rows, $giftRows));
 
             return $order->load(['items', 'totals', 'statusHistories']);
         });
@@ -607,6 +617,237 @@ class OrderCreationService
         }
 
         return $items;
+    }
+
+    /**
+     * @param array<int, GeneratedPromotionGift> $gifts
+     * @param array<int, ProductVariant> $variants
+     * @return array<int, array{item: OrderItem, components: array<int, array<string, mixed>>}>
+     */
+    private function buildGiftItems(array $gifts, array $variants, MerchantProfile $merchant, CarbonInterface $effectiveAt): array
+    {
+        $items = [];
+
+        foreach ($gifts as $gift) {
+            $variant = $variants[$gift->variantId] ?? null;
+            if (! $variant instanceof ProductVariant) {
+                continue;
+            }
+
+            $product = $variant->product;
+            $unitPrice = $this->money($variant->selling_price);
+            $quantity = 1;
+            $lineSubtotal = $this->money((float) $unitPrice * $quantity);
+
+            try {
+                $pricingResult = $this->pricingEngine->calculateProductLine(
+                    product: $product,
+                    merchant: $merchant,
+                    unitPrice: $unitPrice,
+                    quantity: $quantity,
+                    effectiveAt: $effectiveAt,
+                    discountAmount: $lineSubtotal,
+                );
+            } catch (TaxConfigurationException $exception) {
+                throw ValidationException::withMessages([
+                    'items' => $exception->getMessage(),
+                ]);
+            }
+
+            $taxSnapshot = $this->orderTaxSnapshotFactory->fromPricingResult($pricingResult);
+            $policySnapshot = $this->policySnapshotForProduct($product);
+
+            $item = new OrderItem(array_merge([
+                'product_id' => $variant->product_id,
+                'product_variant_id' => $variant->getKey(),
+                'product_name' => $product?->product_name ?? 'Free Gift',
+                'product_image' => $product?->primaryImage?->image_path,
+                'variant_name' => $variant->name,
+                'sku' => $variant->sku,
+                'barcode' => $variant->barcode,
+                'quantity' => $quantity,
+                'unit_mrp' => $this->money($variant->mrp),
+                'unit_price' => $unitPrice,
+                'unit_discount' => $lineSubtotal,
+                'item_discount_type' => $gift->promotion->rewardType,
+                'item_discount_value' => $lineSubtotal,
+                'refund_allowed' => $policySnapshot['refund_allowed'],
+                'refund_window_days' => $policySnapshot['refund_window_days'],
+                'exchange_allowed' => $policySnapshot['exchange_allowed'],
+                'exchange_window_days' => $policySnapshot['exchange_window_days'],
+                'metadata' => $gift->metadata(),
+            ], $taxSnapshot->toOrderItemAttributes()));
+
+            $items[] = [
+                'item' => $item,
+                'components' => $taxSnapshot->componentAttributes(),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<int, GeneratedPromotionGift> $gifts
+     * @param array<int, ProductVariant> $variants
+     * @return array<int, GeneratedPromotionGift>
+     */
+    private function availableGeneratedGifts(array $gifts, array $variants): array
+    {
+        return array_values(array_filter(
+            $gifts,
+            fn (GeneratedPromotionGift $gift): bool => isset($variants[$gift->variantId])
+                && (float) $variants[$gift->variantId]->stock_quantity >= 1,
+        ));
+    }
+
+    /**
+     * @param array<int, GeneratedPromotionGift> $availableGifts
+     */
+    private function promotionResultForAvailableGifts(PromotionCalculationResult $result, array $availableGifts): PromotionCalculationResult
+    {
+        if (count($availableGifts) === count($result->generatedGifts)) {
+            return $result;
+        }
+
+        $availablePromotionIds = array_fill_keys(array_map(
+            fn (GeneratedPromotionGift $gift): int => $gift->promotion->promotionId,
+            $availableGifts,
+        ), true);
+        $lineAdjustments = [];
+
+        foreach ($result->lineAdjustments as $variantId => $adjustment) {
+            $promotionId = $adjustment->winningPromotion?->promotionId;
+
+            if ($promotionId !== null
+                && $adjustment->winningPromotion?->rewardType === 'free_gift'
+                && ! isset($availablePromotionIds[$promotionId])) {
+                $lineAdjustments[$variantId] = new \App\Services\Promotion\Engine\Data\PromotionLineAdjustment(
+                    line: $adjustment->line,
+                    baseLineSubtotalCents: $adjustment->baseLineSubtotalCents,
+                    promotionDiscountCents: 0,
+                    finalLineSubtotalCents: $adjustment->baseLineSubtotalCents,
+                    winningPromotion: null,
+                    eligiblePromotions: $adjustment->eligiblePromotions,
+                );
+
+                continue;
+            }
+
+            $lineAdjustments[$variantId] = $adjustment;
+        }
+
+        return new PromotionCalculationResult($result->shopId, $lineAdjustments, $availableGifts);
+    }
+
+    /**
+     * @param array<int, GeneratedPromotionGift> $gifts
+     * @return array<int, ProductVariant>
+     */
+    private function lockGiftVariants(Shop $shop, array $gifts): array
+    {
+        $variants = [];
+
+        foreach ($gifts as $gift) {
+            if (isset($variants[$gift->variantId])) {
+                continue;
+            }
+
+            $variant = ProductVariant::query()
+                ->with([
+                    'availabilityStatus',
+                    'product.availabilityStatus',
+                    'product.brand',
+                    'product.category.parent.parent',
+                    'product.collections',
+                    'product.primaryImage',
+                    'product.returnPolicy',
+                    'product.shop.settings',
+                ])
+                ->whereKey($gift->variantId)
+                ->where('shop_id', $shop->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if (! $variant instanceof ProductVariant
+                || $variant->status !== 'active'
+                || ! $variant->is_sellable
+                || ! $variant->product instanceof Product
+                || $variant->product->status !== 'active'
+                || $variant->product->deleted_at !== null) {
+                continue;
+            }
+
+            $status = $variant->availabilityStatus ?: $variant->product->availabilityStatus;
+            if ($status === null || $status->status !== 'active' || ! $status->purchase_allowed) {
+                continue;
+            }
+
+            $variants[$gift->variantId] = $variant;
+        }
+
+        return $variants;
+    }
+
+    /**
+     * @param array<int, GeneratedPromotionGift> $gifts
+     * @return array<int, array{quantity: int}>
+     */
+    private function giftDeductionRows(array $gifts): array
+    {
+        $rows = [];
+
+        foreach ($gifts as $gift) {
+            $rows[$gift->variantId] = [
+                'quantity' => ($rows[$gift->variantId]['quantity'] ?? 0) + 1,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param array<int, array{quantity: int, discount_type?: string|null, discount_value?: mixed, policy_snapshot?: array<string, mixed>|null}> $paidRows
+     * @param array<int, array{quantity: int}> $giftRows
+     * @return array<int, array{quantity: int}>
+     */
+    private function mergeDeductionRows(array $paidRows, array $giftRows): array
+    {
+        $rows = [];
+
+        foreach ($paidRows as $variantId => $row) {
+            $rows[$variantId] = ['quantity' => (int) $row['quantity']];
+        }
+
+        foreach ($giftRows as $variantId => $row) {
+            $rows[$variantId] = [
+                'quantity' => ($rows[$variantId]['quantity'] ?? 0) + (int) $row['quantity'],
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param array<int, ProductVariant> $variants
+     * @param array<int, array{quantity: int, discount_type?: string|null, discount_value?: mixed, policy_snapshot?: array<string, mixed>|null}> $paidRows
+     * @param array<int, array{quantity: int}> $giftRows
+     */
+    private function validateGiftStockForDeductions(array $variants, array $paidRows, array $giftRows): void
+    {
+        foreach ($giftRows as $variantId => $giftRow) {
+            $variant = $variants[$variantId] ?? null;
+            if (! $variant instanceof ProductVariant) {
+                continue;
+            }
+
+            $requiredQuantity = (int) $giftRow['quantity'] + (int) ($paidRows[$variantId]['quantity'] ?? 0);
+            if ((float) $variant->stock_quantity < $requiredQuantity) {
+                throw ValidationException::withMessages([
+                    'items' => "Only {$variant->stock_quantity} unit(s) are available for {$variant->product?->product_name}.",
+                ]);
+            }
+        }
     }
 
     /**

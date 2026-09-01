@@ -6,10 +6,12 @@ class PromotionCalculationResult
 {
     /**
      * @param array<int, PromotionLineAdjustment> $lineAdjustments
+     * @param array<int, GeneratedPromotionGift> $generatedGifts
      */
     public function __construct(
         public readonly int $shopId,
         public readonly array $lineAdjustments,
+        public readonly array $generatedGifts = [],
     ) {
     }
 
@@ -23,6 +25,9 @@ class PromotionCalculationResult
         return array_sum(array_map(
             fn (PromotionLineAdjustment $line): int => $line->baseLineSubtotalCents,
             $this->lineAdjustments,
+        )) + array_sum(array_map(
+            fn (GeneratedPromotionGift $gift): int => $gift->baseLineSubtotalCents,
+            $this->generatedGifts,
         ));
     }
 
@@ -31,6 +36,9 @@ class PromotionCalculationResult
         return array_sum(array_map(
             fn (PromotionLineAdjustment $line): int => $line->promotionDiscountCents,
             $this->lineAdjustments,
+        )) + array_sum(array_map(
+            fn (GeneratedPromotionGift $gift): int => $gift->promotionDiscountCents,
+            $this->generatedGifts,
         ));
     }
 
@@ -39,6 +47,9 @@ class PromotionCalculationResult
         return array_sum(array_map(
             fn (PromotionLineAdjustment $line): int => $line->finalLineSubtotalCents,
             $this->lineAdjustments,
+        )) + array_sum(array_map(
+            fn (GeneratedPromotionGift $gift): int => $gift->finalLineSubtotalCents,
+            $this->generatedGifts,
         ));
     }
 
@@ -62,6 +73,16 @@ class PromotionCalculationResult
                 if (! isset($applied[$metadata['id']]) || $currentDiscount > $existingDiscount) {
                     $applied[$metadata['id']] = $metadata;
                 }
+            }
+        }
+
+        foreach ($this->generatedGifts as $gift) {
+            $metadata = $gift->promotion->toMetadata();
+            $existingDiscount = (float) ($applied[$metadata['id']]['discount_amount'] ?? 0);
+            $currentDiscount = (float) $metadata['discount_amount'];
+
+            if (! isset($applied[$metadata['id']]) || $currentDiscount > $existingDiscount) {
+                $applied[$metadata['id']] = $metadata;
             }
         }
 

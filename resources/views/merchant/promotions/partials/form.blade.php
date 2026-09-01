@@ -5,6 +5,13 @@
     $coupon = $promotion->coupons->first();
     $targetsByRole = $promotion->targets->groupBy('target_role');
     $targetIds = fn (string $role, string $type) => $targetsByRole->get($role, collect())->where('target_type', $type)->pluck('target_id')->all();
+    $giftVariantId = (int) old('gift_variant_id', $targetIds('gift', 'variant')[0] ?? 0);
+    $giftProductId = (int) old(
+        'gift_product_id',
+        $giftVariantId > 0
+            ? ($productVariants->firstWhere('id', $giftVariantId)?->product_id ?? 0)
+            : ($targetIds('gift', 'product')[0] ?? 0)
+    );
     $scopeFor = function (string $role, string $default = 'all') use ($targetsByRole) {
         $targets = $targetsByRole->get($role, collect());
         if ($targets->isEmpty()) {
@@ -117,13 +124,35 @@
                 </div>
                 <div class="col-12 js-field js-field-gift-products">
                     <h6 class="fw-semibold mb-2">Free Gift</h6>
-                    <label class="form-label" for="gift_product_ids">Gift Product</label>
-                    <select id="gift_product_ids" name="gift_product_ids[]" class="form-select" multiple size="4">
-                        @foreach($products as $product)
-                            <option value="{{ $product->id }}" @selected(in_array($product->id, old('gift_product_ids', $targetIds('gift', 'product')), true))>{{ $product->product_name }}</option>
-                        @endforeach
-                    </select>
-                    @error('gift_product_ids')<div class="text-danger small">{{ $message }}</div>@enderror
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="gift_product_id">Gift Product</label>
+                            <select id="gift_product_id" name="gift_product_id" class="form-select @error('gift_product_id') is-invalid @enderror">
+                                <option value="">Select Product</option>
+                                @foreach($products as $product)
+                                    <option value="{{ $product->id }}" @selected($giftProductId === (int) $product->id)>{{ $product->product_name }}</option>
+                                @endforeach
+                            </select>
+                            @error('gift_product_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="gift_variant_id">Gift Variant</label>
+                            <select id="gift_variant_id" name="gift_variant_id" class="form-select @error('gift_variant_id') is-invalid @enderror">
+                                <option value="">Select Variant</option>
+                                @foreach($productVariants as $variant)
+                                    <option value="{{ $variant->id }}"
+                                        data-product-id="{{ $variant->product_id }}"
+                                        @selected($giftVariantId === (int) $variant->id)>
+                                        {{ $variant->product?->product_name }} - {{ $variant->name }} @if($variant->sku)({{ $variant->sku }})@endif
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('gift_variant_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            @if($giftVariantId < 1 && $targetIds('gift', 'product') !== [])
+                                <div class="form-text">Choose a variant to complete this legacy gift setup.</div>
+                            @endif
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -310,6 +339,8 @@
             const exchangeMode = document.querySelector('#exchange_policy_mode');
             const exchangeWindow = document.querySelector('.js-exchange-window-wrapper');
             const valueType = document.querySelector('#value_type');
+            const giftProduct = document.querySelector('#gift_product_id');
+            const giftVariant = document.querySelector('#gift_variant_id');
             const valueAmountLabel = document.querySelector('.js-value-amount-label');
             const previewText = document.querySelector('.js-offer-preview-text');
             const fieldMap = {
@@ -483,9 +514,31 @@
                 previewText.textContent = previews[code] || 'Choose an offer type and enter rules to preview this offer.';
             }
 
+            function updateGiftVariants() {
+                if (!giftProduct || !giftVariant) {
+                    return;
+                }
+
+                const productId = giftProduct.value;
+                Array.from(giftVariant.options).forEach((option) => {
+                    if (!option.value) {
+                        option.hidden = false;
+                        return;
+                    }
+
+                    const visible = productId && option.dataset.productId === productId;
+                    option.hidden = !visible;
+
+                    if (!visible && option.selected) {
+                        option.selected = false;
+                    }
+                });
+            }
+
             templateInputs.forEach((input) => input.addEventListener('change', updateTemplate));
             document.querySelectorAll('.js-target-scope').forEach((input) => input.addEventListener('change', updateTargets));
             activationType?.addEventListener('change', updateActivation);
+            giftProduct?.addEventListener('change', updateGiftVariants);
             refundMode?.addEventListener('change', updatePolicies);
             exchangeMode?.addEventListener('change', updatePolicies);
             valueType?.addEventListener('change', updateTemplate);
@@ -494,6 +547,7 @@
             updateTemplate();
             updateActivation();
             updatePolicies();
+            updateGiftVariants();
         });
     </script>
 @endpush

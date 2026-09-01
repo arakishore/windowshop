@@ -73,6 +73,8 @@ class StorePromotionRequest extends FormRequest
             'get_brand_ids.*' => ['integer'],
             'get_collection_ids' => ['nullable', 'array'],
             'get_collection_ids.*' => ['integer'],
+            'gift_product_id' => ['nullable', 'integer'],
+            'gift_variant_id' => ['nullable', 'integer'],
             'gift_product_ids' => ['nullable', 'array'],
             'gift_product_ids.*' => ['integer'],
 

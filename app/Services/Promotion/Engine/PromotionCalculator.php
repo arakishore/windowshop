@@ -3,6 +3,7 @@
 namespace App\Services\Promotion\Engine;
 
 use App\Models\Customer;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
@@ -12,6 +13,8 @@ use App\Models\PromotionReward;
 use App\Models\PromotionTarget;
 use App\Models\Shop;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
+use App\Services\Promotion\Engine\Data\AppliedPromotion;
+use App\Services\Promotion\Engine\Data\GeneratedPromotionGift;
 use App\Services\Promotion\Engine\Data\PromotionLineAdjustment;
 use App\Services\Promotion\Engine\Data\PromotionLineInput;
 use Carbon\CarbonInterface;
@@ -49,12 +52,21 @@ class PromotionCalculator
         $promotions = $this->promotions->automaticActiveForShop((int) $shop->getKey(), $effectiveAt);
         $lines = $this->lineInputs($rows, $variants);
         $candidatesByVariant = $this->candidatesByVariant($promotions, $lines, $customer);
+        $giftCandidates = $this->freeGiftCandidates($promotions, $lines, $customer);
+
+        foreach ($giftCandidates as $giftCandidate) {
+            foreach ($giftCandidate['line_candidates'] as $variantId => $candidate) {
+                $candidatesByVariant[$variantId][] = $candidate;
+            }
+        }
+
         $lineAdjustments = [];
 
         foreach ($lines as $line) {
             $baseLineSubtotalCents = $this->lineSubtotalCents($line);
             $candidates = $candidatesByVariant[$line->variantId] ?? [];
-            $winner = $this->resolver->winningPromotion($candidates)
+            $winner = $this->resolver->winningPromotionByConflictBenefit($candidates)
+                ?? $this->resolver->winningPromotion($candidates)
                 ?? $this->resolver->participationPromotion($candidates);
             $discountCents = $winner?->discountCents ?? 0;
 
@@ -68,7 +80,11 @@ class PromotionCalculator
             );
         }
 
-        return new PromotionCalculationResult((int) $shop->getKey(), $lineAdjustments);
+        return new PromotionCalculationResult(
+            (int) $shop->getKey(),
+            $lineAdjustments,
+            $this->winningGeneratedGifts($giftCandidates, $lineAdjustments),
+        );
     }
 
     /**
@@ -84,6 +100,10 @@ class PromotionCalculator
 
         foreach ($promotions as $promotion) {
             $rewardType = (string) $promotion->rewards->first()?->reward_type;
+
+            if ($rewardType === PromotionReward::TYPE_FREE_GIFT) {
+                continue;
+            }
 
             if ($rewardType === PromotionReward::TYPE_FIXED_BUNDLE_PRICE) {
                 $bundlePromotions[] = $promotion;
@@ -130,6 +150,268 @@ class PromotionCalculator
         }
 
         return $candidates;
+    }
+
+    /**
+     * @param Collection<int, Promotion> $promotions
+     * @param array<int, PromotionLineInput> $lines
+     * @return array<int, array{promotion_id: int, gift: GeneratedPromotionGift, line_candidates: array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>}>
+     */
+    private function freeGiftCandidates(Collection $promotions, array $lines, ?Customer $customer): array
+    {
+        $candidates = [];
+
+        foreach ($promotions as $promotion) {
+            $reward = $promotion->rewards->first();
+            if (! $reward instanceof PromotionReward || $reward->reward_type !== PromotionReward::TYPE_FREE_GIFT) {
+                continue;
+            }
+
+            if ($promotion->new_customer_only && ! $this->isNewCustomerForShop((int) $promotion->shop_id, $customer)) {
+                continue;
+            }
+
+            $eligibleLines = [];
+            foreach ($lines as $line) {
+                if ($this->targets->matches($promotion, $line, PromotionTarget::ROLE_ELIGIBLE)) {
+                    $eligibleLines[$line->variantId] = $line;
+                }
+            }
+
+            if ($eligibleLines === []) {
+                continue;
+            }
+
+            $minimumSubtotalCents = $this->minimumEligibleSubtotalCents($promotion);
+            if ($minimumSubtotalCents < 1) {
+                continue;
+            }
+
+            $eligibleSubtotalCents = array_sum(array_map(
+                fn (PromotionLineInput $line): int => $this->lineSubtotalCents($line),
+                $eligibleLines,
+            ));
+
+            if ($eligibleSubtotalCents < $minimumSubtotalCents) {
+                continue;
+            }
+
+            $giftVariant = $this->giftVariant($promotion);
+            if (! $giftVariant instanceof ProductVariant) {
+                continue;
+            }
+
+            $giftUnitCents = $this->moneyToCents((string) $giftVariant->selling_price);
+            if ($giftUnitCents <= 0) {
+                continue;
+            }
+
+            $gift = $this->generatedGift($promotion, $giftVariant, $giftUnitCents, $minimumSubtotalCents, $eligibleSubtotalCents, $eligibleLines);
+            $lineCandidates = [];
+
+            foreach ($eligibleLines as $line) {
+                $lineCandidates[$line->variantId] = [
+                    'promotion' => $promotion,
+                    'discount_cents' => 0,
+                    'details' => [
+                        'reward_type' => PromotionReward::TYPE_FREE_GIFT,
+                        'roles' => ['qualifying'],
+                        'role' => 'qualifying',
+                        'generated_by_promotion' => false,
+                        'gift_product_id' => (int) $giftVariant->product_id,
+                        'gift_variant_id' => (int) $giftVariant->getKey(),
+                        'gift_quantity' => 1,
+                        'minimum_eligible_subtotal' => $this->moneyFromCents($minimumSubtotalCents),
+                        'eligible_subtotal' => $this->moneyFromCents($eligibleSubtotalCents),
+                        'gift_unit_price' => $this->moneyFromCents($giftUnitCents),
+                        'promotion_discount' => '0.00',
+                        'group_discount' => $this->moneyFromCents($giftUnitCents),
+                        'group_discount_cents' => $giftUnitCents,
+                        'conflict_benefit_cents' => $giftUnitCents,
+                        'qualifying_variant_ids' => array_keys($eligibleLines),
+                        'qualification_line' => [
+                            'variant_id' => $line->variantId,
+                            'product_id' => $line->productId,
+                            'quantity' => $line->quantity,
+                            'base_line_subtotal' => $this->moneyFromCents($this->lineSubtotalCents($line)),
+                        ],
+                    ],
+                ];
+            }
+
+            $candidates[] = [
+                'promotion_id' => (int) $promotion->getKey(),
+                'gift' => $gift,
+                'line_candidates' => $lineCandidates,
+            ];
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * @param array<int, array{promotion_id: int, gift: GeneratedPromotionGift, line_candidates: array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>}> $giftCandidates
+     * @param array<int, PromotionLineAdjustment> $lineAdjustments
+     * @return array<int, GeneratedPromotionGift>
+     */
+    private function winningGeneratedGifts(array $giftCandidates, array $lineAdjustments): array
+    {
+        $gifts = [];
+
+        foreach ($giftCandidates as $giftCandidate) {
+            $promotionId = (int) $giftCandidate['promotion_id'];
+
+            foreach (array_keys($giftCandidate['line_candidates']) as $variantId) {
+                if (($lineAdjustments[$variantId]?->winningPromotion?->promotionId ?? null) !== $promotionId) {
+                    continue 2;
+                }
+            }
+
+            $gifts[] = $giftCandidate['gift'];
+        }
+
+        return $gifts;
+    }
+
+    /**
+     * @param array<int, PromotionLineInput> $eligibleLines
+     */
+    private function generatedGift(Promotion $promotion, ProductVariant $giftVariant, int $giftUnitCents, int $minimumSubtotalCents, int $eligibleSubtotalCents, array $eligibleLines): GeneratedPromotionGift
+    {
+        $product = $giftVariant->product;
+        $details = [
+            'reward_type' => PromotionReward::TYPE_FREE_GIFT,
+            'roles' => ['gift'],
+            'role' => 'gift',
+            'generated_by_promotion' => true,
+            'gift_product_id' => (int) $giftVariant->product_id,
+            'gift_variant_id' => (int) $giftVariant->getKey(),
+            'gift_quantity' => 1,
+            'minimum_eligible_subtotal' => $this->moneyFromCents($minimumSubtotalCents),
+            'eligible_subtotal' => $this->moneyFromCents($eligibleSubtotalCents),
+            'original_unit_price' => $this->moneyFromCents($giftUnitCents),
+            'promotion_discount' => $this->moneyFromCents($giftUnitCents),
+            'group_discount' => $this->moneyFromCents($giftUnitCents),
+            'group_discount_cents' => $giftUnitCents,
+            'conflict_benefit_cents' => $giftUnitCents,
+            'qualifying_lines' => array_map(fn (PromotionLineInput $line): array => [
+                'variant_id' => $line->variantId,
+                'product_id' => $line->productId,
+                'quantity' => $line->quantity,
+                'base_line_subtotal' => $this->moneyFromCents($this->lineSubtotalCents($line)),
+            ], array_values($eligibleLines)),
+        ];
+
+        return new GeneratedPromotionGift(
+            promotion: new AppliedPromotion(
+                promotionId: (int) $promotion->getKey(),
+                promotionName: (string) $promotion->name,
+                promotionSlug: $promotion->slug,
+                templateCode: (string) $promotion->template?->code,
+                rewardType: (string) $promotion->rewards->first()?->reward_type,
+                priority: (int) $promotion->priority,
+                discountCents: $giftUnitCents,
+                details: $details,
+            ),
+            productId: (int) $giftVariant->product_id,
+            variantId: (int) $giftVariant->getKey(),
+            productName: $product?->product_name ?? 'Free Gift',
+            productImage: $product?->primaryImage?->image_path,
+            variantName: (string) $giftVariant->name,
+            sku: $giftVariant->sku,
+            barcode: $giftVariant->barcode,
+            quantity: '1',
+            unitPrice: $this->moneyFromCents($giftUnitCents),
+            baseLineSubtotalCents: $giftUnitCents,
+            promotionDiscountCents: $giftUnitCents,
+            finalLineSubtotalCents: 0,
+            attributes: $this->variantAttributes($giftVariant),
+        );
+    }
+
+    private function minimumEligibleSubtotalCents(Promotion $promotion): int
+    {
+        $condition = $promotion->conditions
+            ->first(fn ($condition): bool => $condition->condition_type === PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL);
+
+        return $condition instanceof PromotionCondition
+            ? $this->moneyToCents((string) $condition->value_numeric)
+            : 0;
+    }
+
+    private function giftVariant(Promotion $promotion): ?ProductVariant
+    {
+        $targets = $promotion->targets
+            ->where('target_role', PromotionTarget::ROLE_GIFT)
+            ->where('target_type', PromotionTarget::TYPE_VARIANT)
+            ->values();
+
+        if ($targets->count() !== 1) {
+            return null;
+        }
+
+        $variant = ProductVariant::query()
+            ->with([
+                'availabilityStatus',
+                'attributes.group',
+                'attributes.value',
+                'product.availabilityStatus',
+                'product.primaryImage',
+            ])
+            ->whereKey((int) $targets->first()->target_id)
+            ->where('shop_id', (int) $promotion->shop_id)
+            ->first();
+
+        if (! $variant instanceof ProductVariant || ! $variant->product instanceof Product) {
+            return null;
+        }
+
+        if ($variant->status !== 'active'
+            || ! $variant->is_sellable
+            || (float) $variant->stock_quantity < 1
+            || $variant->product->status !== 'active'
+            || $variant->product->deleted_at !== null
+        ) {
+            return null;
+        }
+
+        $status = $variant->availabilityStatus ?: $variant->product->availabilityStatus;
+        if ($status === null || $status->status !== 'active' || ! $status->purchase_allowed) {
+            return null;
+        }
+
+        return $variant;
+    }
+
+    private function isNewCustomerForShop(int $shopId, ?Customer $customer): bool
+    {
+        if (! $customer instanceof Customer) {
+            return false;
+        }
+
+        return ! Order::query()
+            ->where('shop_id', $shopId)
+            ->where('customer_id', $customer->getKey())
+            ->where('order_status', Order::STATUS_COMPLETED)
+            ->exists();
+    }
+
+    /**
+     * @return array<int, array{label: string, value: string}>
+     */
+    private function variantAttributes(ProductVariant $variant): array
+    {
+        return $variant->attributes
+            ->filter(fn ($attribute): bool => $attribute->group !== null
+                && $attribute->value !== null
+                && $attribute->group->status === 'active'
+                && $attribute->value->status === 'active')
+            ->map(fn ($attribute): array => [
+                'label' => $attribute->group->name,
+                'value' => $attribute->value->name,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

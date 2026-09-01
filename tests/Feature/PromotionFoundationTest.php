@@ -429,6 +429,7 @@ class PromotionFoundationTest extends TestCase
         $this->seed(PromotionTemplateSeeder::class);
         $fixture = $this->fixture('promo-rewards@example.test');
         $gift = $this->product($fixture, 'Gift Product');
+        $giftVariant = $this->variant($gift);
 
         $cases = [
             ['fixed_discount', ['name' => 'Fixed Off', 'value_amount' => 500], ['reward_type' => 'fixed_discount', 'value_amount' => 500]],
@@ -437,7 +438,7 @@ class PromotionFoundationTest extends TestCase
             ['buy_x_get_y_free', ['name' => 'BOGO Free', 'buy_quantity' => 1, 'get_quantity' => 1], ['reward_type' => 'buy_x_get_y_free', 'buy_quantity' => 1, 'get_quantity' => 1]],
             ['quantity_discount', ['name' => 'Quantity Off', 'minimum_quantity' => 3, 'value_type' => 'percent', 'value_percent' => 10], ['reward_type' => 'quantity_discount', 'value_type' => 'percent', 'value_percent' => 10]],
             ['tier_pricing', ['name' => 'Tier Prices', 'minimum_quantity' => 1, 'tier_config' => [['min_quantity' => 1, 'unit_price' => 500], ['min_quantity' => 3, 'unit_price' => 450]]], ['reward_type' => 'tier_pricing']],
-            ['free_gift', ['name' => 'Custom Free Gift Offer', 'minimum_eligible_subtotal' => 2000, 'gift_product_ids' => [$gift->getKey()]], ['reward_type' => 'free_gift']],
+            ['free_gift', ['name' => 'Custom Free Gift Offer', 'minimum_eligible_subtotal' => 2000, 'gift_product_id' => $gift->getKey(), 'gift_variant_id' => $giftVariant->getKey()], ['reward_type' => 'free_gift']],
         ];
 
         foreach ($cases as [$code, $overrides, $expected]) {
@@ -461,9 +462,59 @@ class PromotionFoundationTest extends TestCase
         $this->assertDatabaseHas('promotion_targets', [
             'promotion_id' => $freeGift->getKey(),
             'target_role' => 'gift',
-            'target_type' => 'product',
-            'target_id' => $gift->getKey(),
+            'target_type' => 'variant',
+            'target_id' => $giftVariant->getKey(),
         ]);
+    }
+
+    public function test_free_gift_requires_one_variant_from_the_selected_shop_product(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('free-gift-validation@example.test');
+        $gift = $this->product($fixture, 'Gift Product');
+        $variant = $this->variant($gift);
+        $otherProduct = $this->product($fixture, 'Other Gift Product');
+        $otherVariant = $this->variant($otherProduct);
+        $otherShop = $this->fixture('free-gift-other-shop@example.test');
+        $crossShopProduct = $this->product($otherShop, 'Cross Shop Gift Product');
+        $crossShopVariant = $this->variant($crossShopProduct);
+
+        $basePayload = $this->payload('free_gift', [
+            'name' => 'Gift Validation',
+            'minimum_eligible_subtotal' => 2000,
+            'gift_product_id' => $gift->getKey(),
+            'gift_variant_id' => $variant->getKey(),
+        ]);
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->post(route('merchant.promotions.store'), $basePayload)
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('promotion_targets', [
+            'target_role' => PromotionTarget::ROLE_GIFT,
+            'target_type' => PromotionTarget::TYPE_VARIANT,
+            'target_id' => $variant->getKey(),
+        ]);
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->post(route('merchant.promotions.store'), [
+                ...$basePayload,
+                'name' => 'Wrong Product Gift',
+                'gift_variant_id' => $otherVariant->getKey(),
+            ])
+            ->assertSessionHasErrors('gift_variant_id');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->post(route('merchant.promotions.store'), [
+                ...$basePayload,
+                'name' => 'Cross Shop Gift',
+                'gift_product_id' => $crossShopProduct->getKey(),
+                'gift_variant_id' => $crossShopVariant->getKey(),
+            ])
+            ->assertSessionHasErrors('gift_variant_id');
     }
 
     public function test_coupon_codes_are_unique_per_shop_but_reusable_across_shops(): void
