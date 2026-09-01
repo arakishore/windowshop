@@ -1,9 +1,9 @@
 # Promotion Calculation Engine
 
-## Phase 3A/3B/3C-A Scope
+## Phase 3A/3B/3C Scope
 
 Phase 3A added the first reusable runtime promotion calculation engine for WindowShop. Phase 3B extends that same engine with quantity-based automatic rewards.
-Phase 3C-A adds automatic Buy X Get Y Free runtime support.
+Phase 3C adds automatic Buy X Get Y Free and Buy X Get Y at Discount runtime support.
 
 Supported automatic promotion rewards:
 
@@ -13,6 +13,7 @@ Supported automatic promotion rewards:
 - Quantity Discount
 - Fixed Bundle Price
 - Buy X Get Y Free
+- Buy X Get Y at Discount
 - Tier Pricing
 
 The base sellable price remains `product_variants.selling_price`. Promotions never update `selling_price`, do not add `offer_price`, and do not store temporary promotional prices on product variants.
@@ -49,7 +50,7 @@ Merchant promotion overlap/conflict advisory is deferred and is not part of the 
 
 ## Quantity Rewards
 
-Quantity-based promotion templates do not all share the same decimal quantity rule. `quantity_discount` and `tier_pricing` use the full eligible quantity. `fixed_bundle_price` and `buy_x_get_y_free` remain discrete-unit based and only complete whole units participate.
+Quantity-based promotion templates do not all share the same decimal quantity rule. `quantity_discount` and `tier_pricing` use the full eligible quantity. `fixed_bundle_price`, `buy_x_get_y_free`, and `buy_x_get_y_discount` remain discrete-unit based and only complete whole units participate.
 
 ### Quantity Discount
 
@@ -97,6 +98,20 @@ Behavior:
 - Same cart/order line quantities greater than 1 are expanded internally into conceptual whole units, then collapsed back to line-level discounts.
 
 BOGO is treated as a group promotion for conflict checks. GET units receive the monetary discount, while BUY qualification units are also protected from conflicting promotions. A BOGO allocation is rejected or reduced if another promotion would take a required BUY or GET participating line.
+
+### Buy X Get Y at Discount
+
+`buy_x_get_y_discount` reuses the same BUY/GET target matching, conceptual whole-unit allocation, cheapest GET selection, repeated group handling, partial-overlap safeguards, and group-safe conflict checks as Buy X Get Y Free.
+
+The current V1 template and merchant form support percentage discounts on rewarded GET units through `value_percent`. Fixed amount GET discounts are not currently exposed by the template configuration.
+
+Behavior:
+
+- Same-pool, different-pool, and partial-overlap group counts follow the same rules as Buy X Get Y Free.
+- Each rewarded GET whole unit receives `value_percent` off its base unit price.
+- The calculated discount is capped at the GET unit price.
+- If the configured value produces no customer benefit, no participation or discount is applied.
+- A Buy X Get Y Free promotion and a Buy X Get Y at Discount promotion compete by actual calculated customer benefit, then normal priority/id tie-breaks.
 
 ### Tier Pricing
 
@@ -152,7 +167,7 @@ Promotion attribution is stored in `order_items.metadata` with the applied promo
 
 Quantity-based metadata also includes calculation details such as quantity thresholds, tier config, bundle count, participating quantity, bundle price, and allocation method where applicable.
 
-BOGO metadata is stored on both BUY qualification lines and GET/free lines. Same-line BOGO participation can include both roles in one metadata payload. The details preserve completed groups, buy/get quantities, participating BUY quantity, free quantity, unit-level BUY and GET allocation, pool type, selection rule, and promotion discount so future bill, invoice, refund, exchange, and audit flows can reconstruct historical participation without reading current promotion configuration.
+Buy-X-Get-Y metadata is stored on both BUY qualification lines and GET reward lines. Same-line participation can include both roles in one metadata payload. The details preserve completed groups, buy/get quantities, participating BUY quantity, rewarded GET quantity, free quantity for free offers, reward value/unit, unit-level BUY and GET allocation, pool type, selection rule, and promotion discount so future bill, invoice, refund, exchange, and audit flows can reconstruct historical participation without reading current promotion configuration.
 
 Refund and exchange services continue to use historical order snapshots.
 
@@ -161,7 +176,6 @@ Refund and exchange services continue to use historical order snapshots.
 Phase 3 does not implement:
 
 - promotion stacking
-- buy X get Y discount
 - free gift
 - coupon UI/application/session storage
 - promotion redemption locking or usage-limit enforcement

@@ -44,6 +44,11 @@ class PromotionCombinationResolver
         $winner = collect($candidates)
             ->filter(fn (array $candidate): bool => (int) $candidate['discount_cents'] === 0)
             ->sort(function (array $left, array $right): int {
+                $discount = (int) ($right['details']['group_discount_cents'] ?? 0) <=> (int) ($left['details']['group_discount_cents'] ?? 0);
+                if ($discount !== 0) {
+                    return $discount;
+                }
+
                 $priority = (int) $right['promotion']->priority <=> (int) $left['promotion']->priority;
                 if ($priority !== 0) {
                     return $priority;

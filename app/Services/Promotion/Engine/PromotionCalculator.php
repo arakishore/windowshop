@@ -90,7 +90,7 @@ class PromotionCalculator
                 continue;
             }
 
-            if ($rewardType === PromotionReward::TYPE_BUY_X_GET_Y_FREE) {
+            if (in_array($rewardType, [PromotionReward::TYPE_BUY_X_GET_Y_FREE, PromotionReward::TYPE_BUY_X_GET_Y_DISCOUNT], true)) {
                 $bogoPromotions[] = $promotion;
                 continue;
             }
@@ -124,7 +124,7 @@ class PromotionCalculator
         }
 
         foreach ($bogoPromotions as $promotion) {
-            foreach ($this->buyXGetYFreeCandidates($promotion, $lines, $customer, $candidates) as $variantId => $candidate) {
+            foreach ($this->buyXGetYCandidates($promotion, $lines, $customer, $candidates) as $variantId => $candidate) {
                 $candidates[$variantId][] = $candidate;
             }
         }
@@ -187,14 +187,14 @@ class PromotionCalculator
      * @param array<int, array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>> $existingCandidates
      * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
      */
-    private function buyXGetYFreeCandidates(Promotion $promotion, array $lines, ?Customer $customer, array $existingCandidates): array
+    private function buyXGetYCandidates(Promotion $promotion, array $lines, ?Customer $customer, array $existingCandidates): array
     {
         $reward = $promotion->rewards->first();
         $buyQuantity = (int) ($reward?->buy_quantity ?? 0);
         $getQuantity = (int) ($reward?->get_quantity ?? 0);
 
         if (! $reward instanceof PromotionReward
-            || $reward->reward_type !== PromotionReward::TYPE_BUY_X_GET_Y_FREE
+            || ! in_array($reward->reward_type, [PromotionReward::TYPE_BUY_X_GET_Y_FREE, PromotionReward::TYPE_BUY_X_GET_Y_DISCOUNT], true)
             || $buyQuantity < 1
             || $getQuantity < 1
         ) {
@@ -222,12 +222,15 @@ class PromotionCalculator
             }
         }
 
-        $allocation = $this->buyXGetYFreeAllocation($buyUnits, $getUnits, $buyQuantity, $getQuantity);
+        $allocation = $this->buyXGetYAllocation($buyUnits, $getUnits, $buyQuantity, $getQuantity);
         if ($allocation === null) {
             return [];
         }
 
-        $candidates = $this->bogoCandidatesFromAllocation($promotion, $allocation);
+        $candidates = $this->buyXGetYCandidatesFromAllocation($promotion, $reward, $allocation);
+        if ($candidates === []) {
+            return [];
+        }
 
         foreach ($candidates as $variantId => $candidate) {
             if (! isset($eligibleLines[$variantId])) {
@@ -235,7 +238,7 @@ class PromotionCalculator
             }
 
             if (! $this->groupCandidateCanSurvive($promotion, $candidate, $existingCandidates[$variantId] ?? [])) {
-                return $this->buyXGetYFreeReducedCandidates($promotion, $buyUnits, $getUnits, $buyQuantity, $getQuantity, $existingCandidates, (int) $allocation['completed_groups'] - 1);
+                return $this->buyXGetYReducedCandidates($promotion, $reward, $buyUnits, $getUnits, $buyQuantity, $getQuantity, $existingCandidates, (int) $allocation['completed_groups'] - 1);
             }
         }
 
@@ -248,15 +251,18 @@ class PromotionCalculator
      * @param array<int, array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>> $existingCandidates
      * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
      */
-    private function buyXGetYFreeReducedCandidates(Promotion $promotion, array $buyUnits, array $getUnits, int $buyQuantity, int $getQuantity, array $existingCandidates, int $maxGroups): array
+    private function buyXGetYReducedCandidates(Promotion $promotion, PromotionReward $reward, array $buyUnits, array $getUnits, int $buyQuantity, int $getQuantity, array $existingCandidates, int $maxGroups): array
     {
         for ($groups = $maxGroups; $groups >= 1; $groups--) {
-            $allocation = $this->buyXGetYFreeAllocation($buyUnits, $getUnits, $buyQuantity, $getQuantity, $groups);
+            $allocation = $this->buyXGetYAllocation($buyUnits, $getUnits, $buyQuantity, $getQuantity, $groups);
             if ($allocation === null) {
                 continue;
             }
 
-            $candidates = $this->bogoCandidatesFromAllocation($promotion, $allocation);
+            $candidates = $this->buyXGetYCandidatesFromAllocation($promotion, $reward, $allocation);
+            if ($candidates === []) {
+                continue;
+            }
 
             foreach ($candidates as $variantId => $candidate) {
                 if (! $this->groupCandidateCanSurvive($promotion, $candidate, $existingCandidates[$variantId] ?? [])) {
@@ -275,7 +281,7 @@ class PromotionCalculator
      * @param array<int, array<string, mixed>> $getUnits
      * @return array{completed_groups: int, buy_quantity: int, get_quantity: int, buy_units: array<int, array<string, mixed>>, get_units: array<int, array<string, mixed>>, pool_type: string}|null
      */
-    private function buyXGetYFreeAllocation(array $buyUnits, array $getUnits, int $buyQuantity, int $getQuantity, ?int $maxGroups = null): ?array
+    private function buyXGetYAllocation(array $buyUnits, array $getUnits, int $buyQuantity, int $getQuantity, ?int $maxGroups = null): ?array
     {
         $buyByKey = $this->unitsByKey($buyUnits);
         $getByKey = $this->unitsByKey($getUnits);
@@ -296,7 +302,11 @@ class PromotionCalculator
         };
 
         for ($groups = min($maxGroups ?? $theoreticalGroups, $theoreticalGroups); $groups >= 1; $groups--) {
-            $freeUnits = array_slice($this->sortedGetUnits(array_values($getByKey)), 0, $groups * $getQuantity);
+            $freeUnits = $this->buyXGetYRewardedGetUnits($buyByKey, $getByKey, $poolType, $groups * $buyQuantity, $groups * $getQuantity);
+            if ($freeUnits === []) {
+                continue;
+            }
+
             $freeKeys = array_fill_keys(array_column($freeUnits, 'unit_key'), true);
             $availableBuyUnits = array_values(array_filter(
                 array_values($buyByKey),
@@ -323,13 +333,62 @@ class PromotionCalculator
     }
 
     /**
+     * @param array<string, array<string, mixed>> $buyByKey
+     * @param array<string, array<string, mixed>> $getByKey
+     * @return array<int, array<string, mixed>>
+     */
+    private function buyXGetYRewardedGetUnits(array $buyByKey, array $getByKey, string $poolType, int $requiredBuyUnits, int $requiredGetUnits): array
+    {
+        if ($requiredGetUnits < 1) {
+            return [];
+        }
+
+        if ($poolType !== 'partial_overlap') {
+            $units = array_slice($this->sortedGetUnits(array_values($getByKey)), 0, $requiredGetUnits);
+
+            return count($units) === $requiredGetUnits ? $units : [];
+        }
+
+        $remainingBuyCapacity = count($buyByKey) - $requiredBuyUnits;
+        if ($remainingBuyCapacity < 0) {
+            return [];
+        }
+
+        $selected = [];
+        $selectedOverlap = 0;
+
+        foreach ($this->sortedGetUnits(array_values($getByKey)) as $unit) {
+            $overlapsBuy = isset($buyByKey[(string) $unit['unit_key']]);
+
+            if ($overlapsBuy && $selectedOverlap >= $remainingBuyCapacity) {
+                continue;
+            }
+
+            $selected[] = $unit;
+            $selectedOverlap += $overlapsBuy ? 1 : 0;
+
+            if (count($selected) === $requiredGetUnits) {
+                return $selected;
+            }
+        }
+
+        return [];
+    }
+
+    /**
      * @param array{completed_groups: int, buy_quantity: int, get_quantity: int, buy_units: array<int, array<string, mixed>>, get_units: array<int, array<string, mixed>>, pool_type: string} $allocation
      * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
      */
-    private function bogoCandidatesFromAllocation(Promotion $promotion, array $allocation): array
+    private function buyXGetYCandidatesFromAllocation(Promotion $promotion, PromotionReward $reward, array $allocation): array
     {
         $buyByVariant = $this->summarizeBogoUnits($allocation['buy_units']);
-        $getByVariant = $this->summarizeBogoUnits($allocation['get_units']);
+        $getByVariant = $this->summarizeBogoUnits($allocation['get_units'], $reward);
+        $totalRewardDiscountCents = array_sum(array_column($getByVariant, 'discount_cents'));
+
+        if ($totalRewardDiscountCents <= 0) {
+            return [];
+        }
+
         $variantIds = array_values(array_unique([
             ...array_keys($buyByVariant),
             ...array_keys($getByVariant),
@@ -353,7 +412,7 @@ class PromotionCalculator
                 'promotion' => $promotion,
                 'discount_cents' => (int) $get['discount_cents'],
                 'details' => [
-                    'reward_type' => PromotionReward::TYPE_BUY_X_GET_Y_FREE,
+                    'reward_type' => $reward->reward_type,
                     'roles' => $roles,
                     'role' => count($roles) === 1 ? $roles[0] : 'buy_get',
                     'buy_quantity' => (int) $allocation['buy_quantity'],
@@ -362,12 +421,19 @@ class PromotionCalculator
                     'pool_type' => $allocation['pool_type'],
                     'participating_buy_quantity' => (int) $buy['quantity'],
                     'participating_get_quantity' => (int) $get['quantity'],
+                    'rewarded_get_quantity' => (int) $get['quantity'],
                     'participating_quantity' => (int) $buy['quantity'] + (int) $get['quantity'],
-                    'free_quantity' => (int) $get['quantity'],
-                    'free_unit_value' => $get['quantity'] > 0 ? $this->moneyFromCents(intdiv((int) $get['discount_cents'], (int) $get['quantity'])) : '0.00',
+                    'free_quantity' => $reward->reward_type === PromotionReward::TYPE_BUY_X_GET_Y_FREE ? (int) $get['quantity'] : 0,
+                    'reward_value' => $this->buyXGetYRewardValue($reward),
+                    'reward_unit' => $this->buyXGetYRewardUnit($reward),
+                    'free_unit_value' => $reward->reward_type === PromotionReward::TYPE_BUY_X_GET_Y_FREE && $get['quantity'] > 0 ? $this->moneyFromCents(intdiv((int) $get['discount_cents'], (int) $get['quantity'])) : '0.00',
                     'promotion_discount' => $this->moneyFromCents((int) $get['discount_cents']),
+                    'group_discount' => $this->moneyFromCents($totalRewardDiscountCents),
+                    'group_discount_cents' => $totalRewardDiscountCents,
                     'buy_units' => $buy['units'],
                     'get_units' => $get['units'],
+                    'consumed_buy_units' => $buy['units'],
+                    'rewarded_get_units' => $get['units'],
                     'unit_selection' => 'cheapest_eligible_get_whole_units',
                     'quantity_rule' => 'whole_units_only_fractional_remainder_base_price',
                 ],
@@ -383,7 +449,7 @@ class PromotionCalculator
      * @param array<int, array<string, mixed>> $units
      * @return array<int, array{quantity: int, discount_cents: int, units: array<int, array<string, mixed>>}>
      */
-    private function summarizeBogoUnits(array $units): array
+    private function summarizeBogoUnits(array $units, ?PromotionReward $reward = null): array
     {
         $summary = [];
 
@@ -391,18 +457,57 @@ class PromotionCalculator
             $variantId = (int) $unit['variant_id'];
             $summary[$variantId] ??= ['quantity' => 0, 'discount_cents' => 0, 'units' => []];
             $summary[$variantId]['quantity']++;
-            $summary[$variantId]['discount_cents'] += (int) $unit['unit_cents'];
+            $unitDiscountCents = $reward instanceof PromotionReward
+                ? $this->buyXGetYUnitDiscountCents((int) $unit['unit_cents'], $reward)
+                : (int) $unit['unit_cents'];
+            $summary[$variantId]['discount_cents'] += $unitDiscountCents;
             $summary[$variantId]['units'][] = [
                 'variant_id' => $variantId,
                 'product_id' => (int) $unit['product_id'],
                 'unit_index' => (int) $unit['unit_index'],
                 'unit_price' => $this->moneyFromCents((int) $unit['unit_cents']),
+                'discount_amount' => $this->moneyFromCents($unitDiscountCents),
             ];
         }
 
         ksort($summary);
 
         return $summary;
+    }
+
+    private function buyXGetYUnitDiscountCents(int $unitCents, PromotionReward $reward): int
+    {
+        if ($reward->reward_type === PromotionReward::TYPE_BUY_X_GET_Y_FREE) {
+            return $unitCents;
+        }
+
+        if ($reward->reward_type !== PromotionReward::TYPE_BUY_X_GET_Y_DISCOUNT) {
+            return 0;
+        }
+
+        $percentUnits = (int) round(((float) $reward->value_percent) * 100);
+        if ($percentUnits <= 0) {
+            return 0;
+        }
+
+        return max(0, min($unitCents, intdiv(($unitCents * $percentUnits) + 5000, 10000)));
+    }
+
+    private function buyXGetYRewardValue(PromotionReward $reward): ?string
+    {
+        return match ($reward->reward_type) {
+            PromotionReward::TYPE_BUY_X_GET_Y_FREE => '100.00',
+            PromotionReward::TYPE_BUY_X_GET_Y_DISCOUNT => $reward->value_percent ? (string) $reward->value_percent : null,
+            default => null,
+        };
+    }
+
+    private function buyXGetYRewardUnit(PromotionReward $reward): string
+    {
+        return match ($reward->reward_type) {
+            PromotionReward::TYPE_BUY_X_GET_Y_FREE, PromotionReward::TYPE_BUY_X_GET_Y_DISCOUNT => 'percent',
+            default => 'unknown',
+        };
     }
 
     /**

@@ -16,6 +16,7 @@ class PromotionRepository
         PromotionReward::TYPE_QUANTITY_DISCOUNT,
         PromotionReward::TYPE_FIXED_BUNDLE_PRICE,
         PromotionReward::TYPE_BUY_X_GET_Y_FREE,
+        PromotionReward::TYPE_BUY_X_GET_Y_DISCOUNT,
         PromotionReward::TYPE_TIER_PRICING,
     ];
 

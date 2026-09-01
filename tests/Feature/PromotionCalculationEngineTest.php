@@ -387,6 +387,90 @@ class PromotionCalculationEngineTest extends TestCase
         $this->assertSame(2, $result->line($buyOnlyVariant->getKey())?->winningPromotion?->details['participating_buy_quantity']);
     }
 
+    public function test_buy_x_get_y_free_partial_overlap_chooses_cheapest_get_units_that_preserve_buy_qualification(): void
+    {
+        $fixture = $this->fixture(price: 500);
+        $saleCollection = $this->collection($fixture);
+        $fixture['product']->collections()->attach($saleCollection->getKey());
+        $getOnlyProduct = $this->product($fixture, 'BOGO Get Only');
+        $getOnlyVariant = $this->variant($fixture, $getOnlyProduct, 600, 'BOGO Get Only');
+        $getOnlyProduct->collections()->attach($saleCollection->getKey());
+        $promotion = $this->promotion($fixture, 'buy_x_get_y_free', [
+            'name' => 'Partial Overlap Cheapest Valid Free',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 1,
+            'get_quantity' => 1,
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product']->getKey(), PromotionTarget::ROLE_BUY);
+        $this->target($promotion, PromotionTarget::TYPE_COLLECTION, $saleCollection->getKey(), PromotionTarget::ROLE_GET);
+
+        $result = $this->calculateRows($fixture['shop'], [
+            ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $getOnlyVariant->getKey(), 'quantity' => 1],
+        ]);
+
+        $this->assertSame(60000, $result->promotionDiscountCents());
+        $this->assertSame(0, $result->line($fixture['variant']->getKey())?->promotionDiscountCents);
+        $this->assertSame(60000, $result->line($getOnlyVariant->getKey())?->promotionDiscountCents);
+        $this->assertSame([0], array_column($result->line($fixture['variant']->getKey())?->winningPromotion?->details['buy_units'] ?? [], 'unit_index'));
+        $this->assertSame($getOnlyVariant->getKey(), $result->line($getOnlyVariant->getKey())?->winningPromotion?->details['get_units'][0]['variant_id']);
+    }
+
+    public function test_buy_x_get_y_free_partial_overlap_preserves_maximum_groups_with_cheapest_valid_get_combination(): void
+    {
+        $fixture = $this->fixture(price: 400);
+        $saleCollection = $this->collection($fixture);
+        $fixture['product']->collections()->attach($saleCollection->getKey());
+        $getOnlyProductA = $this->product($fixture, 'BOGO Get Only A');
+        $getOnlyVariantA = $this->variant($fixture, $getOnlyProductA, 600, 'BOGO Get Only A');
+        $getOnlyProductA->collections()->attach($saleCollection->getKey());
+        $getOnlyProductB = $this->product($fixture, 'BOGO Get Only B');
+        $getOnlyVariantB = $this->variant($fixture, $getOnlyProductB, 700, 'BOGO Get Only B');
+        $getOnlyProductB->collections()->attach($saleCollection->getKey());
+        $promotion = $this->promotion($fixture, 'buy_x_get_y_free', [
+            'name' => 'Partial Overlap Max Groups',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 1,
+            'get_quantity' => 1,
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product']->getKey(), PromotionTarget::ROLE_BUY);
+        $this->target($promotion, PromotionTarget::TYPE_COLLECTION, $saleCollection->getKey(), PromotionTarget::ROLE_GET);
+
+        $result = $this->calculateRows($fixture['shop'], [
+            ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 2],
+            ['product_variant_id' => $getOnlyVariantA->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $getOnlyVariantB->getKey(), 'quantity' => 1],
+        ]);
+
+        $this->assertSame(2, $result->line($getOnlyVariantA->getKey())?->winningPromotion?->details['completed_groups']);
+        $this->assertSame(60000, $result->line($getOnlyVariantA->getKey())?->promotionDiscountCents);
+        $this->assertSame(70000, $result->line($getOnlyVariantB->getKey())?->promotionDiscountCents);
+        $this->assertSame(130000, $result->promotionDiscountCents());
+    }
+
+    public function test_buy_x_get_y_free_partial_overlap_does_not_apply_without_valid_non_overlapping_assignment(): void
+    {
+        $fixture = $this->fixture(price: 500);
+        $saleCollection = $this->collection($fixture);
+        $fixture['product']->collections()->attach($saleCollection->getKey());
+        $promotion = $this->promotion($fixture, 'buy_x_get_y_free', [
+            'name' => 'Partial Overlap No Valid Allocation',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 1,
+            'get_quantity' => 1,
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product']->getKey(), PromotionTarget::ROLE_BUY);
+        $this->target($promotion, PromotionTarget::TYPE_COLLECTION, $saleCollection->getKey(), PromotionTarget::ROLE_GET);
+
+        $line = $this->calculate($fixture, quantity: 1)->line($fixture['variant']->getKey());
+
+        $this->assertSame(0, $line?->promotionDiscountCents);
+        $this->assertNull($line?->winningPromotion);
+    }
+
     public function test_buy_x_get_y_free_uses_whole_units_only_for_decimal_quantities(): void
     {
         $fixture = $this->fixture(price: 800);
@@ -955,6 +1039,379 @@ class PromotionCalculationEngineTest extends TestCase
         ], [
             'buy_quantity' => 2,
             'get_quantity' => 1,
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_BUY);
+        $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_GET);
+
+        $line = $this->calculate($fixture, quantity: 3)->line($fixture['variant']->getKey());
+        $this->assertSame(0, $line?->promotionDiscountCents);
+
+        $promotion->forceFill(['activation_type' => Promotion::ACTIVATION_AUTOMATIC])->save();
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $fixture['shop']->getKey(),
+            'created_source' => Order::SOURCE_POS,
+            'order_status' => Order::STATUS_COMPLETED,
+            'payment_status' => Order::PAYMENT_PAID,
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+            'amount_paid' => 3000,
+            'items' => [
+                ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 3],
+            ],
+        ], $fixture['user'])->load(['items']);
+
+        $item = $order->items->first();
+        $this->assertSame('0.00', $item->line_discount);
+        $this->assertNull($item->metadata);
+    }
+
+    public function test_buy_x_get_y_discount_same_pool_discounts_cheapest_get_units_by_percentage(): void
+    {
+        $fixture = $this->fixture(price: 1200);
+        $productB = $this->product($fixture, 'BXY Discount B');
+        $variantB = $this->variant($fixture, $productB, 1000, 'BXY Discount B');
+        $productC = $this->product($fixture, 'BXY Discount C');
+        $variantC = $this->variant($fixture, $productC, 600, 'BXY Discount C');
+        $promotion = $this->promotion($fixture, 'buy_x_get_y_discount', [
+            'name' => 'BXY Fifty',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+            'value_percent' => '50.00',
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_BUY);
+        $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_GET);
+
+        $result = $this->calculateRows($fixture['shop'], [
+            ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $variantB->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $variantC->getKey(), 'quantity' => 1],
+        ]);
+
+        $this->assertSame(30000, $result->promotionDiscountCents());
+        $this->assertSame(30000, $result->line($variantC->getKey())?->promotionDiscountCents);
+        $this->assertSame(250000, $result->subtotalAfterPromotionsCents());
+        $this->assertSame('buy_x_get_y_discount', $result->line($variantC->getKey())?->winningPromotion?->rewardType);
+        $this->assertSame('50.00', $result->line($variantC->getKey())?->winningPromotion?->details['reward_value']);
+        $this->assertSame(1, $result->line($variantC->getKey())?->winningPromotion?->details['rewarded_get_quantity']);
+    }
+
+    public function test_buy_x_get_y_discount_repeats_and_supports_multiple_get_quantity(): void
+    {
+        $fixture = $this->fixture(price: 1200);
+        $productB = $this->product($fixture, 'BXY Multi B');
+        $variantB = $this->variant($fixture, $productB, 1000, 'BXY Multi B');
+        $productC = $this->product($fixture, 'BXY Multi C');
+        $variantC = $this->variant($fixture, $productC, 800, 'BXY Multi C');
+        $productD = $this->product($fixture, 'BXY Multi D');
+        $variantD = $this->variant($fixture, $productD, 600, 'BXY Multi D');
+        $promotion = $this->promotion($fixture, 'buy_x_get_y_discount', [
+            'name' => 'BXY Multi Get',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 2,
+            'value_percent' => '50.00',
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_BUY);
+        $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_GET);
+
+        $result = $this->calculateRows($fixture['shop'], [
+            ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $variantB->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $variantC->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $variantD->getKey(), 'quantity' => 1],
+        ]);
+
+        $this->assertSame(70000, $result->promotionDiscountCents());
+        $this->assertSame(40000, $result->line($variantC->getKey())?->promotionDiscountCents);
+        $this->assertSame(30000, $result->line($variantD->getKey())?->promotionDiscountCents);
+
+        $repeat = $this->promotion($fixture, 'buy_x_get_y_discount', [
+            'name' => 'BXY Repeat',
+            'status' => Promotion::STATUS_ACTIVE,
+            'priority' => 100,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+            'value_percent' => '50.00',
+        ]);
+        $this->target($repeat, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_BUY);
+        $this->target($repeat, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_GET);
+
+        $line = $this->calculate($fixture, quantity: 6)->line($fixture['variant']->getKey());
+
+        $this->assertSame(120000, $line?->promotionDiscountCents);
+        $this->assertSame(2, $line?->winningPromotion?->details['completed_groups']);
+        $this->assertSame(2, $line?->winningPromotion?->details['rewarded_get_quantity']);
+    }
+
+    public function test_buy_x_get_y_discount_supports_different_and_partial_overlap_pools(): void
+    {
+        $fixture = $this->fixture(price: 1500);
+        $getProduct = $this->product($fixture, 'BXY Discount Get');
+        $getVariant = $this->variant($fixture, $getProduct, 600, 'BXY Discount Get');
+        $different = $this->promotion($fixture, 'buy_x_get_y_discount', [
+            'name' => 'Different Pool BXY Discount',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 1,
+            'get_quantity' => 1,
+            'value_percent' => '25.00',
+        ]);
+        $this->target($different, PromotionTarget::TYPE_PRODUCT, $fixture['product']->getKey(), PromotionTarget::ROLE_BUY);
+        $this->target($different, PromotionTarget::TYPE_PRODUCT, $getProduct->getKey(), PromotionTarget::ROLE_GET);
+
+        $result = $this->calculateRows($fixture['shop'], [
+            ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $getVariant->getKey(), 'quantity' => 2],
+        ]);
+
+        $this->assertSame(15000, $result->promotionDiscountCents());
+        $this->assertSame('different', $result->line($getVariant->getKey())?->winningPromotion?->details['pool_type']);
+
+        $overlapFixture = $this->fixture(price: 1000);
+        $saleCollection = $this->collection($overlapFixture);
+        $overlapFixture['product']->collections()->attach($saleCollection->getKey());
+        $buyOnlyProduct = $this->product($overlapFixture, 'BXY Discount Buy Only');
+        $buyOnlyVariant = $this->variant($overlapFixture, $buyOnlyProduct, 900, 'BXY Discount Buy Only');
+        $partial = $this->promotion($overlapFixture, 'buy_x_get_y_discount', [
+            'name' => 'Partial BXY Discount',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+            'value_percent' => '50.00',
+        ]);
+        $this->target($partial, PromotionTarget::TYPE_CATEGORY, $overlapFixture['category']->getKey(), PromotionTarget::ROLE_BUY);
+        $this->target($partial, PromotionTarget::TYPE_COLLECTION, $saleCollection->getKey(), PromotionTarget::ROLE_GET);
+
+        $result = $this->calculateRows($overlapFixture['shop'], [
+            ['product_variant_id' => $overlapFixture['variant']->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $buyOnlyVariant->getKey(), 'quantity' => 1],
+        ]);
+        $this->assertSame(0, $result->promotionDiscountCents());
+
+        $result = $this->calculateRows($overlapFixture['shop'], [
+            ['product_variant_id' => $overlapFixture['variant']->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $buyOnlyVariant->getKey(), 'quantity' => 2],
+        ]);
+
+        $this->assertSame(50000, $result->promotionDiscountCents());
+        $this->assertSame('partial_overlap', $result->line($overlapFixture['variant']->getKey())?->winningPromotion?->details['pool_type']);
+        $this->assertSame(2, $result->line($buyOnlyVariant->getKey())?->winningPromotion?->details['participating_buy_quantity']);
+    }
+
+    public function test_buy_x_get_y_discount_partial_overlap_uses_cheapest_valid_get_assignment(): void
+    {
+        $fixture = $this->fixture(price: 500);
+        $saleCollection = $this->collection($fixture);
+        $fixture['product']->collections()->attach($saleCollection->getKey());
+        $getOnlyProduct = $this->product($fixture, 'BXY Discount Get Only');
+        $getOnlyVariant = $this->variant($fixture, $getOnlyProduct, 600, 'BXY Discount Get Only');
+        $getOnlyProduct->collections()->attach($saleCollection->getKey());
+        $promotion = $this->promotion($fixture, 'buy_x_get_y_discount', [
+            'name' => 'Partial Overlap Cheapest Valid Discount',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 1,
+            'get_quantity' => 1,
+            'value_percent' => '50.00',
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product']->getKey(), PromotionTarget::ROLE_BUY);
+        $this->target($promotion, PromotionTarget::TYPE_COLLECTION, $saleCollection->getKey(), PromotionTarget::ROLE_GET);
+
+        $result = $this->calculateRows($fixture['shop'], [
+            ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $getOnlyVariant->getKey(), 'quantity' => 1],
+        ]);
+
+        $this->assertSame(30000, $result->promotionDiscountCents());
+        $this->assertSame(30000, $result->line($getOnlyVariant->getKey())?->promotionDiscountCents);
+        $this->assertSame($getOnlyVariant->getKey(), $result->line($getOnlyVariant->getKey())?->winningPromotion?->details['get_units'][0]['variant_id']);
+        $this->assertSame(1, $result->line($fixture['variant']->getKey())?->winningPromotion?->details['participating_buy_quantity']);
+    }
+
+    public function test_buy_x_get_y_discount_same_line_and_decimal_quantities_use_whole_units_only(): void
+    {
+        $fixture = $this->fixture(price: 800);
+        $promotion = $this->promotion($fixture, 'buy_x_get_y_discount', [
+            'name' => 'Same Line BXY Discount',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+            'value_percent' => '50.00',
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_BUY);
+        $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_GET);
+
+        $line = $this->calculate($fixture, quantity: 3)->line($fixture['variant']->getKey());
+        $this->assertSame(40000, $line?->promotionDiscountCents);
+        $this->assertSame(200000, $line?->finalLineSubtotalCents);
+        $this->assertSame(['buy', 'get'], $line?->winningPromotion?->details['roles']);
+        $this->assertSame(2, $line?->winningPromotion?->details['participating_buy_quantity']);
+        $this->assertSame(1, $line?->winningPromotion?->details['rewarded_get_quantity']);
+
+        $line = $this->calculate($fixture, quantity: '3.750')->line($fixture['variant']->getKey());
+        $this->assertSame(300000, $line?->baseLineSubtotalCents);
+        $this->assertSame(40000, $line?->promotionDiscountCents);
+        $this->assertSame(260000, $line?->finalLineSubtotalCents);
+        $this->assertSame('whole_units_only_fractional_remainder_base_price', $line?->winningPromotion?->details['quantity_rule']);
+    }
+
+    public function test_buy_x_get_y_discount_supports_existing_target_types_for_buy_and_get_roles(): void
+    {
+        foreach ([
+            PromotionTarget::TYPE_PRODUCT => 'product',
+            PromotionTarget::TYPE_VARIANT => 'variant',
+            PromotionTarget::TYPE_CATEGORY => 'category',
+            PromotionTarget::TYPE_BRAND => 'brand',
+            PromotionTarget::TYPE_COLLECTION => 'collection',
+        ] as $type => $idSource) {
+            $fixture = $this->fixture(price: 1000);
+            $collection = $this->collection($fixture);
+            $fixture['product']->collections()->attach($collection->getKey());
+            $promotion = $this->promotion($fixture, 'buy_x_get_y_discount', [
+                'name' => 'Targeted BXY Discount '.$type.' '.Str::random(4),
+                'status' => Promotion::STATUS_ACTIVE,
+            ], [
+                'buy_quantity' => 2,
+                'get_quantity' => 1,
+                'value_percent' => '50.00',
+            ]);
+            $targetId = match ($idSource) {
+                'product' => $fixture['product']->getKey(),
+                'variant' => $fixture['variant']->getKey(),
+                'category' => $fixture['category']->getKey(),
+                'brand' => $fixture['brand']->getKey(),
+                'collection' => $collection->getKey(),
+            };
+            $this->target($promotion, $type, $targetId, PromotionTarget::ROLE_BUY);
+            $this->target($promotion, $type, $targetId, PromotionTarget::ROLE_GET);
+
+            $line = $this->calculate($fixture, quantity: 3)->line($fixture['variant']->getKey());
+
+            $this->assertSame(50000, $line?->promotionDiscountCents, "Failed BXY discount {$type} target.");
+            $this->assertSame($promotion->getKey(), $line?->winningPromotion?->promotionId);
+        }
+    }
+
+    public function test_buy_x_get_y_discount_conflicts_with_normal_promotions_and_free_bogo_by_actual_benefit(): void
+    {
+        $fixture = $this->fixture(price: 1000);
+        $discount = $this->promotion($fixture, 'buy_x_get_y_discount', [
+            'name' => 'BXY Half Off',
+            'status' => Promotion::STATUS_ACTIVE,
+            'priority' => 100,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+            'value_percent' => '50.00',
+        ]);
+        $this->target($discount, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_BUY);
+        $this->target($discount, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_GET);
+        $free = $this->promotion($fixture, 'buy_x_get_y_free', [
+            'name' => 'BXY Free Wins',
+            'status' => Promotion::STATUS_ACTIVE,
+            'priority' => 1,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+        ]);
+        $this->target($free, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_BUY);
+        $this->target($free, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_GET);
+
+        $line = $this->calculate($fixture, quantity: 3)->line($fixture['variant']->getKey());
+
+        $this->assertSame(100000, $line?->promotionDiscountCents);
+        $this->assertSame($free->getKey(), $line?->winningPromotion?->promotionId);
+
+        $conflictFixture = $this->fixture(price: 1000);
+        $getProduct = $this->product($conflictFixture, 'BXY Discount Conflict Get');
+        $getVariant = $this->variant($conflictFixture, $getProduct, 500, 'BXY Discount Conflict Get');
+        $bxy = $this->promotion($conflictFixture, 'buy_x_get_y_discount', [
+            'name' => 'BXY Conflict',
+            'status' => Promotion::STATUS_ACTIVE,
+            'priority' => 1,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+            'value_percent' => '50.00',
+        ]);
+        $this->target($bxy, PromotionTarget::TYPE_PRODUCT, $conflictFixture['product']->getKey(), PromotionTarget::ROLE_BUY);
+        $this->target($bxy, PromotionTarget::TYPE_PRODUCT, $getProduct->getKey(), PromotionTarget::ROLE_GET);
+        $fixed = $this->promotion($conflictFixture, 'fixed_discount', [
+            'name' => 'Buy Line Conflict Winner',
+            'status' => Promotion::STATUS_ACTIVE,
+            'priority' => 100,
+        ], ['value_amount' => '100.00']);
+        $this->target($fixed, PromotionTarget::TYPE_PRODUCT, $conflictFixture['product']->getKey());
+
+        $result = $this->calculateRows($conflictFixture['shop'], [
+            ['product_variant_id' => $conflictFixture['variant']->getKey(), 'quantity' => 2],
+            ['product_variant_id' => $getVariant->getKey(), 'quantity' => 1],
+        ]);
+
+        $this->assertSame(20000, $result->promotionDiscountCents());
+        $this->assertSame($fixed->getKey(), $result->line($conflictFixture['variant']->getKey())?->winningPromotion?->promotionId);
+        $this->assertSame(0, $result->line($getVariant->getKey())?->promotionDiscountCents);
+        $this->assertNull($result->line($getVariant->getKey())?->winningPromotion);
+    }
+
+    public function test_buy_x_get_y_discount_recalculates_before_tax_and_stores_order_snapshot_metadata(): void
+    {
+        $fixture = $this->fixture(price: 1000, withTax: true);
+        $promotion = $this->promotion($fixture, 'buy_x_get_y_discount', [
+            'name' => 'Taxed BXY Discount',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+            'value_percent' => '50.00',
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_BUY);
+        $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_GET);
+
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $fixture['shop']->getKey(),
+            'created_source' => Order::SOURCE_STOREFRONT,
+            'order_status' => Order::STATUS_PENDING,
+            'payment_status' => Order::PAYMENT_PENDING,
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+            'amount_paid' => 0,
+            'items' => [
+                ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 3],
+            ],
+        ], $fixture['user'])->load(['items', 'totals']);
+
+        $item = $order->items->first();
+
+        $this->assertSame('3000.00', $item->line_subtotal);
+        $this->assertSame('500.00', $item->line_discount);
+        $this->assertSame('2500.00', $item->taxable_amount);
+        $this->assertSame('125.00', $item->line_tax);
+        $this->assertSame('2625.00', $order->grand_total);
+        $this->assertSame('buy_x_get_y_discount', $item->metadata['promotion']['reward_type']);
+        $this->assertSame(['buy', 'get'], $item->metadata['promotion']['details']['roles']);
+        $this->assertSame(2, $item->metadata['promotion']['details']['participating_buy_quantity']);
+        $this->assertSame(1, $item->metadata['promotion']['details']['rewarded_get_quantity']);
+        $this->assertSame('50.00', $item->metadata['promotion']['details']['reward_value']);
+        $this->assertSame('percent', $item->metadata['promotion']['details']['reward_unit']);
+        $this->assertSame('500.00', $item->metadata['promotion']['details']['promotion_discount']);
+    }
+
+    public function test_coupon_buy_x_get_y_discount_is_ignored_and_pos_order_creation_remains_unaffected(): void
+    {
+        $fixture = $this->fixture(price: 1000);
+        $promotion = $this->promotion($fixture, 'buy_x_get_y_discount', [
+            'name' => 'Coupon BXY Discount',
+            'status' => Promotion::STATUS_ACTIVE,
+            'activation_type' => Promotion::ACTIVATION_COUPON,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+            'value_percent' => '50.00',
         ]);
         $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_BUY);
         $this->target($promotion, PromotionTarget::TYPE_ALL, role: PromotionTarget::ROLE_GET);
