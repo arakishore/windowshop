@@ -586,6 +586,14 @@
                         <span>Discount</span>
                         <strong>{{ $cartData['discount'] ?? 'None' }}</strong>
                     </div>
+                    @php($checkoutGroup = collect($cartData['shop_groups'] ?? [])->first())
+                    @php($checkoutCoupon = is_array($checkoutGroup) ? ($checkoutGroup['coupon'] ?? null) : null)
+                    @if (! empty($checkoutCoupon['code']))
+                        <div class="checkout-total-row">
+                            <span>Coupon {{ $checkoutCoupon['code'] }}</span>
+                            <strong>{{ $checkoutCoupon['message'] ?? 'Applied' }}</strong>
+                        </div>
+                    @endif
                     <div class="checkout-total-row">
                         <span>Shipping</span>
                         <strong data-checkout-shipping-total>{{ $cartData['shipping'] ?? 'Calculated later' }}</strong>

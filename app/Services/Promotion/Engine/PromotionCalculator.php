@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Promotion;
+use App\Models\PromotionCoupon;
 use App\Models\PromotionCondition;
 use App\Models\PromotionReward;
 use App\Models\PromotionTarget;
@@ -34,24 +35,25 @@ class PromotionCalculator
     /**
      * @param array<int, array{product_variant_id?: int, variant_id?: int, quantity?: mixed}> $rows
      */
-    public function calculateForShop(Shop $shop, array $rows, ?Customer $customer = null, ?CarbonInterface $effectiveAt = null): PromotionCalculationResult
+    public function calculateForShop(Shop $shop, array $rows, ?Customer $customer = null, ?CarbonInterface $effectiveAt = null, array $activatedCoupons = [], bool $guestCouponPreview = false): PromotionCalculationResult
     {
         $rows = $this->aggregateRows($rows);
         $variants = $this->variantsForRows($shop, $rows);
 
-        return $this->calculateForVariantRows($shop, $rows, $variants, $customer, $effectiveAt);
+        return $this->calculateForVariantRows($shop, $rows, $variants, $customer, $effectiveAt, $activatedCoupons, $guestCouponPreview);
     }
 
     /**
      * @param array<int, array{quantity: int|float|string}> $rows
      * @param array<int, ProductVariant> $variants
      */
-    public function calculateForVariantRows(Shop $shop, array $rows, array $variants, ?Customer $customer = null, ?CarbonInterface $effectiveAt = null): PromotionCalculationResult
+    public function calculateForVariantRows(Shop $shop, array $rows, array $variants, ?Customer $customer = null, ?CarbonInterface $effectiveAt = null, array $activatedCoupons = [], bool $guestCouponPreview = false): PromotionCalculationResult
     {
         $effectiveAt ??= now();
-        $promotions = $this->promotions->automaticActiveForShop((int) $shop->getKey(), $effectiveAt);
+        $promotions = $this->promotions->automaticAndActivatedCouponsForShop((int) $shop->getKey(), $effectiveAt, $activatedCoupons);
+        $couponByPromotionId = $this->couponByPromotionId($activatedCoupons);
         $lines = $this->lineInputs($rows, $variants);
-        $candidatesByVariant = $this->candidatesByVariant($promotions, $lines, $customer);
+        $candidatesByVariant = $this->candidatesByVariant($promotions, $lines, $customer, $couponByPromotionId, $guestCouponPreview);
         $giftCandidates = $this->freeGiftCandidates($promotions, $lines, $customer);
 
         foreach ($giftCandidates as $giftCandidate) {
@@ -92,7 +94,7 @@ class PromotionCalculator
      * @param array<int, PromotionLineInput> $lines
      * @return array<int, array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>>
      */
-    private function candidatesByVariant(Collection $promotions, array $lines, ?Customer $customer): array
+    private function candidatesByVariant(Collection $promotions, array $lines, ?Customer $customer, array $couponByPromotionId = [], bool $guestCouponPreview = false): array
     {
         $candidates = [];
         $bundlePromotions = [];
@@ -120,7 +122,7 @@ class PromotionCalculator
                     continue;
                 }
 
-                if (! $this->conditions->passes($promotion, $line, $customer)) {
+                if (! $this->conditions->passes($promotion, $line, $customer, $guestCouponPreview && isset($couponByPromotionId[(int) $promotion->getKey()]))) {
                     continue;
                 }
 
@@ -131,6 +133,7 @@ class PromotionCalculator
 
                 $candidates[$line->variantId][] = [
                     'promotion' => $promotion,
+                    'coupon' => $couponByPromotionId[(int) $promotion->getKey()] ?? null,
                     'discount_cents' => $discountCents,
                     'details' => $this->linePromotionDetails($promotion, $line),
                 ];
@@ -150,6 +153,23 @@ class PromotionCalculator
         }
 
         return $candidates;
+    }
+
+    /**
+     * @param array<int, PromotionCoupon> $coupons
+     * @return array<int, PromotionCoupon>
+     */
+    private function couponByPromotionId(array $coupons): array
+    {
+        $byPromotion = [];
+
+        foreach ($coupons as $coupon) {
+            if ($coupon instanceof PromotionCoupon && $coupon->promotion instanceof Promotion) {
+                $byPromotion[(int) $coupon->promotion->getKey()] = $coupon;
+            }
+        }
+
+        return $byPromotion;
     }
 
     /**

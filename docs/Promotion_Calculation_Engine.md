@@ -4,6 +4,7 @@
 
 Phase 3A added the first reusable runtime promotion calculation engine for WindowShop. Phase 3B extends that same engine with quantity-based automatic rewards.
 Phase 3C adds automatic Buy X Get Y Free, Buy X Get Y at Discount, and Free Gift runtime support.
+Phase 3D-A adds customer coupon apply/remove runtime for simple coupon-backed promotions without creating a separate coupon discount engine.
 
 Supported automatic promotion rewards:
 
@@ -177,6 +178,48 @@ Generated Free Gift rows are derived from `PromotionCalculationResult`. Cart tot
 
 Checkout/order placement re-evaluates promotions server-side from authoritative product variant data. Browser totals and previously displayed cart promotion totals are not trusted for final order pricing.
 
+## Phase 3D-A Coupon Runtime
+
+Coupon state is stored for V1 in the storefront session as a shop-scoped map:
+
+```text
+storefront.applied_coupons = [
+    shop_id => NORMALIZED_CODE
+]
+```
+
+Only the normalized coupon code is stored. The browser and session do not store or authorize coupon discount amounts, promotion ids, coupon ids, or eligibility.
+
+Coupon input is normalized by trimming whitespace and uppercasing before lookup. Lookup is always `shop_id + code`, so the same code may exist independently in different shops. Cart UI exposes one coupon area per shop group, and V1 allows one active coupon per shop group.
+
+A coupon resolves to an existing `promotion_coupons` row and explicitly activates that coupon's existing `promotions` row. The promotion then joins the same calculation candidate set as automatic promotions. The existing conflict resolver remains authoritative:
+
+1. Highest customer benefit wins.
+2. If equal, higher promotion `priority` wins.
+3. If still equal, the lowest promotion id wins.
+
+Coupon promotions do not override automatic promotions merely because a customer entered a code. If an automatic offer gives a better benefit, the automatic promotion wins and the coupon remains stored with a customer-facing message that a better offer has been applied.
+
+Phase 3D-A supports coupon activation only for:
+
+- Percentage Discount
+- Fixed Amount Discount
+- Fixed / Special Price
+
+Coupon activation for quantity discount, fixed bundle price, tier pricing, Buy X Get Y Free, Buy X Get Y at Discount, and Free Gift remains deferred to Phase 3D-C. Automatic versions of those rewards remain supported as before.
+
+Guests may apply a coupon as a preview. Customer-specific restrictions, such as new-customer-only behavior, are re-evaluated once an authenticated customer exists. Guest-facing messaging must not claim final eligibility for customer-specific restrictions.
+
+Checkout revalidates the stored coupon code authoritatively during order creation. The order service re-resolves the code for the checkout shop, verifies coupon and promotion lifecycle, verifies the simple reward scope, recalculates promotions from locked variant rows, and taxes the post-promotion taxable amount. Stale browser values and previous cart calculations are ignored.
+
+When a coupon promotion actually wins pricing for an order item, the existing `order_items.metadata.promotion` snapshot includes coupon history:
+
+- `activation_type = coupon`
+- `coupon_id`
+- `coupon_code`
+
+If an automatic promotion wins instead, the order item snapshots the automatic promotion and does not attribute pricing to the stored coupon.
+
 ## Order Snapshots
 
 Applied promotion discounts are stored in the existing order item discount and tax snapshot fields:
@@ -207,11 +250,12 @@ Refund and exchange services continue to use historical order snapshots.
 Phase 3 does not implement:
 
 - promotion stacking
-- coupon UI/application/session storage
 - promotion redemption locking or usage-limit enforcement
+- coupon redemption rows and final usage-limit consumption
 - merchant conflict advisory
 - promotion analytics
 - customer gift choice
 - multiple gifts per promotion
 - repeated Free Gift thresholds
 - Free Gift refund/exchange business rules
+- complex coupon rewards beyond percentage, fixed amount, and fixed price

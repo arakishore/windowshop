@@ -11,6 +11,10 @@ use App\Services\Admin\AdminSettingsService;
 use App\Services\Promotion\Engine\Data\GeneratedPromotionGift;
 use App\Services\Promotion\Engine\PromotionCalculator;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
+use App\Services\Promotion\Coupons\CouponResolver;
+use App\Services\Promotion\Coupons\CouponSessionStore;
+use App\Services\Promotion\Coupons\CouponResolution;
+use App\Services\Storefront\StorefrontCustomerContext;
 use App\Services\Storefront\StorefrontProductPolicyPresenter;
 use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Http\Request;
@@ -30,6 +34,9 @@ class CartPageService
         private readonly StorefrontUrlService $urls,
         private readonly StorefrontProductPolicyPresenter $policyPresenter,
         private readonly PromotionCalculator $promotions,
+        private readonly CouponSessionStore $couponStore,
+        private readonly CouponResolver $couponResolver,
+        private readonly StorefrontCustomerContext $customerContext,
     ) {
     }
 
@@ -51,7 +58,7 @@ class CartPageService
             return $data;
         }
 
-        $data = $this->dataFromItems($cart->items);
+        $data = $this->dataFromItems($cart->items, $request);
         $request->attributes->set(self::PAGE_DATA_ATTRIBUTE, $data);
 
         return $data;
@@ -99,14 +106,22 @@ class CartPageService
      * @param Collection<int, CartItem> $items
      * @return array<string, mixed>
      */
-    private function dataFromItems(Collection $items): array
+    private function dataFromItems(Collection $items, Request $request): array
     {
+        $customer = $this->customerContext->customer($request);
+        $guestCouponPreview = $customer === null;
+
         $groups = $items
             ->groupBy('shop_id')
-            ->map(function (Collection $cartItems): array {
+            ->map(function (Collection $cartItems) use ($request, $customer, $guestCouponPreview): array {
                 $shopItems = $cartItems->map(fn (CartItem $item): array => $this->itemData($item));
                 $first = $shopItems->first();
                 $baseSubtotalCents = (int) $shopItems->sum('line_subtotal_cents');
+                $shop = $cartItems->first()?->shop;
+                $couponResolution = $shop instanceof Shop
+                    ? $this->storedCouponResolution($request, (int) $shop->getKey())
+                    : null;
+                $activatedCoupons = $couponResolution?->valid() ? [$couponResolution->coupon] : [];
                 $promotionResult = $cartItems->first()?->shop instanceof Shop
                     ? $this->promotions->calculateForShop(
                         $cartItems->first()->shop,
@@ -118,6 +133,10 @@ class CartPageService
                             ])
                             ->values()
                             ->all(),
+                        $customer,
+                        null,
+                        $activatedCoupons,
+                        $guestCouponPreview,
                     )
                     : new PromotionCalculationResult((int) ($first['shop_id'] ?? 0), []);
                 $shopItems = $this->applyPromotionsToItems($shopItems, $promotionResult);
@@ -136,6 +155,7 @@ class CartPageService
                     'base_subtotal' => $this->moneyFromCents($baseSubtotalCents),
                     'promotion_discount_cents' => $promotionDiscountCents + $giftDiscountCents,
                     'promotion_discount' => ($promotionDiscountCents + $giftDiscountCents) > 0 ? '-'.$this->moneyFromCents($promotionDiscountCents + $giftDiscountCents) : $this->moneyFromCents(0),
+                    'coupon' => $this->couponState($couponResolution, $promotionResult, $guestCouponPreview),
                     'subtotal_cents' => $subtotalCents,
                     'subtotal' => $this->moneyFromCents($subtotalCents),
                     'applied_promotions' => $promotionResult->appliedPromotions(),
@@ -392,10 +412,87 @@ class CartPageService
             'promotion_discount' => $this->moneyFromCents(0),
             'discount' => 'None',
             'applied_promotions' => [],
+            'coupon' => null,
             'subtotal_cents' => 0,
             'subtotal' => $this->moneyFromCents(0),
             'total_cents' => 0,
             'total' => $this->moneyFromCents(0),
         ];
+    }
+
+    private function storedCouponResolution(Request $request, int $shopId): ?CouponResolution
+    {
+        $code = $this->couponStore->get($request, $shopId);
+        if ($code === null) {
+            return null;
+        }
+
+        $resolution = $this->couponResolver->resolveForShop($shopId, $code);
+        if (! $resolution->valid() && $resolution->clearStoredState) {
+            $this->couponStore->forget($request, $shopId);
+        }
+
+        return $resolution;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function couponState(?CouponResolution $resolution, PromotionCalculationResult $result, bool $guestCouponPreview): ?array
+    {
+        if (! $resolution instanceof CouponResolution) {
+            return null;
+        }
+
+        $state = $resolution->toArray();
+        $state['won'] = false;
+        $state['discount_cents'] = 0;
+        $state['discount'] = $this->moneyFromCents(0);
+
+        if (! $resolution->valid()) {
+            return $state;
+        }
+
+        $promotionId = (int) $resolution->coupon->promotion_id;
+        $candidateDiscountCents = 0;
+        $wonDiscountCents = 0;
+
+        foreach ($result->lineAdjustments as $adjustment) {
+            foreach ($adjustment->eligiblePromotions as $candidate) {
+                if ((int) ($candidate['id'] ?? 0) === $promotionId) {
+                    $candidateDiscountCents += $this->moneyToCents((string) ($candidate['discount_amount'] ?? '0'));
+                }
+            }
+
+            if ($adjustment->winningPromotion?->promotionId === $promotionId) {
+                $wonDiscountCents += $adjustment->promotionDiscountCents;
+            }
+        }
+
+        if ($wonDiscountCents > 0) {
+            $state['status'] = $guestCouponPreview && (bool) $resolution->coupon->promotion?->new_customer_only
+                ? 'guest_verification_required'
+                : 'applied';
+            $state['message'] = $guestCouponPreview && (bool) $resolution->coupon->promotion?->new_customer_only
+                ? 'Coupon applied. Final eligibility will be confirmed after sign in.'
+                : 'Coupon applied.';
+            $state['won'] = true;
+            $state['discount_cents'] = $wonDiscountCents;
+            $state['discount'] = '-'.$this->moneyFromCents($wonDiscountCents);
+
+            return $state;
+        }
+
+        if ($candidateDiscountCents > 0) {
+            $state['status'] = 'valid_but_not_best';
+            $state['message'] = 'Coupon is valid, but a better offer has been applied.';
+
+            return $state;
+        }
+
+        $state['status'] = 'not_eligible';
+        $state['message'] = 'This coupon is not valid for the items in your cart.';
+
+        return $state;
     }
 }

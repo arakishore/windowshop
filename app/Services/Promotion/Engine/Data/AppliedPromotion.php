@@ -13,6 +13,9 @@ class AppliedPromotion
         public readonly int $priority,
         public readonly int $discountCents,
         public readonly array $details = [],
+        public readonly string $activationType = 'automatic',
+        public readonly ?int $couponId = null,
+        public readonly ?string $couponCode = null,
     ) {
     }
 
@@ -30,6 +33,9 @@ class AppliedPromotion
             'priority' => $this->priority,
             'discount_amount' => $this->moneyFromCents($this->discountCents),
             'details' => $this->details,
+            'activation_type' => $this->activationType,
+            'coupon_id' => $this->couponId,
+            'coupon_code' => $this->couponCode,
         ];
     }
 

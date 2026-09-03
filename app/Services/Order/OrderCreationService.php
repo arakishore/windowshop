@@ -19,6 +19,7 @@ use App\Services\Product\ProductReturnPolicyResolver;
 use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
 use App\Services\Promotion\Engine\PromotionCalculator;
+use App\Services\Promotion\Coupons\CouponResolver;
 use App\Services\Tax\Exceptions\TaxConfigurationException;
 use App\Services\Tax\OrderTaxSnapshotFactory;
 use App\Services\Tax\PricingEngine;
@@ -41,6 +42,7 @@ class OrderCreationService
         private readonly CustomerPurchaseAvailabilityGuard $availabilityGuard,
         private readonly MerchantOrderStockShortageService $stockShortageService,
         private readonly PromotionCalculator $promotions,
+        private readonly CouponResolver $couponResolver,
     ) {
     }
 
@@ -68,6 +70,7 @@ class OrderCreationService
      *     remarks?: string|null,
      *     customer_order_note?: string|null,
      *     status_note?: string|null,
+     *     applied_coupon_code?: string|null,
      *     items: array<int, array{product_variant_id: int, quantity: int, policy_snapshot?: array<string, mixed>}>,
      *     totals?: array<int, array<string, mixed>>
      * } $data
@@ -90,8 +93,9 @@ class OrderCreationService
             $customer = $customerSnapshot['customer_id']
                 ? Customer::query()->find((int) $customerSnapshot['customer_id'])
                 : null;
+            $activatedCoupons = $this->activatedCoupons($shop, $data['applied_coupon_code'] ?? null, $effectiveAt);
             $promotionResult = $this->shouldApplyAutomaticPromotions($createdSource)
-                ? $this->promotions->calculateForVariantRows($shop, $rows, $variants, $customer, $effectiveAt)
+                ? $this->promotions->calculateForVariantRows($shop, $rows, $variants, $customer, $effectiveAt, $activatedCoupons)
                 : new PromotionCalculationResult((int) $shop->getKey(), []);
             $giftVariants = $this->lockGiftVariants($shop, $promotionResult->generatedGifts);
             $generatedGifts = $this->availableGeneratedGifts($promotionResult->generatedGifts, $giftVariants);
@@ -189,6 +193,18 @@ class OrderCreationService
 
             return $order->load(['items', 'totals', 'statusHistories']);
         });
+    }
+
+    private function activatedCoupons(Shop $shop, mixed $code, CarbonInterface $effectiveAt): array
+    {
+        $normalized = $this->couponResolver->normalize($code);
+        if ($normalized === '') {
+            return [];
+        }
+
+        $resolution = $this->couponResolver->resolveForShop($shop, $normalized, $effectiveAt);
+
+        return $resolution->valid() ? [$resolution->coupon] : [];
     }
 
     /**

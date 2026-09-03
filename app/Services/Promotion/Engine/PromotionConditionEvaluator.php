@@ -10,9 +10,9 @@ use App\Services\Promotion\Engine\Data\PromotionLineInput;
 
 class PromotionConditionEvaluator
 {
-    public function passes(Promotion $promotion, PromotionLineInput $line, ?Customer $customer = null): bool
+    public function passes(Promotion $promotion, PromotionLineInput $line, ?Customer $customer = null, bool $allowGuestCustomerPreview = false): bool
     {
-        if ($promotion->new_customer_only && ! $this->isNewCustomerForShop($line->shopId, $customer)) {
+        if ($promotion->new_customer_only && ! ($allowGuestCustomerPreview && ! $customer instanceof Customer) && ! $this->isNewCustomerForShop($line->shopId, $customer)) {
             return false;
         }
 

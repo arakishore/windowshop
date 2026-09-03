@@ -3,6 +3,7 @@
 namespace App\Services\Promotion\Engine;
 
 use App\Models\Promotion;
+use App\Models\PromotionCoupon;
 use App\Services\Promotion\Engine\Data\AppliedPromotion;
 
 class PromotionCombinationResolver
@@ -100,6 +101,7 @@ class PromotionCombinationResolver
     private function appliedPromotionFromCandidate(array $winner): AppliedPromotion
     {
         $promotion = $winner['promotion'];
+        $coupon = ($winner['coupon'] ?? null) instanceof PromotionCoupon ? $winner['coupon'] : null;
 
         return new AppliedPromotion(
             promotionId: (int) $promotion->getKey(),
@@ -110,6 +112,9 @@ class PromotionCombinationResolver
             priority: (int) $promotion->priority,
             discountCents: (int) $winner['discount_cents'],
             details: $winner['details'] ?? [],
+            activationType: (string) $promotion->activation_type,
+            couponId: $coupon?->getKey(),
+            couponCode: $coupon?->code,
         );
     }
 
