@@ -1,6 +1,23 @@
 @php
     $heading = ['eligible' => 'Eligible Purchase', 'buy' => 'Customer Buys', 'get' => 'Customer Gets'][$role] ?? 'Targets';
     $ids = fn (string $type) => $targetIds($role, $type);
+    $selectedValues = fn (string $type) => collect(old($prefix.$type.'_ids', $ids($type)))
+        ->filter(fn ($id): bool => $id !== null && $id !== '')
+        ->map(fn ($id): string => (string) $id)
+        ->values();
+    $summary = function ($items, $labelResolver): string {
+        $labels = collect($items)->map($labelResolver)->filter()->values();
+
+        if ($labels->isEmpty()) {
+            return 'No specific targets selected yet.';
+        }
+
+        return 'Selected: '.$labels->join(', ');
+    };
+    $selectedProductIds = $selectedValues('product');
+    $selectedCategoryIds = $selectedValues('category');
+    $selectedBrandIds = $selectedValues('brand');
+    $selectedCollectionIds = $selectedValues('collection');
 @endphp
 
 <div class="col-12 js-target-row">
@@ -20,18 +37,20 @@
             <label class="form-label" for="{{ $prefix }}product_ids">Products</label>
             <select id="{{ $prefix }}product_ids" name="{{ $prefix }}product_ids[]" class="form-select" multiple size="4">
                 @foreach($products as $product)
-                    <option value="{{ $product->id }}" @selected(in_array($product->id, old($prefix.'product_ids', $ids('product')), true))>{{ $product->product_name }}</option>
+                    <option value="{{ $product->id }}" @selected($selectedProductIds->contains((string) $product->id))>{{ $product->product_name }}</option>
                 @endforeach
             </select>
+            <div class="form-text">{{ $summary($selectedProductIds, fn ($id) => $products->firstWhere('id', (int) $id)?->product_name) }}</div>
             @error($prefix.'product_ids')<div class="text-danger small">{{ $message }}</div>@enderror
         </div>
         <div class="col-md-8 js-target-selector" data-target-selector="categories">
             <label class="form-label" for="{{ $prefix }}category_ids">Category</label>
             <select id="{{ $prefix }}category_ids" name="{{ $prefix }}category_ids[]" class="form-select" multiple size="4">
                 @foreach($categories as $categoryId => $categoryLabel)
-                    <option value="{{ $categoryId }}" @selected(in_array($categoryId, old($prefix.'category_ids', $ids('category')), true))>{{ $categoryLabel }}</option>
+                    <option value="{{ $categoryId }}" @selected($selectedCategoryIds->contains((string) $categoryId))>{{ $categoryLabel }}</option>
                 @endforeach
             </select>
+            <div class="form-text">{{ $summary($selectedCategoryIds, fn ($id) => $categories->get((int) $id)) }}</div>
             @error($prefix.'category_ids')<div class="text-danger small">{{ $message }}</div>@enderror
         </div>
         <div class="col-md-8 js-target-selector" data-target-selector="brands">
@@ -41,9 +60,10 @@
             @else
                 <select id="{{ $prefix }}brand_ids" name="{{ $prefix }}brand_ids[]" class="form-select" multiple size="4">
                     @foreach($brands as $brand)
-                        <option value="{{ $brand->id }}" @selected(in_array($brand->id, old($prefix.'brand_ids', $ids('brand')), true))>{{ $brand->name }}</option>
+                        <option value="{{ $brand->id }}" @selected($selectedBrandIds->contains((string) $brand->id))>{{ $brand->name }}</option>
                     @endforeach
                 </select>
+                <div class="form-text">{{ $summary($selectedBrandIds, fn ($id) => $brands->firstWhere('id', (int) $id)?->name) }}</div>
             @endif
             @error($prefix.'brand_ids')<div class="text-danger small">{{ $message }}</div>@enderror
         </div>
@@ -51,9 +71,10 @@
             <label class="form-label" for="{{ $prefix }}collection_ids">Collection</label>
             <select id="{{ $prefix }}collection_ids" name="{{ $prefix }}collection_ids[]" class="form-select" multiple size="4">
                 @foreach($collections as $collection)
-                    <option value="{{ $collection->id }}" @selected(in_array($collection->id, old($prefix.'collection_ids', $ids('collection')), true))>{{ $collection->name }}</option>
+                    <option value="{{ $collection->id }}" @selected($selectedCollectionIds->contains((string) $collection->id))>{{ $collection->name }}</option>
                 @endforeach
             </select>
+            <div class="form-text">{{ $summary($selectedCollectionIds, fn ($id) => $collections->firstWhere('id', (int) $id)?->name) }}</div>
             @error($prefix.'collection_ids')<div class="text-danger small">{{ $message }}</div>@enderror
         </div>
     </div>

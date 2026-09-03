@@ -13,12 +13,20 @@ use App\Models\ProductCategory;
 use App\Models\ProductReturnPolicy;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantAttribute;
+use App\Models\Promotion;
+use App\Models\PromotionCondition;
+use App\Models\PromotionCoupon;
+use App\Models\PromotionTarget;
+use App\Models\PromotionTemplate;
 use App\Models\Shop;
 use App\Models\ShopSetting;
 use App\Models\User;
 use App\Services\Cart\CartResolver;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\Order\OrderCreationService;
+use App\Services\Promotion\Coupons\CouponSessionStore;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
+use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -410,6 +418,105 @@ class StorefrontCartPageTest extends TestCase
         $this->assertSame('250.00', $item->refresh()->unit_price);
     }
 
+    public function test_cart_totals_include_automatic_promotion_without_mutating_stored_unit_price(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 500, stock: 10);
+        $promotion = $this->cartPromotion($fixture, 'fixed_discount', ['value_amount' => '100.00']);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'target_id' => null,
+            'sort_order' => 10,
+        ]);
+        $cart = $this->guestCart('promotion-cart-token');
+        $item = $this->cartItem($cart, $fixture['variant'], 2);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'promotion-cart-token'])
+            ->patchJson(route('storefront.cart.items.update', $item), [
+                'quantity' => 2,
+            ])
+            ->assertOk()
+            ->assertJsonPath('base_subtotal_cents', 100000)
+            ->assertJsonPath('promotion_discount_cents', 20000)
+            ->assertJsonPath('subtotal_cents', 80000)
+            ->assertJsonPath('shop_groups.0.items.0.promotion.id', $promotion->getKey());
+
+        $this->assertSame('500.00', $item->refresh()->unit_price);
+    }
+
+    public function test_cart_exposes_free_gift_virtually_and_removes_it_when_qualification_is_lost(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 1000, stock: 10);
+        $giftProduct = Product::query()->create([
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'root_product_category_id' => $fixture['shop']->root_product_category_id,
+            'product_category_id' => $fixture['product']->product_category_id,
+            'product_name' => 'Cart Gift Product',
+            'slug' => 'cart-gift-product-'.Str::random(8),
+            'availability_status_id' => $fixture['product']->availability_status_id,
+            'status' => 'active',
+            'published_at' => now(),
+        ]);
+        $giftVariant = ProductVariant::query()->create([
+            'product_id' => $giftProduct->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'availability_status_id' => $giftProduct->availability_status_id,
+            'sku' => 'SKU-'.Str::random(8),
+            'name' => 'Gift',
+            'mrp' => 700,
+            'selling_price' => 600,
+            'stock_quantity' => 3,
+            'is_default' => true,
+            'is_sellable' => true,
+            'status' => 'active',
+        ]);
+        $promotion = $this->cartPromotion($fixture, 'free_gift', []);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'target_id' => null,
+            'sort_order' => 10,
+        ]);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_GIFT,
+            'target_type' => PromotionTarget::TYPE_VARIANT,
+            'target_id' => $giftVariant->getKey(),
+            'sort_order' => 20,
+        ]);
+        $promotion->conditions()->create([
+            'condition_type' => PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL,
+            'operator' => '>=',
+            'value_numeric' => '2000.00',
+            'sort_order' => 10,
+        ]);
+        $cart = $this->guestCart('free-gift-cart-token');
+        $item = $this->cartItem($cart, $fixture['variant'], 2);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'free-gift-cart-token'])
+            ->patchJson(route('storefront.cart.items.update', $item), [
+                'quantity' => 2,
+            ])
+            ->assertOk()
+            ->assertJsonPath('base_subtotal_cents', 260000)
+            ->assertJsonPath('promotion_discount_cents', 60000)
+            ->assertJsonPath('subtotal_cents', 200000)
+            ->assertJsonPath('shop_groups.0.items.1.is_generated_gift', true)
+            ->assertJsonPath('shop_groups.0.items.1.product_variant_id', $giftVariant->getKey());
+
+        $this->assertSame(1, CartItem::query()->where('cart_id', $cart->getKey())->count());
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'free-gift-cart-token'])
+            ->patchJson(route('storefront.cart.items.update', $item), [
+                'quantity' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonCount(1, 'shop_groups.0.items')
+            ->assertJsonPath('promotion_discount_cents', 0);
+    }
+
     public function test_unavailable_item_renders_warning_and_can_be_removed(): void
     {
         $fixture = $this->productFixture(name: 'Unavailable Product');
@@ -444,6 +551,284 @@ class StorefrontCartPageTest extends TestCase
             ->assertOk()
             ->assertSee('5 items are currently in stock. 2 items require confirmation from the merchant.')
             ->assertDontSee('Checkout is disabled until unavailable items are removed.');
+    }
+
+    public function test_coupon_apply_normalizes_code_and_stores_per_shop_session_state(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 1000);
+        $this->couponPromotion($fixture, 'percentage_discount', 'SAVE20', ['value_percent' => '20.00']);
+        $cart = $this->guestCart('coupon-normalize-token');
+        $this->cartItem($cart, $fixture['variant']);
+
+        $response = $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-normalize-token'])
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $fixture['shop']->getKey()]), [
+                'coupon_code' => ' save20 ',
+                'promotion_id' => 999999,
+                'discount_amount' => 999999,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('coupon.status', 'applied')
+            ->assertJsonPath('coupon.code', 'SAVE20')
+            ->assertJsonPath('promotion_discount_cents', 20000);
+
+        $this->assertSame(
+            [''.$fixture['shop']->getKey() => 'SAVE20'],
+            session(CouponSessionStore::SESSION_KEY),
+        );
+    }
+
+    public function test_same_coupon_code_resolves_independently_per_shop_and_remove_is_scoped(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $first = $this->productFixture(price: 1000);
+        $second = $this->productFixture(price: 500);
+        $this->couponPromotion($first, 'percentage_discount', 'SAVE20', ['value_percent' => '20.00']);
+        $this->couponPromotion($second, 'fixed_discount', 'SAVE20', ['value_amount' => '100.00']);
+        $cart = $this->guestCart('coupon-multishop-token');
+        $this->cartItem($cart, $first['variant']);
+        $this->cartItem($cart, $second['variant']);
+
+        $session = [CartResolver::SESSION_TOKEN_KEY => 'coupon-multishop-token'];
+        $this->withSession($session)
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $first['shop']->getKey()]), ['coupon_code' => 'SAVE20'])
+            ->assertOk();
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-multishop-token', CouponSessionStore::SESSION_KEY => session(CouponSessionStore::SESSION_KEY)])
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $second['shop']->getKey()]), ['coupon_code' => 'SAVE20'])
+            ->assertOk()
+            ->assertJsonPath('promotion_discount_cents', 30000);
+
+        $stored = session(CouponSessionStore::SESSION_KEY);
+        $this->assertSame('SAVE20', $stored[$first['shop']->getKey()]);
+        $this->assertSame('SAVE20', $stored[$second['shop']->getKey()]);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-multishop-token', CouponSessionStore::SESSION_KEY => $stored])
+            ->deleteJson(route('storefront.cart.shops.coupon.destroy', ['shop' => $first['shop']->getKey()]))
+            ->assertOk()
+            ->assertJsonPath('promotion_discount_cents', 10000);
+
+        $this->assertArrayNotHasKey($first['shop']->getKey(), session(CouponSessionStore::SESSION_KEY));
+        $this->assertSame('SAVE20', session(CouponSessionStore::SESSION_KEY)[$second['shop']->getKey()]);
+    }
+
+    public function test_coupon_from_another_shop_cannot_apply_to_current_shop_group(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $first = $this->productFixture(price: 1000);
+        $second = $this->productFixture(price: 1000);
+        $this->couponPromotion($first, 'percentage_discount', 'SHOPA', ['value_percent' => '20.00']);
+        $cart = $this->guestCart('coupon-wrong-shop-token');
+        $this->cartItem($cart, $second['variant']);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-wrong-shop-token'])
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $second['shop']->getKey()]), ['coupon_code' => 'SHOPA'])
+            ->assertUnprocessable()
+            ->assertJsonPath('coupon.status', 'invalid');
+    }
+
+    public function test_invalid_coupon_states_return_structured_statuses(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 1000);
+        $cart = $this->guestCart('coupon-invalid-token');
+        $this->cartItem($cart, $fixture['variant']);
+
+        $inactiveCoupon = $this->couponPromotion($fixture, 'fixed_discount', 'OFF', ['value_amount' => '100.00']);
+        $inactiveCoupon->forceFill(['status' => PromotionCoupon::STATUS_INACTIVE])->save();
+        $futureCoupon = $this->couponPromotion($fixture, 'fixed_discount', 'FUTURE', ['value_amount' => '100.00']);
+        $futureCoupon->forceFill(['starts_at' => now()->addDay()])->save();
+        $expiredCoupon = $this->couponPromotion($fixture, 'fixed_discount', 'OLD', ['value_amount' => '100.00']);
+        $expiredCoupon->forceFill(['ends_at' => now()->subDay()])->save();
+        $inactivePromotion = $this->couponPromotion($fixture, 'fixed_discount', 'PROMO', ['value_amount' => '100.00']);
+        $inactivePromotion->promotion->forceFill(['status' => Promotion::STATUS_INACTIVE])->save();
+
+        $baseSession = [CartResolver::SESSION_TOKEN_KEY => 'coupon-invalid-token'];
+        $cases = [
+            ['MISSING', 'invalid'],
+            ['OFF', 'inactive'],
+            ['FUTURE', 'not_started'],
+            ['OLD', 'expired'],
+            ['PROMO', 'inactive'],
+        ];
+
+        foreach ($cases as [$code, $status]) {
+            $this->withSession($baseSession)
+                ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $fixture['shop']->getKey()]), ['coupon_code' => $code])
+                ->assertUnprocessable()
+                ->assertJsonPath('coupon.status', $status);
+        }
+    }
+
+    public function test_coupon_and_automatic_promotions_compete_by_existing_conflict_rules(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 2000);
+        $automatic = $this->cartPromotion($fixture, 'percentage_discount', ['value_percent' => '30.00']);
+        $automatic->targets()->create(['target_role' => PromotionTarget::ROLE_ELIGIBLE, 'target_type' => PromotionTarget::TYPE_ALL, 'sort_order' => 10]);
+        $this->couponPromotion($fixture, 'fixed_discount', 'SAVE500', ['value_amount' => '500.00']);
+        $cart = $this->guestCart('coupon-conflict-token');
+        $this->cartItem($cart, $fixture['variant']);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-conflict-token'])
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $fixture['shop']->getKey()]), ['coupon_code' => 'SAVE500'])
+            ->assertOk()
+            ->assertJsonPath('coupon.status', 'valid_but_not_best')
+            ->assertJsonPath('promotion_discount_cents', 60000);
+    }
+
+    public function test_coupon_fixed_discount_is_capped_and_fixed_price_without_benefit_is_ignored(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 300);
+        $this->couponPromotion($fixture, 'fixed_discount', 'SAVE500', ['value_amount' => '500.00']);
+        $noBenefitFixture = $this->productFixture(price: 750);
+        $this->couponPromotion($noBenefitFixture, 'fixed_price', 'FIX799', ['value_amount' => '799.00']);
+        $cart = $this->guestCart('coupon-caps-token');
+        $this->cartItem($cart, $fixture['variant']);
+        $this->cartItem($cart, $noBenefitFixture['variant']);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-caps-token'])
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $fixture['shop']->getKey()]), ['coupon_code' => 'SAVE500'])
+            ->assertOk()
+            ->assertJsonPath('coupon.discount_cents', 30000);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-caps-token'])
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $noBenefitFixture['shop']->getKey()]), ['coupon_code' => 'FIX799'])
+            ->assertOk()
+            ->assertJsonPath('coupon.status', 'not_eligible');
+    }
+
+    public function test_temporarily_ineligible_coupon_state_is_retained_and_can_requalify(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 1000, stock: 5);
+        $coupon = $this->couponPromotion($fixture, 'fixed_discount', 'SAVE100', ['value_amount' => '100.00']);
+        $coupon->promotion->conditions()->create([
+            'condition_type' => PromotionCondition::TYPE_MINIMUM_QUANTITY,
+            'operator' => '>=',
+            'value_numeric' => '2.00',
+            'sort_order' => 10,
+        ]);
+        $cart = $this->guestCart('coupon-requalify-token');
+        $item = $this->cartItem($cart, $fixture['variant'], 2);
+
+        $session = [CartResolver::SESSION_TOKEN_KEY => 'coupon-requalify-token'];
+        $this->withSession($session)
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $fixture['shop']->getKey()]), ['coupon_code' => 'SAVE100'])
+            ->assertOk()
+            ->assertJsonPath('coupon.status', 'applied');
+
+        $stored = session(CouponSessionStore::SESSION_KEY);
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-requalify-token', CouponSessionStore::SESSION_KEY => $stored])
+            ->patchJson(route('storefront.cart.items.update', $item), ['quantity' => 1])
+            ->assertOk()
+            ->assertJsonPath('shop_groups.0.coupon.status', 'not_eligible');
+        $this->assertSame('SAVE100', session(CouponSessionStore::SESSION_KEY)[$fixture['shop']->getKey()]);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-requalify-token', CouponSessionStore::SESSION_KEY => session(CouponSessionStore::SESSION_KEY)])
+            ->patchJson(route('storefront.cart.items.update', $item), ['quantity' => 2])
+            ->assertOk()
+            ->assertJsonPath('shop_groups.0.coupon.status', 'applied');
+    }
+
+    public function test_unsupported_coupon_reward_types_do_not_activate_in_phase_3d_a(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 1000);
+        $cart = $this->guestCart('coupon-unsupported-token');
+        $this->cartItem($cart, $fixture['variant'], 3);
+
+        foreach ([
+            'quantity_discount' => ['value_type' => 'amount', 'value_amount' => '100.00'],
+            'fixed_bundle_price' => ['bundle_quantity' => 2, 'bundle_price' => '1000.00'],
+            'tier_pricing' => ['tier_config' => [['min_quantity' => 2, 'unit_price' => '900.00']]],
+            'buy_x_get_y_free' => ['buy_quantity' => 2, 'get_quantity' => 1],
+            'buy_x_get_y_discount' => ['buy_quantity' => 2, 'get_quantity' => 1, 'value_percent' => '50.00'],
+            'free_gift' => [],
+        ] as $type => $reward) {
+            $coupon = $this->couponPromotion($fixture, $type, Str::upper(Str::replace('_', '', $type)), $reward);
+            if ($type === 'quantity_discount') {
+                $coupon->promotion->conditions()->create(['condition_type' => PromotionCondition::TYPE_MINIMUM_QUANTITY, 'operator' => '>=', 'value_numeric' => '2.00', 'sort_order' => 10]);
+            }
+            if (in_array($type, ['buy_x_get_y_free', 'buy_x_get_y_discount'], true)) {
+                $coupon->promotion->targets()->create(['target_role' => PromotionTarget::ROLE_BUY, 'target_type' => PromotionTarget::TYPE_ALL, 'sort_order' => 20]);
+                $coupon->promotion->targets()->create(['target_role' => PromotionTarget::ROLE_GET, 'target_type' => PromotionTarget::TYPE_ALL, 'sort_order' => 30]);
+            }
+            if ($type === 'free_gift') {
+                $coupon->promotion->conditions()->create(['condition_type' => PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, 'operator' => '>=', 'value_numeric' => '100.00', 'sort_order' => 10]);
+                $coupon->promotion->targets()->create(['target_role' => PromotionTarget::ROLE_GIFT, 'target_type' => PromotionTarget::TYPE_VARIANT, 'target_id' => $fixture['variant']->getKey(), 'sort_order' => 20]);
+            }
+
+            $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-unsupported-token'])
+                ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $fixture['shop']->getKey()]), ['coupon_code' => $coupon->code])
+                ->assertUnprocessable()
+                ->assertJsonPath('coupon.status', 'unsupported_reward_type');
+        }
+    }
+
+    public function test_guest_new_customer_only_coupon_is_presented_as_checkout_verification_required(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 1000);
+        $coupon = $this->couponPromotion($fixture, 'fixed_discount', 'WELCOME200', ['value_amount' => '200.00']);
+        $coupon->promotion->forceFill(['new_customer_only' => true])->save();
+        $cart = $this->guestCart('coupon-new-customer-token');
+        $this->cartItem($cart, $fixture['variant']);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-new-customer-token'])
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $fixture['shop']->getKey()]), ['coupon_code' => 'WELCOME200'])
+            ->assertOk()
+            ->assertJsonPath('coupon.status', 'guest_verification_required')
+            ->assertJsonPath('coupon.won', true)
+            ->assertJsonPath('coupon.discount_cents', 20000)
+            ->assertJsonPath('coupon.message', 'Coupon applied. Final eligibility will be confirmed after sign in.');
+    }
+
+    public function test_order_creation_revalidates_coupon_and_snapshots_coupon_metadata_only_when_coupon_wins(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 1000);
+        $coupon = $this->couponPromotion($fixture, 'fixed_discount', 'SAVE200', ['value_amount' => '200.00']);
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $fixture['shop']->getKey(),
+            'customer_id' => null,
+            'created_source' => \App\Models\Order::SOURCE_STOREFRONT,
+            'order_status' => \App\Models\Order::STATUS_PENDING,
+            'payment_status' => \App\Models\Order::PAYMENT_PENDING,
+            'applied_coupon_code' => 'SAVE200',
+            'items' => [[
+                'product_variant_id' => $fixture['variant']->getKey(),
+                'quantity' => 1,
+            ]],
+        ], $this->userFixture('coupon-order-actor@example.test'));
+
+        $metadata = $order->items->first()->metadata['promotion'];
+        $this->assertSame('coupon', $metadata['activation_type']);
+        $this->assertSame($coupon->getKey(), $metadata['coupon_id']);
+        $this->assertSame('SAVE200', $metadata['coupon_code']);
+
+        $betterFixture = $this->productFixture(price: 1000);
+        $auto = $this->cartPromotion($betterFixture, 'fixed_discount', ['value_amount' => '300.00']);
+        $auto->targets()->create(['target_role' => PromotionTarget::ROLE_ELIGIBLE, 'target_type' => PromotionTarget::TYPE_ALL, 'sort_order' => 10]);
+        $this->couponPromotion($betterFixture, 'fixed_discount', 'SAVE200', ['value_amount' => '200.00']);
+        $order = app(OrderCreationService::class)->create([
+            'shop_id' => $betterFixture['shop']->getKey(),
+            'created_source' => \App\Models\Order::SOURCE_STOREFRONT,
+            'order_status' => \App\Models\Order::STATUS_PENDING,
+            'payment_status' => \App\Models\Order::PAYMENT_PENDING,
+            'applied_coupon_code' => 'SAVE200',
+            'items' => [[
+                'product_variant_id' => $betterFixture['variant']->getKey(),
+                'quantity' => 1,
+            ]],
+        ], $this->userFixture('coupon-order-auto-actor@example.test'));
+
+        $metadata = $order->items->first()->metadata['promotion'];
+        $this->assertSame('automatic', $metadata['activation_type']);
+        $this->assertNull($metadata['coupon_id']);
+        $this->assertNull($metadata['coupon_code']);
+        $this->assertSame($auto->getKey(), $metadata['id']);
     }
 
     /**
@@ -520,6 +905,46 @@ class StorefrontCartPageTest extends TestCase
         return Cart::query()->create([
             'user_id' => null,
             'session_token' => $token,
+        ]);
+    }
+
+    private function cartPromotion(array $fixture, string $templateCode, array $reward): Promotion
+    {
+        $template = PromotionTemplate::query()->where('code', $templateCode)->firstOrFail();
+        $promotion = Promotion::query()->create([
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'promotion_template_id' => $template->getKey(),
+            'name' => 'Cart Promotion '.Str::random(6),
+            'slug' => 'cart-promotion-'.Str::random(8),
+            'status' => Promotion::STATUS_ACTIVE,
+            'activation_type' => Promotion::ACTIVATION_AUTOMATIC,
+            'origin' => Promotion::ORIGIN_MERCHANT,
+            'refund_policy_mode' => Promotion::POLICY_INHERIT,
+            'exchange_policy_mode' => Promotion::POLICY_INHERIT,
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => $template->reward_type,
+            ...$reward,
+        ]);
+
+        return $promotion;
+    }
+
+    private function couponPromotion(array $fixture, string $templateCode, string $code, array $reward): PromotionCoupon
+    {
+        $promotion = $this->cartPromotion($fixture, $templateCode, $reward);
+        $promotion->forceFill(['activation_type' => Promotion::ACTIVATION_COUPON])->save();
+        $promotion->targets()->firstOrCreate([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'target_id' => null,
+        ], ['sort_order' => 10]);
+
+        return $promotion->coupons()->create([
+            'shop_id' => $fixture['shop']->getKey(),
+            'code' => $code,
+            'status' => PromotionCoupon::STATUS_ACTIVE,
         ]);
     }
 

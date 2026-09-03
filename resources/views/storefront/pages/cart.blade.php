@@ -120,7 +120,7 @@
 
             <div class="row" data-cart-filled {{ $cart['is_empty'] ? 'hidden' : '' }}>
                 <div class="col-lg-8">
-                    <form class="form-shop-cart" data-cart-form>
+                    <div class="form-shop-cart" data-cart-form>
                         <div class="overflow-auto">
                             <table class="tf-table-page-cart">
                                 <thead>
@@ -158,6 +158,34 @@
                                                         </p>
                                                     </div>
                                                 </div>
+                                                <div class="d-flex flex-wrap align-items-center gap-2 pb-3" data-shop-coupon="{{ $shopGroup['shop_id'] }}">
+                                                    <form method="POST"
+                                                        action="{{ route('storefront.cart.shops.coupon.store', ['shop' => $shopGroup['shop_id']]) }}"
+                                                        class="d-flex flex-wrap align-items-center gap-2 mb-0"
+                                                        data-coupon-apply-form>
+                                                        @csrf
+                                                        <input
+                                                            name="coupon_code"
+                                                            class="form-control form-control-sm"
+                                                            style="max-width: 180px"
+                                                            value="{{ $shopGroup['coupon']['code'] ?? '' }}"
+                                                            placeholder="Coupon code"
+                                                            data-coupon-input>
+                                                        <button type="submit" class="tf-btn animate-btn small">
+                                                            Apply
+                                                        </button>
+                                                    </form>
+                                                    <button type="button"
+                                                        class="tf-btn btn-stroke small"
+                                                        data-coupon-remove-url="{{ route('storefront.cart.shops.coupon.destroy', ['shop' => $shopGroup['shop_id']]) }}"
+                                                        {{ empty($shopGroup['coupon']['code']) ? 'hidden' : '' }}>
+                                                        Remove
+                                                    </button>
+                                                    <span class="text-caption-01 {{ (($shopGroup['coupon']['status'] ?? '') === 'applied' || ($shopGroup['coupon']['status'] ?? '') === 'guest_verification_required') ? 'text-success' : 'cl-text-2' }}"
+                                                        data-coupon-message>
+                                                        {{ $shopGroup['coupon']['message'] ?? '' }}
+                                                    </span>
+                                                </div>
                                             </td>
                                         </tr>
                                         @foreach ($shopGroup['items'] as $item)
@@ -175,6 +203,9 @@
                                                             class="prd_name fw-medium link lh-24">
                                                             {{ $item['product_name'] }}
                                                         </a>
+                                                        @if (! empty($item['is_generated_gift']))
+                                                            <div class="badge bg-success-subtle text-success border border-success-subtle mb-1">Free Gift</div>
+                                                        @endif
                                                         @foreach ($item['attributes'] as $attribute)
                                                             <div class="prd_select text-caption-01">
                                                                 <span class="type-text cl-text-3">{{ $attribute['label'] }}:&nbsp;</span>
@@ -191,11 +222,13 @@
                                                                 {{ $item['availability_message'] ?: 'Currently unavailable.' }}
                                                             </p>
                                                         @endif
-                                                        <button type="button"
-                                                            class="cart_remove tf-btn-line-3 type-primary remove"
-                                                            data-cart-remove-url="{{ $item['remove_url'] }}">
-                                                            <span class="text-caption-01 fw-semibold">Remove</span>
-                                                        </button>
+                                                        @empty($item['is_generated_gift'])
+                                                            <button type="button"
+                                                                class="cart_remove tf-btn-line-3 type-primary remove"
+                                                                data-cart-remove-url="{{ $item['remove_url'] }}">
+                                                                <span class="text-caption-01 fw-semibold">Remove</span>
+                                                            </button>
+                                                        @endempty
                                                         <p class="text-caption-01 mt-2 mb-0" data-cart-item-message role="status" hidden></p>
                                                     </div>
                                                 </td>
@@ -203,6 +236,9 @@
                                                     <span data-cart-item-price>{{ $item['unit_price'] }}</span>
                                                 </td>
                                                 <td class="cart_quantity" data-cart-title="Quantity">
+                                                    @if (! empty($item['is_generated_gift']))
+                                                        <span class="text-caption-01 fw-semibold">{{ $item['quantity'] }}</span>
+                                                    @else
                                                     <div class="wg-quantity">
                                                         <button type="button"
                                                             class="btn-quantity minus-quantity"
@@ -223,10 +259,16 @@
                                                             <i class="icon icon-plus"></i>
                                                         </button>
                                                     </div>
+                                                    @endif
                                                 </td>
                                                 <td>
                                                     <div class="cart_total fw-semibold text-primary" data-cart-item-subtotal>
                                                         {{ $item['line_subtotal'] }}
+                                                    </div>
+                                                    <div class="text-caption-01 text-success"
+                                                        data-cart-item-promotion-discount
+                                                        @if (($item['promotion_discount_cents'] ?? 0) <= 0) hidden @endif>
+                                                        {{ ($item['promotion_discount_cents'] ?? 0) > 0 ? $item['promotion_discount'].' offer' : '' }}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -235,7 +277,7 @@
                                 </tbody>
                             </table>
                         </div>
-                    </form>
+                    </div>
                 </div>
 
                 <div class="col-lg-4">
@@ -353,6 +395,29 @@
                         minimumMessage.hidden = message === '';
                     }
 
+                    const couponWrap = page.querySelector(`[data-shop-coupon="${shop.shop_id}"]`);
+                    if (couponWrap) {
+                        const coupon = shop.coupon || {};
+                        const input = couponWrap.querySelector('[data-coupon-input]');
+                        const message = couponWrap.querySelector('[data-coupon-message]');
+                        const remove = couponWrap.querySelector('[data-coupon-remove-url]');
+
+                        if (input && coupon.code) {
+                            input.value = coupon.code;
+                        }
+
+                        if (message) {
+                            message.textContent = coupon.message || '';
+                            message.classList.toggle('text-success', ['applied', 'guest_verification_required'].includes(coupon.status || ''));
+                            message.classList.toggle('text-danger', ['invalid', 'expired', 'inactive', 'unsupported_reward_type'].includes(coupon.status || ''));
+                            message.classList.toggle('cl-text-2', !message.classList.contains('text-success') && !message.classList.contains('text-danger'));
+                        }
+
+                        if (remove) {
+                            remove.hidden = !coupon.code;
+                        }
+                    }
+
                     (shop.items || []).forEach((item) => {
                         const row = page.querySelector(`[data-cart-item="${item.id}"]`);
 
@@ -363,6 +428,7 @@
                         const input = row.querySelector('[data-cart-quantity-input]');
                         const price = row.querySelector('[data-cart-item-price]');
                         const line = row.querySelector('[data-cart-item-subtotal]');
+                        const discount = row.querySelector('[data-cart-item-promotion-discount]');
 
                         if (input) {
                             input.value = item.quantity;
@@ -374,6 +440,12 @@
 
                         if (line) {
                             line.textContent = item.line_subtotal;
+                        }
+
+                        if (discount) {
+                            const discountCents = Number(item.promotion_discount_cents || 0);
+                            discount.textContent = discountCents > 0 ? `${item.promotion_discount} offer` : '';
+                            discount.hidden = discountCents <= 0;
                         }
                     });
                 });
@@ -513,6 +585,56 @@
 
             confirmModalElement?.addEventListener('hidden.bs.modal', () => {
                 pendingRemove = null;
+            });
+
+            page.querySelectorAll('[data-coupon-apply-form]').forEach((form) => {
+                form.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+
+                    const button = form.querySelector('button[type="submit"]');
+                    const body = new URLSearchParams(new FormData(form));
+
+                    try {
+                        if (button) {
+                            button.disabled = true;
+                        }
+
+                        const payload = await requestCart(form.action, 'POST', body);
+                        syncCart(payload);
+                    } catch (error) {
+                        const wrap = form.closest('[data-shop-coupon]');
+                        const message = wrap?.querySelector('[data-coupon-message]');
+                        if (message) {
+                            message.textContent = error.message;
+                            message.classList.add('text-danger');
+                            message.classList.remove('text-success', 'cl-text-2');
+                        }
+                    } finally {
+                        if (button) {
+                            button.disabled = false;
+                        }
+                    }
+                });
+            });
+
+            page.querySelectorAll('[data-coupon-remove-url]').forEach((button) => {
+                button.addEventListener('click', async () => {
+                    try {
+                        button.disabled = true;
+                        const payload = await requestCart(button.dataset.couponRemoveUrl, 'DELETE');
+                        syncCart(payload);
+                    } catch (error) {
+                        const wrap = button.closest('[data-shop-coupon]');
+                        const message = wrap?.querySelector('[data-coupon-message]');
+                        if (message) {
+                            message.textContent = error.message;
+                            message.classList.add('text-danger');
+                            message.classList.remove('text-success', 'cl-text-2');
+                        }
+                    } finally {
+                        button.disabled = false;
+                    }
+                });
             });
         });
     </script>

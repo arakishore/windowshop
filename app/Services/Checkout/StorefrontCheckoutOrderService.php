@@ -14,6 +14,7 @@ use App\Services\Admin\AdminSettingsService;
 use App\Services\Cart\CartPageService;
 use App\Services\Merchant\MerchantCustomerService;
 use App\Services\Order\OrderCreationService;
+use App\Services\Promotion\Coupons\CouponSessionStore;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +29,7 @@ class StorefrontCheckoutOrderService
         private readonly OrderCreationService $orders,
         private readonly MerchantCustomerService $merchantCustomers,
         private readonly AdminSettingsService $adminSettings,
+        private readonly CouponSessionStore $couponStore,
     ) {
     }
 
@@ -118,11 +120,13 @@ class StorefrontCheckoutOrderService
                 'amount_paid' => 0,
                 'customer_order_note' => $this->nullableString($customerOrderNote),
                 'status_note' => 'Storefront order placed',
+                'applied_coupon_code' => $this->couponStore->get($request, (int) $shop->getKey()),
                 'items' => $this->orderItems($group['items'] ?? []),
                 'totals' => $this->totalsRows((int) $deliveryData['shipping_cents'], $deliveryData),
             ], $actor);
 
             $cart->items()->delete();
+            $this->couponStore->forget($request, (int) $shop->getKey());
             $this->clearCheckoutState($request);
 
             return $order;
@@ -225,6 +229,7 @@ class StorefrontCheckoutOrderService
     private function orderItems(array $items): array
     {
         $rows = collect($items)
+            ->reject(fn (array $item): bool => (bool) ($item['is_generated_gift'] ?? false))
             ->map(fn (array $item): array => [
                 'product_variant_id' => (int) ($item['product_variant_id'] ?? $item['id'] ?? 0),
                 'quantity' => (int) ($item['quantity_value'] ?? $item['quantity'] ?? 0),

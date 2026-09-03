@@ -15,6 +15,10 @@ use App\Models\Product;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
+use App\Models\Promotion;
+use App\Models\PromotionCoupon;
+use App\Models\PromotionTarget;
+use App\Models\PromotionTemplate;
 use App\Models\Shop;
 use App\Models\ShopSetting;
 use App\Models\User;
@@ -24,8 +28,10 @@ use App\Services\Checkout\CheckoutPageService;
 use App\Services\Checkout\StorefrontDeliveryService;
 use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\Promotion\Coupons\CouponSessionStore;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Storefront\StorefrontCountryResolver;
+use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -1412,6 +1418,92 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee($fixture['shop']->name);
     }
 
+    public function test_checkout_place_order_applies_session_coupon_through_authoritative_order_creation(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $customer = $this->customerUser('place-coupon@example.test');
+        $fixture = $this->productFixture(price: 1000);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $item = $this->cartItem($cart, $fixture['variant']);
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+        $coupon = $this->couponPromotion($fixture, 'fixed_discount', 'SAVE200', ['value_amount' => '200.00']);
+
+        $response = $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                CouponSessionStore::SESSION_KEY => [$fixture['shop']->getKey() => 'SAVE200'],
+            ])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ]);
+
+        $order = Order::query()->with(['items', 'totals'])->firstOrFail();
+        $response->assertRedirect(route('storefront.checkout.success', $order));
+
+        $orderItem = $order->items->first();
+        $this->assertSame('1000.00', $orderItem->line_subtotal);
+        $this->assertSame('200.00', $orderItem->line_discount);
+        $this->assertSame('800.00', $order->grand_total);
+        $this->assertSame('coupon', $orderItem->metadata['promotion']['activation_type']);
+        $this->assertSame($coupon->getKey(), $orderItem->metadata['promotion']['coupon_id']);
+        $this->assertSame('SAVE200', $orderItem->metadata['promotion']['coupon_code']);
+        $this->assertDatabaseHas('order_totals', [
+            'order_id' => $order->getKey(),
+            'code' => OrderTotal::CODE_ITEM_DISCOUNT,
+            'amount' => '-200.00',
+            'source' => 'promotion',
+        ]);
+        $this->assertDatabaseMissing('cart_items', ['id' => $item->getKey()]);
+        $this->assertFalse(session()->has(CouponSessionStore::SESSION_KEY));
+    }
+
+    public function test_checkout_place_order_revalidates_stale_session_coupon_before_pricing(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $customer = $this->customerUser('place-stale-coupon@example.test');
+        $fixture = $this->productFixture(price: 1000);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $this->cartItem($cart, $fixture['variant']);
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+        $coupon = $this->couponPromotion($fixture, 'fixed_discount', 'SAVE200', ['value_amount' => '200.00']);
+        $coupon->forceFill(['status' => PromotionCoupon::STATUS_INACTIVE])->save();
+
+        $response = $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                CouponSessionStore::SESSION_KEY => [$fixture['shop']->getKey() => 'SAVE200'],
+            ])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+                'promotion_id' => $coupon->promotion_id,
+                'coupon_id' => $coupon->getKey(),
+                'discount_amount' => '200.00',
+                'browser_total' => '800.00',
+            ]);
+
+        $order = Order::query()->with('items')->firstOrFail();
+        $response->assertRedirect(route('storefront.checkout.success', $order));
+
+        $orderItem = $order->items->first();
+        $this->assertSame('1000.00', $orderItem->line_subtotal);
+        $this->assertSame('0.00', $orderItem->line_discount);
+        $this->assertSame('1000.00', $order->grand_total);
+        $this->assertNull($orderItem->metadata);
+        $this->assertFalse(session()->has(CouponSessionStore::SESSION_KEY));
+    }
+
     public function test_storefront_backorder_checkout_can_deduct_stock_negative(): void
     {
         $customer = $this->customerUser('place-backorder@example.test');
@@ -1958,6 +2050,39 @@ class StorefrontCheckoutGateTest extends TestCase
             'product_variant_id' => $variant->getKey(),
             'quantity' => $quantity,
             'unit_price' => $variant->selling_price,
+        ]);
+    }
+
+    private function couponPromotion(array $fixture, string $templateCode, string $code, array $reward): PromotionCoupon
+    {
+        $template = PromotionTemplate::query()->where('code', $templateCode)->firstOrFail();
+        $promotion = Promotion::query()->create([
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'promotion_template_id' => $template->getKey(),
+            'name' => 'Checkout Coupon '.Str::random(6),
+            'slug' => 'checkout-coupon-'.Str::random(8),
+            'status' => Promotion::STATUS_ACTIVE,
+            'activation_type' => Promotion::ACTIVATION_COUPON,
+            'origin' => Promotion::ORIGIN_MERCHANT,
+            'refund_policy_mode' => Promotion::POLICY_INHERIT,
+            'exchange_policy_mode' => Promotion::POLICY_INHERIT,
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => $template->reward_type,
+            ...$reward,
+        ]);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'target_id' => null,
+            'sort_order' => 10,
+        ]);
+
+        return $promotion->coupons()->create([
+            'shop_id' => $fixture['shop']->getKey(),
+            'code' => $code,
+            'status' => PromotionCoupon::STATUS_ACTIVE,
         ]);
     }
 

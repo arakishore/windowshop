@@ -31,6 +31,7 @@ use App\Http\Controllers\Storefront\AccountAddressController;
 use App\Http\Controllers\Storefront\CartItemController;
 use App\Http\Controllers\Storefront\CheckoutAddressController;
 use App\Http\Controllers\Storefront\CheckoutController;
+use App\Http\Controllers\Storefront\CouponController;
 use App\Http\Controllers\Storefront\CustomerAccountController;
 use App\Http\Controllers\Storefront\CustomerLocationController;
 use App\Http\Controllers\Storefront\StorefrontController;
@@ -83,6 +84,8 @@ Route::delete('/wishlist/products/{product}', [WishlistController::class, 'destr
 Route::post('/cart/items', [CartItemController::class, 'store'])->name('storefront.cart.items.store');
 Route::patch('/cart/items/{cartItem}', [CartItemController::class, 'update'])->name('storefront.cart.items.update');
 Route::delete('/cart/items/{cartItem}', [CartItemController::class, 'destroy'])->name('storefront.cart.items.destroy');
+Route::post('/cart/shops/{shop}/coupon', [CouponController::class, 'store'])->name('storefront.cart.shops.coupon.store');
+Route::delete('/cart/shops/{shop}/coupon', [CouponController::class, 'destroy'])->name('storefront.cart.shops.coupon.destroy');
 Route::post('/products/{slug}/delivery-check', [StorefrontController::class, 'checkProductDelivery'])->name('storefront.product.delivery-check');
 Route::get('/category/{categoryPath}/products/{slug}', [StorefrontController::class, 'productDetailWithCategory'])
     ->where('categoryPath', '.+')

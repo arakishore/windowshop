@@ -550,20 +550,26 @@
                             @foreach ($group['items'] as $item)
                                 <div class="checkout-summary-item">
                                     <img src="{{ $item['image'] }}" alt="{{ $item['product_name'] }}">
-                                    <div>
-                                        <p class="mb-4">{{ $item['product_name'] }}</p>
-                                        @if ($item['attributes'])
-                                            <p class="text-caption-01 cl-text-3 mb-4">
+                                     <div>
+                                         <p class="mb-4">{{ $item['product_name'] }}</p>
+                                         @if (! empty($item['is_generated_gift']))
+                                             <div class="badge bg-success-subtle text-success border border-success-subtle mb-4">Free Gift</div>
+                                         @endif
+                                         @if ($item['attributes'])
+                                             <p class="text-caption-01 cl-text-3 mb-4">
                                                 @foreach ($item['attributes'] as $attribute)
                                                     {{ $attribute['label'] }}: {{ $attribute['value'] }}{{ ! $loop->last ? ', ' : '' }}
                                                 @endforeach
                                             </p>
                                         @endif
-                                        <div class="d-flex justify-content-between gap-3">
-                                            <span class="cl-text-2">Qty {{ $item['quantity'] }}</span>
-                                            <strong>{{ $item['line_subtotal'] }}</strong>
-                                        </div>
-                                        @unless ($item['is_available'])
+                                         <div class="d-flex justify-content-between gap-3">
+                                             <span class="cl-text-2">Qty {{ $item['quantity'] }}</span>
+                                             <strong>{{ $item['line_subtotal'] }}</strong>
+                                         </div>
+                                         @if (($item['promotion_discount_cents'] ?? 0) > 0)
+                                             <p class="text-caption-01 text-success mb-0">{{ $item['promotion_discount'] }} offer</p>
+                                         @endif
+                                         @unless ($item['is_available'])
                                             <p class="text-danger text-caption-01 mb-0">{{ $item['availability_message'] }}</p>
                                         @endunless
                                     </div>
@@ -580,6 +586,14 @@
                         <span>Discount</span>
                         <strong>{{ $cartData['discount'] ?? 'None' }}</strong>
                     </div>
+                    @php($checkoutGroup = collect($cartData['shop_groups'] ?? [])->first())
+                    @php($checkoutCoupon = is_array($checkoutGroup) ? ($checkoutGroup['coupon'] ?? null) : null)
+                    @if (! empty($checkoutCoupon['code']))
+                        <div class="checkout-total-row">
+                            <span>Coupon {{ $checkoutCoupon['code'] }}</span>
+                            <strong>{{ $checkoutCoupon['message'] ?? 'Applied' }}</strong>
+                        </div>
+                    @endif
                     <div class="checkout-total-row">
                         <span>Shipping</span>
                         <strong data-checkout-shipping-total>{{ $cartData['shipping'] ?? 'Calculated later' }}</strong>

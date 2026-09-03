@@ -180,3 +180,176 @@ Promotion override applies only to items participating in that promotion. Histor
 
 The foundation intentionally does not implement cart promotion evaluation, automatic cart discounts, customer coupon entry, checkout recalculation, tax integration, promotion pricing services, discount allocation, usage reservation/locking, order item promotion allocation or snapshots, refund/exchange calculation, offer landing pages, banner links, promotion banners, social sharing, delivery promotions, or POS promotion pricing.
 ====================
+PHASE 3
+Investigation complete. I did not modify code.
+
+**Root Finding**
+
+WindowShop currently has promotion configuration/storage, but no promotion calculation layer is connected to cart, checkout, POS pricing, tax, or order creation yet.
+
+The best Phase 3 integration point is a shared promotion calculation service that runs after cart/POS line normalization and before tax calculation/order total finalization.
+
+**Current Pricing Flow**
+
+Base price source is `product_variants.selling_price`.
+
+Key files:
+
+- [ProductVariant.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/ProductVariant.php:24)
+- [ProductListingService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Storefront/ProductListingService.php:99)
+- [AddToCartService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Cart/AddToCartService.php:21)
+- [CartPageService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Cart/CartPageService.php:132)
+- [OrderCreationService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Order/OrderCreationService.php:530)
+- [PosPricingService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/POS/PosPricingService.php:41)
+
+Storefront product listing uses `selling_price` and `mrp` only for display/visual discount badges. That is not a promotion system.
+
+Cart stores `cart_items.unit_price`, but it is refreshed from the variant’s current `selling_price` in:
+
+- [AddToCartService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Cart/AddToCartService.php:45)
+- [CartItemMutationService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Cart/CartItemMutationService.php:65)
+- [CartMergeService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Cart/CartMergeService.php:102)
+- [CartPageService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Cart/CartPageService.php:153)
+
+Checkout/order creation does not trust cart item prices. Storefront checkout passes only variant id and quantity into order creation:
+
+- [StorefrontCheckoutOrderService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Checkout/StorefrontCheckoutOrderService.php:225)
+
+Then `OrderCreationService::buildItems()` recalculates from the locked variant’s `selling_price`.
+
+**Tax And Discount Flow**
+
+Tax is already designed to accept a pre-tax line discount.
+
+Important files:
+
+- [PricingEngine.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Tax/PricingEngine.php:19)
+- [TaxCalculator.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Tax/TaxCalculator.php:15)
+- [OrderTaxSnapshotFactory.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Tax/OrderTaxSnapshotFactory.php:24)
+
+`TaxCalculator::calculateLine()` subtracts `discountAmount` before taxable amount. This is the correct place for promotion discounts to affect tax.
+
+Existing POS manual discounts already use this path:
+
+- [DiscountService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/POS/DiscountService.php:13)
+- [PosPricingService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/POS/PosPricingService.php:172)
+- [OrderCreationService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Order/OrderCreationService.php:539)
+
+So Phase 3 should feed promotion discounts into the same `discountAmount` path, not create separate post-tax math.
+
+**Cart And Checkout Boundaries**
+
+Cart supports multiple shops in grouped display:
+
+- [CartPageService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Cart/CartPageService.php:97)
+
+But checkout/order placement requires exactly one shop:
+
+- [StorefrontCheckoutOrderService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Checkout/StorefrontCheckoutOrderService.php:54)
+- [StorefrontCheckoutOrderService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Checkout/StorefrontCheckoutOrderService.php:67)
+
+Promotion evaluation should therefore be shop-scoped. In cart display, evaluate per shop group. In checkout/order creation, enforce the selected shop only.
+
+**Promotion Foundation**
+
+Promotion storage is in place:
+
+- [Promotion.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/Promotion.php:17)
+- [PromotionReward.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/PromotionReward.php:10)
+- [PromotionTarget.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/PromotionTarget.php:10)
+- [PromotionCondition.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/PromotionCondition.php:10)
+- [PromotionCoupon.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/PromotionCoupon.php:10)
+- [PromotionRedemption.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/PromotionRedemption.php:10)
+
+Supported reward types currently map to:
+
+- percentage discount
+- fixed discount
+- fixed price
+- fixed bundle price
+- buy X get Y free
+- buy X get Y discount
+- quantity discount
+- tier pricing
+- free gift
+
+Targets support:
+
+- all
+- product
+- variant
+- category
+- brand
+- collection
+
+Target facts can be resolved from:
+
+- [Product.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/Product.php:166)
+- [Product.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/Product.php:176)
+- [Product.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/Product.php:231)
+- [ProductCategory.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Models/ProductCategory.php:103)
+
+**Important Risks**
+
+Quantity handling needs care. Cart supports decimal quantities, but storefront order placement currently converts quantities to integers in `StorefrontCheckoutOrderService::orderItems()`. BOGO, bundle, and tier logic should explicitly define how decimal quantities behave, likely using floor units for unit-based promotions.
+
+Free gift is not just a discount. Current order creation always prices variants from `selling_price`; a free gift would need either a zero-price discounted order item or an explicit promotion-generated gift line with full discount metadata. This should not be hacked into cart item price.
+
+Usage limits and coupon limits require transaction-safe redemption creation. `promotion_redemptions` exists, but nothing currently locks promotions/coupons or writes redemptions during order placement.
+
+Refund/exchange workflows prorate stored order item snapshots:
+
+- [OrderRefundService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Order/OrderRefundService.php:146)
+- [OrderExchangeService.php](D:/xampp82/htdocs/unwanted/localhyper/windowshop/app/Services/Order/OrderExchangeService.php:218)
+
+So the Phase 3 engine must ensure `order_items.line_discount`, `line_tax`, `line_total`, and metadata accurately reflect applied promotions at order creation time.
+
+**Recommended Minimal Architecture**
+
+Add a shared promotion calculation layer, likely under `app/Services/Promotion/Engine`.
+
+Suggested services:
+
+- `PromotionContextBuilder`
+- `PromotionRepository`
+- `PromotionTargetMatcher`
+- `PromotionConditionEvaluator`
+- `PromotionRewardCalculator`
+- `PromotionCombinationResolver`
+- `PromotionRedemptionService`
+- DTOs like `PromotionCartInput`, `PromotionLineInput`, `PromotionCalculationResult`, `PromotionLineAdjustment`, `AppliedPromotion`
+
+Integrate it into:
+
+- `CartPageService::dataFromItems()` for cart/checkout preview totals
+- `StorefrontCheckoutOrderService::place()` to re-evaluate before order creation
+- `OrderCreationService::buildItems()` or its input contract so final order snapshots use the same adjustments
+- `PosPricingService::price()` if POS promotions are in Phase 3 scope
+
+**Suggested Result Contract**
+
+The engine should return:
+
+- original subtotal
+- promotion discount total
+- final subtotal before shipping
+- per-line discount allocations
+- applied promotion ids/names/reward types
+- skipped promotion reasons where useful
+- gift lines separately, not silently mixed with normal cart lines
+- redemption candidates for commit after order creation
+
+**Implementation Order**
+
+1. Build read-only active promotion query using `Promotion::scopeActiveNow()`.
+2. Build line target facts in bulk: product, variant, category ancestry, brand, collection ids.
+3. Implement automatic promotion evaluation without coupons first.
+4. Add reward calculators one by one, starting with percentage/fixed/quantity.
+5. Add deterministic combination/priority rules.
+6. Feed line discounts into existing tax calculation.
+7. Persist applied promotion attribution on `order_items.metadata` and/or `order_totals.metadata`.
+8. Write `promotion_redemptions` transactionally after order creation.
+9. Add coupon application/session support separately.
+10. Add free gift only after the line/order representation is explicitly designed.
+
+No files were changed, and I did not run tests because this was investigation-only.

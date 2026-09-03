@@ -1179,7 +1179,8 @@ class MerchantOrderActionsTest extends TestCase
             ->assertSee('Shop policy does not allow a refund, but you may approve one as an exception.')
             ->assertDontSee('Shop Visit Only')
             ->assertDontSee('Cash at Shop orders do not support pickup.')
-            ->assertDontSee('Refund expired by');
+            ->assertSee('Refund expired by 3 days')
+            ->assertSee('Refund window has expired, but you may approve one as an exception.');
     }
 
     public function test_merchant_order_detail_shows_expired_and_not_started_return_exchange_states(): void
