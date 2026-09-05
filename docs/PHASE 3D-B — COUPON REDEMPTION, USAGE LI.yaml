@@ -1,0 +1,127 @@
+Implement Phase 3D-B — Coupon Redemption & Usage Limits
+
+Phase 3D-A is complete/frozen. Do not redesign it.
+
+First inspect the existing:
+- promotion_redemptions schema/model
+- promotion/coupon usage-limit fields
+- checkout/order transaction
+- coupon resolver/services
+- merchant order cancellation flow
+
+Then implement the smallest architecture-consistent solution.
+
+REQUIREMENTS
+
+1. Redemption
+- Create redemption only after successful order creation AND only when the coupon promotion actually wins.
+- Do not create redemption on Apply, cart, or checkout preview.
+- If automatic promotion beats the coupon, create no coupon redemption.
+- COD/Cash at Shop consume usage at order creation.
+- Store actual applied discount, not configured discount.
+
+2. Usage Limits
+Enforce:
+- promotions.total_usage_limit
+- promotions.per_customer_usage_limit
+- promotion_coupons.usage_limit
+- promotion_coupons.per_customer_usage_limit
+
+Cancelled redemptions must not count.
+
+Guest per-customer limits are provisional until login/checkout.
+Authoritative enforcement must happen during checkout.
+
+3. Concurrency
+Prevent two checkouts from consuming the final available usage.
+
+Use DB transaction + lockForUpdate() on the appropriate promotion/coupon records and re-check limits under the lock.
+
+Do not rely on an unlocked count-then-insert flow.
+
+4. Idempotency
+Checkout/order retries must not create duplicate redemptions or return a 500.
+
+Conceptual identity:
+order_id + promotion_id + promotion_coupon_id
+
+Inspect existing indexes first.
+Add a migration only if needed for safe idempotency/indexing.
+
+5. Cancellation
+When an order is cancelled:
+- keep the redemption row
+- mark it cancelled
+- set cancelled_at
+- exclude it from future usage counts
+
+Make cancellation idempotent and integrate it with the existing cancellation transaction.
+
+Refunds do NOT restore coupon usage in this phase.
+
+6. Exhausted Coupon at Checkout
+If a coupon was valid in cart but becomes exhausted before checkout:
+- never honor the stale discount
+- preserve existing Phase 3D-A stale-coupon behavior
+- never trust browser promotion/coupon IDs or discount amounts
+
+7. Architecture
+Prefer a focused PromotionRedemptionService/CouponRedemptionService.
+
+Keep:
+- PromotionCalculator responsible for pricing math
+- CouponResolver responsible for coupon resolution
+- redemption/usage service responsible for limits, locking, creation and cancellation
+
+Do not introduce OrderTotal coupon double-accounting.
+
+OUT OF SCOPE
+
+Do NOT implement:
+- complex coupon rewards (Phase 3D-C)
+- coupon stacking
+- multiple coupons per shop
+- POS coupons
+- refund-based usage restoration
+- banner changes
+- unrelated refactoring
+
+TESTS
+
+Cover at minimum:
+- successful winning coupon creates one redemption
+- automatic winner creates no coupon redemption
+- promotion total limit
+- coupon total limit
+- promotion per-customer limit
+- coupon per-customer limit
+- cancelled order releases usage
+- redemption remains as cancelled audit record
+- idempotent retry creates no duplicate
+- exhausted/stale coupon not honored at checkout
+- guest provisional vs authenticated enforcement
+- shop isolation
+- actual discount amount stored correctly
+- forged browser discount/promotion values ignored
+
+Run affected promotion/cart/checkout/order/cancellation tests, then:
+
+php artisan test
+git diff --check
+
+Target: full suite remains green.
+
+REPORT
+
+Report:
+- root architecture/schema findings
+- migration added, if any, and why
+- files changed
+- usage/concurrency/idempotency approach
+- cancellation behavior
+- focused + full test results
+- remaining concerns
+
+Do NOT commit, push, or merge.
+Do NOT enable Phase 3D-C complex coupons.
+Stop for review.

@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\User;
+use App\Models\PromotionCoupon;
 use App\Services\POS\DiscountService;
 use App\Services\POS\CashRoundingService;
 use App\Services\Promotion\Engine\Data\GeneratedPromotionGift;
@@ -20,6 +21,7 @@ use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
 use App\Services\Promotion\Engine\PromotionCalculator;
 use App\Services\Promotion\Coupons\CouponResolver;
+use App\Services\Promotion\Redemptions\CouponRedemptionService;
 use App\Services\Tax\Exceptions\TaxConfigurationException;
 use App\Services\Tax\OrderTaxSnapshotFactory;
 use App\Services\Tax\PricingEngine;
@@ -43,6 +45,7 @@ class OrderCreationService
         private readonly MerchantOrderStockShortageService $stockShortageService,
         private readonly PromotionCalculator $promotions,
         private readonly CouponResolver $couponResolver,
+        private readonly CouponRedemptionService $couponRedemptions,
     ) {
     }
 
@@ -93,7 +96,7 @@ class OrderCreationService
             $customer = $customerSnapshot['customer_id']
                 ? Customer::query()->find((int) $customerSnapshot['customer_id'])
                 : null;
-            $activatedCoupons = $this->activatedCoupons($shop, $data['applied_coupon_code'] ?? null, $effectiveAt);
+            $activatedCoupons = $this->activatedCoupons($shop, $data['applied_coupon_code'] ?? null, $customer, $effectiveAt);
             $promotionResult = $this->shouldApplyAutomaticPromotions($createdSource)
                 ? $this->promotions->calculateForVariantRows($shop, $rows, $variants, $customer, $effectiveAt, $activatedCoupons)
                 : new PromotionCalculationResult((int) $shop->getKey(), []);
@@ -182,6 +185,7 @@ class OrderCreationService
             $order->forceFill(['payment_status' => $paymentStatus]);
 
             $this->orderTotalsService->save($order, $calculated['summary'], $calculated['rows']);
+            $this->couponRedemptions->redeemWinningCoupon($order, $promotionResult);
             $this->orderStatusService->recordInitial(
                 $order,
                 $orderStatus,
@@ -195,7 +199,7 @@ class OrderCreationService
         });
     }
 
-    private function activatedCoupons(Shop $shop, mixed $code, CarbonInterface $effectiveAt): array
+    private function activatedCoupons(Shop $shop, mixed $code, ?Customer $customer, CarbonInterface $effectiveAt): array
     {
         $normalized = $this->couponResolver->normalize($code);
         if ($normalized === '') {
@@ -204,7 +208,13 @@ class OrderCreationService
 
         $resolution = $this->couponResolver->resolveForShop($shop, $normalized, $effectiveAt);
 
-        return $resolution->valid() ? [$resolution->coupon] : [];
+        if (! $resolution->valid() || $resolution->coupon === null) {
+            return [];
+        }
+
+        $coupon = $this->couponRedemptions->lockAvailableCouponForCheckout($shop, $resolution->coupon, $customer, $effectiveAt);
+
+        return $coupon instanceof PromotionCoupon ? [$coupon] : [];
     }
 
     /**

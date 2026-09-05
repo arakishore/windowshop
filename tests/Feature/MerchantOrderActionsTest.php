@@ -1179,7 +1179,7 @@ class MerchantOrderActionsTest extends TestCase
             ->assertSee('Shop policy does not allow a refund, but you may approve one as an exception.')
             ->assertDontSee('Shop Visit Only')
             ->assertDontSee('Cash at Shop orders do not support pickup.')
-            ->assertSee('Refund expired by 3 days')
+            ->assertSee('Refund expired by '.(int) ceil($collectedAt->copy()->addDays(3)->diffInDays(now())).' days')
             ->assertSee('Refund window has expired, but you may approve one as an exception.');
     }
 
