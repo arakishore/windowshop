@@ -732,38 +732,96 @@ class StorefrontCartPageTest extends TestCase
             ->assertJsonPath('shop_groups.0.coupon.status', 'applied');
     }
 
-    public function test_unsupported_coupon_reward_types_do_not_activate_in_phase_3d_a(): void
+    public function test_complex_coupon_reward_types_activate_through_existing_cart_engine(): void
     {
         $this->seed(PromotionTemplateSeeder::class);
-        $fixture = $this->productFixture(price: 1000);
-        $cart = $this->guestCart('coupon-unsupported-token');
-        $this->cartItem($cart, $fixture['variant'], 3);
+        $cases = [
+            'quantity_discount' => [
+                'code' => 'QTYCOUPON',
+                'reward' => ['value_type' => 'amount', 'value_amount' => '100.00'],
+                'discount_cents' => 30000,
+            ],
+            'fixed_bundle_price' => [
+                'code' => 'BUNDLECOUPON',
+                'reward' => ['bundle_quantity' => 2, 'bundle_price' => '1000.00'],
+                'discount_cents' => 100000,
+            ],
+            'tier_pricing' => [
+                'code' => 'TIERCOUPON',
+                'reward' => ['tier_config' => [['min_quantity' => 3, 'unit_price' => '800.00']]],
+                'discount_cents' => 60000,
+            ],
+            'buy_x_get_y_free' => [
+                'code' => 'BOGOFREE',
+                'reward' => ['buy_quantity' => 2, 'get_quantity' => 1],
+                'discount_cents' => 100000,
+            ],
+            'buy_x_get_y_discount' => [
+                'code' => 'BOGODISCOUNT',
+                'reward' => ['buy_quantity' => 2, 'get_quantity' => 1, 'value_percent' => '50.00'],
+                'discount_cents' => 50000,
+            ],
+            'free_gift' => [
+                'code' => 'GIFTCOUPON',
+                'reward' => [],
+                'discount_cents' => 60000,
+            ],
+        ];
 
-        foreach ([
-            'quantity_discount' => ['value_type' => 'amount', 'value_amount' => '100.00'],
-            'fixed_bundle_price' => ['bundle_quantity' => 2, 'bundle_price' => '1000.00'],
-            'tier_pricing' => ['tier_config' => [['min_quantity' => 2, 'unit_price' => '900.00']]],
-            'buy_x_get_y_free' => ['buy_quantity' => 2, 'get_quantity' => 1],
-            'buy_x_get_y_discount' => ['buy_quantity' => 2, 'get_quantity' => 1, 'value_percent' => '50.00'],
-            'free_gift' => [],
-        ] as $type => $reward) {
-            $coupon = $this->couponPromotion($fixture, $type, Str::upper(Str::replace('_', '', $type)), $reward);
+        foreach ($cases as $type => $case) {
+            $fixture = $this->productFixture(price: 1000, stock: 10);
+            $cart = $this->guestCart('coupon-complex-'.Str::random(8));
+            $this->cartItem($cart, $fixture['variant'], 3);
+            $coupon = $this->couponPromotion($fixture, $type, $case['code'], $case['reward']);
+
             if ($type === 'quantity_discount') {
                 $coupon->promotion->conditions()->create(['condition_type' => PromotionCondition::TYPE_MINIMUM_QUANTITY, 'operator' => '>=', 'value_numeric' => '2.00', 'sort_order' => 10]);
             }
+
             if (in_array($type, ['buy_x_get_y_free', 'buy_x_get_y_discount'], true)) {
                 $coupon->promotion->targets()->create(['target_role' => PromotionTarget::ROLE_BUY, 'target_type' => PromotionTarget::TYPE_ALL, 'sort_order' => 20]);
                 $coupon->promotion->targets()->create(['target_role' => PromotionTarget::ROLE_GET, 'target_type' => PromotionTarget::TYPE_ALL, 'sort_order' => 30]);
             }
+
             if ($type === 'free_gift') {
+                $giftProduct = Product::query()->create([
+                    'merchant_id' => $fixture['merchant']->getKey(),
+                    'shop_id' => $fixture['shop']->getKey(),
+                    'root_product_category_id' => $fixture['shop']->root_product_category_id,
+                    'product_category_id' => $fixture['product']->product_category_id,
+                    'product_name' => 'Coupon Gift Product '.Str::random(5),
+                    'slug' => 'coupon-gift-product-'.Str::random(8),
+                    'availability_status_id' => $fixture['product']->availability_status_id,
+                    'status' => 'active',
+                    'published_at' => now(),
+                ]);
+                $giftVariant = ProductVariant::query()->create([
+                    'product_id' => $giftProduct->getKey(),
+                    'shop_id' => $fixture['shop']->getKey(),
+                    'availability_status_id' => $giftProduct->availability_status_id,
+                    'sku' => 'SKU-'.Str::random(8),
+                    'name' => 'Gift',
+                    'mrp' => 700,
+                    'selling_price' => 600,
+                    'stock_quantity' => 3,
+                    'is_default' => true,
+                    'is_sellable' => true,
+                    'status' => 'active',
+                ]);
                 $coupon->promotion->conditions()->create(['condition_type' => PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, 'operator' => '>=', 'value_numeric' => '100.00', 'sort_order' => 10]);
-                $coupon->promotion->targets()->create(['target_role' => PromotionTarget::ROLE_GIFT, 'target_type' => PromotionTarget::TYPE_VARIANT, 'target_id' => $fixture['variant']->getKey(), 'sort_order' => 20]);
+                $coupon->promotion->targets()->create(['target_role' => PromotionTarget::ROLE_GIFT, 'target_type' => PromotionTarget::TYPE_VARIANT, 'target_id' => $giftVariant->getKey(), 'sort_order' => 20]);
             }
 
-            $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-unsupported-token'])
+            $response = $this->withSession([CartResolver::SESSION_TOKEN_KEY => $cart->session_token])
                 ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $fixture['shop']->getKey()]), ['coupon_code' => $coupon->code])
-                ->assertUnprocessable()
-                ->assertJsonPath('coupon.status', 'unsupported_reward_type');
+                ->assertOk()
+                ->assertJsonPath('coupon.status', 'applied')
+                ->assertJsonPath('coupon.won', true)
+                ->assertJsonPath('coupon.discount_cents', $case['discount_cents']);
+
+            if ($type === 'free_gift') {
+                $response->assertJsonPath('shop_groups.0.items.1.is_generated_gift', true);
+            }
         }
     }
 
@@ -782,6 +840,82 @@ class StorefrontCartPageTest extends TestCase
             ->assertJsonPath('coupon.status', 'guest_verification_required')
             ->assertJsonPath('coupon.won', true)
             ->assertJsonPath('coupon.discount_cents', 20000)
+            ->assertJsonPath('coupon.message', 'Coupon applied. Final eligibility will be confirmed after sign in.');
+    }
+
+    public function test_guest_new_customer_only_fixed_bundle_coupon_preview_requires_checkout_verification(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 1000, stock: 5);
+        $coupon = $this->couponPromotion($fixture, 'fixed_bundle_price', 'BUNDLEWELCOME', [
+            'bundle_quantity' => 2,
+            'bundle_price' => '1000.00',
+        ]);
+        $coupon->promotion->forceFill(['new_customer_only' => true])->save();
+        $cart = $this->guestCart('coupon-new-customer-bundle-token');
+        $this->cartItem($cart, $fixture['variant'], 2);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-new-customer-bundle-token'])
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $fixture['shop']->getKey()]), ['coupon_code' => 'BUNDLEWELCOME'])
+            ->assertOk()
+            ->assertJsonPath('coupon.status', 'guest_verification_required')
+            ->assertJsonPath('coupon.won', true)
+            ->assertJsonPath('coupon.discount_cents', 100000)
+            ->assertJsonPath('coupon.message', 'Coupon applied. Final eligibility will be confirmed after sign in.');
+    }
+
+    public function test_guest_new_customer_only_free_gift_coupon_preview_requires_checkout_verification(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->productFixture(price: 1000, stock: 5);
+        $giftProduct = Product::query()->create([
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'root_product_category_id' => $fixture['shop']->root_product_category_id,
+            'product_category_id' => $fixture['product']->product_category_id,
+            'product_name' => 'New Customer Gift '.Str::random(5),
+            'slug' => 'new-customer-gift-'.Str::random(8),
+            'availability_status_id' => $fixture['product']->availability_status_id,
+            'status' => 'active',
+            'published_at' => now(),
+        ]);
+        $giftVariant = ProductVariant::query()->create([
+            'product_id' => $giftProduct->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'availability_status_id' => $giftProduct->availability_status_id,
+            'sku' => 'SKU-'.Str::random(8),
+            'name' => 'Gift',
+            'mrp' => 700,
+            'selling_price' => 600,
+            'stock_quantity' => 3,
+            'is_default' => true,
+            'is_sellable' => true,
+            'status' => 'active',
+        ]);
+        $coupon = $this->couponPromotion($fixture, 'free_gift', 'GIFTWELCOME', []);
+        $coupon->promotion->forceFill(['new_customer_only' => true])->save();
+        $coupon->promotion->conditions()->create([
+            'condition_type' => PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL,
+            'operator' => '>=',
+            'value_numeric' => '2000.00',
+            'sort_order' => 10,
+        ]);
+        $coupon->promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_GIFT,
+            'target_type' => PromotionTarget::TYPE_VARIANT,
+            'target_id' => $giftVariant->getKey(),
+            'sort_order' => 20,
+        ]);
+        $cart = $this->guestCart('coupon-new-customer-gift-token');
+        $this->cartItem($cart, $fixture['variant'], 2);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'coupon-new-customer-gift-token'])
+            ->postJson(route('storefront.cart.shops.coupon.store', ['shop' => $fixture['shop']->getKey()]), ['coupon_code' => 'GIFTWELCOME'])
+            ->assertOk()
+            ->assertJsonPath('coupon.status', 'guest_verification_required')
+            ->assertJsonPath('coupon.won', true)
+            ->assertJsonPath('coupon.discount_cents', 60000)
+            ->assertJsonPath('shop_groups.0.items.1.is_generated_gift', true)
             ->assertJsonPath('coupon.message', 'Coupon applied. Final eligibility will be confirmed after sign in.');
     }
 

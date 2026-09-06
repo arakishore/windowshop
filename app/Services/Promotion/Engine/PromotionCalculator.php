@@ -54,7 +54,7 @@ class PromotionCalculator
         $couponByPromotionId = $this->couponByPromotionId($activatedCoupons);
         $lines = $this->lineInputs($rows, $variants);
         $candidatesByVariant = $this->candidatesByVariant($promotions, $lines, $customer, $couponByPromotionId, $guestCouponPreview);
-        $giftCandidates = $this->freeGiftCandidates($promotions, $lines, $customer);
+        $giftCandidates = $this->freeGiftCandidates($promotions, $lines, $customer, $couponByPromotionId, $guestCouponPreview);
 
         foreach ($giftCandidates as $giftCandidate) {
             foreach ($giftCandidate['line_candidates'] as $variantId => $candidate) {
@@ -141,13 +141,15 @@ class PromotionCalculator
         }
 
         foreach ($bundlePromotions as $promotion) {
-            foreach ($this->fixedBundleCandidates($promotion, $lines, $customer, $candidates) as $variantId => $candidate) {
+            $coupon = $couponByPromotionId[(int) $promotion->getKey()] ?? null;
+            foreach ($this->fixedBundleCandidates($promotion, $lines, $customer, $candidates, $coupon, $guestCouponPreview && $coupon instanceof PromotionCoupon) as $variantId => $candidate) {
                 $candidates[$variantId][] = $candidate;
             }
         }
 
         foreach ($bogoPromotions as $promotion) {
-            foreach ($this->buyXGetYCandidates($promotion, $lines, $customer, $candidates) as $variantId => $candidate) {
+            $coupon = $couponByPromotionId[(int) $promotion->getKey()] ?? null;
+            foreach ($this->buyXGetYCandidates($promotion, $lines, $customer, $candidates, $coupon, $guestCouponPreview && $coupon instanceof PromotionCoupon) as $variantId => $candidate) {
                 $candidates[$variantId][] = $candidate;
             }
         }
@@ -177,7 +179,7 @@ class PromotionCalculator
      * @param array<int, PromotionLineInput> $lines
      * @return array<int, array{promotion_id: int, gift: GeneratedPromotionGift, line_candidates: array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>}>
      */
-    private function freeGiftCandidates(Collection $promotions, array $lines, ?Customer $customer): array
+    private function freeGiftCandidates(Collection $promotions, array $lines, ?Customer $customer, array $couponByPromotionId = [], bool $guestCouponPreview = false): array
     {
         $candidates = [];
 
@@ -187,15 +189,20 @@ class PromotionCalculator
                 continue;
             }
 
-            if ($promotion->new_customer_only && ! $this->isNewCustomerForShop((int) $promotion->shop_id, $customer)) {
+            $coupon = $couponByPromotionId[(int) $promotion->getKey()] ?? null;
+            $allowGuestCustomerPreview = $guestCouponPreview && $coupon instanceof PromotionCoupon && ! $customer instanceof Customer;
+
+            if ($promotion->new_customer_only && ! $allowGuestCustomerPreview && ! $this->isNewCustomerForShop((int) $promotion->shop_id, $customer)) {
                 continue;
             }
 
             $eligibleLines = [];
             foreach ($lines as $line) {
-                if ($this->targets->matches($promotion, $line, PromotionTarget::ROLE_ELIGIBLE)) {
-                    $eligibleLines[$line->variantId] = $line;
+                if (! $this->targets->matches($promotion, $line, PromotionTarget::ROLE_ELIGIBLE)) {
+                    continue;
                 }
+
+                $eligibleLines[$line->variantId] = $line;
             }
 
             if ($eligibleLines === []) {
@@ -226,12 +233,13 @@ class PromotionCalculator
                 continue;
             }
 
-            $gift = $this->generatedGift($promotion, $giftVariant, $giftUnitCents, $minimumSubtotalCents, $eligibleSubtotalCents, $eligibleLines);
+            $gift = $this->generatedGift($promotion, $giftVariant, $giftUnitCents, $minimumSubtotalCents, $eligibleSubtotalCents, $eligibleLines, $coupon);
             $lineCandidates = [];
 
             foreach ($eligibleLines as $line) {
                 $lineCandidates[$line->variantId] = [
                     'promotion' => $promotion,
+                    'coupon' => $coupon,
                     'discount_cents' => 0,
                     'details' => [
                         'reward_type' => PromotionReward::TYPE_FREE_GIFT,
@@ -296,7 +304,7 @@ class PromotionCalculator
     /**
      * @param array<int, PromotionLineInput> $eligibleLines
      */
-    private function generatedGift(Promotion $promotion, ProductVariant $giftVariant, int $giftUnitCents, int $minimumSubtotalCents, int $eligibleSubtotalCents, array $eligibleLines): GeneratedPromotionGift
+    private function generatedGift(Promotion $promotion, ProductVariant $giftVariant, int $giftUnitCents, int $minimumSubtotalCents, int $eligibleSubtotalCents, array $eligibleLines, ?PromotionCoupon $coupon = null): GeneratedPromotionGift
     {
         $product = $giftVariant->product;
         $details = [
@@ -332,6 +340,9 @@ class PromotionCalculator
                 priority: (int) $promotion->priority,
                 discountCents: $giftUnitCents,
                 details: $details,
+                activationType: (string) $promotion->activation_type,
+                couponId: $coupon?->getKey(),
+                couponCode: $coupon?->code,
             ),
             productId: (int) $giftVariant->product_id,
             variantId: (int) $giftVariant->getKey(),
@@ -439,7 +450,7 @@ class PromotionCalculator
      * @param array<int, array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>> $existingCandidates
      * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
      */
-    private function fixedBundleCandidates(Promotion $promotion, array $lines, ?Customer $customer, array $existingCandidates): array
+    private function fixedBundleCandidates(Promotion $promotion, array $lines, ?Customer $customer, array $existingCandidates, ?PromotionCoupon $coupon = null, bool $allowGuestCustomerPreview = false): array
     {
         $eligibleLines = [];
 
@@ -448,7 +459,7 @@ class PromotionCalculator
                 continue;
             }
 
-            if (! $this->conditions->passes($promotion, $line, $customer)) {
+            if (! $this->conditions->passes($promotion, $line, $customer, $allowGuestCustomerPreview)) {
                 continue;
             }
 
@@ -465,6 +476,7 @@ class PromotionCalculator
 
             $candidates[$variantId] = [
                 'promotion' => $promotion,
+                'coupon' => $coupon,
                 'discount_cents' => (int) $allocation['discount_cents'],
                 'details' => $allocation['details'] ?? [],
             ];
@@ -489,7 +501,7 @@ class PromotionCalculator
      * @param array<int, array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>> $existingCandidates
      * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
      */
-    private function buyXGetYCandidates(Promotion $promotion, array $lines, ?Customer $customer, array $existingCandidates): array
+    private function buyXGetYCandidates(Promotion $promotion, array $lines, ?Customer $customer, array $existingCandidates, ?PromotionCoupon $coupon = null, bool $allowGuestCustomerPreview = false): array
     {
         $reward = $promotion->rewards->first();
         $buyQuantity = (int) ($reward?->buy_quantity ?? 0);
@@ -508,7 +520,7 @@ class PromotionCalculator
         $getUnits = [];
 
         foreach ($lines as $line) {
-            if (! $this->conditions->passes($promotion, $line, $customer)) {
+            if (! $this->conditions->passes($promotion, $line, $customer, $allowGuestCustomerPreview)) {
                 continue;
             }
 
@@ -529,7 +541,7 @@ class PromotionCalculator
             return [];
         }
 
-        $candidates = $this->buyXGetYCandidatesFromAllocation($promotion, $reward, $allocation);
+        $candidates = $this->buyXGetYCandidatesFromAllocation($promotion, $reward, $allocation, $coupon);
         if ($candidates === []) {
             return [];
         }
@@ -540,7 +552,7 @@ class PromotionCalculator
             }
 
             if (! $this->groupCandidateCanSurvive($promotion, $candidate, $existingCandidates[$variantId] ?? [])) {
-                return $this->buyXGetYReducedCandidates($promotion, $reward, $buyUnits, $getUnits, $buyQuantity, $getQuantity, $existingCandidates, (int) $allocation['completed_groups'] - 1);
+                return $this->buyXGetYReducedCandidates($promotion, $reward, $buyUnits, $getUnits, $buyQuantity, $getQuantity, $existingCandidates, (int) $allocation['completed_groups'] - 1, $coupon);
             }
         }
 
@@ -553,7 +565,7 @@ class PromotionCalculator
      * @param array<int, array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>> $existingCandidates
      * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
      */
-    private function buyXGetYReducedCandidates(Promotion $promotion, PromotionReward $reward, array $buyUnits, array $getUnits, int $buyQuantity, int $getQuantity, array $existingCandidates, int $maxGroups): array
+    private function buyXGetYReducedCandidates(Promotion $promotion, PromotionReward $reward, array $buyUnits, array $getUnits, int $buyQuantity, int $getQuantity, array $existingCandidates, int $maxGroups, ?PromotionCoupon $coupon = null): array
     {
         for ($groups = $maxGroups; $groups >= 1; $groups--) {
             $allocation = $this->buyXGetYAllocation($buyUnits, $getUnits, $buyQuantity, $getQuantity, $groups);
@@ -561,7 +573,7 @@ class PromotionCalculator
                 continue;
             }
 
-            $candidates = $this->buyXGetYCandidatesFromAllocation($promotion, $reward, $allocation);
+            $candidates = $this->buyXGetYCandidatesFromAllocation($promotion, $reward, $allocation, $coupon);
             if ($candidates === []) {
                 continue;
             }
@@ -681,7 +693,7 @@ class PromotionCalculator
      * @param array{completed_groups: int, buy_quantity: int, get_quantity: int, buy_units: array<int, array<string, mixed>>, get_units: array<int, array<string, mixed>>, pool_type: string} $allocation
      * @return array<int, array{promotion: Promotion, discount_cents: int, details?: array<string, mixed>}>
      */
-    private function buyXGetYCandidatesFromAllocation(Promotion $promotion, PromotionReward $reward, array $allocation): array
+    private function buyXGetYCandidatesFromAllocation(Promotion $promotion, PromotionReward $reward, array $allocation, ?PromotionCoupon $coupon = null): array
     {
         $buyByVariant = $this->summarizeBogoUnits($allocation['buy_units']);
         $getByVariant = $this->summarizeBogoUnits($allocation['get_units'], $reward);
@@ -712,6 +724,7 @@ class PromotionCalculator
 
             $candidates[$variantId] = [
                 'promotion' => $promotion,
+                'coupon' => $coupon,
                 'discount_cents' => (int) $get['discount_cents'],
                 'details' => [
                     'reward_type' => $reward->reward_type,

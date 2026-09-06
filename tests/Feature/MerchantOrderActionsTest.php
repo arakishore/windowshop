@@ -1155,32 +1155,37 @@ class MerchantOrderActionsTest extends TestCase
             'action' => 'merchant_complete_pickup',
         ], $collectedAt);
 
-        $response = $this
-            ->actingAs($user)
-            ->withSession(['active_shop_id' => $shopId])
-            ->get(route('merchant.orders.show', $order));
+        Carbon::setTestNow(Carbon::parse('2026-09-02 10:00:00'));
+        try {
+            $response = $this
+                ->actingAs($user)
+                ->withSession(['active_shop_id' => $shopId])
+                ->get(route('merchant.orders.show', $order));
 
-        $response->assertOk()
-            ->assertSee('Return / Exchange')
-            ->assertSee('Exchange Policy Item')
-            ->assertSee('Refund Policy Item')
-            ->assertSee('Refund: Not Allowed')
-            ->assertSee('Exchange: Within 7 days')
-            ->assertSee('Refund: Within 3 days')
-            ->assertSee('Exchange: Not Allowed')
-            ->assertSee('Refund: Not Eligible')
-            ->assertSee('Exchange: Eligible')
-            ->assertSee('Start: '.app_datetime($collectedAt))
-            ->assertSee('Exchange until: '.app_datetime($collectedAt->copy()->addDays(7)))
-            ->assertSee('Refund until: '.app_datetime($collectedAt->copy()->addDays(3)))
-            ->assertSee('Refund: 2 items')
-            ->assertSee('Exchange: 1 item')
-            ->assertSee('Merchant Exception')
-            ->assertSee('Shop policy does not allow a refund, but you may approve one as an exception.')
-            ->assertDontSee('Shop Visit Only')
-            ->assertDontSee('Cash at Shop orders do not support pickup.')
-            ->assertSee('Refund expired by '.(int) ceil($collectedAt->copy()->addDays(3)->diffInDays(now())).' days')
-            ->assertSee('Refund window has expired, but you may approve one as an exception.');
+            $response->assertOk()
+                ->assertSee('Return / Exchange')
+                ->assertSee('Exchange Policy Item')
+                ->assertSee('Refund Policy Item')
+                ->assertSee('Refund: Not Allowed')
+                ->assertSee('Exchange: Within 7 days')
+                ->assertSee('Refund: Within 3 days')
+                ->assertSee('Exchange: Not Allowed')
+                ->assertSee('Refund: Not Eligible')
+                ->assertSee('Exchange: Eligible')
+                ->assertSee('Start: '.app_datetime($collectedAt))
+                ->assertSee('Exchange until: '.app_datetime($collectedAt->copy()->addDays(7)))
+                ->assertSee('Refund until: '.app_datetime($collectedAt->copy()->addDays(3)))
+                ->assertSee('Refund: 2 items')
+                ->assertSee('Exchange: 1 item')
+                ->assertSee('Merchant Exception')
+                ->assertSee('Shop policy does not allow a refund, but you may approve one as an exception.')
+                ->assertDontSee('Shop Visit Only')
+                ->assertDontSee('Cash at Shop orders do not support pickup.')
+                ->assertSee('Refund expired by 1 day')
+                ->assertSee('Refund window has expired, but you may approve one as an exception.');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_merchant_order_detail_shows_expired_and_not_started_return_exchange_states(): void

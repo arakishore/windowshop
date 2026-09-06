@@ -461,12 +461,22 @@ class CartPageService
             foreach ($adjustment->eligiblePromotions as $candidate) {
                 if ((int) ($candidate['id'] ?? 0) === $promotionId) {
                     $candidateDiscountCents += $this->moneyToCents((string) ($candidate['discount_amount'] ?? '0'));
+                    $candidateDiscountCents += max(0, (int) ($candidate['details']['conflict_benefit_cents'] ?? 0));
                 }
             }
 
             if ($adjustment->winningPromotion?->promotionId === $promotionId) {
                 $wonDiscountCents += $adjustment->promotionDiscountCents;
             }
+        }
+
+        foreach ($result->generatedGifts as $gift) {
+            if ($gift->promotion->promotionId !== $promotionId) {
+                continue;
+            }
+
+            $candidateDiscountCents += $gift->promotionDiscountCents;
+            $wonDiscountCents += $gift->promotionDiscountCents;
         }
 
         if ($wonDiscountCents > 0) {

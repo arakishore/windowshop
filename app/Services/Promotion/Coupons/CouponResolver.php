@@ -4,7 +4,6 @@ namespace App\Services\Promotion\Coupons;
 
 use App\Models\Promotion;
 use App\Models\PromotionCoupon;
-use App\Models\PromotionReward;
 use App\Models\Shop;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
@@ -16,13 +15,6 @@ class CouponResolver
     public const STATUS_EXPIRED = 'expired';
     public const STATUS_NOT_STARTED = 'not_started';
     public const STATUS_INACTIVE = 'inactive';
-    public const STATUS_UNSUPPORTED_REWARD_TYPE = 'unsupported_reward_type';
-
-    private const SUPPORTED_REWARD_TYPES = [
-        PromotionReward::TYPE_PERCENTAGE_DISCOUNT,
-        PromotionReward::TYPE_FIXED_DISCOUNT,
-        PromotionReward::TYPE_FIXED_PRICE,
-    ];
 
     public function normalize(mixed $code): string
     {
@@ -90,15 +82,6 @@ class CouponResolver
 
         if (! $promotion->isSetupComplete()) {
             return new CouponResolution(self::STATUS_INACTIVE, 'This coupon is currently unavailable.', code: $normalized, clearStoredState: true);
-        }
-
-        $rewardType = (string) $promotion->rewards->first()?->reward_type;
-        if (! in_array($rewardType, self::SUPPORTED_REWARD_TYPES, true)) {
-            return new CouponResolution(
-                self::STATUS_UNSUPPORTED_REWARD_TYPE,
-                'This coupon is not available for this offer yet.',
-                code: $normalized,
-            );
         }
 
         return new CouponResolution(self::STATUS_APPLIED, 'Coupon applied.', $coupon, $normalized);

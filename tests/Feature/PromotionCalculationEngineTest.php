@@ -17,6 +17,7 @@ use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Promotion;
 use App\Models\PromotionCondition;
+use App\Models\PromotionCoupon;
 use App\Models\PromotionReward;
 use App\Models\PromotionTarget;
 use App\Models\PromotionTemplate;
@@ -601,6 +602,69 @@ class PromotionCalculationEngineTest extends TestCase
         $this->assertSame(100000, $result->promotionDiscountCents());
         $this->assertSame('partial_overlap', $result->line($fixture['variant']->getKey())?->winningPromotion?->details['pool_type']);
         $this->assertSame(2, $result->line($buyOnlyVariant->getKey())?->winningPromotion?->details['participating_buy_quantity']);
+    }
+
+    public function test_coupon_buy_x_get_y_free_uses_existing_different_and_partial_overlap_allocations(): void
+    {
+        $differentFixture = $this->fixture(price: 1200);
+        $differentGetProduct = $this->product($differentFixture, 'Coupon Different Get');
+        $differentGetVariant = $this->variant($differentFixture, $differentGetProduct, 300, 'Coupon Different Get');
+        $differentPromotion = $this->promotion($differentFixture, 'buy_x_get_y_free', [
+            'name' => 'Coupon Different Pool BOGO',
+            'status' => Promotion::STATUS_ACTIVE,
+            'activation_type' => Promotion::ACTIVATION_COUPON,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+        ]);
+        $this->target($differentPromotion, PromotionTarget::TYPE_PRODUCT, $differentFixture['product']->getKey(), PromotionTarget::ROLE_BUY);
+        $this->target($differentPromotion, PromotionTarget::TYPE_PRODUCT, $differentGetProduct->getKey(), PromotionTarget::ROLE_GET);
+        $differentCoupon = $differentPromotion->coupons()->create([
+            'shop_id' => $differentFixture['shop']->getKey(),
+            'code' => 'DIFFBOGO',
+            'status' => PromotionCoupon::STATUS_ACTIVE,
+        ]);
+
+        $differentResult = app(PromotionCalculator::class)->calculateForShop($differentFixture['shop'], [
+            ['product_variant_id' => $differentFixture['variant']->getKey(), 'quantity' => 5],
+            ['product_variant_id' => $differentGetVariant->getKey(), 'quantity' => 3],
+        ], activatedCoupons: [$differentCoupon]);
+
+        $this->assertSame(60000, $differentResult->promotionDiscountCents());
+        $this->assertSame('different', $differentResult->line($differentGetVariant->getKey())?->winningPromotion?->details['pool_type']);
+        $this->assertSame(Promotion::ACTIVATION_COUPON, $differentResult->line($differentGetVariant->getKey())?->winningPromotion?->activationType);
+        $this->assertSame($differentCoupon->getKey(), $differentResult->line($differentGetVariant->getKey())?->winningPromotion?->couponId);
+
+        $partialFixture = $this->fixture(price: 1000);
+        $saleCollection = $this->collection($partialFixture);
+        $partialFixture['product']->collections()->attach($saleCollection->getKey());
+        $buyOnlyProduct = $this->product($partialFixture, 'Coupon Partial Buy Only');
+        $buyOnlyVariant = $this->variant($partialFixture, $buyOnlyProduct, 900, 'Coupon Partial Buy Only');
+        $partialPromotion = $this->promotion($partialFixture, 'buy_x_get_y_free', [
+            'name' => 'Coupon Partial Pool BOGO',
+            'status' => Promotion::STATUS_ACTIVE,
+            'activation_type' => Promotion::ACTIVATION_COUPON,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+        ]);
+        $this->target($partialPromotion, PromotionTarget::TYPE_CATEGORY, $partialFixture['category']->getKey(), PromotionTarget::ROLE_BUY);
+        $this->target($partialPromotion, PromotionTarget::TYPE_COLLECTION, $saleCollection->getKey(), PromotionTarget::ROLE_GET);
+        $partialCoupon = $partialPromotion->coupons()->create([
+            'shop_id' => $partialFixture['shop']->getKey(),
+            'code' => 'PARTBOGO',
+            'status' => PromotionCoupon::STATUS_ACTIVE,
+        ]);
+
+        $partialResult = app(PromotionCalculator::class)->calculateForShop($partialFixture['shop'], [
+            ['product_variant_id' => $partialFixture['variant']->getKey(), 'quantity' => 1],
+            ['product_variant_id' => $buyOnlyVariant->getKey(), 'quantity' => 2],
+        ], activatedCoupons: [$partialCoupon]);
+
+        $this->assertSame(100000, $partialResult->promotionDiscountCents());
+        $this->assertSame('partial_overlap', $partialResult->line($partialFixture['variant']->getKey())?->winningPromotion?->details['pool_type']);
+        $this->assertSame(Promotion::ACTIVATION_COUPON, $partialResult->line($partialFixture['variant']->getKey())?->winningPromotion?->activationType);
+        $this->assertSame($partialCoupon->getKey(), $partialResult->line($partialFixture['variant']->getKey())?->winningPromotion?->couponId);
     }
 
     public function test_buy_x_get_y_free_partial_overlap_chooses_cheapest_get_units_that_preserve_buy_qualification(): void

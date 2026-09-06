@@ -188,6 +188,27 @@ class CouponRedemptionService
             $summary['discount_cents'] += max(0, $adjustment->promotionDiscountCents);
         }
 
+        foreach ($result->generatedGifts as $gift) {
+            $winner = $gift->promotion;
+            if ($winner->activationType !== Promotion::ACTIVATION_COUPON || $winner->couponId === null) {
+                continue;
+            }
+
+            $key = $winner->promotionId.':'.$winner->couponId;
+            if ($summary !== null && $summary['key'] !== $key) {
+                continue;
+            }
+
+            $summary ??= [
+                'key' => $key,
+                'promotion_id' => $winner->promotionId,
+                'coupon_id' => $winner->couponId,
+                'coupon_code' => $winner->couponCode,
+                'discount_cents' => 0,
+            ];
+            $summary['discount_cents'] += max(0, $gift->promotionDiscountCents);
+        }
+
         if ($summary === null || $summary['discount_cents'] <= 0) {
             return null;
         }
