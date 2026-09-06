@@ -10,12 +10,14 @@ use App\Models\OrderItem;
 use App\Models\OrderTotal;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Promotion;
 use App\Models\Shop;
 use App\Models\User;
 use App\Models\PromotionCoupon;
 use App\Services\POS\DiscountService;
 use App\Services\POS\CashRoundingService;
 use App\Services\Promotion\Engine\Data\GeneratedPromotionGift;
+use App\Services\Promotion\Engine\Data\AppliedPromotion;
 use App\Services\Product\ProductReturnPolicyResolver;
 use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
@@ -613,7 +615,8 @@ class OrderCreationService
 
             $taxSnapshot = $this->orderTaxSnapshotFactory->fromPricingResult($pricingResult);
             $policySnapshot = $row['policy_snapshot']
-                ?? $this->policySnapshotForProduct($product);
+                ?? $this->policySnapshotForProduct($product, $promotionAdjustment?->winningPromotion);
+            $metadata = $this->metadataWithPolicySnapshot($promotionAdjustment?->metadata(), $policySnapshot);
 
             $item = new OrderItem(array_merge([
                 'product_id' => $variant->product_id,
@@ -633,7 +636,7 @@ class OrderCreationService
                 'refund_window_days' => $policySnapshot['refund_window_days'],
                 'exchange_allowed' => $policySnapshot['exchange_allowed'],
                 'exchange_window_days' => $policySnapshot['exchange_window_days'],
-                'metadata' => $promotionAdjustment?->metadata(),
+                'metadata' => $metadata,
             ], $taxSnapshot->toOrderItemAttributes()));
 
             $items[] = [
@@ -681,7 +684,7 @@ class OrderCreationService
             }
 
             $taxSnapshot = $this->orderTaxSnapshotFactory->fromPricingResult($pricingResult);
-            $policySnapshot = $this->policySnapshotForProduct($product);
+            $policySnapshot = $this->policySnapshotForProduct($product, $gift->promotion);
 
             $item = new OrderItem(array_merge([
                 'product_id' => $variant->product_id,
@@ -701,7 +704,7 @@ class OrderCreationService
                 'refund_window_days' => $policySnapshot['refund_window_days'],
                 'exchange_allowed' => $policySnapshot['exchange_allowed'],
                 'exchange_window_days' => $policySnapshot['exchange_window_days'],
-                'metadata' => $gift->metadata(),
+                'metadata' => $this->metadataWithPolicySnapshot($gift->metadata(), $policySnapshot),
             ], $taxSnapshot->toOrderItemAttributes()));
 
             $items[] = [
@@ -921,20 +924,22 @@ class OrderCreationService
     }
 
     /**
-     * @return array{refund_allowed: bool, refund_window_days: int, exchange_allowed: bool, exchange_window_days: int}
+     * @return array<string, mixed>
      */
-    private function policySnapshotForProduct(?Product $product): array
+    private function policySnapshotForProduct(?Product $product, ?AppliedPromotion $promotion = null): array
     {
         if (! $product instanceof Product) {
-            return $this->defaultPolicySnapshot();
+            return $this->applyPromotionPolicySnapshot($this->defaultPolicySnapshot(), $promotion);
         }
 
-        return $this->normalizePolicySnapshot($this->returnPolicyResolver->resolve($product))
+        $snapshot = $this->normalizePolicySnapshot($this->returnPolicyResolver->resolve($product))
             ?? $this->defaultPolicySnapshot();
+
+        return $this->applyPromotionPolicySnapshot($snapshot, $promotion);
     }
 
     /**
-     * @return array{refund_allowed: bool, refund_window_days: int, exchange_allowed: bool, exchange_window_days: int}|null
+     * @return array<string, mixed>|null
      */
     private function normalizePolicySnapshot(mixed $snapshot): ?array
     {
@@ -951,16 +956,88 @@ class OrderCreationService
         $refundAllowed = (bool) $snapshot['refund_allowed'];
         $exchangeAllowed = (bool) $snapshot['exchange_allowed'];
 
-        return [
+        $normalized = [
             'refund_allowed' => $refundAllowed,
             'refund_window_days' => $refundAllowed ? max(0, (int) $snapshot['refund_window_days']) : 0,
             'exchange_allowed' => $exchangeAllowed,
             'exchange_window_days' => $exchangeAllowed ? max(0, (int) $snapshot['exchange_window_days']) : 0,
         ];
+
+        if (array_key_exists('refund_source', $snapshot)) {
+            $normalized['refund_source'] = $snapshot['refund_source'];
+        }
+
+        if (array_key_exists('exchange_source', $snapshot)) {
+            $normalized['exchange_source'] = $snapshot['exchange_source'];
+        }
+
+        return $normalized;
     }
 
     /**
-     * @return array{refund_allowed: false, refund_window_days: 0, exchange_allowed: false, exchange_window_days: 0}
+     * @param array<string, mixed> $snapshot
+     * @return array<string, mixed>
+     */
+    private function applyPromotionPolicySnapshot(array $snapshot, ?AppliedPromotion $appliedPromotion): array
+    {
+        if (! $appliedPromotion instanceof AppliedPromotion) {
+            return $snapshot;
+        }
+
+        $policy = $appliedPromotion->policyOverrides;
+        $refundMode = (string) ($policy['refund_policy_mode'] ?? Promotion::POLICY_INHERIT);
+        $exchangeMode = (string) ($policy['exchange_policy_mode'] ?? Promotion::POLICY_INHERIT);
+        $refundOverride = $this->promotionPolicyOverride($refundMode);
+        if ($refundOverride !== null) {
+            $snapshot['refund_allowed'] = $refundOverride;
+            $snapshot['refund_window_days'] = $refundOverride ? max(0, (int) ($policy['refund_window_days'] ?? 0)) : 0;
+            $snapshot['refund_source'] = 'promotion';
+        }
+
+        $exchangeOverride = $this->promotionPolicyOverride($exchangeMode);
+        if ($exchangeOverride !== null) {
+            $snapshot['exchange_allowed'] = $exchangeOverride;
+            $snapshot['exchange_window_days'] = $exchangeOverride ? max(0, (int) ($policy['exchange_window_days'] ?? 0)) : 0;
+            $snapshot['exchange_source'] = 'promotion';
+        }
+
+        return $snapshot;
+    }
+
+    private function promotionPolicyOverride(string $mode): ?bool
+    {
+        return match ($mode) {
+            Promotion::POLICY_ALLOWED => true,
+            Promotion::POLICY_NOT_ALLOWED => false,
+            default => null,
+        };
+    }
+
+    /**
+     * @param array<string, mixed>|null $metadata
+     * @param array<string, mixed> $policySnapshot
+     * @return array<string, mixed>|null
+     */
+    private function metadataWithPolicySnapshot(?array $metadata, array $policySnapshot): ?array
+    {
+        if ($metadata === null) {
+            return null;
+        }
+
+        $metadata['return_exchange_policy'] = [
+            'refund_allowed' => (bool) $policySnapshot['refund_allowed'],
+            'refund_window_days' => (int) $policySnapshot['refund_window_days'],
+            'exchange_allowed' => (bool) $policySnapshot['exchange_allowed'],
+            'exchange_window_days' => (int) $policySnapshot['exchange_window_days'],
+            'refund_source' => $policySnapshot['refund_source'] ?? null,
+            'exchange_source' => $policySnapshot['exchange_source'] ?? null,
+        ];
+
+        return $metadata;
+    }
+
+    /**
+     * @return array<string, mixed>
      */
     private function defaultPolicySnapshot(): array
     {

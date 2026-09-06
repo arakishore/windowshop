@@ -16,6 +16,7 @@ class AppliedPromotion
         public readonly string $activationType = 'automatic',
         public readonly ?int $couponId = null,
         public readonly ?string $couponCode = null,
+        public readonly array $policyOverrides = [],
     ) {
     }
 
@@ -36,6 +37,7 @@ class AppliedPromotion
             'activation_type' => $this->activationType,
             'coupon_id' => $this->couponId,
             'coupon_code' => $this->couponCode,
+            'policy_overrides' => $this->policyOverrides,
         ];
     }
 

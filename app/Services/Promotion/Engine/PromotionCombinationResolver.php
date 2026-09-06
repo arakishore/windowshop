@@ -115,6 +115,12 @@ class PromotionCombinationResolver
             activationType: (string) $promotion->activation_type,
             couponId: $coupon?->getKey(),
             couponCode: $coupon?->code,
+            policyOverrides: [
+                'refund_policy_mode' => $promotion->refund_policy_mode,
+                'refund_window_days' => $promotion->refund_window_days,
+                'exchange_policy_mode' => $promotion->exchange_policy_mode,
+                'exchange_window_days' => $promotion->exchange_window_days,
+            ],
         );
     }
 
