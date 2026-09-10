@@ -702,7 +702,7 @@
             const moneyText = (value) => formatMoneyText(value, currencyConfig);
             const compactMoneyText = moneyText;
             const pricingNumber = (row, key, fallback = 0) => {
-                const value = row?.pricing?.[key];
+                const value = row?.pricing?.[key] ?? row?.[key];
 
                 return value === null || value === undefined ? fallback : Number(value);
             };
@@ -738,8 +738,16 @@
             const lineDiscountAmount = (row) => pricingNumber(row, 'line_discount', calculateDiscount(lineSubtotal(row), row.discount).amount);
             const lineTaxAmount = (row) => pricingNumber(row, 'line_tax', 0);
             const lineTotal = (row) => pricingNumber(row, 'line_total', Math.max(0, lineSubtotal(row) - lineDiscountAmount(row)));
+            const generatedGiftRows = () => Array.isArray(pricingPayload?.generated_gifts) ? pricingPayload.generated_gifts : [];
             const cartSubtotal = () => summaryNumber('subtotal', Array.from(cart.values()).reduce((sum, row) => sum + lineSubtotal(row), 0));
-            const cartItemDiscount = () => Array.from(cart.values()).reduce((sum, row) => sum + lineDiscountAmount(row), 0);
+            const cartItemDiscount = () => {
+                if (pricingPayload?.items) {
+                    return [...(pricingPayload.items || []), ...generatedGiftRows()]
+                        .reduce((sum, row) => sum + Number(row.line_discount || 0), 0);
+                }
+
+                return Array.from(cart.values()).reduce((sum, row) => sum + lineDiscountAmount(row), 0);
+            };
             const orderDiscountBase = () => Math.max(0, cartSubtotal() - cartItemDiscount());
             const orderDiscountAmount = () => Number(pricingPayload?.order_discount?.amount ?? calculateDiscount(orderDiscountBase(), orderDiscount).amount);
             const unroundedCartTotal = () => Math.max(0, orderDiscountBase() - orderDiscountAmount());
@@ -777,6 +785,11 @@
                     ? `${value.toLocaleString('en-IN')}% OFF`
                     : `${moneyText(value)} OFF`;
             };
+            const promotionName = (row) => row?.promotion?.name || row?.metadata?.promotion?.name || 'Automatic offer';
+            const lineDiscountLabel = (row) => row?.promotion
+                ? promotionName(row)
+                : discountBadge(row.discount).replace(' OFF', '');
+            const isGeneratedGift = (row) => row?.is_generated_gift === true;
             const elapsedSeconds = () => timerElapsedBeforeStart + (timerStartedAt === null ? 0 : Math.max(0, Math.floor((Date.now() - timerStartedAt) / 1000)));
             const selectedFulfilment = () => root.querySelector('input[name="fulfilment_type"]:checked')?.value || 'counter';
             const selectedPaymentMethod = () => {
@@ -1324,6 +1337,16 @@
             };
 
             const render = () => {
+                const displayRows = [
+                    ...Array.from(cart.values()),
+                    ...generatedGiftRows().map((row) => ({
+                        ...row,
+                        id: `gift-${row.product_variant_id}-${row.promotion?.id || 'offer'}`,
+                        price: Number(row.unit_price || 0),
+                        quantity: Number(row.quantity || 1),
+                    })),
+                ];
+
                 if (cart.size === 0) {
                     if (timerStartedAt !== null || timerElapsedBeforeStart > 0) {
                         resetTimer();
@@ -1336,8 +1359,8 @@
                         </div>
                     `;
                 } else {
-                    cartItems.innerHTML = Array.from(cart.values()).map((row) => `
-                        <div class="pos-cart-row" data-variant-id="${row.id}">
+                    cartItems.innerHTML = displayRows.map((row) => `
+                        <div class="pos-cart-row ${isGeneratedGift(row) ? 'bg-success bg-opacity-10' : ''}" data-variant-id="${row.id}">
                             <div class="pos-cart-product">
                                 <div class="pos-cart-thumb">
                                     ${row.image_url ? `<img src="${escapeHtml(row.image_url)}" alt="${escapeHtml(row.product_name)}">` : '<i class="ph-image"></i>'}
@@ -1345,9 +1368,14 @@
                                 <div class="pos-cart-title">
                                     <div class="fw-semibold">${escapeHtml(row.product_name)} ${row.sku ? `<span class="text-muted fs-sm fw-normal ms-1">${escapeHtml(row.sku)}</span>` : ''}</div>
                                     <div class="text-muted fs-sm">${escapeHtml(row.variant_name || 'Standard variant')}</div>
+                                    ${isGeneratedGift(row) ? `
+                                        <div class="text-success fs-sm mt-1">
+                                            <i class="ph-gift me-1"></i>Free gift
+                                        </div>
+                                    ` : ''}
                                     ${lineDiscountAmount(row) > 0 ? `
-                                        <div class="text-warning fs-sm mt-1">
-                                            <i class="ph-tag me-1"></i>- ${moneyText(lineDiscountAmount(row))} (${escapeHtml(discountBadge(row.discount).replace(' OFF', ''))})
+                                        <div class="${row.promotion ? 'text-success' : 'text-warning'} fs-sm mt-1">
+                                            <i class="${isGeneratedGift(row) ? 'ph-gift' : 'ph-tag'} me-1"></i>- ${moneyText(lineDiscountAmount(row))} (${escapeHtml(lineDiscountLabel(row))})
                                         </div>
                                     ` : ''}
                                 </div>
@@ -1365,21 +1393,25 @@
                                         MRP ${compactMoneyText(lineSubtotal(row))}
                                     </div>
                                 ` : ''}
-                                <div class="pos-qty-control mt-2">
-                                    <button type="button" class="js-pos-decrease" data-bs-popup="tooltip" title="Decrease quantity" aria-label="Decrease quantity"><i class="ph-minus"></i></button>
-                                    <span>${row.quantity}</span>
-                                    <button type="button" class="js-pos-increase" data-bs-popup="tooltip" title="Increase quantity" aria-label="Increase quantity"><i class="ph-plus"></i></button>
-                                </div>
-                                <div class="pos-line-actions mt-1">
-                                    ${allowItemDiscount ? `
-                                        <button type="button" class="pos-line-action js-pos-line-discount-open ${lineDiscountAmount(row) > 0 ? 'is-active' : ''}" data-bs-popup="tooltip" title="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}" aria-label="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}">
-                                            <i class="ph-tag"></i>
+                                ${isGeneratedGift(row) ? `
+                                    <div class="badge bg-success bg-opacity-10 text-success mt-2">Read-only</div>
+                                ` : `
+                                    <div class="pos-qty-control mt-2">
+                                        <button type="button" class="js-pos-decrease" data-bs-popup="tooltip" title="Decrease quantity" aria-label="Decrease quantity"><i class="ph-minus"></i></button>
+                                        <span>${row.quantity}</span>
+                                        <button type="button" class="js-pos-increase" data-bs-popup="tooltip" title="Increase quantity" aria-label="Increase quantity"><i class="ph-plus"></i></button>
+                                    </div>
+                                    <div class="pos-line-actions mt-1">
+                                        ${allowItemDiscount ? `
+                                            <button type="button" class="pos-line-action js-pos-line-discount-open ${lineDiscountAmount(row) > 0 ? 'is-active' : ''}" data-bs-popup="tooltip" title="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}" aria-label="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}">
+                                                <i class="ph-tag"></i>
+                                            </button>
+                                        ` : ''}
+                                        <button type="button" class="pos-line-action js-pos-remove" title="Remove item from cart" aria-label="Remove item from cart">
+                                            <i class="ph-trash"></i>
                                         </button>
-                                    ` : ''}
-                                    <button type="button" class="pos-line-action js-pos-remove"   title="Remove item from cart" aria-label="Remove item from cart">
-                                        <i class="ph-trash"></i>
-                                    </button>
-                                </div>
+                                    </div>
+                                `}
                             </div>
                         </div>
                     `).join('');

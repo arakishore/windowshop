@@ -179,9 +179,10 @@ class OrderCreationService
             $createdItems = $order->items()->get();
             $calculated = $this->orderTotalsService->calculate(
                 $createdItems,
-                $this->totalsRows($createdItems, $orderDiscount, $data['totals'] ?? [], $data, $createdSource),
+                $this->totalsRows($createdItems, $orderDiscount, $data['totals'] ?? [], $data),
                 $data['amount_paid'] ?? 0,
             );
+            $this->assertNormalPosTenderPaid($createdSource, $data, $calculated['summary']);
 
             $paymentStatus = $this->resolvePaymentStatus($requestedPaymentStatus, $calculated['summary']);
             $order->forceFill(['payment_status' => $paymentStatus]);
@@ -1070,18 +1071,19 @@ class OrderCreationService
      * @param array<string, mixed> $data
      * @return array<int, array<string, mixed>>
      */
-    private function totalsRows(Collection $items, array $orderDiscount, array $extraRows, array $data, string $createdSource): array
+    private function totalsRows(Collection $items, array $orderDiscount, array $extraRows, array $data): array
     {
         $rows = [];
         $itemDiscount = $this->money($items->sum(fn (OrderItem $item): float => (float) $item->line_discount));
 
         if ((float) $itemDiscount > 0) {
+            $discountDescriptor = $this->itemDiscountDescriptor($items);
             $rows[] = [
                 'code' => OrderTotal::CODE_ITEM_DISCOUNT,
-                'title' => $this->shouldApplyAutomaticPromotions($createdSource) ? 'Offer Discount' : 'Item Discount',
+                'title' => $discountDescriptor['title'],
                 'amount' => -1 * (float) $itemDiscount,
                 'sort_order' => 20,
-                'source' => $this->shouldApplyAutomaticPromotions($createdSource) ? 'promotion' : 'pos',
+                'source' => $discountDescriptor['source'],
             ];
         }
 
@@ -1121,6 +1123,47 @@ class OrderCreationService
 
     /**
      * @param Collection<int, OrderItem> $items
+     * @return array{title: string, source: string}
+     */
+    private function itemDiscountDescriptor(Collection $items): array
+    {
+        $hasPromotionDiscount = false;
+        $hasManualDiscount = false;
+
+        foreach ($items as $item) {
+            if ((float) $item->line_discount <= 0) {
+                continue;
+            }
+
+            if ($this->promotionMetadata($item) !== null) {
+                $hasPromotionDiscount = true;
+            } else {
+                $hasManualDiscount = true;
+            }
+        }
+
+        return match (true) {
+            $hasPromotionDiscount && $hasManualDiscount => ['title' => 'Offer / Item Discount', 'source' => 'pos'],
+            $hasPromotionDiscount => ['title' => 'Offer Discount', 'source' => 'promotion'],
+            default => ['title' => 'Item Discount', 'source' => 'pos'],
+        };
+    }
+
+    private function promotionMetadata(OrderItem $item): ?array
+    {
+        $metadata = $item->metadata;
+        if (is_string($metadata)) {
+            $decoded = json_decode($metadata, true);
+            $metadata = json_last_error() === JSON_ERROR_NONE ? $decoded : null;
+        }
+
+        return is_array($metadata) && is_array($metadata['promotion'] ?? null)
+            ? $metadata['promotion']
+            : null;
+    }
+
+    /**
+     * @param Collection<int, OrderItem> $items
      * @param array{type: string|null, value: string|null, amount: string, reason: string|null, note: string|null} $orderDiscount
      * @param array<string, mixed> $data
      */
@@ -1150,6 +1193,34 @@ class OrderCreationService
 
     private function shouldApplyAutomaticPromotions(string $createdSource): bool
     {
-        return in_array($createdSource, [Order::SOURCE_STOREFRONT, Order::SOURCE_CUSTOMER_APP], true);
+        return in_array($createdSource, [Order::SOURCE_POS, Order::SOURCE_STOREFRONT, Order::SOURCE_CUSTOMER_APP], true);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, string> $summary
+     */
+    private function assertNormalPosTenderPaid(string $createdSource, array $data, array $summary): void
+    {
+        if ($createdSource !== Order::SOURCE_POS || ($data['created_source'] ?? null) !== Order::SOURCE_POS) {
+            return;
+        }
+
+        if (($data['order_status'] ?? Order::STATUS_COMPLETED) !== Order::STATUS_COMPLETED) {
+            return;
+        }
+
+        $paymentMethod = (string) ($data['payment_method'] ?? Order::PAYMENT_METHOD_CASH);
+        if ($paymentMethod === Order::PAYMENT_METHOD_CREDIT) {
+            return;
+        }
+
+        if ((float) $summary['amount_paid'] + 0.00001 >= (float) $summary['grand_total']) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'amount_paid' => 'The amount paid is less than the recalculated sale total. Please refresh pricing and collect the full amount.',
+        ]);
     }
 }

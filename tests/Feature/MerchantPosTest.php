@@ -7,10 +7,17 @@ use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderTotal;
 use App\Models\Product;
+use App\Models\ProductAvailabilityStatus;
+use App\Models\Promotion;
+use App\Models\PromotionCondition;
+use App\Models\PromotionTarget;
+use App\Models\PromotionTemplate;
 use App\Models\User;
 use App\Services\Merchant\MerchantCustomerService;
+use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Product\ProductVariantManagementService;
 use Database\Seeders\MasterData\LocationSeeder;
+use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -897,6 +904,395 @@ class MerchantPosTest extends TestCase
             ->assertJsonPath('order.grand_total', $pricing->json('pricing.summary.grand_total'));
     }
 
+    public function test_pos_pricing_and_checkout_apply_automatic_percentage_and_fixed_promotions(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $percentItem = $this->createPosProduct($shopId, 'Percent Promo Shirt', 'Default', 'AUTO-PCT', 'AUTO-PCT-BAR');
+        $fixedItem = $this->createPosProduct($shopId, 'Fixed Promo Shirt', 'Default', 'AUTO-FIX', 'AUTO-FIX-BAR');
+        $this->setVariantPrice($percentItem['variant_id'], 1000);
+        $this->setVariantPrice($fixedItem['variant_id'], 1000);
+
+        $percent = $this->promotion($shopId, 'percentage_discount', [
+            'name' => 'POS 20 Percent',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], ['value_percent' => '20.00']);
+        $this->target($percent, PromotionTarget::TYPE_PRODUCT, $percentItem['product_id']);
+
+        $fixed = $this->promotion($shopId, 'fixed_discount', [
+            'name' => 'POS Fixed 150',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], ['value_amount' => '150.00']);
+        $this->target($fixed, PromotionTarget::TYPE_PRODUCT, $fixedItem['product_id']);
+
+        $payload = [
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+            'amount_paid' => 2000,
+            'items' => [
+                ['product_variant_id' => $percentItem['variant_id'], 'quantity' => 1],
+                ['product_variant_id' => $fixedItem['variant_id'], 'quantity' => 1],
+            ],
+        ];
+
+        $pricing = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), $payload);
+
+        $pricing
+            ->assertOk()
+            ->assertJsonPath('pricing.items.0.line_discount', '200.00')
+            ->assertJsonPath('pricing.items.0.promotion.id', $percent->getKey())
+            ->assertJsonPath('pricing.items.1.line_discount', '150.00')
+            ->assertJsonPath('pricing.items.1.promotion.id', $fixed->getKey())
+            ->assertJsonPath('pricing.summary.discount_total', '350.00')
+            ->assertJsonPath('pricing.summary.grand_total', '1650.00');
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                ...$payload,
+                'fulfilment_type' => 'counter',
+            ]);
+
+        $checkout
+            ->assertOk()
+            ->assertJsonPath('order.grand_total', '1650.00');
+
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $this->assertCount(2, $order->items);
+        $this->assertSame($percent->getKey(), $order->items->firstWhere('product_variant_id', $percentItem['variant_id'])->metadata['promotion']['id']);
+        $this->assertSame($fixed->getKey(), $order->items->firstWhere('product_variant_id', $fixedItem['variant_id'])->metadata['promotion']['id']);
+        $this->assertDatabaseHas('order_totals', [
+            'order_id' => $order->getKey(),
+            'code' => OrderTotal::CODE_ITEM_DISCOUNT,
+            'title' => 'Offer Discount',
+            'source' => 'promotion',
+        ]);
+    }
+
+    public function test_pos_quantity_promotion_recalculates_when_quantity_changes(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Quantity Promo Shirt', 'Default', 'AUTO-QTY', 'AUTO-QTY-BAR');
+        $this->setVariantPrice($fixture['variant_id'], 100);
+
+        $promotion = $this->promotion($shopId, 'quantity_discount', [
+            'name' => 'POS Buy Three Save',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'value_type' => 'amount',
+            'value_amount' => '10.00',
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product_id']);
+        $this->condition($promotion, PromotionCondition::TYPE_MINIMUM_QUANTITY, '3.00');
+
+        $lowQuantity = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 200,
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 2],
+                ],
+            ]);
+
+        $lowQuantity
+            ->assertOk()
+            ->assertJsonPath('pricing.items.0.line_discount', '0.00')
+            ->assertJsonPath('pricing.summary.grand_total', '200.00');
+
+        $qualified = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 300,
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 3],
+                ],
+            ]);
+
+        $qualified
+            ->assertOk()
+            ->assertJsonPath('pricing.items.0.line_discount', '30.00')
+            ->assertJsonPath('pricing.items.0.promotion.id', $promotion->getKey())
+            ->assertJsonPath('pricing.summary.grand_total', '270.00');
+    }
+
+    public function test_pos_checkout_applies_bogo_free_and_bogo_discount_promotions(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $freeItem = $this->createPosProduct($shopId, 'BOGO Free Shirt', 'Default', 'BOGO-FREE', 'BOGO-FREE-BAR');
+        $discountItem = $this->createPosProduct($shopId, 'BOGO Discount Shirt', 'Default', 'BOGO-DISC', 'BOGO-DISC-BAR');
+        $this->setVariantPrice($freeItem['variant_id'], 1000);
+        $this->setVariantPrice($discountItem['variant_id'], 1000);
+
+        $free = $this->promotion($shopId, 'buy_x_get_y_free', [
+            'name' => 'POS Buy Two Get One',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+        ]);
+        $this->target($free, PromotionTarget::TYPE_PRODUCT, $freeItem['product_id'], PromotionTarget::ROLE_BUY);
+        $this->target($free, PromotionTarget::TYPE_PRODUCT, $freeItem['product_id'], PromotionTarget::ROLE_GET);
+
+        $discount = $this->promotion($shopId, 'buy_x_get_y_discount', [
+            'name' => 'POS Second Half',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], [
+            'buy_quantity' => 1,
+            'get_quantity' => 1,
+            'value_percent' => '50.00',
+        ]);
+        $this->target($discount, PromotionTarget::TYPE_PRODUCT, $discountItem['product_id'], PromotionTarget::ROLE_BUY);
+        $this->target($discount, PromotionTarget::TYPE_PRODUCT, $discountItem['product_id'], PromotionTarget::ROLE_GET);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 3500,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'items' => [
+                    ['product_variant_id' => $freeItem['variant_id'], 'quantity' => 3],
+                    ['product_variant_id' => $discountItem['variant_id'], 'quantity' => 2],
+                ],
+            ]);
+
+        $checkout
+            ->assertOk()
+            ->assertJsonPath('order.grand_total', '3500.00');
+
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $freeLine = $order->items->firstWhere('product_variant_id', $freeItem['variant_id']);
+        $discountLine = $order->items->firstWhere('product_variant_id', $discountItem['variant_id']);
+
+        $this->assertSame('1000.00', (string) $freeLine->line_discount);
+        $this->assertSame('500.00', (string) $discountLine->line_discount);
+        $this->assertSame('buy_x_get_y_free', $freeLine->metadata['promotion']['reward_type']);
+        $this->assertSame('buy_x_get_y_discount', $discountLine->metadata['promotion']['reward_type']);
+    }
+
+    public function test_pos_free_gift_preview_and_checkout_are_generated_server_side(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $qualifying = $this->createPosProduct($shopId, 'Gift Qualifier Shirt', 'Default', 'GIFT-QUAL', 'GIFT-QUAL-BAR');
+        $gift = $this->createPosProduct($shopId, 'Gift Tote', 'Default', 'GIFT-TOTE', 'GIFT-TOTE-BAR');
+        $this->setVariantPrice($qualifying['variant_id'], 1000);
+        $this->setVariantPrice($gift['variant_id'], 300);
+
+        $promotion = $this->promotion($shopId, 'free_gift', [
+            'name' => 'Gift On Us',
+            'status' => Promotion::STATUS_ACTIVE,
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $qualifying['product_id']);
+        $this->target($promotion, PromotionTarget::TYPE_VARIANT, $gift['variant_id'], PromotionTarget::ROLE_GIFT);
+        $this->condition($promotion, PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, '1000.00');
+
+        $pricing = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 1000,
+                'items' => [
+                    ['product_variant_id' => $qualifying['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $pricing
+            ->assertOk()
+            ->assertJsonCount(1, 'pricing.items')
+            ->assertJsonCount(1, 'pricing.generated_gifts')
+            ->assertJsonPath('pricing.generated_gifts.0.product_variant_id', $gift['variant_id'])
+            ->assertJsonPath('pricing.generated_gifts.0.is_generated_gift', true)
+            ->assertJsonPath('pricing.generated_gifts.0.line_discount', '300.00')
+            ->assertJsonPath('pricing.generated_gifts.0.line_total', '0.00')
+            ->assertJsonPath('pricing.summary.discount_total', '300.00')
+            ->assertJsonPath('pricing.summary.grand_total', '1000.00');
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'items' => [
+                    ['product_variant_id' => $qualifying['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertOk();
+
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $this->assertCount(2, $order->items);
+        $giftItem = $order->items->firstWhere('product_variant_id', $gift['variant_id']);
+        $this->assertSame('gift', $giftItem->metadata['promotion']['details']['role']);
+        $this->assertSame('300.00', (string) $giftItem->line_discount);
+        $this->assertSame('0.00', (string) $giftItem->line_total);
+    }
+
+    public function test_pos_free_gift_preview_is_removed_when_qualification_disappears(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $qualifying = $this->createPosProduct($shopId, 'Gift Threshold Shirt', 'Default', 'GIFT-THRESH', 'GIFT-THRESH-BAR');
+        $gift = $this->createPosProduct($shopId, 'Gift Socks', 'Default', 'GIFT-SOCKS', 'GIFT-SOCKS-BAR');
+        $this->setVariantPrice($qualifying['variant_id'], 1000);
+        $this->setVariantPrice($gift['variant_id'], 100);
+
+        $promotion = $this->promotion($shopId, 'free_gift', [
+            'name' => 'Spend Two Gift',
+            'status' => Promotion::STATUS_ACTIVE,
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $qualifying['product_id']);
+        $this->target($promotion, PromotionTarget::TYPE_VARIANT, $gift['variant_id'], PromotionTarget::ROLE_GIFT);
+        $this->condition($promotion, PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, '2000.00');
+
+        $qualified = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 2000,
+                'items' => [
+                    ['product_variant_id' => $qualifying['variant_id'], 'quantity' => 2],
+                ],
+            ]);
+
+        $qualified->assertOk()->assertJsonCount(1, 'pricing.generated_gifts');
+
+        $unqualified = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 1000,
+                'items' => [
+                    ['product_variant_id' => $qualifying['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $unqualified
+            ->assertOk()
+            ->assertJsonCount(0, 'pricing.generated_gifts')
+            ->assertJsonPath('pricing.summary.discount_total', '0.00')
+            ->assertJsonPath('pricing.summary.grand_total', '1000.00');
+    }
+
+    public function test_pos_checkout_rejects_underpaid_stale_normal_sale_total(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Underpaid Server Shirt', 'Default', 'UNDERPAY', 'UNDERPAY-BAR');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 900,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('amount_paid');
+
+        $this->assertSame(0, DB::table('orders')->where('shop_id', $shopId)->count());
+    }
+
+    public function test_pos_promotion_policy_override_snapshot_uses_only_winning_promotion(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Policy Promo Shirt', 'Default', 'POLICY-PROMO', 'POLICY-PROMO-BAR');
+        $this->setVariantPrice($fixture['variant_id'], 1000);
+
+        $winner = $this->promotion($shopId, 'fixed_discount', [
+            'name' => 'Winning Policy Promo',
+            'status' => Promotion::STATUS_ACTIVE,
+            'refund_policy_mode' => Promotion::POLICY_NOT_ALLOWED,
+            'exchange_policy_mode' => Promotion::POLICY_ALLOWED,
+        ], ['value_amount' => '200.00']);
+        $this->target($winner, PromotionTarget::TYPE_PRODUCT, $fixture['product_id']);
+
+        $nonWinning = $this->promotion($shopId, 'percentage_discount', [
+            'name' => 'Non Winning Policy Promo',
+            'status' => Promotion::STATUS_ACTIVE,
+            'refund_policy_mode' => Promotion::POLICY_ALLOWED,
+            'exchange_policy_mode' => Promotion::POLICY_NOT_ALLOWED,
+            'priority' => 100,
+        ], ['value_percent' => '10.00']);
+        $this->target($nonWinning, PromotionTarget::TYPE_PRODUCT, $fixture['product_id']);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 800,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertOk();
+
+        $item = Order::query()->with('items')->findOrFail($checkout->json('order.id'))->items->first();
+        $this->assertSame($winner->getKey(), $item->metadata['promotion']['id']);
+        $this->assertNotSame($nonWinning->getKey(), $item->metadata['promotion']['id']);
+        $this->assertSame('promotion', $item->metadata['return_exchange_policy']['refund_source']);
+        $this->assertFalse($item->metadata['return_exchange_policy']['refund_allowed']);
+        $this->assertSame('promotion', $item->metadata['return_exchange_policy']['exchange_source']);
+        $this->assertTrue($item->metadata['return_exchange_policy']['exchange_allowed']);
+    }
+
+    public function test_pos_receipt_labels_automatic_offers_and_free_gifts_without_manual_line_discount_wording(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $qualifying = $this->createPosProduct($shopId, 'Receipt Gift Qualifier', 'Default', 'REC-GIFT-QUAL', 'REC-GIFT-QUAL-BAR');
+        $gift = $this->createPosProduct($shopId, 'Receipt Gift Item', 'Default', 'REC-GIFT', 'REC-GIFT-BAR');
+        $this->setVariantPrice($qualifying['variant_id'], 1000);
+        $this->setVariantPrice($gift['variant_id'], 100);
+
+        $promotion = $this->promotion($shopId, 'free_gift', [
+            'name' => 'Receipt Gift Promo',
+            'status' => Promotion::STATUS_ACTIVE,
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $qualifying['product_id']);
+        $this->target($promotion, PromotionTarget::TYPE_VARIANT, $gift['variant_id'], PromotionTarget::ROLE_GIFT);
+        $this->condition($promotion, PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, '1000.00');
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'items' => [
+                    ['product_variant_id' => $qualifying['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertOk();
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get($checkout->json('order.receipt_url'))
+            ->assertOk()
+            ->assertSee('Offer: Receipt Gift Promo')
+            ->assertSee('Free Gift')
+            ->assertSee('Offer Discount')
+            ->assertDontSee('Line Discount');
+    }
+
     public function test_pos_discount_settings_are_enforced_at_checkout(): void
     {
         [$userId, $shopId] = $this->merchantShopFixture();
@@ -977,6 +1373,12 @@ class MerchantPosTest extends TestCase
             'order_id' => $orderId,
             'code' => OrderTotal::CODE_ROUNDING,
             'amount' => -0.20,
+        ]);
+        $this->assertDatabaseHas('order_totals', [
+            'order_id' => $orderId,
+            'code' => OrderTotal::CODE_ITEM_DISCOUNT,
+            'title' => 'Item Discount',
+            'source' => 'pos',
         ]);
     }
 
@@ -3191,6 +3593,9 @@ class MerchantPosTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        app(MerchantAvailabilityStatusSeeder::class)->seedDefaultsForMerchant(
+            MerchantProfile::query()->findOrFail($merchantId),
+        );
         $rootCategoryId = $this->category('Retail', null);
         $shopId = (int) DB::table('shops')->insertGetId([
             'uuid' => (string) Str::uuid(),
@@ -3506,12 +3911,17 @@ class MerchantPosTest extends TestCase
         $shop = DB::table('shops')->where('id', $shopId)->first();
         $categoryId = $this->category('Apparel', (int) $shop->root_product_category_id);
         $attributeGroupId = $this->attributeGroup('Color');
+        $availabilityStatusId = DB::table('product_availability_statuses')
+            ->where('merchant_id', $shop->merchant_id)
+            ->where('code', ProductAvailabilityStatus::CODE_IN_STOCK)
+            ->value('id');
         $productId = (int) DB::table('products')->insertGetId([
             'uuid' => (string) Str::uuid(),
             'merchant_id' => $shop->merchant_id,
             'shop_id' => $shopId,
             'root_product_category_id' => $shop->root_product_category_id,
             'product_category_id' => $categoryId,
+            'availability_status_id' => $availabilityStatusId,
             'product_name' => $name,
             'slug' => Str::slug($name).'-'.Str::random(5),
             'status' => 'active',
@@ -3523,6 +3933,7 @@ class MerchantPosTest extends TestCase
             'uuid' => (string) Str::uuid(),
             'product_id' => $productId,
             'shop_id' => $shopId,
+            'availability_status_id' => $availabilityStatusId,
             'sku' => $sku,
             'barcode' => $barcode,
             'name' => $variantName,
@@ -3562,6 +3973,64 @@ class MerchantPosTest extends TestCase
             'status' => 'active',
             'created_at' => now(),
             'updated_at' => now(),
+        ]);
+    }
+
+    private function setVariantPrice(int $variantId, int|float|string $price): void
+    {
+        DB::table('product_variants')->where('id', $variantId)->update([
+            'mrp' => (float) $price + 100,
+            'selling_price' => $price,
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function promotion(int $shopId, string $templateCode, array $overrides = [], array $reward = []): Promotion
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+
+        $shop = DB::table('shops')->where('id', $shopId)->first();
+        $template = PromotionTemplate::query()->where('code', $templateCode)->firstOrFail();
+        $name = $overrides['name'] ?? 'POS Promotion '.Str::random(6);
+
+        $promotion = Promotion::query()->create([
+            'merchant_id' => $shop->merchant_id,
+            'shop_id' => $shopId,
+            'promotion_template_id' => $template->getKey(),
+            'name' => $name,
+            'slug' => Str::slug($name).'-'.Str::random(6),
+            'status' => Promotion::STATUS_DRAFT,
+            'activation_type' => Promotion::ACTIVATION_AUTOMATIC,
+            'origin' => Promotion::ORIGIN_MERCHANT,
+            'refund_policy_mode' => Promotion::POLICY_INHERIT,
+            'exchange_policy_mode' => Promotion::POLICY_INHERIT,
+            ...$overrides,
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => $template->reward_type,
+            ...$reward,
+        ]);
+
+        return $promotion;
+    }
+
+    private function target(Promotion $promotion, string $type, ?int $id = null, string $role = PromotionTarget::ROLE_ELIGIBLE): void
+    {
+        $promotion->targets()->create([
+            'target_role' => $role,
+            'target_type' => $type,
+            'target_id' => $id,
+            'sort_order' => 10,
+        ]);
+    }
+
+    private function condition(Promotion $promotion, string $type, string $value): void
+    {
+        $promotion->conditions()->create([
+            'condition_type' => $type,
+            'operator' => '>=',
+            'value_numeric' => $value,
+            'sort_order' => 10,
         ]);
     }
 

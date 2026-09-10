@@ -424,7 +424,7 @@ class PromotionCalculationEngineTest extends TestCase
         $this->assertSame(20, (int) $fixture['variant']->refresh()->stock_quantity);
     }
 
-    public function test_free_gift_ignores_unavailable_gift_coupon_runtime_and_pos(): void
+    public function test_free_gift_ignores_unavailable_gift_coupon_runtime_and_applies_to_pos(): void
     {
         $fixture = $this->fixture(price: 2000);
         $giftVariant = $this->variant($fixture, $this->product($fixture, 'Unavailable Gift'), 600, 'Gift');
@@ -455,7 +455,8 @@ class PromotionCalculationEngineTest extends TestCase
             ],
         ], $fixture['user'])->load(['items']);
 
-        $this->assertCount(1, $order->items);
+        $this->assertCount(2, $order->items);
+        $this->assertNotNull($order->items->firstWhere('product_variant_id', $giftVariant->getKey()));
     }
 
     public function test_buy_x_get_y_free_same_pool_repeats_by_complete_whole_groups(): void
@@ -1309,7 +1310,7 @@ class PromotionCalculationEngineTest extends TestCase
         $this->assertCount(1, $item->metadata['promotion']['details']['get_units']);
     }
 
-    public function test_coupon_bogo_is_ignored_and_pos_order_creation_remains_unaffected(): void
+    public function test_coupon_bogo_is_ignored_without_coupon_and_automatic_bogo_applies_to_pos(): void
     {
         $fixture = $this->fixture(price: 1000);
         $promotion = $this->promotion($fixture, 'buy_x_get_y_free', [
@@ -1340,8 +1341,10 @@ class PromotionCalculationEngineTest extends TestCase
         ], $fixture['user'])->load(['items']);
 
         $item = $order->items->first();
-        $this->assertSame('0.00', $item->line_discount);
-        $this->assertNull($item->metadata);
+        $this->assertSame('1000.00', $item->line_discount);
+        $this->assertSame($promotion->getKey(), $item->metadata['promotion']['id']);
+        $this->assertNull($item->metadata['promotion']['coupon_id']);
+        $this->assertSame('buy_x_get_y_free', $item->metadata['promotion']['reward_type']);
     }
 
     public function test_buy_x_get_y_discount_same_pool_discounts_cheapest_get_units_by_percentage(): void
@@ -1681,7 +1684,7 @@ class PromotionCalculationEngineTest extends TestCase
         $this->assertSame('500.00', $item->metadata['promotion']['details']['promotion_discount']);
     }
 
-    public function test_coupon_buy_x_get_y_discount_is_ignored_and_pos_order_creation_remains_unaffected(): void
+    public function test_coupon_buy_x_get_y_discount_is_ignored_without_coupon_and_automatic_discount_applies_to_pos(): void
     {
         $fixture = $this->fixture(price: 1000);
         $promotion = $this->promotion($fixture, 'buy_x_get_y_discount', [
@@ -1713,8 +1716,10 @@ class PromotionCalculationEngineTest extends TestCase
         ], $fixture['user'])->load(['items']);
 
         $item = $order->items->first();
-        $this->assertSame('0.00', $item->line_discount);
-        $this->assertNull($item->metadata);
+        $this->assertSame('500.00', $item->line_discount);
+        $this->assertSame($promotion->getKey(), $item->metadata['promotion']['id']);
+        $this->assertNull($item->metadata['promotion']['coupon_id']);
+        $this->assertSame('buy_x_get_y_discount', $item->metadata['promotion']['reward_type']);
     }
 
     public function test_quantity_discount_recalculates_before_tax_during_order_creation(): void
