@@ -10,6 +10,8 @@ use App\Models\Product;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\Promotion;
 use App\Models\PromotionCondition;
+use App\Models\PromotionCoupon;
+use App\Models\PromotionRedemption;
 use App\Models\PromotionTarget;
 use App\Models\PromotionTemplate;
 use App\Models\User;
@@ -66,6 +68,8 @@ class MerchantPosTest extends TestCase
         $response->assertSee('--pos-product-tile-size: 180px', false);
         $response->assertSee('data-play-add-sound="1"', false);
         $response->assertSee('Order time');
+        $response->assertSee('Coupon');
+        $response->assertSee('Coupon code');
         $response->assertSee('Linen Shirt');
         $response->assertSee('White / M');
         $response->assertSee('Walk-in Customer');
@@ -969,6 +973,469 @@ class MerchantPosTest extends TestCase
             'title' => 'Offer Discount',
             'source' => 'promotion',
         ]);
+    }
+
+    public function test_pos_pricing_and_checkout_apply_coupon_percentage_and_fixed_promotions(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $percentItem = $this->createPosProduct($shopId, 'Coupon Percent Shirt', 'Default', 'CPN-PCT', 'CPN-PCT-BAR');
+        $fixedItem = $this->createPosProduct($shopId, 'Coupon Fixed Shirt', 'Default', 'CPN-FIX', 'CPN-FIX-BAR');
+        $this->setVariantPrice($percentItem['variant_id'], 1000);
+        $this->setVariantPrice($fixedItem['variant_id'], 1000);
+
+        $percentCoupon = $this->couponPromotion($shopId, 'percentage_discount', 'SAVE20', [
+            'name' => 'POS Coupon 20 Percent',
+        ], ['value_percent' => '20.00']);
+        $this->target($percentCoupon->promotion, PromotionTarget::TYPE_PRODUCT, $percentItem['product_id']);
+
+        $fixedCoupon = $this->couponPromotion($shopId, 'fixed_discount', 'SAVE150', [
+            'name' => 'POS Coupon Fixed 150',
+        ], ['value_amount' => '150.00']);
+        $this->target($fixedCoupon->promotion, PromotionTarget::TYPE_PRODUCT, $fixedItem['product_id']);
+
+        $percentPricing = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 1000,
+                'coupon_code' => ' save20 ',
+                'items' => [
+                    ['product_variant_id' => $percentItem['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $percentPricing
+            ->assertOk()
+            ->assertJsonPath('pricing.coupon.status', 'applied')
+            ->assertJsonPath('pricing.coupon.code', 'SAVE20')
+            ->assertJsonPath('pricing.coupon.won', true)
+            ->assertJsonPath('pricing.coupon.discount_cents', 20000)
+            ->assertJsonPath('pricing.items.0.promotion.activation_type', Promotion::ACTIVATION_COUPON)
+            ->assertJsonPath('pricing.items.0.promotion.coupon_id', $percentCoupon->getKey())
+            ->assertJsonPath('pricing.summary.grand_total', '800.00');
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'coupon_code' => 'save150',
+                'items' => [
+                    ['product_variant_id' => $fixedItem['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout
+            ->assertOk()
+            ->assertJsonPath('order.grand_total', '850.00');
+
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $metadata = $order->items->first()->metadata['promotion'];
+        $this->assertSame(Promotion::ACTIVATION_COUPON, $metadata['activation_type']);
+        $this->assertSame($fixedCoupon->getKey(), $metadata['coupon_id']);
+        $this->assertSame('SAVE150', $metadata['coupon_code']);
+        $this->assertDatabaseHas('promotion_redemptions', [
+            'promotion_id' => $fixedCoupon->promotion_id,
+            'promotion_coupon_id' => $fixedCoupon->getKey(),
+            'order_id' => $order->getKey(),
+            'shop_id' => $shopId,
+            'discount_amount' => '150.00',
+            'status' => PromotionRedemption::STATUS_REDEEMED,
+        ]);
+    }
+
+    public function test_pos_coupon_invalid_lifecycle_and_wrong_shop_states(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        [, $otherShopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Coupon State Shirt', 'Default', 'CPN-STATE', 'CPN-STATE-BAR');
+        $otherFixture = $this->createPosProduct($otherShopId, 'Other Coupon Shirt', 'Default', 'CPN-OTHER', 'CPN-OTHER-BAR');
+
+        $inactive = $this->couponPromotion($shopId, 'fixed_discount', 'INACTIVE', reward: ['value_amount' => '100.00']);
+        $inactive->forceFill(['status' => PromotionCoupon::STATUS_INACTIVE])->save();
+        $future = $this->couponPromotion($shopId, 'fixed_discount', 'FUTURE', reward: ['value_amount' => '100.00']);
+        $future->forceFill(['starts_at' => now()->addDay()])->save();
+        $expired = $this->couponPromotion($shopId, 'fixed_discount', 'EXPIRED', reward: ['value_amount' => '100.00']);
+        $expired->forceFill(['ends_at' => now()->subDay()])->save();
+        $wrongShop = $this->couponPromotion($otherShopId, 'fixed_discount', 'WRONGSHOP', reward: ['value_amount' => '100.00']);
+        $this->target($wrongShop->promotion, PromotionTarget::TYPE_PRODUCT, $otherFixture['product_id']);
+
+        $cases = [
+            'MISSING' => 'invalid',
+            'INACTIVE' => 'inactive',
+            'FUTURE' => 'not_started',
+            'EXPIRED' => 'expired',
+            'WRONGSHOP' => 'invalid',
+        ];
+
+        foreach ($cases as $code => $status) {
+            $this
+                ->actingAs(User::query()->findOrFail($userId))
+                ->withSession(['active_shop_id' => $shopId])
+                ->postJson(route('merchant.pos.pricing'), [
+                    'payment_method' => Order::PAYMENT_METHOD_CASH,
+                    'amount_paid' => 999,
+                    'coupon_code' => $code,
+                    'items' => [
+                        ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                    ],
+                ])
+                ->assertOk()
+                ->assertJsonPath('pricing.coupon.status', $status)
+                ->assertJsonPath('pricing.summary.grand_total', '999.00');
+        }
+    }
+
+    public function test_pos_coupon_and_automatic_promotions_use_existing_winner_rules(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Coupon Competition Shirt', 'Default', 'CPN-COMP', 'CPN-COMP-BAR');
+        $this->setVariantPrice($fixture['variant_id'], 1000);
+
+        $automatic = $this->promotion($shopId, 'fixed_discount', [
+            'name' => 'Better Automatic',
+            'status' => Promotion::STATUS_ACTIVE,
+        ], ['value_amount' => '300.00']);
+        $this->target($automatic, PromotionTarget::TYPE_PRODUCT, $fixture['product_id']);
+
+        $coupon = $this->couponPromotion($shopId, 'fixed_discount', 'SAVE100', [
+            'name' => 'Smaller Coupon',
+        ], ['value_amount' => '100.00']);
+        $this->target($coupon->promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product_id']);
+
+        $notBest = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 1000,
+                'coupon_code' => 'SAVE100',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $notBest
+            ->assertOk()
+            ->assertJsonPath('pricing.coupon.status', 'valid_but_not_best')
+            ->assertJsonPath('pricing.items.0.promotion.id', $automatic->getKey())
+            ->assertJsonPath('pricing.summary.grand_total', '700.00');
+
+        $coupon->promotion->rewards()->update(['value_amount' => '400.00']);
+
+        $wins = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 1000,
+                'coupon_code' => 'SAVE100',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $wins
+            ->assertOk()
+            ->assertJsonPath('pricing.coupon.status', 'applied')
+            ->assertJsonPath('pricing.items.0.promotion.coupon_id', $coupon->getKey())
+            ->assertJsonPath('pricing.summary.grand_total', '600.00');
+    }
+
+    public function test_pos_checkout_revalidates_stale_and_exhausted_coupons_authoritatively(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Coupon Limit Shirt', 'Default', 'CPN-LIMIT', 'CPN-LIMIT-BAR');
+        $this->setVariantPrice($fixture['variant_id'], 1000);
+
+        $coupon = $this->couponPromotion($shopId, 'fixed_discount', 'LIMITED', reward: ['value_amount' => '200.00']);
+        $coupon->forceFill(['usage_limit' => 1])->save();
+        $this->target($coupon->promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product_id']);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 800,
+                'coupon_code' => 'LIMITED',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('pricing.coupon.status', 'applied')
+            ->assertJsonPath('pricing.summary.grand_total', '800.00');
+
+        PromotionRedemption::query()->create([
+            'promotion_id' => $coupon->promotion_id,
+            'promotion_coupon_id' => $coupon->getKey(),
+            'shop_id' => $shopId,
+            'discount_amount' => '200.00',
+            'status' => PromotionRedemption::STATUS_REDEEMED,
+            'redeemed_at' => now(),
+        ]);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 800,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'coupon_code' => 'LIMITED',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $checkout->assertUnprocessable()->assertJsonValidationErrors('amount_paid');
+        $this->assertSame(1, PromotionRedemption::query()->count());
+    }
+
+    public function test_pos_coupon_customer_restrictions_use_selected_customer_and_do_not_allow_walk_in_bypass(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $fixture = $this->createPosProduct($shopId, 'Customer Coupon Shirt', 'Default', 'CPN-CUST', 'CPN-CUST-BAR');
+        $this->setVariantPrice($fixture['variant_id'], 1000);
+        $merchantCustomerId = $this->createCustomer($shopId, 'Existing Coupon Buyer', '9876500001', 'coupon-buyer@example.test');
+        $globalCustomerId = (int) DB::table('merchant_customers')->where('id', $merchantCustomerId)->value('customer_id');
+
+        $newCustomerCoupon = $this->couponPromotion($shopId, 'fixed_discount', 'WELCOME', [
+            'new_customer_only' => true,
+        ], ['value_amount' => '200.00']);
+        $this->target($newCustomerCoupon->promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product_id']);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1000,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'customer_id' => $globalCustomerId,
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertOk();
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 1000,
+                'customer_id' => $globalCustomerId,
+                'coupon_code' => 'WELCOME',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('pricing.coupon.status', 'not_eligible')
+            ->assertJsonPath('pricing.summary.grand_total', '1000.00');
+
+        $perCustomerCoupon = $this->couponPromotion($shopId, 'fixed_discount', 'CUSTOMERONLY', [
+            'per_customer_usage_limit' => 1,
+        ], ['value_amount' => '100.00']);
+        $this->target($perCustomerCoupon->promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product_id']);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 1000,
+                'coupon_code' => 'CUSTOMERONLY',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('pricing.coupon.status', 'customer_required')
+            ->assertJsonPath('pricing.summary.grand_total', '1000.00');
+
+        $walkInCheckout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 900,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'coupon_code' => 'CUSTOMERONLY',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $walkInCheckout->assertUnprocessable()->assertJsonValidationErrors('amount_paid');
+
+        PromotionRedemption::query()->create([
+            'promotion_id' => $perCustomerCoupon->promotion_id,
+            'promotion_coupon_id' => $perCustomerCoupon->getKey(),
+            'customer_id' => $globalCustomerId,
+            'shop_id' => $shopId,
+            'discount_amount' => '100.00',
+            'status' => PromotionRedemption::STATUS_REDEEMED,
+            'redeemed_at' => now(),
+        ]);
+
+        $limitedCustomerCheckout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 900,
+                'fulfilment_type' => 'counter',
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'customer_id' => $globalCustomerId,
+                'coupon_code' => 'CUSTOMERONLY',
+                'items' => [
+                    ['product_variant_id' => $fixture['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $limitedCustomerCheckout->assertUnprocessable()->assertJsonValidationErrors('amount_paid');
+        $this->assertSame(1, PromotionRedemption::query()->where('promotion_coupon_id', $perCustomerCoupon->getKey())->count());
+    }
+
+    public function test_pos_coupon_complex_reward_types_and_free_gift_preview_use_existing_engine(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $cases = [
+            'quantity_discount' => [
+                'code' => 'QTYCOUPON',
+                'reward' => ['value_type' => 'amount', 'value_amount' => '100.00'],
+                'discount_cents' => 30000,
+            ],
+            'fixed_bundle_price' => [
+                'code' => 'BUNDLECOUPON',
+                'reward' => ['bundle_quantity' => 2, 'bundle_price' => '1000.00'],
+                'discount_cents' => 100000,
+            ],
+            'tier_pricing' => [
+                'code' => 'TIERCOUPON',
+                'reward' => ['tier_config' => [['min_quantity' => 3, 'unit_price' => '800.00']]],
+                'discount_cents' => 60000,
+            ],
+            'buy_x_get_y_free' => [
+                'code' => 'BOGOFREE',
+                'reward' => ['buy_quantity' => 2, 'get_quantity' => 1],
+                'discount_cents' => 100000,
+            ],
+            'buy_x_get_y_discount' => [
+                'code' => 'BOGODISCOUNT',
+                'reward' => ['buy_quantity' => 2, 'get_quantity' => 1, 'value_percent' => '50.00'],
+                'discount_cents' => 50000,
+            ],
+            'free_gift' => [
+                'code' => 'GIFTCOUPON',
+                'reward' => [],
+                'discount_cents' => 30000,
+            ],
+        ];
+
+        foreach ($cases as $type => $case) {
+            $fixture = $this->createPosProduct($shopId, 'Complex '.$type.' Shirt', 'Default', 'CPN-'.Str::upper(Str::random(6)), 'BAR-'.Str::upper(Str::random(6)));
+            $this->setVariantPrice($fixture['variant_id'], 1000);
+            $coupon = $this->couponPromotion($shopId, $type, $case['code'], [
+                'name' => 'POS '.$type.' Coupon',
+            ], $case['reward']);
+
+            if ($type === 'quantity_discount') {
+                $this->condition($coupon->promotion, PromotionCondition::TYPE_MINIMUM_QUANTITY, '2.00');
+            }
+
+            if (in_array($type, ['buy_x_get_y_free', 'buy_x_get_y_discount'], true)) {
+                $this->target($coupon->promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product_id'], PromotionTarget::ROLE_BUY);
+                $this->target($coupon->promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product_id'], PromotionTarget::ROLE_GET);
+            } else {
+                $this->target($coupon->promotion, PromotionTarget::TYPE_PRODUCT, $fixture['product_id']);
+            }
+
+            if ($type === 'free_gift') {
+                $gift = $this->createPosProduct($shopId, 'Coupon Gift Tote', 'Default', 'CPN-GIFT-'.Str::upper(Str::random(4)), 'CPN-GIFT-BAR-'.Str::upper(Str::random(4)));
+                $this->setVariantPrice($gift['variant_id'], 300);
+                $this->condition($coupon->promotion, PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, '1000.00');
+                $this->target($coupon->promotion, PromotionTarget::TYPE_VARIANT, $gift['variant_id'], PromotionTarget::ROLE_GIFT);
+            }
+
+            $response = $this
+                ->actingAs(User::query()->findOrFail($userId))
+                ->withSession(['active_shop_id' => $shopId])
+                ->postJson(route('merchant.pos.pricing'), [
+                    'payment_method' => Order::PAYMENT_METHOD_CASH,
+                    'amount_paid' => 3000,
+                    'coupon_code' => $case['code'],
+                    'items' => [
+                        ['product_variant_id' => $fixture['variant_id'], 'quantity' => 3],
+                    ],
+                ]);
+
+            $response
+                ->assertOk()
+                ->assertJsonPath('pricing.coupon.status', 'applied')
+                ->assertJsonPath('pricing.coupon.discount_cents', $case['discount_cents']);
+
+            if ($type === 'free_gift') {
+                $response
+                    ->assertJsonCount(1, 'pricing.generated_gifts')
+                    ->assertJsonPath('pricing.generated_gifts.0.is_generated_gift', true)
+                    ->assertJsonPath('pricing.generated_gifts.0.line_total', '0.00');
+            }
+        }
+    }
+
+    public function test_pos_coupon_preserves_manual_discount_tax_rounding_and_barcode_regressions(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $couponItem = $this->createPosProduct($shopId, 'Coupon Tax Shirt', 'Default', 'CPN-TAX', 'CPN-TAX-BAR');
+        $manualItem = $this->createPosProduct($shopId, 'Manual Discount Shirt', 'Default', 'CPN-MANUAL', 'CPN-MANUAL-BAR');
+        $this->setVariantPrice($couponItem['variant_id'], 999.25);
+        $this->setVariantPrice($manualItem['variant_id'], 1000);
+        $merchantId = $this->merchantIdForShop($shopId);
+        $this->enablePosTax($shopId, $couponItem['product_category_id'], false);
+        $this->setMerchantSetting($merchantId, 'pos', 'cash_rounding.method', 'up', 'string');
+        $this->setMerchantSetting($merchantId, 'pos', 'cash_rounding.apply_to', 'cash', 'string');
+
+        $coupon = $this->couponPromotion($shopId, 'fixed_discount', 'TAXSAVE', reward: ['value_amount' => '100.00']);
+        $this->target($coupon->promotion, PromotionTarget::TYPE_PRODUCT, $couponItem['product_id']);
+
+        $pricing = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.pricing'), [
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'amount_paid' => 2000,
+                'coupon_code' => 'TAXSAVE',
+                'order_discount' => ['type' => Order::DISCOUNT_TYPE_AMOUNT, 'value' => 10],
+                'items' => [
+                    ['product_variant_id' => $couponItem['variant_id'], 'quantity' => 1, 'discount_type' => Order::DISCOUNT_TYPE_AMOUNT, 'discount_value' => 500],
+                    ['product_variant_id' => $manualItem['variant_id'], 'quantity' => 1, 'discount_type' => Order::DISCOUNT_TYPE_AMOUNT, 'discount_value' => 50],
+                ],
+            ]);
+
+        $pricing
+            ->assertOk()
+            ->assertJsonPath('pricing.coupon.status', 'applied')
+            ->assertJsonPath('pricing.items.0.line_discount', '100.00')
+            ->assertJsonPath('pricing.items.0.promotion.coupon_id', $coupon->getKey())
+            ->assertJsonPath('pricing.items.1.line_discount', '50.00')
+            ->assertJsonPath('pricing.order_discount.amount', '10.00')
+            ->assertJsonPath('pricing.summary.rounding_adjustment', '0.29')
+            ->assertJsonPath('pricing.summary.grand_total', '1932.00');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->getJson(route('merchant.pos.search', ['q' => 'CPN-TAX-BAR', 'scanner_mode' => 1]))
+            ->assertOk()
+            ->assertJsonPath('match_type', 'barcode')
+            ->assertJsonPath('auto_add', true)
+            ->assertJsonPath('item.variant_id', $couponItem['variant_id']);
     }
 
     public function test_pos_quantity_promotion_recalculates_when_quantity_changes(): void
@@ -4012,6 +4479,21 @@ class MerchantPosTest extends TestCase
         ]);
 
         return $promotion;
+    }
+
+    private function couponPromotion(int $shopId, string $templateCode, string $code, array $overrides = [], array $reward = []): PromotionCoupon
+    {
+        $promotion = $this->promotion($shopId, $templateCode, [
+            'status' => Promotion::STATUS_ACTIVE,
+            'activation_type' => Promotion::ACTIVATION_COUPON,
+            ...$overrides,
+        ], $reward);
+
+        return $promotion->coupons()->create([
+            'shop_id' => $shopId,
+            'code' => Str::upper($code),
+            'status' => PromotionCoupon::STATUS_ACTIVE,
+        ]);
     }
 
     private function target(Promotion $promotion, string $type, ?int $id = null, string $role = PromotionTarget::ROLE_ELIGIBLE): void

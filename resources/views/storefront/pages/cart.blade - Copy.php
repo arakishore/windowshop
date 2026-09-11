@@ -4,48 +4,7 @@
 @section('meta_description', 'Review your selected local shop products before checkout on WindowShop.')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('assets/admin/icons/fontawesome/styles.min.css') }}">
-
     <style>
-        .fa-solid,
-        .fa-regular {
-            display: inline-block;
-            min-width: 1em;
-            font-style: normal;
-            font-variant: normal;
-            line-height: 1;
-            text-rendering: auto;
-            vertical-align: middle;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-
-        .fa-solid {
-            font-family: "Font Awesome 5 Free";
-            font-weight: 900;
-        }
-
-        .fa-regular {
-            font-family: "Font Awesome 5 Free";
-            font-weight: 400;
-        }
-
-        .fa-trash-can::before {
-            content: "\f2ed";
-        }
-
-        .fa-circle-check::before {
-            content: "\f058";
-        }
-
-        .fa-shield-halved::before {
-            content: "\f3ed";
-        }
-
-        .fa-rotate-left::before {
-            content: "\f2ea";
-        }
-
         #cartRemoveConfirmModal .modal-dialog {
             max-width: 420px;
         }
@@ -262,8 +221,7 @@
         }
 
         /* Product row: image | body */
-        .cart-shop-item,
-        .product-row {
+        .cart-shop-item {
             display: flex;
             gap: 12px;
             padding: 14px 12px;
@@ -271,15 +229,13 @@
         }
 
         @media (min-width: 576px) {
-            .cart-shop-item,
-            .product-row {
+            .cart-shop-item {
                 gap: 16px;
                 padding: 20px 24px;
             }
         }
 
-        .cart-shop-item:last-child,
-        .product-row:last-child {
+        .cart-shop-item:last-child {
             border-bottom: 0;
         }
 
@@ -292,8 +248,7 @@
             flex-shrink: 0;
         }
 
-        .cart-shop-item.is-unavailable .ws-img,
-        .product-row.is-unavailable .ws-img {
+        .cart-shop-item.is-unavailable .ws-img {
             opacity: .55;
         }
 
@@ -458,29 +413,6 @@
             background: #2563EB;
         }
 
-        .ws-offer-coupon,
-        .ws-offer-auto,
-        .ws-offer-blue {
-            border-radius: 8px;
-            border: 1px solid;
-            max-width: 100%;
-        }
-
-        .ws-offer-coupon {
-            background: #FFF7ED;
-            border-color: #FDBA7466;
-        }
-
-        .ws-offer-auto {
-            background: #ECFDF5;
-            border-color: #A7F3D0;
-        }
-
-        .ws-offer-blue {
-            background: #EFF6FF;
-            border-color: #BFDBFE;
-        }
-
         .lp-offer-text {
             display: block;
             line-height: 1.2;
@@ -591,79 +523,6 @@
 
         .cart-item-controls {
             display: contents;
-        }
-
-        .ws-qty {
-            display: grid;
-            grid-template-columns: 32px 32px 32px;
-            align-items: center;
-            justify-content: center;
-            width: 96px;
-            height: 32px;
-            border: 1px solid var(--line);
-            border-radius: 999px;
-            overflow: hidden;
-            background: #fff;
-            flex: 0 0 96px;
-        }
-
-        .ws-qty button {
-            width: 32px;
-            height: 32px;
-            border: 0;
-            padding: 0;
-            background: transparent;
-            color: #111827;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            line-height: 1;
-            font-size: 14px;
-        }
-
-        .ws-qty .qty-value {
-            width: 32px;
-            height: 32px;
-            border: 0;
-            padding: 0;
-            background: transparent;
-            color: #111;
-            font-size: 14px;
-            line-height: 32px;
-            text-align: center;
-            display: block;
-        }
-
-        .ws-qty .fa-solid {
-            min-width: auto;
-            font-size: 10px;
-            line-height: 1;
-            top: 0;
-        }
-
-        .btn-ws-dark,
-        .btn-ws-primary {
-            border-radius: 999px;
-            font-weight: 600;
-        }
-
-        .btn-ws-dark {
-            background: #111827;
-            border-color: #111827;
-            color: #fff;
-        }
-
-        .btn-ws-primary {
-            background: #111;
-            border-color: #111;
-            color: #fff;
-        }
-
-        .btn-ws-dark:hover,
-        .btn-ws-primary:hover {
-            background: #000;
-            border-color: #000;
-            color: #fff;
         }
 
         .cart-product-actions {
@@ -1157,13 +1016,6 @@
 
             return 'background:'.$pick[0].';border:1px solid '.$pick[1].';color:'.$pick[2].';';
         };
-        $effectiveUnitPrice = static function (array $item): string {
-            $quantity = (float) ($item['quantity_value'] ?? $item['quantity'] ?? 1);
-            $quantity = $quantity > 0 ? $quantity : 1;
-            $lineSubtotalCents = (int) ($item['line_subtotal_cents'] ?? $item['unit_price_cents'] ?? 0);
-
-            return '₹'.number_format(($lineSubtotalCents / 100) / $quantity, 2);
-        };
     @endphp
 
     <section class="section-shoping-cart each-list-prd  pb-0" data-cart-page>
@@ -1214,185 +1066,174 @@
             <div class="row g-4 align-items-start" data-cart-filled {{ $cart['is_empty'] ? 'hidden' : '' }}>
                 <div class="col-lg-8">
                      
-                        <div class="d-flex flex-column gap-4" id="shop-groups" data-cart-items>
+                        <div class="d-flex flex-column gap-4" data-cart-items>
                             @foreach ($shopGroups as $shopGroup)
                                 @php
                                     $shopItems = collect($shopGroup['items'] ?? []);
                                     $paidItems = $shopItems->reject(fn (array $item): bool => ! empty($item['is_generated_gift']));
                                     $shopOfferCount = collect($shopGroup['applied_promotions'] ?? [])->count();
                                 @endphp
-                                <section class="shop-group ws-card" data-shop="{{ $shopGroup['shop_id'] }}" data-cart-shop-card="{{ $shopGroup['shop_id'] }}">
-                                    <div class="ws-shop-head bg-white d-flex align-items-center justify-content-between px-3 px-sm-4 py-3">
-                                        <div class="d-flex align-items-center gap-3">
-                                            <span class="rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width:36px;height:36px;{{ $avatarStyle($shopGroup['shop_name']) }}font-size:12px;">{{ $initials($shopGroup['shop_name']) }}</span>
+                                <section class="cart-shop-card ws-card mb-10" data-cart-shop-card="{{ $shopGroup['shop_id'] }}">
+                                    <div class="cart-shop-header">
+                                        <div class="cart-shop-heading">
+                                            <span class="cart-shop-avatar" style="{{ $avatarStyle($shopGroup['shop_name']) }}">{{ $initials($shopGroup['shop_name']) }}</span>
                                             <div>
-                                                <div class="fw-semibold" style="font-size:15px; color:#111; line-height:1;">{{ $shopGroup['shop_name'] }}</div>
-                                                <div class="small text-secondary">
-                                                    <span>{{ $paidItems->count() }} {{ Str::plural('item', $paidItems->count()) }} &middot; {{ $shopOfferCount > 0 ? 'Eligible for offers' : 'Try a coupon' }}</span>
+                                                <h6>{{ $shopGroup['shop_name'] }}</h6>
+                                                <div class="cart-shop-meta">
+                                                    <span>{{ $paidItems->count() }} {{ Str::plural('item', $paidItems->count()) }} &middot; {{ $shopOfferCount > 0 ? $shopOfferCount.' '.Str::plural('offer', $shopOfferCount).' applied' : 'Try a coupon' }}</span>
                                                 </div>
                                             </div>
                                         </div>
                                         @if ($shopOfferCount > 0)
-                                            <span class="badge rounded-pill border fw-medium d-none d-sm-inline-flex align-items-center gap-1" style="background:#ECFDF5;color:#065F46;border-color:#A7F3D0 !important;">
-                                                <i class="fa-solid fa-tag" style="font-size:10px;"></i>
+                                            <span class="cart-shop-chip">
+                                                <i class="icon icon-Tag"></i>
                                                 {{ $shopOfferCount }} {{ Str::plural('offer', $shopOfferCount) }} applied
-                                            </span>
-                                        @else
-                                            <span class="badge rounded-pill border d-none d-sm-inline-flex align-items-center gap-1" style="background:#FFFBEB;color:#92400E;border-color:#FDE68A !important;">
-                                                <i class="fa-regular fa-lightbulb" style="font-size:10px;"></i>
-                                                Try a coupon
                                             </span>
                                         @endif
                                     </div>
 
-                                    <div>
+                                    <div class="cart-shop-items">
                                         @foreach ($shopGroup['items'] as $item)
                                         @php
                                             $promotion = is_array($item['promotion'] ?? null) ? $item['promotion'] : null;
                                             $offerSource = $offerMeta($promotion);
-                                            $iconClass = $offerIconClass($promotion);
                                             $hasOffer = ! empty($promotion) && (($item['promotion_discount_cents'] ?? 0) > 0 || ! empty($item['is_generated_gift']));
                                             $isGift = ! empty($item['is_generated_gift']);
                                                 $isCouponBacked = ($promotion['activation_type'] ?? null) === 'coupon' && filled($promotion['coupon_code'] ?? null);
-                                            $offerBoxClass = $isCouponBacked ? 'ws-offer-coupon' : ($iconClass === 'is-blue' ? 'ws-offer-blue' : 'ws-offer-auto');
-                                            $offerIconColor = $isCouponBacked ? '#F97316' : ($iconClass === 'is-blue' ? '#2563EB' : '#059669');
-                                            $offerTextColor = $isCouponBacked ? '#9A3412' : ($iconClass === 'is-blue' ? '#1E40AF' : '#065F46');
-                                            $offerMetaColor = $isCouponBacked ? '#C2410C' : ($iconClass === 'is-blue' ? '#2563EB' : '#047857');
                                             @endphp
                                             @if ($isGift)
-                                                <div class="ws-gift d-flex align-items-center gap-3 px-3 px-sm-4 py-3"
+                                                <div class="cart-shop-item is-generated-gift"
                                                     data-cart-item="{{ $item['id'] }}"
                                                     data-cart-shop="{{ $shopGroup['shop_id'] }}">
-                                                    <div class="position-relative flex-shrink-0" style="padding:8px;">
-                                                        <img src="{{ $item['image'] }}" alt="{{ $item['product_name'] }}" class="ws-img" style="border-color:#FDE68A;" loading="lazy">
-                                                        <span class="position-absolute badge rounded-pill bg-dark border border-white shadow-sm" style="font-size:9px; letter-spacing:.12em; top:14px; left:14px; padding:5px 9px; line-height:1;">FREE GIFT</span>
+                                                    <div class="ws-gift-img">
+                                                        <img src="{{ $item['image'] }}" alt="{{ $item['product_name'] }}" class="ws-img" loading="lazy">
+                                                        <span class="ws-gift-tag">FREE GIFT</span>
                                                     </div>
-                                                    <div class="flex-grow-1" style="min-width:0;">
-                                                        <div class="fw-bold text-xxs" style="letter-spacing:.12em; color:#92400E;">FREE GIFT</div>
-                                                        <a href="{{ $item['product_url'] }}" class="fw-medium link" style="font-size:14px; color:#111;">{{ $item['product_name'] }}</a>
-                                                        <div class="small text-secondary">
-                                                            Regular value <span class="text-decoration-line-through" data-cart-gift-unit-price>{{ $item['unit_price'] }}</span>
-                                                            &middot; <span class="fw-bold text-success">FREE / <span data-cart-item-subtotal>{{ $item['line_subtotal'] }}</span></span>
+                                                    <div class="lp-row-body">
+                                                        <div class="lp-gift-kicker">FREE GIFT</div>
+                                                        <a href="{{ $item['product_url'] }}" class="lp-item-name prd_name link">{{ $item['product_name'] }}</a>
+                                                        <div class="lp-gift-value">
+                                                            Regular value <span class="text-decoration-line-through" data-cart-item-price>{{ $item['unit_price'] }}</span>
+                                                            &middot; <strong class="text-success">FREE / <span data-cart-item-subtotal>{{ $item['line_subtotal'] }}</span></strong>
                                                         </div>
-                                                        <div class="text-xxs text-secondary mt-1">
+                                                        <div class="lp-gift-by">
                                                             Added by: <span class="fw-medium">{{ $promotion['name'] ?? 'offer' }}</span>@if ($isCouponBacked)
-                                                                &middot; Coupon: <span class="mono fw-bold">{{ $promotion['coupon_code'] }}</span>
+                                                                &middot; Coupon: <strong>{{ $promotion['coupon_code'] }}</strong>
                                                             @endif
                                                         </div>
                                                         <p class="text-caption-01 mt-2 mb-0" data-cart-item-message role="status" hidden></p>
                                                     </div>
-                                                    <span class="d-none d-sm-inline-flex badge bg-white text-secondary border fw-semibold align-items-center gap-1" style="font-size:11px;">
-                                                        <i class="fa-solid fa-lock" style="font-size:10px;"></i>
+                                                    <span class="cart-gift-lock d-none d-sm-inline-flex">
+                                                        <i class="icon icon-Lock"></i>
                                                         Gift &mdash; no changes
                                                     </span>
                                                 </div>
                                             @else
-                                                <div class="product-row d-flex gap-3 p-3 p-sm-4 border-bottom {{ $item['is_available'] ? '' : 'is-unavailable' }}"
-                                                    data-price="{{ ($item['base_line_subtotal_cents'] ?? $item['line_subtotal_cents'] ?? 0) / 100 }}"
-                                                    data-final="{{ ($item['line_subtotal_cents'] ?? 0) / 100 }}"
-                                                    data-qty="{{ $item['quantity_value'] ?? $item['quantity'] }}"
+                                                <div class="cart-shop-item {{ $item['is_available'] ? '' : 'is-unavailable' }}"
                                                     data-cart-item="{{ $item['id'] }}"
                                                     data-cart-shop="{{ $shopGroup['shop_id'] }}">
-                                                    <img loading="lazy" width="100" height="133"
-                                                        src="{{ $item['image'] }}"
-                                                        alt="{{ $item['product_name'] }}"
-                                                        class="ws-img flex-shrink-0">
-                                                    <div class="flex-grow-1" style="min-width:0;">
-                                                        <div class="d-flex align-items-start justify-content-between gap-2">
-                                                            <div style="min-width:0;">
-                                                                <div class="fw-medium text-truncate"
-                                                                    style="font-size:14px; color:#111;">
-                                                                    {{ $item['product_name'] }}
-                                                                </div>
-                                                                @if (! empty($item['attributes']))
-                                                                    <div class="small text-secondary">
-                                                                        @foreach ($item['attributes'] as $attribute)
-                                                                            <span>{{ $attribute['label'] }}: {{ $attribute['value'] }}</span>@if (! $loop->last) <span>&middot;</span> @endif
-                                                                        @endforeach
-                                                                    </div>
-                                                                @endif
-                                                                <div class="{{ $offerBoxClass }} d-inline-flex align-items-center gap-2 px-2 py-2 mt-2"
-                                                                    data-cart-item-offer
-                                                                    @if (! $hasOffer) hidden @endif>
-                                                                    <span class="d-flex align-items-center justify-content-center text-white rounded" style="width:24px;height:24px;background:{{ $offerIconColor }};font-size:10px;" data-cart-item-offer-icon>
-                                                                        @if ($iconClass === 'is-auto')
-                                                                            <i class="fa-solid fa-gift" aria-hidden="true"></i>
-                                                                        @else
-                                                                            {{ $offerIconGlyph($promotion) }}
-                                                                        @endif
-                                                                    </span>
-                                                                    <span style="line-height:1.2;">
-                                                                        <span class="fw-semibold d-block" style="font-size:12px; color:{{ $offerTextColor }};" data-cart-item-offer-name>
-                                                                            @if ($promotion)
-                                                                                Offer: {{ $promotion['name'] }}
+                                                    <a href="{{ $item['product_url'] }}" class="img-prd d-block flex-shrink-0">
+                                                        <img loading="lazy" width="100" height="133"
+                                                            src="{{ $item['image'] }}"
+                                                            alt="{{ $item['product_name'] }}"
+                                                            class="ws-img">
+                                                    </a>
+                                                    <div class="lp-row-body">
+                                                        <div class="lp-row-top">
+                                                            <div class="lp-row-title">
+                                                                <div class="lp-title-offer">
+                                                                    <a href="{{ $item['product_url'] }}"
+                                                                        class="lp-item-name prd_name link">
+                                                                        {{ $item['product_name'] }}
+                                                                    </a>
+                                                                    <div class="cart-offer-panel {{ $isCouponBacked ? 'is-coupon' : '' }} {{ $offerIconClass($promotion) === 'is-blue' ? 'is-blue' : '' }}"
+                                                                        data-cart-item-offer
+                                                                        @if (! $hasOffer) hidden @endif>
+                                                                        <span class="lp-offer-icon {{ $offerIconClass($promotion) }}" data-cart-item-offer-icon>
+                                                                            @if ($offerIconClass($promotion) === 'is-auto')
+                                                                                <i class="fas fa-gift" aria-hidden="true"></i>
+                                                                            @else
+                                                                                {{ $offerIconGlyph($promotion) }}
                                                                             @endif
                                                                         </span>
-                                                                        <span style="font-size:11px; color:{{ $offerMetaColor }};">
-                                                                            <span data-cart-item-offer-source>{{ $offerSource }}</span>
-                                                                            <span>&middot;</span>
-                                                                            <span data-cart-item-offer-savings>
-                                                                                @if (($item['promotion_discount_cents'] ?? 0) > 0)
-                                                                                    You save {{ ltrim($item['promotion_discount'], '-') }}
+                                                                        <span class="lp-offer-text">
+                                                                            <span class="cart-offer-label d-block" data-cart-item-offer-name>
+                                                                                @if ($promotion)
+                                                                                    Offer: {{ $promotion['name'] }}
                                                                                 @endif
                                                                             </span>
+                                                                            <span class="cart-offer-inline">
+                                                                                <span class="cart-offer-meta" data-cart-item-offer-source>{{ $offerSource }}</span>
+                                                                                <span class="cart-offer-meta">&middot;</span>
+                                                                                <span class="cart-offer-savings" data-cart-item-offer-savings>
+                                                                                    @if (($item['promotion_discount_cents'] ?? 0) > 0)
+                                                                                        You save {{ ltrim($item['promotion_discount'], '-') }}
+                                                                                    @endif
+                                                                                </span>
+                                                                            </span>
                                                                         </span>
-                                                                    </span>
+                                                                    </div>
                                                                 </div>
+                                                                @foreach ($item['attributes'] as $attribute)
+                                                                    <div class="lp-item-variant prd_select">
+                                                                        <span>{{ $attribute['label'] }}: {{ $attribute['value'] }}</span>
+                                                                    </div>
+                                                                @endforeach
                                                             </div>
                                                             <button type="button"
-                                                                class="remove-btn btn btn-link btn-sm text-decoration-none d-none d-sm-inline-flex text-secondary p-0 flex-shrink-0 cart_remove remove"
+                                                                class="lp-remove-btn cart_remove remove d-none d-sm-inline-flex"
                                                                 data-cart-remove-url="{{ $item['remove_url'] }}">
-                                                                <i class="fa-regular fa-trash-can me-1"></i>Remove
+                                                                <i class="icon icon-trash me-1"></i>Remove
                                                             </button>
                                                         </div>
-                                                        <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mt-3">
-                                                            <div class="d-flex align-items-center gap-2">
-                                                                <div class="ws-qty" data-cart-title="Quantity">
+                                                        <div class="lp-row-bottom">
+                                                            <div class="lp-row-qty">
+                                                                <div class="cart-item-controls wg-quantity" data-cart-title="Quantity">
                                                                     <button type="button"
-                                                                        class="qty-minus"
+                                                                        class="btn-quantity minus-quantity"
                                                                         data-cart-quantity-step="-1"
                                                                         {{ $item['is_available'] ? '' : 'disabled' }}>
-                                                                        <i class="fa-solid fa-minus" style="font-size:10px;"></i>
+                                                                        <i class="icon icon-minus"></i>
                                                                     </button>
-                                                                    <span class="qty-value text-center fw-semibold" style="width:32px; font-size:14px;" data-cart-quantity-display>{{ $item['quantity'] }}</span>
-                                                                    <input class="quantity-product visually-hidden" type="hidden" name="quantity"
+                                                                    <input class="quantity-product" type="text" name="quantity"
                                                                         value="{{ $item['quantity'] }}"
+                                                                        inputmode="numeric"
                                                                         data-cart-quantity-input
-                                                                        data-cart-update-url="{{ $item['update_url'] }}">
+                                                                        data-cart-update-url="{{ $item['update_url'] }}"
+                                                                        {{ $item['is_available'] ? '' : 'disabled' }}>
                                                                     <button type="button"
-                                                                        class="qty-plus"
+                                                                        class="btn-quantity plus-quantity"
                                                                         data-cart-quantity-step="1"
                                                                         {{ $item['is_available'] ? '' : 'disabled' }}>
-                                                                        <i class="fa-solid fa-plus" style="font-size:10px;"></i>
+                                                                        <i class="icon icon-plus"></i>
                                                                     </button>
                                                                 </div>
                                                                 @if (! empty($item['return_exchange_policy']))
-                                                                    <span class="d-none d-sm-inline small text-secondary cart-product-policy">
+                                                                    <span class="lp-row-policy cart-product-policy d-none d-sm-inline">
                                                                         {{ $item['return_exchange_policy']['inline'] }}
                                                                     </span>
                                                                 @endif
                                                             </div>
-                                                            <div class="text-end ms-auto">
+                                                            <div class="lp-row-money">
+                                                                <div class="lp-unit-note" data-cart-title="Price">
+                                                                    <span data-cart-item-price>{{ $item['unit_price'] }}</span> each
+                                                                </div>
                                                                 <div class="cart-total-stack" data-cart-title="Total Price">
-                                                                    <div class="d-flex align-items-center gap-2 justify-content-end">
+                                                                    <div class="lp-money-line">
                                                                         <span class="cart-base-subtotal"
                                                                             data-cart-item-base-subtotal
                                                                             @if (($item['promotion_discount_cents'] ?? 0) <= 0) hidden @endif>
                                                                             {{ $item['base_line_subtotal'] ?? '' }}
                                                                         </span>
-                                                                        <span class="fw-bold cart_total" style="font-size:15px; color:#111;" data-cart-item-subtotal>{{ $item['line_subtotal'] }}</span>
+                                                                        <span class="lp-final-price cart_total" data-cart-item-subtotal>{{ $item['line_subtotal'] }}</span>
                                                                     </div>
-                                                                    <div class="small text-secondary" data-cart-title="Price">
-                                                                        <span data-cart-item-price>{{ $effectiveUnitPrice($item) }}</span> each
-                                                                    </div>
-                                                                    <div class="text-success fw-medium"
-                                                                        style="font-size:11px;"
+                                                                    <div class="lp-save-line"
                                                                         data-cart-item-promotion-discount
                                                                         @if (($item['promotion_discount_cents'] ?? 0) <= 0) hidden @endif>
                                                                         {{ ($item['promotion_discount_cents'] ?? 0) > 0 ? 'You save '.ltrim($item['promotion_discount'], '-') : '' }}
                                                                     </div>
                                                                     @if (! empty($item['return_exchange_policy']))
-                                                                        <div class="d-sm-none small text-secondary cart-product-policy">
+                                                                        <div class="lp-policy-mobile cart-product-policy d-sm-none">
                                                                             {{ $item['return_exchange_policy']['inline'] }}
                                                                         </div>
                                                                     @endif
@@ -1400,9 +1241,9 @@
                                                             </div>
                                                         </div>
                                                         <button type="button"
-                                                            class="remove-btn btn btn-link btn-sm text-decoration-none d-sm-none text-secondary p-0 mt-2 cart_remove remove"
+                                                            class="lp-remove-btn cart_remove remove d-sm-none mt-2"
                                                             data-cart-remove-url="{{ $item['remove_url'] }}">
-                                                            <i class="fa-regular fa-trash-can me-1"></i>Remove
+                                                            <i class="icon icon-trash me-1"></i>Remove
                                                         </button>
                                                         @if (! empty($item['availability_message']))
                                                             <p class="text-caption-01 {{ $item['is_available'] ? 'cl-text-2' : 'text-danger' }} mb-0" data-cart-item-warning>
@@ -1416,163 +1257,156 @@
                                         @endforeach
                                     </div>
 
-                                    <div class="ws-coupon-box px-3 px-sm-4 py-3" data-shop-coupon="{{ $shopGroup['shop_id'] }}" data-cart-shop-coupon-row="{{ $shopGroup['shop_id'] }}">
-                                            @php
-                                                $couponStatus = $shopGroup['coupon']['status'] ?? '';
-                                                $couponIsApplied = ! empty($shopGroup['coupon']['won'])
-                                                    || in_array($couponStatus, ['applied', 'guest_verification_required'], true);
-                                                $couponIsInvalid = in_array($couponStatus, ['invalid', 'expired', 'inactive', 'not_started', 'not_eligible', 'unsupported_reward_type'], true);
-                                            @endphp
-                                            <div class="d-flex align-items-center gap-2 mb-2">
-                                                <i class="fa-solid fa-tag text-secondary" style="font-size:12px;"></i>
-                                                <span class="small fw-semibold text-secondary" style="letter-spacing:.06em; text-transform:uppercase; font-size:11px;">Coupon for this shop</span>
+                                    <div class="cart-shop-footer" data-cart-shop-coupon-row="{{ $shopGroup['shop_id'] }}">
+                                        <div class="ws-coupon-box" data-shop-coupon="{{ $shopGroup['shop_id'] }}">
+                                            <div class="lp-coupon-label">
+                                                <i class="icon icon-Tag"></i>
+                                                <span>Coupon for this shop</span>
                                             </div>
                                             <form method="POST"
                                                 action="{{ route('storefront.cart.shops.coupon.store', ['shop' => $shopGroup['shop_id']]) }}"
-                                                class="coupon-unapplied d-flex gap-2 mb-0"
+                                                class="coupon-unapplied cart-shop-coupon-form mb-0"
                                                 data-coupon-apply-form
-                                                {{ $couponIsApplied ? 'hidden' : '' }}>
+                                                {{ ! empty($shopGroup['coupon']['code']) ? 'hidden' : '' }}>
                                                 @csrf
-                                                <div class="flex-grow-1 position-relative">
+                                                <div class="coupon-input-wrap">
                                                     <input
                                                         name="coupon_code"
-                                                        class="coupon-input form-control rounded-pill bg-white ps-3 pe-5"
-                                                        style="height:40px; font-size:14px;"
+                                                        class="coupon-input form-control"
                                                         value="{{ $shopGroup['coupon']['code'] ?? '' }}"
                                                         placeholder="Enter coupon code"
                                                         data-coupon-input>
-                                                    <i class="fa-regular fa-keyboard position-absolute top-50 end-0 translate-middle-y me-3 text-secondary opacity-50" style="font-size:12px;"></i>
+                                                    <span class="coupon-input-icon">⌨</span>
                                                 </div>
-                                                <button type="submit" class="coupon-apply-btn btn btn-ws-dark px-4" style="height:40px;">
+                                                <button type="submit" class="lp-btn-dark">
                                                     Apply
                                                 </button>
                                             </form>
-                                            <div class="coupon-applied d-flex align-items-center justify-content-between bg-white border border-success-subtle rounded-pill px-3 py-2"
+                                            <div class="coupon-applied lp-coupon-applied"
                                                 data-coupon-applied-code
-                                                {{ $couponIsApplied ? '' : 'hidden' }}>
+                                                {{ empty($shopGroup['coupon']['code']) ? 'hidden' : '' }}>
                                                 <span class="small">
                                                     <span class="text-secondary">Coupon</span>
-                                                    <span class="mono fw-bold text-success coupon-code-display" data-coupon-code-display>{{ $shopGroup['coupon']['code'] ?? '' }}</span>
+                                                    <span class="cart-coupon-code" data-coupon-code-display>{{ $shopGroup['coupon']['code'] ?? '' }}</span>
                                                     <span class="text-success fw-medium">applied</span>
-                                                    <i class="fa-solid fa-circle-check text-success ms-1"></i>
+                                                    <i class="icon icon-CheckCircle1 text-success ms-1"></i>
                                                 </span>
                                                 <button type="button"
-                                                    class="coupon-remove-btn btn btn-link btn-sm text-secondary p-0 text-decoration-underline"
-                                                    style="font-size:12px;"
+                                                    class="lp-coupon-remove"
                                                     data-coupon-remove-url="{{ route('storefront.cart.shops.coupon.destroy', ['shop' => $shopGroup['shop_id']]) }}"
-                                                    {{ $couponIsApplied ? '' : 'hidden' }}>
+                                                    {{ empty($shopGroup['coupon']['code']) ? 'hidden' : '' }}>
                                                     Remove
                                                 </button>
                                             </div>
-                                            <div class="coupon-feedback small mt-2">
-                                                <span class="text-caption-01 {{ $couponIsApplied ? 'text-success' : ($couponIsInvalid ? 'text-danger' : 'cl-text-2') }}"
+                                            <div class="coupon-feedback cart-coupon-state mt-2">
+                                                <span class="text-caption-01 {{ (($shopGroup['coupon']['status'] ?? '') === 'applied' || ($shopGroup['coupon']['status'] ?? '') === 'guest_verification_required') ? 'text-success' : 'cl-text-2' }}"
                                                     data-coupon-message>
                                                     {{ $shopGroup['coupon']['message'] ?? '' }}
                                                 </span>
                                             </div>
-                                            <div>
-                                                <div>
-                                                    <div class="d-flex justify-content-between small mt-3">
+                                            <div class="cart-shop-total-area">
+                                                <div class="lp-shop-totals cart-shop-totals">
+                                                    <div class="cart-shop-total-row">
                                                         <span class="text-secondary">Shop subtotal</span>
-                                                        <span class="fw-semibold shop-subtotal" data-shop-subtotal="{{ $shopGroup['shop_id'] }}">{{ $shopGroup['subtotal'] }}</span>
+                                                        <strong data-shop-subtotal="{{ $shopGroup['shop_id'] }}">{{ $shopGroup['subtotal'] }}</strong>
                                                     </div>
-                                                    <div class="d-flex justify-content-between text-xxs mt-1" @if (($shopGroup['promotion_discount_cents'] ?? 0) <= 0) hidden @endif>
-                                                        <span class="text-success fw-medium shop-savings">Offer savings &mdash; {{ $shopGroup['promotion_discount'] }}</span>
+                                                    <div class="cart-shop-total-row is-savings" @if (($shopGroup['promotion_discount_cents'] ?? 0) <= 0) hidden @endif>
+                                                        <span>Offer savings - {{ $shopGroup['promotion_discount'] }}</span>
                                                         <span class="text-secondary">Shipping at checkout</span>
                                                     </div>
                                                     <p
-                                                        class="text-caption-01 text-danger mb-0 mt-2"
+                                                        class="text-caption-01 text-danger mb-0"
                                                         data-shop-delivery-minimum="{{ $shopGroup['shop_id'] }}"
                                                         {{ empty($shopGroup['delivery_minimum']['message']) ? 'hidden' : '' }}>
                                                         {{ $shopGroup['delivery_minimum']['message'] ?? '' }}
                                                     </p>
                                                 </div>
-                                                <div>
+                                                <div class="cart-shop-checkout lp-shop-checkout">
                                                     <a href="{{ route('storefront.checkout') }}"
-                                                        class="btn btn-ws-primary w-100 d-flex align-items-center justify-content-center gap-2 mt-3 px-4"
-                                                        style="height:42px;">
-                                                        Proceed to checkout <i class="fa-solid fa-arrow-right" style="font-size:12px;"></i>
+                                                        class="lp-btn-dark">
+                                                        <span class="fw-semibold">Proceed to checkout</span>
+                                                        <i class="icon icon-CaretRightThin" style="font-size:12px;"></i>
                                                     </a>
-                                                    <div class="text-xxs text-secondary mt-2 text-center" style="line-height:1.45;">
+                                                    <p class="cart-shop-checkout-note">
                                                         Checkout is per shop. Choose a shop to continue.<br>
                                                         You'll checkout items from <span class="fw-medium" style="color:#111;">{{ $shopGroup['shop_name'] }}</span> only. Other shop items stay saved.
-                                                    </div>
+                                                    </p>
                                                 </div>
                                             </div>
+                                        </div>
                                     </div>
                                 </section>
                             @endforeach
-                            <div class="d-flex align-items-center justify-content-center gap-2 small text-secondary py-2">
-                                <i class="fa-solid fa-shield-halved text-secondary"></i> Secure cart &middot; Promotions calculated live
+                            <div class="lp-secure-strip">
+                                <i class="icon icon-Lock"></i> Secure cart &middot; Promotions calculated live
                             </div>
                         </div>
                      
                 </div>
 
                 <div class="col-lg-4">
-                    <div class="fl-sidebar-cart mt-lg-0">
-                        <div class="ws-card position-sticky" style="top:80px;">
-                            <div class="p-4">
-                                <div class="fw-semibold" style="font-size:15px; color:#111;">Order Summary</div>
-                                <div class="small text-secondary">Totals update as you change quantities or coupons.</div>
-                                <div class="mt-4 d-flex flex-column gap-2 small">
-                                    <div class="d-flex justify-content-between">
-                                        <span class="text-secondary">Subtotal <span class="text-secondary opacity-75">({{ $cartLineCount }} {{ Str::plural('item', $cartLineCount) }})</span></span>
-                                        <span class="fw-medium" data-cart-subtotal>{{ $cart['base_subtotal'] ?? $cart['subtotal'] }}</span>
+                    <div class="fl-sidebar-cart mt-lg-0 sticky-top" style="top: 80px;">
+                        <div class="box-order-summary ws-card">
+                            <div class="cart-summary-card">
+                                <div class="cart-summary-title">Order Summary</div>
+                                <div class="cart-summary-subtitle">Totals update as you change quantities or coupons.</div>
+                                <div class="mt-4 d-flex flex-column gap-2">
+                                    <div class="cart-summary-row mb-0">
+                                        <span>Subtotal ({{ $cartLineCount }} {{ Str::plural('item', $cartLineCount) }})</span>
+                                        <span class="fw-semibold text-dark" data-cart-subtotal>{{ $cart['base_subtotal'] ?? $cart['subtotal'] }}</span>
                                     </div>
-                                    <div class="d-flex justify-content-between text-success" data-cart-summary-savings-row @if (($cart['promotion_discount_cents'] ?? 0) <= 0) hidden @endif>
-                                        <span class="d-flex align-items-center gap-1"><i class="fa-solid fa-tag" style="font-size:11px;"></i> Offer Savings</span>
+                                    <div class="cart-summary-row is-savings mb-0" data-cart-summary-savings-row @if (($cart['promotion_discount_cents'] ?? 0) <= 0) hidden @endif>
+                                        <span><i class="icon icon-Tag" style="font-size:11px;"></i>Offer Savings</span>
                                         <span class="fw-semibold" data-cart-promotion-discount>{{ $cart['promotion_discount'] }}</span>
                                     </div>
-                                    <div class="d-flex justify-content-between text-secondary">
+                                    <div class="cart-summary-row mb-0">
                                         <span>Shipping</span>
                                         <span style="font-size: 12px;">Calculated at checkout</span>
                                     </div>
-                                    <hr class="my-2">
-                                    <div class="d-flex justify-content-between align-items-baseline">
-                                        <span class="fw-semibold" style="color:#111;">Total</span>
-                                        <span class="fw-bold" style="font-size:20px; color:#111;" data-cart-total>{{ $cart['total'] }}</span>
+                                    <hr class="cart-summary-divider">
+                                    <div class="cart-summary-row is-total align-items-baseline">
+                                        <span>Total</span>
+                                        <span data-cart-total>{{ $cart['total'] }}</span>
                                     </div>
-                                    <span class="badge rounded-pill border d-inline-flex align-items-center gap-2 align-self-start px-3 py-2" style="background:#ECFDF5; color:#065F46; border-color:#A7F3D0 !important; font-size:12px;" data-cart-summary-savings-note @if (($cart['promotion_discount_cents'] ?? 0) <= 0) hidden @endif>
-                                        <i class="fa-solid fa-piggy-bank" style="font-size:11px;"></i>
+                                    <span class="lp-summary-save" data-cart-summary-savings-note @if (($cart['promotion_discount_cents'] ?? 0) <= 0) hidden @endif>
+                                        <span aria-hidden="true">₹</span>
                                         You save <span data-cart-promotion-discount-note>{{ ltrim($cart['promotion_discount'] ?? '', '-') }}</span> on this cart
                                     </span>
                                 </div>
-                                <div class="mt-4 d-flex flex-column gap-2">
-                                    <div class="text-center" style="font-size:11px; color:#6B7280;">
+                                <div class="cart-summary-actions">
+                                    <p class="cart-summary-action-note">
                                         @if ($isSingleShopCart)
                                             Checkout is ready for this shop.
                                         @else
                                             Checkout is per shop. Choose a shop to continue.
                                         @endif
-                                    </div>
+                                    </p>
                                     @if ($isSingleShopCart)
                                         <a href="{{ route('storefront.checkout') }}"
-                                            class="btn btn-ws-dark w-100 d-flex align-items-center justify-content-center gap-2 action-checkout"
-                                            style="height:44px;">
-                                            Proceed To Checkout <i class="fa-solid fa-arrow-right" style="font-size:12px;"></i>
+                                            class="lp-btn-dark cart-summary-cta w-100 action-checkout">
+                                            <span class="fw-semibold">Proceed To Checkout</span>
                                         </a>
                                     @else
-                                        <a href="{{ route('storefront.products') }}" class="btn btn-ws-dark w-100 d-flex align-items-center justify-content-center gap-2" style="height:44px;">
-                                            Continue Shopping <i class="fa-solid fa-arrow-right" style="font-size:12px;"></i>
+                                        <a href="{{ route('storefront.products') }}" class="lp-btn-dark cart-summary-cta w-100">
+                                            Continue Shopping &rarr;
                                         </a>
                                     @endif
-                                    <div class="text-center" style="font-size:11px; color:#9CA3AF;">
+                                    <p class="cart-summary-secondary-note">
                                         @if ($isSingleShopCart)
-                                            Or <a href="{{ route('storefront.products') }}" class="link fw-medium text-secondary">Continue Shopping</a>
+                                            Or <a href="{{ route('storefront.products') }}" class="link">Continue Shopping</a>
                                         @else
-                                            Or use the <span class="fw-medium text-secondary">Proceed to checkout</span> button inside each shop card.
+                                            Or use the <span class="fw-medium">Proceed to checkout</span> button inside each shop card.
                                         @endif
-                                    </div>
+                                    </p>
                                 </div>
                             </div>
-                            <div class="d-flex align-items-center justify-content-center gap-3 small text-secondary border-top px-4 py-3" style="background:#FAFAFA; font-size:11px;">
-                                <span><i class="fa-solid fa-lock me-1"></i>Secure</span><span class="rounded-circle bg-secondary opacity-25" style="width:4px;height:4px;"></span><span><i class="fa-solid fa-rotate-left me-1"></i>Easy exchanges</span><span class="rounded-circle bg-secondary opacity-25" style="width:4px;height:4px;"></span><span><i class="fa-regular fa-credit-card me-1"></i>Cards &amp; UPI</span>
+                            <div class="cart-summary-trust text-caption-01 px-4 pb-3">
+                                <span>Secure</span><span>&middot;</span><span>Easy exchanges</span><span>&middot;</span><span>Cards &amp; UPI</span>
                             </div>
                         </div>
-                        <div class="ws-card mt-3 p-3 text-center border-dashed" style="border-style:dashed !important;">
-                            <div class="small fw-semibold" style="color:#374151;">Need help?</div>
-                            <div class="small text-secondary mt-1">Coupons are shop-specific. Apply a code inside the shop you want to checkout.</div>
+                        <div class="ws-card lp-help-card mt-3">
+                            <div class="fw-semibold">Need help?</div>
+                            <div class="text-caption-01 cl-text-3 mt-1">Coupons are shop-specific. Apply a code inside the shop you want to checkout.</div>
                         </div>
                     </div>
                 </div>
@@ -1630,21 +1464,6 @@
             };
 
             const positiveMoney = (value) => String(value || '').replace(/^-/, '');
-            const formatCartMoney = (cents) => `₹${(Number(cents || 0) / 100).toLocaleString('en-IN', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            })}`;
-
-            const effectiveUnitPrice = (item) => {
-                const quantity = Number(item?.quantity_value || item?.quantity || 1);
-                const lineSubtotalCents = Number(item?.line_subtotal_cents || 0);
-
-                if (quantity > 0 && lineSubtotalCents >= 0) {
-                    return formatCartMoney(lineSubtotalCents / quantity);
-                }
-
-                return item?.unit_price || formatCartMoney(0);
-            };
 
             const offerSource = (promotion) => {
                 if (!promotion || typeof promotion !== 'object') {
@@ -1670,30 +1489,10 @@
                 const iconClass = offerIconClass(promotion);
 
                 if (iconClass === 'is-auto') {
-                    return '<i class="fa-solid fa-gift" aria-hidden="true"></i>';
+                    return '<i class="fas fa-gift" aria-hidden="true"></i>';
                 }
 
                 return iconClass === 'is-blue' ? '&#8377;' : '%';
-            };
-
-            const offerBoxClass = (promotion) => {
-                const iconClass = offerIconClass(promotion);
-
-                if (iconClass === 'is-coupon') {
-                    return 'ws-offer-coupon';
-                }
-
-                return iconClass === 'is-blue' ? 'ws-offer-blue' : 'ws-offer-auto';
-            };
-
-            const offerIconColor = (promotion) => {
-                const iconClass = offerIconClass(promotion);
-
-                if (iconClass === 'is-coupon') {
-                    return '#F97316';
-                }
-
-                return iconClass === 'is-blue' ? '#2563EB' : '#059669';
             };
 
             const syncCart = (payload) => {
@@ -1762,7 +1561,7 @@
                         const appliedCode = couponWrap.querySelector('[data-coupon-applied-code]');
                         const appliedCodeText = couponWrap.querySelector('[data-coupon-code-display]');
                         const unapplied = couponWrap.querySelector('.coupon-unapplied');
-                        const couponIsApplied = Boolean(coupon.won) || ['applied', 'guest_verification_required'].includes(coupon.status || '');
+                        const hasCouponCode = Boolean(coupon.code);
 
                         if (input) {
                             input.value = coupon.code || '';
@@ -1770,21 +1569,21 @@
 
                         if (message) {
                             message.textContent = coupon.message || '';
-                            message.classList.toggle('text-success', couponIsApplied);
+                            message.classList.toggle('text-success', ['applied', 'guest_verification_required'].includes(coupon.status || ''));
                             message.classList.toggle('text-danger', ['invalid', 'expired', 'inactive', 'not_started', 'not_eligible', 'unsupported_reward_type'].includes(coupon.status || ''));
                             message.classList.toggle('cl-text-2', !message.classList.contains('text-success') && !message.classList.contains('text-danger'));
                         }
 
                         if (remove) {
-                            remove.hidden = !couponIsApplied;
+                            remove.hidden = !hasCouponCode;
                         }
 
                         if (unapplied) {
-                            unapplied.hidden = couponIsApplied;
+                            unapplied.hidden = hasCouponCode;
                         }
 
                         if (appliedCode) {
-                            appliedCode.hidden = !couponIsApplied;
+                            appliedCode.hidden = !hasCouponCode;
                         }
 
                         if (appliedCodeText) {
@@ -1800,7 +1599,6 @@
                         }
 
                         const input = row.querySelector('[data-cart-quantity-input]');
-                        const quantityDisplay = row.querySelector('[data-cart-quantity-display]');
                         const price = row.querySelector('[data-cart-item-price]');
                         const line = row.querySelector('[data-cart-item-subtotal]');
                         const discount = row.querySelector('[data-cart-item-promotion-discount]');
@@ -1817,12 +1615,8 @@
                             input.value = item.quantity;
                         }
 
-                        if (quantityDisplay) {
-                            quantityDisplay.textContent = item.quantity;
-                        }
-
                         if (price) {
-                            price.textContent = effectiveUnitPrice(item);
+                            price.textContent = item.unit_price;
                         }
 
                         if (line) {
@@ -1841,13 +1635,13 @@
 
                         if (offer) {
                             offer.hidden = !hasOffer;
-                            offer.classList.remove('ws-offer-coupon', 'ws-offer-auto', 'ws-offer-blue', 'cart-offer-panel', 'is-coupon', 'is-blue');
-                            offer.classList.add(offerBoxClass(item.promotion));
+                            offer.classList.toggle('is-coupon', offerIconClass(item.promotion) === 'is-coupon');
+                            offer.classList.toggle('is-blue', offerIconClass(item.promotion) === 'is-blue');
                         }
 
                         if (offerIcon) {
-                            offerIcon.className = 'd-flex align-items-center justify-content-center text-white rounded';
-                            offerIcon.style.cssText = `width:24px;height:24px;background:${offerIconColor(item.promotion)};font-size:10px;`;
+                            const nextIconClass = offerIconClass(item.promotion);
+                            offerIcon.className = `lp-offer-icon ${nextIconClass}`;
                             offerIcon.innerHTML = offerIconMarkup(item.promotion);
                         }
 

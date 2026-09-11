@@ -625,6 +625,10 @@
             const searchEmptyEl = root.querySelector('.js-pos-search-empty');
             const cashInput = root.querySelector('.js-pos-cash-received');
             const paymentMethodInput = root.querySelector('.js-pos-payment-method');
+            const couponInput = root.querySelector('.js-pos-coupon-code');
+            const couponApplyButton = root.querySelector('.js-pos-coupon-apply');
+            const couponRemoveButton = root.querySelector('.js-pos-coupon-remove');
+            const couponMessageEl = root.querySelector('.js-pos-coupon-message');
             const paidLabelEl = root.querySelector('.js-pos-paid-label');
             const changeEl = root.querySelector('.js-pos-change');
             const completeButton = root.querySelector('.js-pos-complete');
@@ -666,6 +670,7 @@
             let customerSearchResults = [];
             let addSoundContext = null;
             let orderDiscount = null;
+            let couponCode = '';
             let pricingPayload = null;
             let pricingRequestId = 0;
             let pricingTimer = null;
@@ -712,6 +717,17 @@
                 return value === null || value === undefined ? fallback : Number(value);
             };
             const lineSubtotal = (row) => pricingNumber(row, 'line_subtotal', Number(row.price) * Number(row.quantity));
+            const couponStatusClass = (status) => {
+                if (['applied'].includes(status || '')) {
+                    return 'text-success';
+                }
+
+                if (['invalid', 'expired', 'inactive', 'not_started', 'not_eligible', 'customer_required'].includes(status || '')) {
+                    return 'text-danger';
+                }
+
+                return 'text-muted';
+            };
             const calculateDiscount = (baseAmount, discount) => {
                 const type = discount?.type || discount?.discount_type || null;
                 const value = Number(discount?.value ?? discount?.discount_value ?? 0);
@@ -919,6 +935,8 @@
             const pricingRequestPayload = () => ({
                 amount_paid: cashInput.value || 0,
                 payment_method: selectedPaymentMethod(),
+                customer_id: selectedCustomer?.customer_id || null,
+                coupon_code: couponCode || null,
                 order_discount: allowOrderDiscount && orderDiscount ? {
                     type: orderDiscount.type,
                     value: orderDiscount.value,
@@ -935,6 +953,12 @@
             const applyPricingPayload = (payload) => {
                 pricingPayload = payload || null;
                 pricingFailed = false;
+                if (pricingPayload?.coupon?.code) {
+                    couponCode = pricingPayload.coupon.code;
+                    if (couponInput) {
+                        couponInput.value = couponCode;
+                    }
+                }
                 const pricedItems = new Map((pricingPayload?.items || []).map((item) => [String(item.product_variant_id), item]));
 
                 cart.forEach((row, variantId) => {
@@ -1048,6 +1072,7 @@
                 customer: selectedCustomer,
                 shippingAddressId: shippingAddressSelect?.value || '',
                 orderDiscount: allowOrderDiscount ? orderDiscount : null,
+                couponCode,
                 elapsedSeconds: elapsedSeconds(),
                 timerStartedAt,
                 timerElapsedBeforeStart,
@@ -1139,6 +1164,10 @@
                     : (posSettings.defaultPaymentMethod || Object.keys(paymentMethodLabels)[0] || 'cash');
                 selectedCustomer = normalizeCustomerPayload(snapshot.customer || null);
                 orderDiscount = allowOrderDiscount ? (snapshot.orderDiscount || null) : null;
+                couponCode = String(snapshot.couponCode || '').trim();
+                if (couponInput) {
+                    couponInput.value = couponCode;
+                }
                 setFulfilment(snapshot.fulfilmentType || 'counter');
                 renderSelectedCustomer();
                 renderFulfilment();
@@ -1275,6 +1304,7 @@
                 customerResultsEl.innerHTML = '';
                 renderSelectedCustomer();
                 loadCustomerAddresses(customer);
+                queuePricing();
                 saveCart();
             };
             const saveQuickCustomer = async () => {
@@ -1333,6 +1363,36 @@
                 selectedCustomer = null;
                 renderSelectedCustomer();
                 renderAddresses([]);
+                queuePricing();
+                saveCart();
+            };
+            const applyCoupon = () => {
+                const code = (couponInput?.value || '').trim();
+
+                if (!code) {
+                    couponCode = '';
+                    pricingPayload = null;
+                    render();
+                    queuePricing();
+                    saveCart();
+                    return;
+                }
+
+                couponCode = code;
+                pricingPayload = null;
+                render();
+                requestPricing();
+                saveCart();
+            };
+            const removeCoupon = () => {
+                couponCode = '';
+                if (couponInput) {
+                    couponInput.value = '';
+                }
+
+                pricingPayload = null;
+                render();
+                queuePricing();
                 saveCart();
             };
 
@@ -1441,6 +1501,19 @@
                 if (orderDiscountBadge) {
                     orderDiscountBadge.textContent = discountBadge(orderDiscount);
                     orderDiscountBadge.classList.toggle('d-none', currentOrderDiscountAmount <= 0);
+                }
+                if (couponMessageEl) {
+                    const coupon = pricingPayload?.coupon || null;
+                    const message = coupon?.message || (couponCode ? 'Apply coupon to refresh totals.' : '');
+                    couponMessageEl.textContent = message;
+                    couponMessageEl.classList.remove('text-success', 'text-danger', 'text-muted');
+                    couponMessageEl.classList.add(couponStatusClass(coupon?.status));
+                }
+                if (couponRemoveButton) {
+                    couponRemoveButton.disabled = !couponCode;
+                }
+                if (couponApplyButton) {
+                    couponApplyButton.disabled = cart.size === 0 || pricingPending;
                 }
                 if (pricingStatusEl) {
                     pricingStatusEl.classList.toggle('d-none', !pricingPending && !pricingFailed);
@@ -1976,6 +2049,10 @@
                 cashInput.value = '';
                 selectedCustomer = null;
                 orderDiscount = null;
+                couponCode = '';
+                if (couponInput) {
+                    couponInput.value = '';
+                }
                 renderSelectedCustomer();
                 renderAddresses([]);
                 resetTimer();
@@ -2378,6 +2455,21 @@
                 saveCart();
             });
             paymentMethodInput.addEventListener('change', renderPaymentMethod);
+            couponApplyButton?.addEventListener('click', applyCoupon);
+            couponRemoveButton?.addEventListener('click', removeCoupon);
+            couponInput?.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyCoupon();
+                }
+            });
+            couponInput?.addEventListener('input', () => {
+                if ((couponInput.value || '').trim() !== couponCode && couponMessageEl) {
+                    couponMessageEl.textContent = couponInput.value.trim() ? 'Apply coupon to refresh totals.' : '';
+                    couponMessageEl.classList.remove('text-success', 'text-danger');
+                    couponMessageEl.classList.add('text-muted');
+                }
+            });
             lineDiscountModalEl?.addEventListener('input', updateLineDiscountPreview);
             orderDiscountModalEl?.addEventListener('input', updateOrderDiscountPreview);
             lineDiscountModalEl?.addEventListener('click', (event) => {
@@ -2620,6 +2712,7 @@
                             fulfilment_type: selectedFulfilment(),
                             customer_id: selectedCustomer?.customer_id || null,
                             shipping_address_id: selectedFulfilment() === 'delivery' ? (shippingAddressSelect?.value || null) : null,
+                            coupon_code: couponCode || null,
                             order_discount: allowOrderDiscount && orderDiscount ? {
                                 type: orderDiscount.type,
                                 value: orderDiscount.value,

@@ -215,9 +215,23 @@ class OrderCreationService
             return [];
         }
 
+        if (! $customer instanceof Customer && $this->couponRequiresCustomer($resolution->coupon)) {
+            return [];
+        }
+
         $coupon = $this->couponRedemptions->lockAvailableCouponForCheckout($shop, $resolution->coupon, $customer, $effectiveAt);
 
         return $coupon instanceof PromotionCoupon ? [$coupon] : [];
+    }
+
+    private function couponRequiresCustomer(PromotionCoupon $coupon): bool
+    {
+        $promotion = $coupon->promotion;
+
+        return $promotion instanceof Promotion
+            && ((bool) $promotion->new_customer_only
+                || (int) ($promotion->per_customer_usage_limit ?? 0) > 0
+                || (int) ($coupon->per_customer_usage_limit ?? 0) > 0);
     }
 
     /**

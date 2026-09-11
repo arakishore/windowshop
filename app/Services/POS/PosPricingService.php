@@ -3,13 +3,18 @@
 namespace App\Services\POS;
 
 use App\Models\MerchantProfile;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderTotal;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Promotion;
+use App\Models\PromotionCoupon;
 use App\Models\Shop;
 use App\Services\Order\OrderTotalsService;
+use App\Services\Promotion\Coupons\CouponResolution;
+use App\Services\Promotion\Coupons\CouponResolver;
 use App\Services\Promotion\Engine\Data\GeneratedPromotionGift;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
 use App\Services\Promotion\Engine\PromotionCalculator;
@@ -30,6 +35,7 @@ class PosPricingService
         private readonly OrderTaxSnapshotFactory $orderTaxSnapshotFactory,
         private readonly OrderTotalsService $orderTotalsService,
         private readonly PromotionCalculator $promotions,
+        private readonly CouponResolver $couponResolver,
     ) {
     }
 
@@ -38,17 +44,20 @@ class PosPricingService
      *     items: array<int, array{product_variant_id: int, quantity: int, discount_type?: string|null, discount_value?: mixed}>,
      *     order_discount?: array{type?: string|null, value?: mixed, reason?: string|null, note?: string|null}|null,
      *     payment_method?: string|null,
-     *     amount_paid?: mixed
+     *     amount_paid?: mixed,
+     *     coupon_code?: mixed
      * } $data
      * @param array{method?: string, applyTo?: array<int, string>|string} $cashRounding
      * @return array<string, mixed>
      */
-    public function price(Shop $shop, array $data, array $cashRounding, CarbonInterface $effectiveAt): array
+    public function price(Shop $shop, array $data, array $cashRounding, CarbonInterface $effectiveAt, ?Customer $customer = null): array
     {
         $shop->loadMissing('merchant.taxSetting');
         $rows = $this->aggregateItems($data['items'] ?? []);
         $variants = $this->variants($shop, $rows);
-        $promotionResult = $this->promotions->calculateForVariantRows($shop, $rows, $variants, null, $effectiveAt);
+        $couponResolution = $this->couponResolution($shop, $data['coupon_code'] ?? null, $customer, $effectiveAt);
+        $activatedCoupons = $couponResolution?->valid() ? [$couponResolution->coupon] : [];
+        $promotionResult = $this->promotions->calculateForVariantRows($shop, $rows, $variants, $customer, $effectiveAt, $activatedCoupons);
         $giftVariants = $this->giftVariants($shop, $promotionResult->generatedGifts);
         $generatedGifts = $this->availableGeneratedGifts($promotionResult->generatedGifts, $giftVariants);
         $promotionResult = $this->promotionResultForAvailableGifts($promotionResult, $generatedGifts);
@@ -73,6 +82,7 @@ class PosPricingService
             'items' => array_map(fn (OrderItem $item): array => $this->itemPayload($item), $items),
             'generated_gifts' => array_map(fn (OrderItem $item): array => $this->itemPayload($item, true), $giftItems),
             'applied_promotions' => $promotionResult->appliedPromotions(),
+            'coupon' => $this->couponState($couponResolution, $promotionResult),
             'summary' => $summary,
             'totals' => $calculated['rows'],
             'order_discount' => $orderDiscount,
@@ -241,6 +251,108 @@ class PosPricingService
         }
 
         return $items;
+    }
+
+    private function couponResolution(Shop $shop, mixed $code, ?Customer $customer, CarbonInterface $effectiveAt): ?CouponResolution
+    {
+        $normalized = $this->couponResolver->normalize($code);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $resolution = $this->couponResolver->resolveForShop($shop, $normalized, $effectiveAt);
+        if (! $resolution->valid() || ! $resolution->coupon instanceof PromotionCoupon) {
+            return $resolution;
+        }
+
+        if (! $customer instanceof Customer && $this->couponRequiresCustomer($resolution->coupon)) {
+            return new CouponResolution(
+                'customer_required',
+                'Select a customer to use this coupon.',
+                code: $normalized,
+            );
+        }
+
+        return $resolution;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function couponState(?CouponResolution $resolution, PromotionCalculationResult $result): ?array
+    {
+        if (! $resolution instanceof CouponResolution) {
+            return null;
+        }
+
+        $state = $resolution->toArray();
+        $state['won'] = false;
+        $state['discount_cents'] = 0;
+        $state['discount'] = $this->money(0);
+
+        if (! $resolution->valid() || ! $resolution->coupon instanceof PromotionCoupon) {
+            return $state;
+        }
+
+        $promotionId = (int) $resolution->coupon->promotion_id;
+        $candidateDiscountCents = 0;
+        $wonDiscountCents = 0;
+
+        foreach ($result->lineAdjustments as $adjustment) {
+            foreach ($adjustment->eligiblePromotions as $candidate) {
+                if ((int) ($candidate['id'] ?? 0) !== $promotionId) {
+                    continue;
+                }
+
+                $candidateDiscountCents += $this->moneyToCents((string) ($candidate['discount_amount'] ?? '0'));
+                $candidateDiscountCents += max(0, (int) ($candidate['details']['conflict_benefit_cents'] ?? 0));
+            }
+
+            if ($adjustment->winningPromotion?->promotionId === $promotionId) {
+                $wonDiscountCents += $adjustment->promotionDiscountCents;
+            }
+        }
+
+        foreach ($result->generatedGifts as $gift) {
+            if ($gift->promotion->promotionId !== $promotionId) {
+                continue;
+            }
+
+            $candidateDiscountCents += $gift->promotionDiscountCents;
+            $wonDiscountCents += $gift->promotionDiscountCents;
+        }
+
+        if ($wonDiscountCents > 0) {
+            $state['status'] = 'applied';
+            $state['message'] = 'Coupon applied.';
+            $state['won'] = true;
+            $state['discount_cents'] = $wonDiscountCents;
+            $state['discount'] = '-'.$this->moneyFromCents($wonDiscountCents);
+
+            return $state;
+        }
+
+        if ($candidateDiscountCents > 0) {
+            $state['status'] = 'valid_but_not_best';
+            $state['message'] = 'Coupon is valid, but a better offer has been applied.';
+
+            return $state;
+        }
+
+        $state['status'] = 'not_eligible';
+        $state['message'] = 'This coupon is not valid for the items in this sale.';
+
+        return $state;
+    }
+
+    private function couponRequiresCustomer(PromotionCoupon $coupon): bool
+    {
+        $promotion = $coupon->promotion;
+
+        return $promotion instanceof Promotion
+            && ((bool) $promotion->new_customer_only
+                || (int) ($promotion->per_customer_usage_limit ?? 0) > 0
+                || (int) ($coupon->per_customer_usage_limit ?? 0) > 0);
     }
 
     /**
@@ -556,5 +668,15 @@ class PosPricingService
     private function money(float|string|int $value): string
     {
         return number_format(round((float) $value, 2), 2, '.', '');
+    }
+
+    private function moneyToCents(string $amount): int
+    {
+        return (int) round(((float) $amount) * 100);
+    }
+
+    private function moneyFromCents(int $cents): string
+    {
+        return number_format($cents / 100, 2, '.', '');
     }
 }
