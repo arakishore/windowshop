@@ -243,7 +243,7 @@ class PromotionCalculationEngineTest extends TestCase
         $this->assertNull($line?->winningPromotion);
     }
 
-    public function test_free_gift_uses_combined_eligible_subtotal_and_generates_one_virtual_gift(): void
+    public function test_free_gift_uses_combined_eligible_subtotal_and_scales_virtual_gift_quantity(): void
     {
         $fixture = $this->fixture(price: 1200);
         $secondProduct = $this->product($fixture, 'Second Qualifier');
@@ -271,6 +271,7 @@ class PromotionCalculationEngineTest extends TestCase
         $this->assertCount(1, $result->generatedGifts);
         $gift = $result->generatedGifts[0];
         $this->assertSame($giftVariant->getKey(), $gift->variantId);
+        $this->assertSame('1', $gift->quantity);
         $this->assertSame(60000, $gift->promotionDiscountCents);
         $this->assertSame(0, $gift->finalLineSubtotalCents);
         $this->assertSame($promotion->getKey(), $result->line($fixture['variant']->getKey())?->winningPromotion?->promotionId);
@@ -280,6 +281,16 @@ class PromotionCalculationEngineTest extends TestCase
             ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 3.75],
         ]);
         $this->assertCount(1, $above->generatedGifts);
+        $this->assertSame('2', $above->generatedGifts[0]->quantity);
+        $this->assertSame(120000, $above->generatedGifts[0]->promotionDiscountCents);
+
+        $giftVariant->forceFill(['stock_quantity' => 1])->save();
+        $stockCapped = $this->calculateRows($fixture['shop'], [
+            ['product_variant_id' => $fixture['variant']->getKey(), 'quantity' => 3.75],
+        ]);
+        $this->assertCount(1, $stockCapped->generatedGifts);
+        $this->assertSame('1', $stockCapped->generatedGifts[0]->quantity);
+        $this->assertSame(60000, $stockCapped->generatedGifts[0]->promotionDiscountCents);
     }
 
     public function test_free_gift_supports_existing_eligible_target_types(): void

@@ -573,14 +573,31 @@ class PromotionController extends Controller
             'activationTypes' => $this->activationTypes(),
             'policyModes' => $this->policyModes(),
             'products' => Product::query()
+                ->with([
+                    'primaryImage:id,image_path,thumbnail_path',
+                    'category:id,name',
+                    'brand:id,name',
+                    'variants' => fn ($query) => $query
+                        ->whereNull('deleted_at')
+                        ->where('status', 'active')
+                        ->orderByDesc('is_default')
+                        ->orderBy('sort_order')
+                        ->orderBy('name')
+                        ->select(['id', 'product_id', 'name', 'sku', 'selling_price', 'status', 'is_default', 'sort_order']),
+                ])
                 ->where('merchant_id', $shop->merchant_id)
                 ->where('shop_id', $shop->getKey())
                 ->whereNull('deleted_at')
                 ->where('status', '!=', 'archived')
                 ->orderBy('product_name')
-                ->get(['id', 'product_name', 'slug']),
+                ->get(['id', 'product_name', 'slug', 'product_category_id', 'brand_id', 'primary_image_id', 'status']),
             'productVariants' => ProductVariant::query()
-                ->with('product:id,product_name')
+                ->with([
+                    'product:id,product_name,primary_image_id,product_category_id,brand_id,status',
+                    'product.primaryImage:id,image_path,thumbnail_path',
+                    'product.category:id,name',
+                    'product.brand:id,name',
+                ])
                 ->where('shop_id', $shop->getKey())
                 ->whereNull('deleted_at')
                 ->where('status', 'active')

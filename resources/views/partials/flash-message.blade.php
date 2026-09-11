@@ -25,3 +25,17 @@
         </div>
     </div>
 @endif
+
+@if($errors->any())
+    <div class="px-3 pt-3">
+        <div class="alert alert-danger alert-dismissible fade show mb-0">
+            <div class="fw-semibold">Please fix the highlighted fields.</div>
+            <ul class="mb-0 mt-1 ps-3">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    </div>
+@endif

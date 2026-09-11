@@ -496,7 +496,7 @@
         <div class="container">
             <div class="product-shop-offers__heading">
                 <h5>Offers from {{ $product['store'] }}</h5>
-                <p>Shop-level offers will appear here once merchant promotions are connected.</p>
+                {{-- <p>Shop-level offers will appear here once merchant promotions are connected.</p> --}}
             </div>
             <div class="tf-grid-layout xs-col-1 sm-col-2 md-col-2 flat-spacing-2 pt-0">
                 @foreach ($shopOffers as $offer)

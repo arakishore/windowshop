@@ -372,7 +372,7 @@ class PosPricingService
 
             $product = $variant->product;
             $unitPrice = $this->money($variant->selling_price);
-            $quantity = 1;
+            $quantity = max(1, (int) $gift->quantity);
             $lineSubtotal = $this->money((float) $unitPrice * $quantity);
 
             try {
@@ -466,7 +466,7 @@ class PosPricingService
         return array_values(array_filter(
             $gifts,
             fn (GeneratedPromotionGift $gift): bool => isset($variants[$gift->variantId])
-                && (float) $variants[$gift->variantId]->stock_quantity >= 1,
+                && (float) $variants[$gift->variantId]->stock_quantity >= max(1, (int) $gift->quantity),
         ));
     }
 

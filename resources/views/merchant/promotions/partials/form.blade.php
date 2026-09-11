@@ -31,7 +31,194 @@
         ? $promotion->template
         : $templates->firstWhere('id', (int) old('promotion_template_id', $promotion->promotion_template_id ?: $templates->first()?->id));
     $templateId = $isEdit ? $promotion->promotion_template_id : old('promotion_template_id', $promotion->promotion_template_id ?: $templates->first()?->id);
+    $minimumQuantityValue = old('minimum_quantity', $promotion->conditions->where('condition_type', 'minimum_quantity')->first()?->value_numeric);
+    $minimumQuantityValue = $minimumQuantityValue !== null && $minimumQuantityValue !== '' ? (int) $minimumQuantityValue : '';
+    $money = fn ($value): string => '₹'.number_format((float) $value, 0);
+    $productImage = function ($product): ?string {
+        $path = $product?->primaryImage?->thumbnail_path ?: $product?->primaryImage?->image_path;
+
+        return $path ? asset('storage/'.$path) : null;
+    };
 @endphp
+
+@push('styles')
+    <style>
+        .promotion-product-selector {
+            display: grid;
+            gap: .75rem;
+        }
+
+        .promotion-product-search {
+            position: relative;
+        }
+
+        .promotion-product-search .ph-magnifying-glass {
+            position: absolute;
+            top: 50%;
+            left: .875rem;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            pointer-events: none;
+        }
+
+        .promotion-product-search .form-control {
+            padding-left: 2.4rem;
+            border-radius: 999px;
+        }
+
+        .promotion-product-filters {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+            gap: .5rem;
+        }
+
+        .promotion-product-list {
+            max-height: 320px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #fff;
+        }
+
+        .promotion-product-option {
+            position: relative;
+            display: grid;
+            grid-template-columns: auto 48px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: .75rem;
+            margin: 0;
+            padding: .75rem;
+            border-bottom: 1px solid #eef2f7;
+            cursor: pointer;
+        }
+
+        .promotion-product-option:last-child {
+            border-bottom: 0;
+        }
+
+        .promotion-product-option:hover,
+        .promotion-product-option.is-selected {
+            background: #f4f1ff;
+        }
+
+        .promotion-product-media {
+            position: relative;
+            width: 48px;
+            height: 48px;
+        }
+
+        .promotion-product-thumb,
+        .promotion-product-placeholder {
+            display: flex;
+            width: 48px;
+            height: 48px;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: #f3f4f6;
+            color: #6b7280;
+            font-size: 10px;
+            object-fit: cover;
+        }
+
+        .promotion-product-preview {
+            position: absolute;
+            left: 58px;
+            top: 50%;
+            z-index: 20;
+            display: none;
+            width: 220px;
+            height: 220px;
+            padding: .4rem;
+            transform: translateY(-50%);
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 18px 48px rgba(15, 23, 42, .18);
+        }
+
+        .promotion-product-media:hover .promotion-product-preview {
+            display: block;
+        }
+
+        .promotion-product-preview img {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .promotion-product-copy {
+            min-width: 0;
+        }
+
+        .promotion-product-name,
+        .promotion-product-meta {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .promotion-product-name {
+            color: #111827;
+            font-weight: 600;
+        }
+
+        .promotion-product-meta {
+            color: #64748b;
+            font-size: 11px;
+        }
+
+        .promotion-product-side {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            color: #111827;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .promotion-product-footer {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .promotion-product-empty {
+            padding: 1rem;
+            color: #64748b;
+            text-align: center;
+        }
+
+        .promotion-gift-list .promotion-product-option {
+            grid-template-columns: auto 48px minmax(0, 1fr) auto;
+        }
+
+        @media (max-width: 575.98px) {
+            .promotion-product-filters {
+                grid-template-columns: 1fr;
+            }
+
+            .promotion-product-option {
+                grid-template-columns: auto 44px minmax(0, 1fr);
+            }
+
+            .promotion-product-side {
+                grid-column: 3;
+                justify-content: flex-start;
+            }
+
+            .promotion-product-preview {
+                left: 0;
+                top: 54px;
+                transform: none;
+            }
+        }
+    </style>
+@endpush
 
 <div class="row g-3 js-promotion-form" data-current-template-code="{{ $isEdit ? $currentTemplate?->code : '' }}">
     <div class="col-xl-8">
@@ -124,34 +311,58 @@
                 </div>
                 <div class="col-12 js-field js-field-gift-products">
                     <h6 class="fw-semibold mb-2">Free Gift</h6>
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label" for="gift_product_id">Gift Product</label>
-                            <select id="gift_product_id" name="gift_product_id" class="form-select @error('gift_product_id') is-invalid @enderror">
-                                <option value="">Select Product</option>
-                                @foreach($products as $product)
-                                    <option value="{{ $product->id }}" @selected($giftProductId === (int) $product->id)>{{ $product->product_name }}</option>
-                                @endforeach
-                            </select>
-                            @error('gift_product_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    <input type="hidden" id="gift_product_id" name="gift_product_id" value="{{ $giftProductId }}">
+                    <div class="promotion-product-selector js-promotion-gift-selector">
+                        <div class="promotion-product-search">
+                            <i class="ph-magnifying-glass"></i>
+                            <input type="search" class="form-control js-gift-search" placeholder="Search gift products, SKU or variant...">
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label" for="gift_variant_id">Gift Variant</label>
-                            <select id="gift_variant_id" name="gift_variant_id" class="form-select @error('gift_variant_id') is-invalid @enderror">
-                                <option value="">Select Variant</option>
-                                @foreach($productVariants as $variant)
-                                    <option value="{{ $variant->id }}"
-                                        data-product-id="{{ $variant->product_id }}"
-                                        @selected($giftVariantId === (int) $variant->id)>
-                                        {{ $variant->product?->product_name }} - {{ $variant->name }} @if($variant->sku)({{ $variant->sku }})@endif
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('gift_variant_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            @if($giftVariantId < 1 && $targetIds('gift', 'product') !== [])
-                                <div class="form-text">Choose a variant to complete this legacy gift setup.</div>
-                            @endif
+                        <div class="promotion-product-list promotion-gift-list">
+                            @foreach($productVariants as $variant)
+                                @php
+                                    $giftProduct = $variant->product;
+                                    $image = $productImage($giftProduct);
+                                    $meta = collect([
+                                        $variant->name ? 'Variant '.$variant->name : null,
+                                        $variant->sku ? 'SKU: '.$variant->sku : null,
+                                        $giftProduct?->category?->name,
+                                        $giftProduct?->brand?->name,
+                                    ])->filter()->join(' · ');
+                                    $searchText = collect([$giftProduct?->product_name, $variant->name, $variant->sku, $giftProduct?->category?->name, $giftProduct?->brand?->name])
+                                        ->filter()
+                                        ->join(' ');
+                                @endphp
+                                <label class="promotion-product-option js-gift-option @if($giftVariantId === (int) $variant->id) is-selected @endif"
+                                    data-search="{{ Str::lower($searchText) }}">
+                                    <input type="radio" name="gift_variant_id" value="{{ $variant->id }}" class="form-check-input js-gift-variant-choice" data-product-id="{{ $variant->product_id }}" @checked($giftVariantId === (int) $variant->id)>
+                                    <span class="promotion-product-media">
+                                        @if($image)
+                                            <img src="{{ $image }}" alt="{{ $giftProduct?->product_name }}" class="promotion-product-thumb">
+                                            <span class="promotion-product-preview"><img src="{{ $image }}" alt="{{ $giftProduct?->product_name }}"></span>
+                                        @else
+                                            <span class="promotion-product-placeholder">No Image</span>
+                                        @endif
+                                    </span>
+                                    <span class="promotion-product-copy">
+                                        <span class="promotion-product-name">{{ $giftProduct?->product_name }}</span>
+                                        <span class="promotion-product-meta">{{ $meta ?: 'No variant details' }}</span>
+                                    </span>
+                                    <span class="promotion-product-side">
+                                        <span class="promotion-product-price">{{ $money($variant->selling_price) }}</span>
+                                    </span>
+                                </label>
+                            @endforeach
+                            <div class="promotion-product-empty d-none js-gift-empty">No matching gift variants.</div>
                         </div>
+                        <div class="promotion-product-footer">
+                            <span class="js-gift-summary">{{ $giftVariantId > 0 ? 'Gift selected' : 'No gift selected' }}</span>
+                            <button type="button" class="btn btn-link btn-sm p-0 js-gift-clear">Clear gift</button>
+                        </div>
+                        @error('gift_product_id')<div class="text-danger small">{{ $message }}</div>@enderror
+                        @error('gift_variant_id')<div class="text-danger small">{{ $message }}</div>@enderror
+                        @if($giftVariantId < 1 && $targetIds('gift', 'product') !== [])
+                            <div class="form-text">Choose a variant to complete this legacy gift setup.</div>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -205,7 +416,7 @@
                 </div>
                 <div class="col-md-4 js-field js-field-minimum-quantity">
                     <label class="form-label" for="minimum_quantity">Minimum Quantity</label>
-                    <input id="minimum_quantity" name="minimum_quantity" type="number" min="1" value="{{ old('minimum_quantity', $promotion->conditions->where('condition_type', 'minimum_quantity')->first()?->value_numeric) }}" class="form-control">
+                    <input id="minimum_quantity" name="minimum_quantity" type="number" min="1" step="1" value="{{ $minimumQuantityValue }}" class="form-control">
                 </div>
                 <div class="col-md-4 js-field js-field-minimum-subtotal">
                     <label class="form-label" for="minimum_eligible_subtotal">Minimum Eligible Subtotal</label>
@@ -340,7 +551,6 @@
             const exchangeWindow = document.querySelector('.js-exchange-window-wrapper');
             const valueType = document.querySelector('#value_type');
             const giftProduct = document.querySelector('#gift_product_id');
-            const giftVariant = document.querySelector('#gift_variant_id');
             const valueAmountLabel = document.querySelector('.js-value-amount-label');
             const previewText = document.querySelector('.js-offer-preview-text');
             const fieldMap = {
@@ -365,15 +575,17 @@
                 return templateInputs.find((input) => input.checked)?.dataset.templateCode || form?.dataset.currentTemplateCode || '';
             }
 
-            function setVisible(element, visible) {
+            function setVisible(element, visible, disableControls = true) {
                 if (!element) {
                     return;
                 }
 
                 element.classList.toggle('d-none', !visible);
-                element.querySelectorAll('input, select, textarea').forEach((input) => {
-                    input.disabled = !visible;
-                });
+                if (disableControls) {
+                    element.querySelectorAll('input, select, textarea').forEach((input) => {
+                        input.disabled = !visible;
+                    });
+                }
             }
 
             function updateTemplate() {
@@ -417,7 +629,7 @@
                 document.querySelectorAll('.js-target-row').forEach((row) => {
                     const scope = row.querySelector('.js-target-scope')?.value || 'all';
                     row.querySelectorAll('.js-target-selector').forEach((selector) => {
-                        setVisible(selector, selector.dataset.targetSelector === scope);
+                        setVisible(selector, selector.dataset.targetSelector === scope, false);
                     });
                 });
             }
@@ -514,31 +726,162 @@
                 previewText.textContent = previews[code] || 'Choose an offer type and enter rules to preview this offer.';
             }
 
-            function updateGiftVariants() {
-                if (!giftProduct || !giftVariant) {
-                    return;
-                }
+            function initProductSelectors() {
+                document.querySelectorAll('.js-promotion-product-selector').forEach((selector) => {
+                    const search = selector.querySelector('.js-product-search');
+                    const filters = Array.from(selector.querySelectorAll('.js-product-filter'));
+                    const options = Array.from(selector.querySelectorAll('.js-product-option'));
+                    const empty = selector.querySelector('.js-product-empty');
+                    const count = selector.querySelector('.js-product-selected-count');
+                    const summary = selector.parentElement?.querySelector('.js-product-summary');
+                    const clearFilters = selector.querySelector('.js-product-filter-clear');
+                    const clearSelection = selector.querySelector('.js-product-clear-selection');
+                    const selectAll = selector.parentElement?.querySelector('.js-product-select-all');
 
-                const productId = giftProduct.value;
-                Array.from(giftVariant.options).forEach((option) => {
-                    if (!option.value) {
-                        option.hidden = false;
-                        return;
+                    function visibleOptions() {
+                        return options.filter((option) => !option.classList.contains('d-none'));
                     }
 
-                    const visible = productId && option.dataset.productId === productId;
-                    option.hidden = !visible;
+                    function updateState() {
+                        const selected = options.filter((option) => option.querySelector('.js-product-checkbox')?.checked);
+                        options.forEach((option) => {
+                            option.classList.toggle('is-selected', option.querySelector('.js-product-checkbox')?.checked);
+                        });
 
-                    if (!visible && option.selected) {
-                        option.selected = false;
+                        if (count) {
+                            count.textContent = selected.length;
+                        }
+
+                        if (summary) {
+                            const names = selected.map((option) => option.querySelector('.promotion-product-name')?.textContent?.trim()).filter(Boolean);
+                            summary.textContent = names.length ? `Selected: ${names.join(', ')}` : 'No specific targets selected yet.';
+                        }
                     }
+
+                    function applyFilters() {
+                        const query = (search?.value || '').trim().toLowerCase();
+                        const activeFilters = Object.fromEntries(filters.map((filter) => [filter.dataset.filter, filter.value]));
+                        let shown = 0;
+
+                        options.forEach((option) => {
+                            const matchesSearch = !query || (option.dataset.search || '').includes(query);
+                            const matchesCategory = !activeFilters.category || option.dataset.category === activeFilters.category;
+                            const matchesBrand = !activeFilters.brand || option.dataset.brand === activeFilters.brand;
+                            const matchesStatus = !activeFilters.status || option.dataset.status === activeFilters.status;
+                            const visible = matchesSearch && matchesCategory && matchesBrand && matchesStatus;
+
+                            option.classList.toggle('d-none', !visible);
+                            shown += visible ? 1 : 0;
+                        });
+
+                        empty?.classList.toggle('d-none', shown > 0);
+                    }
+
+                    search?.addEventListener('input', applyFilters);
+                    filters.forEach((filter) => filter.addEventListener('change', applyFilters));
+                    options.forEach((option) => {
+                        const checkbox = option.querySelector('.js-product-checkbox');
+                        checkbox?.addEventListener('change', updateState);
+                    });
+                    clearFilters?.addEventListener('click', () => {
+                        if (search) {
+                            search.value = '';
+                        }
+
+                        filters.forEach((filter) => {
+                            filter.value = '';
+                        });
+                        applyFilters();
+                    });
+                    clearSelection?.addEventListener('click', () => {
+                        options.forEach((option) => {
+                            const checkbox = option.querySelector('.js-product-checkbox');
+                            if (checkbox) {
+                                checkbox.checked = false;
+                            }
+                        });
+                        updateState();
+                    });
+                    selectAll?.addEventListener('click', () => {
+                        visibleOptions().forEach((option) => {
+                            const checkbox = option.querySelector('.js-product-checkbox');
+                            if (checkbox) {
+                                checkbox.checked = true;
+                            }
+                        });
+                        updateState();
+                    });
+
+                    applyFilters();
+                    updateState();
                 });
             }
 
+            function initGiftSelector() {
+                const selector = document.querySelector('.js-promotion-gift-selector');
+
+                if (!selector || !giftProduct) {
+                    return;
+                }
+
+                const search = selector.querySelector('.js-gift-search');
+                const options = Array.from(selector.querySelectorAll('.js-gift-option'));
+                const empty = selector.querySelector('.js-gift-empty');
+                const summary = selector.querySelector('.js-gift-summary');
+                const clear = selector.querySelector('.js-gift-clear');
+
+                function updateState() {
+                    const selectedInput = selector.querySelector('.js-gift-variant-choice:checked');
+                    giftProduct.value = selectedInput?.dataset.productId || '';
+
+                    options.forEach((option) => {
+                        option.classList.toggle('is-selected', option.querySelector('.js-gift-variant-choice')?.checked);
+                    });
+
+                    if (summary) {
+                        const selectedOption = selectedInput?.closest('.js-gift-option');
+                        const name = selectedOption?.querySelector('.promotion-product-name')?.textContent?.trim();
+                        summary.textContent = name ? `Gift selected: ${name}` : 'No gift selected';
+                    }
+                }
+
+                function applyFilters() {
+                    const query = (search?.value || '').trim().toLowerCase();
+                    let shown = 0;
+
+                    options.forEach((option) => {
+                        const visible = !query || (option.dataset.search || '').includes(query);
+                        option.classList.toggle('d-none', !visible);
+                        shown += visible ? 1 : 0;
+                    });
+
+                    empty?.classList.toggle('d-none', shown > 0);
+                }
+
+                search?.addEventListener('input', applyFilters);
+                options.forEach((option) => {
+                    const input = option.querySelector('.js-gift-variant-choice');
+                    input?.addEventListener('change', updateState);
+                });
+                clear?.addEventListener('click', () => {
+                    options.forEach((option) => {
+                        const input = option.querySelector('.js-gift-variant-choice');
+                        if (input) {
+                            input.checked = false;
+                        }
+                    });
+                    updateState();
+                });
+
+                applyFilters();
+                updateState();
+            }
+
+            initProductSelectors();
+            initGiftSelector();
             templateInputs.forEach((input) => input.addEventListener('change', updateTemplate));
             document.querySelectorAll('.js-target-scope').forEach((input) => input.addEventListener('change', updateTargets));
             activationType?.addEventListener('change', updateActivation);
-            giftProduct?.addEventListener('change', updateGiftVariants);
             refundMode?.addEventListener('change', updatePolicies);
             exchangeMode?.addEventListener('change', updatePolicies);
             valueType?.addEventListener('change', updateTemplate);
@@ -547,7 +890,6 @@
             updateTemplate();
             updateActivation();
             updatePolicies();
-            updateGiftVariants();
         });
     </script>
 @endpush

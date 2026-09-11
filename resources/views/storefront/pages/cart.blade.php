@@ -1245,7 +1245,7 @@
                                         @endif
                                     </div>
 
-                                    <div>
+                                    <div data-cart-shop-items="{{ $shopGroup['shop_id'] }}">
                                         @foreach ($shopGroup['items'] as $item)
                                         @php
                                             $promotion = is_array($item['promotion'] ?? null) ? $item['promotion'] : null;
@@ -1262,7 +1262,8 @@
                                             @if ($isGift)
                                                 <div class="ws-gift d-flex align-items-center gap-3 px-3 px-sm-4 py-3"
                                                     data-cart-item="{{ $item['id'] }}"
-                                                    data-cart-shop="{{ $shopGroup['shop_id'] }}">
+                                                    data-cart-shop="{{ $shopGroup['shop_id'] }}"
+                                                    data-cart-generated-gift="1">
                                                     <div class="position-relative flex-shrink-0" style="padding:8px;">
                                                         <img src="{{ $item['image'] }}" alt="{{ $item['product_name'] }}" class="ws-img" style="border-color:#FDE68A;" loading="lazy">
                                                         <span class="position-absolute badge rounded-pill bg-dark border border-white shadow-sm" style="font-size:9px; letter-spacing:.12em; top:14px; left:14px; padding:5px 9px; line-height:1;">FREE GIFT</span>
@@ -1273,6 +1274,9 @@
                                                         <div class="small text-secondary">
                                                             Regular value <span class="text-decoration-line-through" data-cart-gift-unit-price>{{ $item['unit_price'] }}</span>
                                                             &middot; <span class="fw-bold text-success">FREE / <span data-cart-item-subtotal>{{ $item['line_subtotal'] }}</span></span>
+                                                        </div>
+                                                        <div class="small text-secondary mt-1">
+                                                            Free gift qty: <span class="fw-semibold text-success" data-cart-gift-quantity>{{ $item['quantity'] }}</span>
                                                         </div>
                                                         <div class="text-xxs text-secondary mt-1">
                                                             Added by: <span class="fw-medium">{{ $promotion['name'] ?? 'offer' }}</span>@if ($isCouponBacked)
@@ -1302,7 +1306,7 @@
                                                             <div style="min-width:0;">
                                                                 <div class="fw-medium text-truncate"
                                                                     style="font-size:14px; color:#111;">
-                                                                    {{ $item['product_name'] }}
+                                                                    <a href="{{ $item['product_url'] }}" class="name fw-medium link text-line-clamp-1">{{ $item['product_name'] }}</a>
                                                                 </div>
                                                                 @if (! empty($item['attributes']))
                                                                     <div class="small text-secondary">
@@ -1646,6 +1650,14 @@
                 return item?.unit_price || formatCartMoney(0);
             };
 
+            const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;',
+            }[char]));
+
             const offerSource = (promotion) => {
                 if (!promotion || typeof promotion !== 'object') {
                     return '';
@@ -1694,6 +1706,46 @@
                 }
 
                 return iconClass === 'is-blue' ? '#2563EB' : '#059669';
+            };
+
+            const renderGiftRow = (item, shopId) => {
+                const promotion = item.promotion || {};
+                const coupon = promotion.activation_type === 'coupon' && promotion.coupon_code
+                    ? ` &middot; Coupon: <span class="mono fw-bold">${escapeHtml(promotion.coupon_code)}</span>`
+                    : '';
+                const row = document.createElement('div');
+
+                row.className = 'ws-gift d-flex align-items-center gap-3 px-3 px-sm-4 py-3';
+                row.dataset.cartItem = item.id;
+                row.dataset.cartShop = shopId;
+                row.dataset.cartGeneratedGift = '1';
+                row.innerHTML = `
+                    <div class="position-relative flex-shrink-0" style="padding:8px;">
+                        <img src="${escapeHtml(item.image || '')}" alt="${escapeHtml(item.product_name || 'Free Gift')}" class="ws-img" style="border-color:#FDE68A;" loading="lazy">
+                        <span class="position-absolute badge rounded-pill bg-dark border border-white shadow-sm" style="font-size:9px; letter-spacing:.12em; top:14px; left:14px; padding:5px 9px; line-height:1;">FREE GIFT</span>
+                    </div>
+                    <div class="flex-grow-1" style="min-width:0;">
+                        <div class="fw-bold text-xxs" style="letter-spacing:.12em; color:#92400E;">FREE GIFT</div>
+                        <a href="${escapeHtml(item.product_url || '#')}" class="fw-medium link" style="font-size:14px; color:#111;">${escapeHtml(item.product_name || 'Free Gift')}</a>
+                        <div class="small text-secondary">
+                            Regular value <span class="text-decoration-line-through" data-cart-gift-unit-price>${escapeHtml(item.unit_price || '')}</span>
+                            &middot; <span class="fw-bold text-success">FREE / <span data-cart-item-subtotal>${escapeHtml(item.line_subtotal || '')}</span></span>
+                        </div>
+                        <div class="small text-secondary mt-1">
+                            Free gift qty: <span class="fw-semibold text-success" data-cart-gift-quantity>${escapeHtml(item.quantity || '1')}</span>
+                        </div>
+                        <div class="text-xxs text-secondary mt-1">
+                            Added by: <span class="fw-medium">${escapeHtml(promotion.name || 'offer')}</span>${coupon}
+                        </div>
+                        <p class="text-caption-01 mt-2 mb-0" data-cart-item-message role="status" hidden></p>
+                    </div>
+                    <span class="d-none d-sm-inline-flex badge bg-white text-secondary border fw-semibold align-items-center gap-1" style="font-size:11px;">
+                        <i class="fa-solid fa-lock" style="font-size:10px;"></i>
+                        Gift &mdash; no changes
+                    </span>
+                `;
+
+                return row;
             };
 
             const syncCart = (payload) => {
@@ -1792,8 +1844,24 @@
                         }
                     }
 
+                    const shopItemsWrap = page.querySelector(`[data-cart-shop-items="${shop.shop_id}"]`);
+                    const currentGiftIds = new Set((shop.items || [])
+                        .filter((item) => item.is_generated_gift)
+                        .map((item) => String(item.id)));
+
+                    page.querySelectorAll(`[data-cart-generated-gift="1"][data-cart-shop="${shop.shop_id}"]`).forEach((giftRow) => {
+                        if (!currentGiftIds.has(String(giftRow.dataset.cartItem))) {
+                            giftRow.remove();
+                        }
+                    });
+
                     (shop.items || []).forEach((item) => {
-                        const row = page.querySelector(`[data-cart-item="${item.id}"]`);
+                        let row = page.querySelector(`[data-cart-item="${item.id}"]`);
+
+                        if (!row && item.is_generated_gift && shopItemsWrap) {
+                            row = renderGiftRow(item, shop.shop_id);
+                            shopItemsWrap.append(row);
+                        }
 
                         if (!row) {
                             return;
@@ -1810,6 +1878,8 @@
                         const offerName = row.querySelector('[data-cart-item-offer-name]');
                         const offerSourceNode = row.querySelector('[data-cart-item-offer-source]');
                         const offerSavings = row.querySelector('[data-cart-item-offer-savings]');
+                        const giftQuantity = row.querySelector('[data-cart-gift-quantity]');
+                        const giftUnitPrice = row.querySelector('[data-cart-gift-unit-price]');
                         const discountCents = Number(item.promotion_discount_cents || 0);
                         const hasOffer = Boolean(item.promotion) && (discountCents > 0 || item.is_generated_gift);
 
@@ -1827,6 +1897,14 @@
 
                         if (line) {
                             line.textContent = item.is_generated_gift ? `FREE / ${item.line_subtotal}` : item.line_subtotal;
+                        }
+
+                        if (giftQuantity) {
+                            giftQuantity.textContent = item.quantity || '1';
+                        }
+
+                        if (giftUnitPrice) {
+                            giftUnitPrice.textContent = item.unit_price || '';
                         }
 
                         if (discount) {

@@ -233,7 +233,16 @@ class PromotionCalculator
                 continue;
             }
 
-            $gift = $this->generatedGift($promotion, $giftVariant, $giftUnitCents, $minimumSubtotalCents, $eligibleSubtotalCents, $eligibleLines, $coupon);
+            $giftQuantity = min(
+                intdiv($eligibleSubtotalCents, $minimumSubtotalCents),
+                (int) floor((float) $giftVariant->stock_quantity)
+            );
+            if ($giftQuantity < 1) {
+                continue;
+            }
+
+            $gift = $this->generatedGift($promotion, $giftVariant, $giftUnitCents, $giftQuantity, $minimumSubtotalCents, $eligibleSubtotalCents, $eligibleLines, $coupon);
+            $giftDiscountCents = $giftUnitCents * $giftQuantity;
             $lineCandidates = [];
 
             foreach ($eligibleLines as $line) {
@@ -248,14 +257,14 @@ class PromotionCalculator
                         'generated_by_promotion' => false,
                         'gift_product_id' => (int) $giftVariant->product_id,
                         'gift_variant_id' => (int) $giftVariant->getKey(),
-                        'gift_quantity' => 1,
+                        'gift_quantity' => $giftQuantity,
                         'minimum_eligible_subtotal' => $this->moneyFromCents($minimumSubtotalCents),
                         'eligible_subtotal' => $this->moneyFromCents($eligibleSubtotalCents),
                         'gift_unit_price' => $this->moneyFromCents($giftUnitCents),
                         'promotion_discount' => '0.00',
-                        'group_discount' => $this->moneyFromCents($giftUnitCents),
-                        'group_discount_cents' => $giftUnitCents,
-                        'conflict_benefit_cents' => $giftUnitCents,
+                        'group_discount' => $this->moneyFromCents($giftDiscountCents),
+                        'group_discount_cents' => $giftDiscountCents,
+                        'conflict_benefit_cents' => $giftDiscountCents,
                         'qualifying_variant_ids' => array_keys($eligibleLines),
                         'qualification_line' => [
                             'variant_id' => $line->variantId,
@@ -304,9 +313,10 @@ class PromotionCalculator
     /**
      * @param array<int, PromotionLineInput> $eligibleLines
      */
-    private function generatedGift(Promotion $promotion, ProductVariant $giftVariant, int $giftUnitCents, int $minimumSubtotalCents, int $eligibleSubtotalCents, array $eligibleLines, ?PromotionCoupon $coupon = null): GeneratedPromotionGift
+    private function generatedGift(Promotion $promotion, ProductVariant $giftVariant, int $giftUnitCents, int $giftQuantity, int $minimumSubtotalCents, int $eligibleSubtotalCents, array $eligibleLines, ?PromotionCoupon $coupon = null): GeneratedPromotionGift
     {
         $product = $giftVariant->product;
+        $giftDiscountCents = $giftUnitCents * $giftQuantity;
         $details = [
             'reward_type' => PromotionReward::TYPE_FREE_GIFT,
             'roles' => ['gift'],
@@ -314,14 +324,14 @@ class PromotionCalculator
             'generated_by_promotion' => true,
             'gift_product_id' => (int) $giftVariant->product_id,
             'gift_variant_id' => (int) $giftVariant->getKey(),
-            'gift_quantity' => 1,
+            'gift_quantity' => $giftQuantity,
             'minimum_eligible_subtotal' => $this->moneyFromCents($minimumSubtotalCents),
             'eligible_subtotal' => $this->moneyFromCents($eligibleSubtotalCents),
             'original_unit_price' => $this->moneyFromCents($giftUnitCents),
-            'promotion_discount' => $this->moneyFromCents($giftUnitCents),
-            'group_discount' => $this->moneyFromCents($giftUnitCents),
-            'group_discount_cents' => $giftUnitCents,
-            'conflict_benefit_cents' => $giftUnitCents,
+            'promotion_discount' => $this->moneyFromCents($giftDiscountCents),
+            'group_discount' => $this->moneyFromCents($giftDiscountCents),
+            'group_discount_cents' => $giftDiscountCents,
+            'conflict_benefit_cents' => $giftDiscountCents,
             'qualifying_lines' => array_map(fn (PromotionLineInput $line): array => [
                 'variant_id' => $line->variantId,
                 'product_id' => $line->productId,
@@ -338,7 +348,7 @@ class PromotionCalculator
                 templateCode: (string) $promotion->template?->code,
                 rewardType: (string) $promotion->rewards->first()?->reward_type,
                 priority: (int) $promotion->priority,
-                discountCents: $giftUnitCents,
+                discountCents: $giftDiscountCents,
                 details: $details,
                 activationType: (string) $promotion->activation_type,
                 couponId: $coupon?->getKey(),
@@ -357,10 +367,10 @@ class PromotionCalculator
             variantName: (string) $giftVariant->name,
             sku: $giftVariant->sku,
             barcode: $giftVariant->barcode,
-            quantity: '1',
+            quantity: (string) $giftQuantity,
             unitPrice: $this->moneyFromCents($giftUnitCents),
-            baseLineSubtotalCents: $giftUnitCents,
-            promotionDiscountCents: $giftUnitCents,
+            baseLineSubtotalCents: $giftDiscountCents,
+            promotionDiscountCents: $giftDiscountCents,
             finalLineSubtotalCents: 0,
             attributes: $this->variantAttributes($giftVariant),
         );

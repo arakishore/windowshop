@@ -1513,7 +1513,7 @@ class StorefrontCheckoutGateTest extends TestCase
         $coupon->promotion->conditions()->create([
             'condition_type' => PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL,
             'operator' => '>=',
-            'value_numeric' => '2000.00',
+            'value_numeric' => '1000.00',
             'sort_order' => 10,
         ]);
         $coupon->promotion->targets()->create([
@@ -1528,18 +1528,21 @@ class StorefrontCheckoutGateTest extends TestCase
         $response->assertRedirect(route('storefront.checkout.success', $order));
         $giftItem = $order->items->firstWhere('product_variant_id', $giftVariant->getKey());
         $this->assertNotNull($giftItem);
-        $this->assertSame('450.00', $giftItem->line_subtotal);
-        $this->assertSame('450.00', $giftItem->line_discount);
+        $this->assertSame(2, (int) $giftItem->quantity);
+        $this->assertSame('900.00', $giftItem->line_subtotal);
+        $this->assertSame('900.00', $giftItem->line_discount);
         $this->assertSame('0.00', $giftItem->line_total);
         $this->assertSame(Promotion::ACTIVATION_COUPON, $giftItem->metadata['promotion']['activation_type']);
         $this->assertSame($coupon->getKey(), $giftItem->metadata['promotion']['coupon_id']);
         $this->assertSame('FREEGIFT', $giftItem->metadata['promotion']['coupon_code']);
+        $this->assertSame(2, $giftItem->metadata['promotion']['details']['gift_quantity']);
         $this->assertSame('2000.00', $order->grand_total);
+        $this->assertSame(0, (int) $giftVariant->refresh()->stock_quantity);
         $this->assertDatabaseHas('promotion_redemptions', [
             'promotion_id' => $coupon->promotion_id,
             'promotion_coupon_id' => $coupon->getKey(),
             'order_id' => $order->getKey(),
-            'discount_amount' => '450.00',
+            'discount_amount' => '900.00',
             'status' => PromotionRedemption::STATUS_REDEEMED,
         ]);
     }

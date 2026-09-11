@@ -1334,7 +1334,7 @@ class MerchantPosTest extends TestCase
             'free_gift' => [
                 'code' => 'GIFTCOUPON',
                 'reward' => [],
-                'discount_cents' => 30000,
+                'discount_cents' => 90000,
             ],
         ];
 
@@ -1384,6 +1384,8 @@ class MerchantPosTest extends TestCase
                 $response
                     ->assertJsonCount(1, 'pricing.generated_gifts')
                     ->assertJsonPath('pricing.generated_gifts.0.is_generated_gift', true)
+                    ->assertJsonPath('pricing.generated_gifts.0.quantity', 3)
+                    ->assertJsonPath('pricing.generated_gifts.0.line_discount', '900.00')
                     ->assertJsonPath('pricing.generated_gifts.0.line_total', '0.00');
             }
         }
@@ -1565,9 +1567,9 @@ class MerchantPosTest extends TestCase
             ->withSession(['active_shop_id' => $shopId])
             ->postJson(route('merchant.pos.pricing'), [
                 'payment_method' => Order::PAYMENT_METHOD_CASH,
-                'amount_paid' => 1000,
+                'amount_paid' => 2000,
                 'items' => [
-                    ['product_variant_id' => $qualifying['variant_id'], 'quantity' => 1],
+                    ['product_variant_id' => $qualifying['variant_id'], 'quantity' => 2],
                 ],
             ]);
 
@@ -1577,20 +1579,21 @@ class MerchantPosTest extends TestCase
             ->assertJsonCount(1, 'pricing.generated_gifts')
             ->assertJsonPath('pricing.generated_gifts.0.product_variant_id', $gift['variant_id'])
             ->assertJsonPath('pricing.generated_gifts.0.is_generated_gift', true)
-            ->assertJsonPath('pricing.generated_gifts.0.line_discount', '300.00')
+            ->assertJsonPath('pricing.generated_gifts.0.quantity', 2)
+            ->assertJsonPath('pricing.generated_gifts.0.line_discount', '600.00')
             ->assertJsonPath('pricing.generated_gifts.0.line_total', '0.00')
-            ->assertJsonPath('pricing.summary.discount_total', '300.00')
-            ->assertJsonPath('pricing.summary.grand_total', '1000.00');
+            ->assertJsonPath('pricing.summary.discount_total', '600.00')
+            ->assertJsonPath('pricing.summary.grand_total', '2000.00');
 
         $checkout = $this
             ->actingAs(User::query()->findOrFail($userId))
             ->withSession(['active_shop_id' => $shopId])
             ->postJson(route('merchant.pos.checkout'), [
-                'amount_paid' => 1000,
+                'amount_paid' => 2000,
                 'fulfilment_type' => 'counter',
                 'payment_method' => Order::PAYMENT_METHOD_CASH,
                 'items' => [
-                    ['product_variant_id' => $qualifying['variant_id'], 'quantity' => 1],
+                    ['product_variant_id' => $qualifying['variant_id'], 'quantity' => 2],
                 ],
             ]);
 
@@ -1600,7 +1603,8 @@ class MerchantPosTest extends TestCase
         $this->assertCount(2, $order->items);
         $giftItem = $order->items->firstWhere('product_variant_id', $gift['variant_id']);
         $this->assertSame('gift', $giftItem->metadata['promotion']['details']['role']);
-        $this->assertSame('300.00', (string) $giftItem->line_discount);
+        $this->assertSame(2, (int) $giftItem->quantity);
+        $this->assertSame('600.00', (string) $giftItem->line_discount);
         $this->assertSame('0.00', (string) $giftItem->line_total);
     }
 

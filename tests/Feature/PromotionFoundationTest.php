@@ -672,6 +672,65 @@ class PromotionFoundationTest extends TestCase
         $this->assertSame('200.00', $promotion->rewards()->firstOrFail()->value_amount);
     }
 
+    public function test_quantity_discount_update_preserves_existing_product_targets_when_browser_omits_ids(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-quantity-preserve-targets@example.test');
+        $product = $this->product($fixture, 'Quantity Target Product');
+        $template = PromotionTemplate::query()->where('code', 'quantity_discount')->firstOrFail();
+        $promotion = $this->promotion($fixture, 'Quantity Target Offer', [
+            'promotion_template_id' => $template->getKey(),
+            'activation_type' => Promotion::ACTIVATION_COUPON,
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => PromotionReward::TYPE_QUANTITY_DISCOUNT,
+            'value_type' => 'percent',
+            'value_percent' => 10,
+        ]);
+        $promotion->conditions()->create([
+            'condition_type' => 'minimum_quantity',
+            'operator' => '>=',
+            'value_numeric' => 3,
+            'sort_order' => 10,
+        ]);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_PRODUCT,
+            'target_id' => $product->getKey(),
+            'sort_order' => 10,
+        ]);
+        $promotion->coupons()->create([
+            'shop_id' => $fixture['shop']->getKey(),
+            'code' => 'QTYKEEP',
+            'status' => 'active',
+        ]);
+
+        $payload = $this->payload('quantity_discount', [
+            'name' => 'Quantity Target Offer Updated',
+            'activation_type' => Promotion::ACTIVATION_AUTOMATIC,
+            'target_scope' => 'products',
+            'minimum_quantity' => 3,
+            'value_type' => 'percent',
+            'value_percent' => 10,
+            'coupon_code' => null,
+        ]);
+        unset($payload['promotion_template_id'], $payload['product_ids']);
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->put(route('merchant.promotions.update', $promotion), $payload)
+            ->assertRedirect(route('merchant.promotions.edit', $promotion))
+            ->assertSessionHas('success', 'Offer updated successfully.');
+
+        $promotion->refresh()->load('targets', 'coupons');
+        $this->assertSame(Promotion::ACTIVATION_AUTOMATIC, $promotion->activation_type);
+        $this->assertSame(
+            [$product->getKey()],
+            $promotion->targets->where('target_role', PromotionTarget::ROLE_ELIGIBLE)->where('target_type', PromotionTarget::TYPE_PRODUCT)->pluck('target_id')->values()->all()
+        );
+        $this->assertCount(0, $promotion->coupons);
+    }
+
     public function test_tampered_update_cannot_change_template_or_use_wrong_template_validation(): void
     {
         $this->seed(PromotionTemplateSeeder::class);

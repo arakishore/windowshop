@@ -764,7 +764,7 @@ class StorefrontCartPageTest extends TestCase
             'free_gift' => [
                 'code' => 'GIFTCOUPON',
                 'reward' => [],
-                'discount_cents' => 60000,
+                'discount_cents' => 180000,
             ],
         ];
 
@@ -820,7 +820,9 @@ class StorefrontCartPageTest extends TestCase
                 ->assertJsonPath('coupon.discount_cents', $case['discount_cents']);
 
             if ($type === 'free_gift') {
-                $response->assertJsonPath('shop_groups.0.items.1.is_generated_gift', true);
+                $response
+                    ->assertJsonPath('shop_groups.0.items.1.is_generated_gift', true)
+                    ->assertJsonPath('shop_groups.0.items.1.quantity', '3');
             }
         }
     }
