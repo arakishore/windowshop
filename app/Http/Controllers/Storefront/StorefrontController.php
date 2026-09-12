@@ -7,6 +7,7 @@ use App\Models\PostalCode;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Shop;
+use App\Models\ShopAudience;
 use App\Models\WishlistItem;
 use App\Services\Banner\BannerService;
 use App\Services\Cart\CartPageService;
@@ -14,6 +15,7 @@ use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Delivery\ShopDeliveryServiceabilityService;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
+use App\Services\Storefront\ProductLocationSorter;
 use App\Services\Storefront\ProductListingService;
 use App\Services\Storefront\StorefrontCustomerContext;
 use App\Services\Storefront\StorefrontUrlService;
@@ -50,57 +52,188 @@ class StorefrontController extends Controller
         ]);
     }
 
-    public function stores(): View
+    public function stores(Request $request, CustomerLocationService $location, ProductLocationSorter $locationSorter): View
     {
-        $stores = [
-            [
-                'name' => 'Green Basket Market',
-                'address' => 'Main Road, Near City Centre',
-                'area' => 'Grocery & Daily Needs',
-                'image' => 'assets/storefront/images/section/store-1.jpg',
-                'website_url' => url('/store/green-basket-market'),
-            ],
-            [
-                'name' => 'Style Corner',
-                'address' => 'Fashion Street, Central Market',
-                'area' => 'Fashion & Lifestyle',
-                'image' => 'assets/storefront/images/section/store-2.jpg',
-                'website_url' => url('/store/style-corner'),
-            ],
-            [
-                'name' => 'Home Care Essentials',
-                'address' => 'Station Road, Local Shopping Lane',
-                'area' => 'Home & Living',
-                'image' => 'assets/storefront/images/section/store-3.jpg',
-                'website_url' => url('/store/home-care-essentials'),
-            ],
-            [
-                'name' => 'Mobile Point',
-                'address' => 'Tech Plaza, Market Square',
-                'area' => 'Electronics & Accessories',
-                'image' => 'assets/storefront/images/section/store-4.jpg',
-                'website_url' => url('/store/mobile-point'),
-            ],
-            [
-                'name' => 'Fresh Bloom Florist',
-                'address' => 'Garden Lane, Old Market',
-                'area' => 'Flowers & Gifts',
-                'image' => 'assets/storefront/images/section/store-5.jpg',
-                'website_url' => url('/store/fresh-bloom-florist'),
-            ],
-            [
-                'name' => 'Daily Wellness Store',
-                'address' => 'Health Street, Community Complex',
-                'area' => 'Health & Personal Care',
-                'image' => 'assets/storefront/images/section/store-1.jpg',
-                'website_url' => url('/store/daily-wellness-store'),
-            ],
+        $selectedPostalCode = $location->postalCode($request);
+        $postalCodeRecord = $selectedPostalCode ? $location->postalCodeRecord($selectedPostalCode) : null;
+        $locationDistrict = trim((string) ($postalCodeRecord?->district ?? ''));
+        $locationState = trim((string) ($postalCodeRecord?->state ?? ''));
+        $filters = [
+            'search' => trim((string) $request->query('search', '')),
+            'area' => trim((string) $request->query('area', '')),
+            'shop_type' => trim((string) $request->query('shop_type', '')),
+            'audience' => trim((string) $request->query('audience', '')),
         ];
+
+        $baseQuery = $this->storeDiscoveryBaseQuery();
+        $this->applyStoreLocationScope($baseQuery, $locationDistrict, $locationState);
+
+        $areaOptions = (clone $baseQuery)
+            ->reorder()
+            ->whereNotNull('landmark')
+            ->where('landmark', '!=', '')
+            ->distinct()
+            ->orderBy('landmark')
+            ->pluck('landmark')
+            ->filter()
+            ->values();
+
+        $shopTypeOptions = ProductCategory::query()
+            ->whereNull('parent_id')
+            ->where('status', 'active')
+            ->whereNull('deleted_at')
+            ->whereIn('id', (clone $baseQuery)->reorder()->select('root_product_category_id')->distinct())
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug']);
+
+        $audienceOptions = ShopAudience::query()
+            ->where('status', 'active')
+            ->whereNull('deleted_at')
+            ->whereHas('shops', fn ($query) => $query->whereIn('shops.id', (clone $baseQuery)->reorder()->select('shops.id')))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug']);
+
+        $storesQuery = clone $baseQuery;
+        $this->applyStoreFilters($storesQuery, $filters);
+        $locationSorter->apply($storesQuery, $selectedPostalCode, 'shops.pincode');
+
+        $stores = $storesQuery
+            ->orderBy('name')
+            ->paginate(24)
+            ->withQueryString()
+            ->through(fn (Shop $shop): array => $this->storeCardData($shop));
 
         return view('storefront.pages.stores', [
             'stores' => $stores,
+            'filters' => $filters,
+            'hasActiveStoreFilters' => collect($filters)->filter(fn ($value): bool => $value !== '')->isNotEmpty(),
+            'selectedPostalCode' => $selectedPostalCode,
+            'locationDistrict' => $locationDistrict,
+            'locationState' => $locationState,
+            'areaOptions' => $areaOptions,
+            'shopTypeOptions' => $shopTypeOptions,
+            'audienceOptions' => $audienceOptions,
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
+    }
+
+    private function storeDiscoveryBaseQuery()
+    {
+        return Shop::query()
+            ->with([
+                'rootProductCategory:id,name',
+                'audiences:id,name,slug',
+                'city:id,name',
+                'state:id,name',
+                'country:id,name',
+            ])
+            ->where('status', 'active')
+            ->whereHas('merchant', fn ($query) => $query->where('status', 'active'));
+    }
+
+    private function applyStoreLocationScope($query, string $district, string $state): void
+    {
+        if ($district === '') {
+            return;
+        }
+
+        $postalCodes = PostalCode::query()
+            ->active()
+            ->where('district', $district)
+            ->when($state !== '', fn ($query) => $query->where('state', $state))
+            ->pluck('postal_code')
+            ->all();
+
+        $query->where(function ($query) use ($district, $postalCodes): void {
+            $query->whereHas('city', fn ($query) => $query->where('name', $district));
+
+            if ($postalCodes !== []) {
+                $query->orWhereIn('pincode', $postalCodes);
+            }
+        });
+    }
+
+    private function applyStoreFilters($query, array $filters): void
+    {
+        if ($filters['search'] !== '') {
+            $search = $filters['search'];
+            $query->where(function ($query) use ($search): void {
+                $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('short_description', 'like', "%{$search}%")
+                    ->orWhere('landmark', 'like', "%{$search}%")
+                    ->orWhere('address_line_1', 'like', "%{$search}%")
+                    ->orWhere('address_line_2', 'like', "%{$search}%");
+            });
+        }
+
+        if ($filters['area'] !== '') {
+            $query->where('landmark', $filters['area']);
+        }
+
+        if ($filters['shop_type'] !== '') {
+            $query->whereHas('rootProductCategory', fn ($query) => $query->where('slug', $filters['shop_type']));
+        }
+
+        if ($filters['audience'] !== '') {
+            $query->whereHas('audiences', fn ($query) => $query->where('slug', $filters['audience']));
+        }
+    }
+
+    private function storeCardData(Shop $shop): array
+    {
+        $imagePath = $shop->banner_path ?: $shop->logo_path;
+        $storeUrl = route('storefront.store.show', $shop->slug);
+        $fullAddress = collect([
+            $shop->address_line_1,
+            $shop->address_line_2,
+            $shop->landmark,
+            $shop->city?->name,
+            $shop->pincode,
+        ])->filter()->implode(', ');
+
+        $latitude = is_numeric($shop->latitude) ? (float) $shop->latitude : null;
+        $longitude = is_numeric($shop->longitude) ? (float) $shop->longitude : null;
+
+        if ($latitude !== null && $longitude !== null) {
+            $mapsUrl = "https://www.google.com/maps?q={$latitude},{$longitude}";
+        } else {
+            $searchQuery = collect([
+                $shop->name,
+                $fullAddress,
+                $shop->state?->name,
+                $shop->country?->name,
+            ])->filter()->implode(', ');
+            $mapsUrl = $searchQuery !== ''
+                ? 'https://www.google.com/maps/search/?api=1&query='.urlencode($searchQuery)
+                : null;
+        }
+
+        return [
+            'name' => $shop->name,
+            'address' => $fullAddress ?: null,
+            'maps_url' => $mapsUrl,
+            'shop_type' => $shop->rootProductCategory?->name,
+            'audiences' => $shop->audiences->pluck('name')->values()->all(),
+            'image' => $imagePath ? 'storage/'.$imagePath : 'assets/storefront/images/no-image-icon.png',
+            'logo' => $shop->logo_path ? 'storage/'.$shop->logo_path : null,
+            'initials' => $this->storeInitials($shop->name),
+            'website_url' => $shop->website_url ?: $storeUrl,
+            'store_url' => $storeUrl,
+        ];
+    }
+
+    private function storeInitials(string $name): string
+    {
+        $words = preg_split('/\s+/u', trim($name)) ?: [];
+        $initials = collect($words)
+            ->filter()
+            ->map(fn (string $word): string => mb_strtoupper(mb_substr($word, 0, 1)))
+            ->take(3)
+            ->implode('');
+
+        return $initials !== '' ? $initials : 'WS';
     }
 
     public function testimonials(): View
