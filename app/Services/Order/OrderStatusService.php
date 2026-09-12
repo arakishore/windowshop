@@ -4,11 +4,17 @@ namespace App\Services\Order;
 
 use App\Models\Order;
 use App\Models\User;
+use App\Services\Promotion\Redemptions\CouponRedemptionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class OrderStatusService
 {
+    public function __construct(
+        private readonly ?CouponRedemptionService $couponRedemptions = null,
+    ) {
+    }
+
     public function recordInitial(Order $order, string $status, ?User $actor = null, ?string $notes = null, ?array $metadata = null): void
     {
         $order->statusHistories()->create([
@@ -74,6 +80,11 @@ class OrderStatusService
             }
 
             $order->forceFill($changes)->save();
+
+            if ($toStatus === Order::STATUS_CANCELLED) {
+                ($this->couponRedemptions ?? app(CouponRedemptionService::class))->cancelForOrder($order);
+            }
+
             $order->statusHistories()->create([
                 'from_status' => $fromStatus,
                 'to_status' => $toStatus,

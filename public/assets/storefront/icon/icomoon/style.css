@@ -359,3 +359,169 @@
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath d='M864 64H160c-53 0-96 43-96 96v704c0 53 43 96 96 96h704c53 0 96-43 96-96V160c0-53-43-96-96-96zM328 800H200V384h128v416zM264 329c-41 0-74-34-74-75s33-74 74-74 74 33 74 74-33 75-74 75zM824 800H696V598c0-48-1-110-67-110-67 0-77 52-77 106v206H424V384h123v57h2c17-32 59-66 121-66 130 0 154 86 154 197v228z'/%3E%3C/svg%3E") no-repeat center / contain;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath d='M864 64H160c-53 0-96 43-96 96v704c0 53 43 96 96 96h704c53 0 96-43 96-96V160c0-53-43-96-96-96zM328 800H200V384h128v416zM264 329c-41 0-74-34-74-75s33-74 74-74 74 33 74 74-33 75-74 75zM824 800H696V598c0-48-1-110-67-110-67 0-77 52-77 106v206H424V384h123v57h2c17-32 59-66 121-66 130 0 154 86 154 197v228z'/%3E%3C/svg%3E") no-repeat center / contain;
 }
+
+/* =========================================================
+   Additional Storefront Icons
+   SVG-mask icons used when the glyph is not available
+   in the existing IcoMoon font.
+   ========================================================= */
+
+/* Common styling */
+.icon-MapPin:before,
+.icon-Phone:before,
+.icon-Envelope:before,
+.icon-Globe:before,
+.icon-Link:before,
+.icon-Info:before,
+.icon-Gift:before,
+.icon-CreditCard:before,
+.icon-Lock:before,
+.icon-WhatsappLogo:before {
+    content: "";
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    background-color: currentColor;
+    vertical-align: -0.125em;
+}
+
+
+/* ---------------------------------------------------------
+   Location / Map Pin
+   --------------------------------------------------------- */
+.icon-MapPin:before {
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M128 16a80 80 0 0 0-80 80c0 60 70 137 73 140a10 10 0 0 0 14 0c3-3 73-80 73-140a80 80 0 0 0-80-80zm0 112a32 32 0 1 1 32-32 32 32 0 0 1-32 32z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M128 16a80 80 0 0 0-80 80c0 60 70 137 73 140a10 10 0 0 0 14 0c3-3 73-80 73-140a80 80 0 0 0-80-80zm0 112a32 32 0 1 1 32-32 32 32 0 0 1-32 32z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+}
+
+
+/* ---------------------------------------------------------
+   Phone
+   --------------------------------------------------------- */
+.icon-Phone:before {
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M222 177l-44-20a12 12 0 0 0-14 3l-20 24c-32-16-56-40-72-72l24-20a12 12 0 0 0 3-14L79 34a12 12 0 0 0-13-7L26 36a12 12 0 0 0-10 12c0 106 86 192 192 192a12 12 0 0 0 12-10l9-40a12 12 0 0 0-7-13z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M222 177l-44-20a12 12 0 0 0-14 3l-20 24c-32-16-56-40-72-72l24-20a12 12 0 0 0 3-14L79 34a12 12 0 0 0-13-7L26 36a12 12 0 0 0-10 12c0 106 86 192 192 192a12 12 0 0 0 12-10l9-40a12 12 0 0 0-7-13z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+}
+
+
+/* ---------------------------------------------------------
+   Email
+   --------------------------------------------------------- */
+.icon-Envelope:before {
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M224 40H32a16 16 0 0 0-16 16v144a16 16 0 0 0 16 16h192a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16zm-9 32-87 65L41 72V56l87 65 87-65z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M224 40H32a16 16 0 0 0-16 16v144a16 16 0 0 0 16 16h192a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16zm-9 32-87 65L41 72V56l87 65 87-65z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+}
+
+
+/* ---------------------------------------------------------
+   Website / Globe
+   --------------------------------------------------------- */
+.icon-Globe:before {
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M128 16a112 112 0 1 0 112 112A112 112 0 0 0 128 16zm78 96h-38c-2-27-9-51-19-69a96 96 0 0 1 57 69zM128 32c12 0 27 30 31 80H97c4-50 19-80 31-80zM107 43c-10 18-17 42-19 69H50a96 96 0 0 1 57-69zM48 128h39c0 29 6 56 16 77a96 96 0 0 1-55-77zm80 96c-12 0-27-30-31-80h62c-4 50-19 80-31 80zm21-19c10-21 16-48 16-77h43a96 96 0 0 1-59 77z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M128 16a112 112 0 1 0 112 112A112 112 0 0 0 128 16zm78 96h-38c-2-27-9-51-19-69a96 96 0 0 1 57 69zM128 32c12 0 27 30 31 80H97c4-50 19-80 31-80zM107 43c-10 18-17 42-19 69H50a96 96 0 0 1 57-69zM48 128h39c0 29 6 56 16 77a96 96 0 0 1-55-77zm80 96c-12 0-27-30-31-80h62c-4 50-19 80-31 80zm21-19c10-21 16-48 16-77h43a96 96 0 0 1-59 77z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+}
+
+
+/* ---------------------------------------------------------
+   Link
+   --------------------------------------------------------- */
+.icon-Link:before {
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M137 74l25-25a52 52 0 0 1 74 74l-34 34a52 52 0 0 1-73 0 12 12 0 0 1 17-17 28 28 0 0 0 39 0l34-34a28 28 0 0 0-40-40l-25 25a12 12 0 1 1-17-17zm-18 108-25 25a28 28 0 0 1-40-40l34-34a28 28 0 0 1 39 0 12 12 0 1 0 17-17 52 52 0 0 0-73 0l-34 34a52 52 0 0 0 74 74l25-25a12 12 0 1 0-17-17zm45-98-80 80a12 12 0 1 0 17 17l80-80a12 12 0 1 0-17-17z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M137 74l25-25a52 52 0 0 1 74 74l-34 34a52 52 0 0 1-73 0 12 12 0 0 1 17-17 28 28 0 0 0 39 0l34-34a28 28 0 0 0-40-40l-25 25a12 12 0 1 1-17-17zm-18 108-25 25a28 28 0 0 1-40-40l34-34a28 28 0 0 1 39 0 12 12 0 1 0 17-17 52 52 0 0 0-73 0l-34 34a52 52 0 0 0 74 74l25-25a12 12 0 1 0-17-17zm45-98-80 80a12 12 0 1 0 17 17l80-80a12 12 0 1 0-17-17z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+}
+
+
+/* ---------------------------------------------------------
+   Information
+   Also fixes existing usages of icon-Info
+   --------------------------------------------------------- */
+.icon-Info:before {
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M128 16a112 112 0 1 0 112 112A112 112 0 0 0 128 16zm0 48a16 16 0 1 1-16 16 16 16 0 0 1 16-16zm20 128h-40a12 12 0 0 1 0-24h8v-48h-8a12 12 0 0 1 0-24h20a12 12 0 0 1 12 12v60h8a12 12 0 0 1 0 24z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M128 16a112 112 0 1 0 112 112A112 112 0 0 0 128 16zm0 48a16 16 0 1 1-16 16 16 16 0 0 1 16-16zm20 128h-40a12 12 0 0 1 0-24h8v-48h-8a12 12 0 0 1 0-24h20a12 12 0 0 1 12 12v60h8a12 12 0 0 1 0 24z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+}
+
+
+/* ---------------------------------------------------------
+   Gift
+   --------------------------------------------------------- */
+.icon-Gift:before {
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M216 80h-35c7-8 11-17 11-28a36 36 0 0 0-64-22 36 36 0 0 0-64 22c0 11 4 20 11 28H40a16 16 0 0 0-16 16v32h92V96h24v32h92V96a16 16 0 0 0-16-16zM100 80c-12 0-20-12-20-28a12 12 0 0 1 22-7l26 35zm56 0h-28l26-35a12 12 0 0 1 22 7c0 16-8 28-20 28zM32 144h84v88H48a16 16 0 0 1-16-16zm108 0h84v72a16 16 0 0 1-16 16h-68z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M216 80h-35c7-8 11-17 11-28a36 36 0 0 0-64-22 36 36 0 0 0-64 22c0 11 4 20 11 28H40a16 16 0 0 0-16 16v32h92V96h24v32h92V96a16 16 0 0 0-16-16zM100 80c-12 0-20-12-20-28a12 12 0 0 1 22-7l26 35zm56 0h-28l26-35a12 12 0 0 1 22 7c0 16-8 28-20 28zM32 144h84v88H48a16 16 0 0 1-16-16zm108 0h84v72a16 16 0 0 1-16 16h-68z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+}
+
+
+/* ---------------------------------------------------------
+   Credit Card / Payment
+   --------------------------------------------------------- */
+.icon-CreditCard:before {
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M224 48H32a24 24 0 0 0-24 24v112a24 24 0 0 0 24 24h192a24 24 0 0 0 24-24V72a24 24 0 0 0-24-24zm0 24v24H32V72zm0 112H32v-64h192zm-32-24h24a8 8 0 0 0 0-16h-24a8 8 0 0 0 0 16z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M224 48H32a24 24 0 0 0-24 24v112a24 24 0 0 0 24 24h192a24 24 0 0 0 24-24V72a24 24 0 0 0-24-24zm0 24v24H32V72zm0 112H32v-64h192zm-32-24h24a8 8 0 0 0 0-16h-24a8 8 0 0 0 0 16z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+}
+
+
+/* ---------------------------------------------------------
+   Lock / Secure
+   --------------------------------------------------------- */
+.icon-Lock:before {
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M200 88h-16V64a56 56 0 0 0-112 0v24H56a24 24 0 0 0-24 24v104a24 24 0 0 0 24 24h144a24 24 0 0 0 24-24V112a24 24 0 0 0-24-24zM96 64a32 32 0 0 1 64 0v24H96zm44 110v26a12 12 0 0 1-24 0v-26a20 20 0 1 1 24 0z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M200 88h-16V64a56 56 0 0 0-112 0v24H56a24 24 0 0 0-24 24v104a24 24 0 0 0 24 24h144a24 24 0 0 0 24-24V112a24 24 0 0 0-24-24zM96 64a32 32 0 0 1 64 0v24H96zm44 110v26a12 12 0 0 1-24 0v-26a20 20 0 1 1 24 0z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+}
+
+
+/* ---------------------------------------------------------
+   WhatsApp
+   --------------------------------------------------------- */
+.icon-WhatsappLogo:before {
+    -webkit-mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M216 40a119 119 0 0 0-187 143L16 232l50-13A119 119 0 0 0 216 40zm-88 184a95 95 0 0 1-49-14l-7-4-30 8 8-29-5-8a96 96 0 1 1 83 47zm53-72c-3-1-18-9-21-10s-5-2-7 2-8 10-10 12-4 2-7 1c-20-10-34-18-47-41-4-7 4-7 11-23 1-2 1-5 0-7s-7-17-10-23c-3-6-6-5-8-5h-7c-3 0-7 1-11 5s-14 14-14 34 14 39 16 42c2 3 28 43 68 60 25 11 35 12 48 10 8-1 25-10 28-20s3-19 2-21c-1-2-4-3-7-4z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+
+    mask:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M216 40a119 119 0 0 0-187 143L16 232l50-13A119 119 0 0 0 216 40zm-88 184a95 95 0 0 1-49-14l-7-4-30 8 8-29-5-8a96 96 0 1 1 83 47zm53-72c-3-1-18-9-21-10s-5-2-7 2-8 10-10 12-4 2-7 1c-20-10-34-18-47-41-4-7 4-7 11-23 1-2 1-5 0-7s-7-17-10-23c-3-6-6-5-8-5h-7c-3 0-7 1-11 5s-14 14-14 34 14 39 16 42c2 3 28 43 68 60 25 11 35 12 48 10 8-1 25-10 28-20s3-19 2-21c-1-2-4-3-7-4z'/%3E%3C/svg%3E")
+        no-repeat center / contain;
+}

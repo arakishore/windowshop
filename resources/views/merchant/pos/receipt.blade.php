@@ -164,6 +164,15 @@
             return $rate ? $name.' '.$rate : $name;
         };
         $itemHsnCode = static fn ($item): ?string => data_get($item->metadata, 'hsn_code') ?: data_get($item->metadata, 'hsn');
+        $promotionMetadata = static fn ($item): ?array => is_array($item->metadata) ? data_get($item->metadata, 'promotion') : null;
+        $isGeneratedGift = static fn ($item): bool => (bool) data_get($promotionMetadata($item), 'details.generated_by_promotion', false);
+        $hasPromotionDiscount = $order->items->contains(fn ($item): bool => $promotionMetadata($item) !== null && (float) $item->line_discount > 0);
+        $hasManualItemDiscount = $order->items->contains(fn ($item): bool => $promotionMetadata($item) === null && (float) $item->line_discount > 0);
+        $itemDiscountLabel = match (true) {
+            $hasPromotionDiscount && $hasManualItemDiscount => 'Offer / Item Discount',
+            $hasPromotionDiscount => 'Offer Discount',
+            default => 'Item Discount',
+        };
         $hsnSummary = $order->items
             ->map(function ($item) use ($itemHsnCode): ?array {
                 $hsnCode = $itemHsnCode($item);
@@ -246,7 +255,13 @@
             <div class="receipt-rule"></div>
 
             @foreach($order->items as $item)
+                @php($itemPromotion = $promotionMetadata($item))
                 <div>{{ $cleanProductName($item->product_name, $item->variant_name) }}</div>
+                @if($isGeneratedGift($item))
+                    <div>Free Gift</div>
+                @elseif($itemPromotion)
+                    <div>Offer: {{ $itemPromotion['name'] ?? 'Automatic offer' }}</div>
+                @endif
                 @if($item->variant_name)
                     <div>{{ $item->variant_name }}</div>
                 @endif
@@ -262,7 +277,7 @@
                 </div>
                 @if((float) $item->line_discount > 0)
                     <div class="receipt-row">
-                        <span>Line Discount</span>
+                        <span>{{ $itemPromotion ? 'Offer Discount' : 'Line Discount' }}</span>
                         <span>-{{ $formatReceiptMoney($item->line_discount) }}</span>
                     </div>
                 @endif
@@ -304,7 +319,7 @@
                 <span>{{ $formatReceiptMoney($order->subtotal) }}</span>
             </div>
             <div class="receipt-row">
-                <span>Item Discount</span>
+                <span>{{ $itemDiscountLabel }}</span>
                 <span>{{ $formatReceiptMoney($itemDiscountTotal) }}</span>
             </div>
             <div class="receipt-row">

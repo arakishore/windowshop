@@ -46,7 +46,7 @@ class StorePromotionRequest extends FormRequest
             'exchange_policy_mode' => ['required', Rule::in([Promotion::POLICY_INHERIT, Promotion::POLICY_ALLOWED, Promotion::POLICY_NOT_ALLOWED])],
             'exchange_window_days' => ['nullable', 'integer', 'min:0', 'max:365'],
 
-            'target_scope' => ['required', Rule::in(['all', 'products', 'categories', 'brands', 'collections'])],
+            'target_scope' => ['nullable', Rule::in(['all', 'products', 'categories', 'brands', 'collections'])],
             'product_ids' => ['nullable', 'array'],
             'product_ids.*' => ['integer'],
             'category_ids' => ['nullable', 'array'],
@@ -73,6 +73,8 @@ class StorePromotionRequest extends FormRequest
             'get_brand_ids.*' => ['integer'],
             'get_collection_ids' => ['nullable', 'array'],
             'get_collection_ids.*' => ['integer'],
+            'gift_product_id' => ['nullable', 'integer'],
+            'gift_variant_id' => ['nullable', 'integer'],
             'gift_product_ids' => ['nullable', 'array'],
             'gift_product_ids.*' => ['integer'],
 

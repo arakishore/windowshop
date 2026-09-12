@@ -246,7 +246,7 @@ class Promotion extends Model
             PromotionReward::TYPE_FREE_GIFT => [
                 ...$this->requireCondition(PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, 'Add the purchase subtotal before activating this offer.'),
                 ...$this->requireTargetRole(PromotionTarget::ROLE_ELIGIBLE, 'Choose eligible products before activating this offer.'),
-                ...$this->requireTargetRole(PromotionTarget::ROLE_GIFT, 'Select a gift product before activating this offer.'),
+                ...$this->requireTargetRole(PromotionTarget::ROLE_GIFT, 'Select a gift variant before activating this offer.', PromotionTarget::TYPE_VARIANT),
             ],
             default => ['Unsupported promotion template.'],
         };
@@ -283,11 +283,15 @@ class Promotion extends Model
         return (float) ($value ?? 0) > 0 ? [] : [$message];
     }
 
-    private function requireTargetRole(string $role, string $message): array
+    private function requireTargetRole(string $role, string $message, ?string $type = null): array
     {
         $exists = $this->relationLoaded('targets')
-            ? $this->targets->contains(fn (PromotionTarget $target): bool => $target->target_role === $role)
-            : $this->targets()->where('target_role', $role)->exists();
+            ? $this->targets->contains(fn (PromotionTarget $target): bool => $target->target_role === $role
+                && ($type === null || $target->target_type === $type))
+            : $this->targets()
+                ->where('target_role', $role)
+                ->when($type !== null, fn ($query) => $query->where('target_type', $type))
+                ->exists();
 
         return $exists ? [] : [$message];
     }
