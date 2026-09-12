@@ -112,6 +112,7 @@ class StorefrontController extends Controller
             'selectedPostalCode' => $selectedPostalCode,
             'locationDistrict' => $locationDistrict,
             'locationState' => $locationState,
+            'storeHeroMap' => $this->storeHeroMapData($postalCodeRecord),
             'areaOptions' => $areaOptions,
             'shopTypeOptions' => $shopTypeOptions,
             'audienceOptions' => $audienceOptions,
@@ -234,6 +235,23 @@ class StorefrontController extends Controller
             ->implode('');
 
         return $initials !== '' ? $initials : 'WS';
+    }
+
+    private function storeHeroMapData(?PostalCode $postalCode): ?array
+    {
+        if (
+            $postalCode === null
+            || ! is_numeric($postalCode->latitude)
+            || ! is_numeric($postalCode->longitude)
+        ) {
+            return null;
+        }
+
+        return [
+            'latitude' => (float) $postalCode->latitude,
+            'longitude' => (float) $postalCode->longitude,
+            'zoom' => 11,
+        ];
     }
 
     public function testimonials(): View

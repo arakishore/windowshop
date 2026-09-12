@@ -8,7 +8,74 @@
         .store-hero {
             background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
             border-bottom: 1px solid #e5e7eb;
+            overflow: hidden;
             padding: 34px 0 30px;
+            position: relative;
+        }
+
+        .store-hero-map {
+            contain: paint;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+            position: absolute;
+            z-index: 0;
+        }
+
+        .store-hero-map .leaflet-container,
+        .store-hero-map .leaflet-pane,
+        .store-hero-map .leaflet-map-pane,
+        .store-hero-map .leaflet-tile-pane,
+        .store-hero-map .leaflet-layer,
+        .store-hero-map .leaflet-tile-container,
+        .store-hero-map .leaflet-tile {
+            height: 100%;
+            left: 0;
+            position: absolute;
+            top: 0;
+            width: 100%;
+        }
+
+        .store-hero-map .leaflet-container {
+            background: #edf2f7;
+            font: 12px/1.5 Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        .store-hero-map .leaflet-tile {
+            border: 0;
+            filter: saturate(.72) contrast(.94);
+            max-width: none !important;
+            user-select: none;
+        }
+
+        .store-hero-map .leaflet-control-attribution {
+            background: rgba(255, 255, 255, .76);
+            bottom: 4px;
+            color: #64748b;
+            font-size: 10px;
+            line-height: 1.2;
+            padding: 2px 5px;
+            position: absolute;
+            right: 6px;
+            z-index: 3;
+        }
+
+        .store-hero-map .leaflet-proxy {
+            position: absolute;
+            visibility: hidden;
+        }
+
+        .store-hero-overlay {
+            background: rgba(255, 255, 255, .70);
+            inset: 0;
+            position: absolute;
+            z-index: 1;
+        }
+
+        .store-hero .container {
+            position: relative;
+            z-index: 2;
         }
 
         .store-hero-grid {
@@ -441,9 +508,14 @@
         $locationDistrict = $locationDistrict ?? null;
         $areaLabel = $locationDistrict ? 'All ' . $locationDistrict : 'All Areas';
         $resultCount = method_exists($stores, 'total') ? $stores->total() : count($stores);
+        $storeHeroMap = $storeHeroMap ?? null;
     @endphp
 
     <section class="store-hero">
+        @if ($storeHeroMap)
+            <div class="store-hero-map" id="store-hero-map" aria-hidden="true"></div>
+            <div class="store-hero-overlay" aria-hidden="true"></div>
+        @endif
         <div class="container">
             <div class="store-hero-grid">
                 <div>
@@ -649,8 +721,35 @@
 @endsection
 
 @push('scripts')
+    @if ($storeHeroMap)
+        <script src="{{ asset('assets/admin/js/vendor/maps/leaflet/leaflet.min.js') }}"></script>
+    @endif
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const mapData = @json($storeHeroMap);
+            const mapElement = document.getElementById('store-hero-map');
+
+            if (mapData && mapElement && window.L && !mapElement.dataset.mapInitialized) {
+                mapElement.dataset.mapInitialized = '1';
+
+                const heroMap = L.map(mapElement, {
+                    zoomControl: false,
+                    attributionControl: true,
+                    dragging: false,
+                    scrollWheelZoom: false,
+                    doubleClickZoom: false,
+                    boxZoom: false,
+                    keyboard: false,
+                    touchZoom: false,
+                }).setView([mapData.latitude, mapData.longitude], mapData.zoom || 11);
+
+                // Public OpenStreetMap tiles are fine for local/dev. Review a production tile provider before high traffic.
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors',
+                    maxZoom: 19,
+                }).addTo(heroMap);
+            }
+
             document.querySelectorAll('[data-copy-url]').forEach(function(button) {
                 button.addEventListener('click', function() {
                     const url = button.getAttribute('data-copy-url') || '';
