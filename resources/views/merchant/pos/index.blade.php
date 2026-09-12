@@ -625,6 +625,10 @@
             const searchEmptyEl = root.querySelector('.js-pos-search-empty');
             const cashInput = root.querySelector('.js-pos-cash-received');
             const paymentMethodInput = root.querySelector('.js-pos-payment-method');
+            const couponInput = root.querySelector('.js-pos-coupon-code');
+            const couponApplyButton = root.querySelector('.js-pos-coupon-apply');
+            const couponRemoveButton = root.querySelector('.js-pos-coupon-remove');
+            const couponMessageEl = root.querySelector('.js-pos-coupon-message');
             const paidLabelEl = root.querySelector('.js-pos-paid-label');
             const changeEl = root.querySelector('.js-pos-change');
             const completeButton = root.querySelector('.js-pos-complete');
@@ -666,6 +670,7 @@
             let customerSearchResults = [];
             let addSoundContext = null;
             let orderDiscount = null;
+            let couponCode = '';
             let pricingPayload = null;
             let pricingRequestId = 0;
             let pricingTimer = null;
@@ -702,7 +707,7 @@
             const moneyText = (value) => formatMoneyText(value, currencyConfig);
             const compactMoneyText = moneyText;
             const pricingNumber = (row, key, fallback = 0) => {
-                const value = row?.pricing?.[key];
+                const value = row?.pricing?.[key] ?? row?.[key];
 
                 return value === null || value === undefined ? fallback : Number(value);
             };
@@ -712,6 +717,17 @@
                 return value === null || value === undefined ? fallback : Number(value);
             };
             const lineSubtotal = (row) => pricingNumber(row, 'line_subtotal', Number(row.price) * Number(row.quantity));
+            const couponStatusClass = (status) => {
+                if (['applied'].includes(status || '')) {
+                    return 'text-success';
+                }
+
+                if (['invalid', 'expired', 'inactive', 'not_started', 'not_eligible', 'customer_required'].includes(status || '')) {
+                    return 'text-danger';
+                }
+
+                return 'text-muted';
+            };
             const calculateDiscount = (baseAmount, discount) => {
                 const type = discount?.type || discount?.discount_type || null;
                 const value = Number(discount?.value ?? discount?.discount_value ?? 0);
@@ -738,8 +754,16 @@
             const lineDiscountAmount = (row) => pricingNumber(row, 'line_discount', calculateDiscount(lineSubtotal(row), row.discount).amount);
             const lineTaxAmount = (row) => pricingNumber(row, 'line_tax', 0);
             const lineTotal = (row) => pricingNumber(row, 'line_total', Math.max(0, lineSubtotal(row) - lineDiscountAmount(row)));
+            const generatedGiftRows = () => Array.isArray(pricingPayload?.generated_gifts) ? pricingPayload.generated_gifts : [];
             const cartSubtotal = () => summaryNumber('subtotal', Array.from(cart.values()).reduce((sum, row) => sum + lineSubtotal(row), 0));
-            const cartItemDiscount = () => Array.from(cart.values()).reduce((sum, row) => sum + lineDiscountAmount(row), 0);
+            const cartItemDiscount = () => {
+                if (pricingPayload?.items) {
+                    return [...(pricingPayload.items || []), ...generatedGiftRows()]
+                        .reduce((sum, row) => sum + Number(row.line_discount || 0), 0);
+                }
+
+                return Array.from(cart.values()).reduce((sum, row) => sum + lineDiscountAmount(row), 0);
+            };
             const orderDiscountBase = () => Math.max(0, cartSubtotal() - cartItemDiscount());
             const orderDiscountAmount = () => Number(pricingPayload?.order_discount?.amount ?? calculateDiscount(orderDiscountBase(), orderDiscount).amount);
             const unroundedCartTotal = () => Math.max(0, orderDiscountBase() - orderDiscountAmount());
@@ -777,6 +801,11 @@
                     ? `${value.toLocaleString('en-IN')}% OFF`
                     : `${moneyText(value)} OFF`;
             };
+            const promotionName = (row) => row?.promotion?.name || row?.metadata?.promotion?.name || 'Automatic offer';
+            const lineDiscountLabel = (row) => row?.promotion
+                ? promotionName(row)
+                : discountBadge(row.discount).replace(' OFF', '');
+            const isGeneratedGift = (row) => row?.is_generated_gift === true;
             const elapsedSeconds = () => timerElapsedBeforeStart + (timerStartedAt === null ? 0 : Math.max(0, Math.floor((Date.now() - timerStartedAt) / 1000)));
             const selectedFulfilment = () => root.querySelector('input[name="fulfilment_type"]:checked')?.value || 'counter';
             const selectedPaymentMethod = () => {
@@ -906,6 +935,8 @@
             const pricingRequestPayload = () => ({
                 amount_paid: cashInput.value || 0,
                 payment_method: selectedPaymentMethod(),
+                customer_id: selectedCustomer?.customer_id || null,
+                coupon_code: couponCode || null,
                 order_discount: allowOrderDiscount && orderDiscount ? {
                     type: orderDiscount.type,
                     value: orderDiscount.value,
@@ -922,6 +953,12 @@
             const applyPricingPayload = (payload) => {
                 pricingPayload = payload || null;
                 pricingFailed = false;
+                if (pricingPayload?.coupon?.code) {
+                    couponCode = pricingPayload.coupon.code;
+                    if (couponInput) {
+                        couponInput.value = couponCode;
+                    }
+                }
                 const pricedItems = new Map((pricingPayload?.items || []).map((item) => [String(item.product_variant_id), item]));
 
                 cart.forEach((row, variantId) => {
@@ -1035,6 +1072,7 @@
                 customer: selectedCustomer,
                 shippingAddressId: shippingAddressSelect?.value || '',
                 orderDiscount: allowOrderDiscount ? orderDiscount : null,
+                couponCode,
                 elapsedSeconds: elapsedSeconds(),
                 timerStartedAt,
                 timerElapsedBeforeStart,
@@ -1126,6 +1164,10 @@
                     : (posSettings.defaultPaymentMethod || Object.keys(paymentMethodLabels)[0] || 'cash');
                 selectedCustomer = normalizeCustomerPayload(snapshot.customer || null);
                 orderDiscount = allowOrderDiscount ? (snapshot.orderDiscount || null) : null;
+                couponCode = String(snapshot.couponCode || '').trim();
+                if (couponInput) {
+                    couponInput.value = couponCode;
+                }
                 setFulfilment(snapshot.fulfilmentType || 'counter');
                 renderSelectedCustomer();
                 renderFulfilment();
@@ -1262,6 +1304,7 @@
                 customerResultsEl.innerHTML = '';
                 renderSelectedCustomer();
                 loadCustomerAddresses(customer);
+                queuePricing();
                 saveCart();
             };
             const saveQuickCustomer = async () => {
@@ -1320,10 +1363,50 @@
                 selectedCustomer = null;
                 renderSelectedCustomer();
                 renderAddresses([]);
+                queuePricing();
+                saveCart();
+            };
+            const applyCoupon = () => {
+                const code = (couponInput?.value || '').trim();
+
+                if (!code) {
+                    couponCode = '';
+                    pricingPayload = null;
+                    render();
+                    queuePricing();
+                    saveCart();
+                    return;
+                }
+
+                couponCode = code;
+                pricingPayload = null;
+                render();
+                requestPricing();
+                saveCart();
+            };
+            const removeCoupon = () => {
+                couponCode = '';
+                if (couponInput) {
+                    couponInput.value = '';
+                }
+
+                pricingPayload = null;
+                render();
+                queuePricing();
                 saveCart();
             };
 
             const render = () => {
+                const displayRows = [
+                    ...Array.from(cart.values()),
+                    ...generatedGiftRows().map((row) => ({
+                        ...row,
+                        id: `gift-${row.product_variant_id}-${row.promotion?.id || 'offer'}`,
+                        price: Number(row.unit_price || 0),
+                        quantity: Number(row.quantity || 1),
+                    })),
+                ];
+
                 if (cart.size === 0) {
                     if (timerStartedAt !== null || timerElapsedBeforeStart > 0) {
                         resetTimer();
@@ -1336,8 +1419,8 @@
                         </div>
                     `;
                 } else {
-                    cartItems.innerHTML = Array.from(cart.values()).map((row) => `
-                        <div class="pos-cart-row" data-variant-id="${row.id}">
+                    cartItems.innerHTML = displayRows.map((row) => `
+                        <div class="pos-cart-row ${isGeneratedGift(row) ? 'bg-success bg-opacity-10' : ''}" data-variant-id="${row.id}">
                             <div class="pos-cart-product">
                                 <div class="pos-cart-thumb">
                                     ${row.image_url ? `<img src="${escapeHtml(row.image_url)}" alt="${escapeHtml(row.product_name)}">` : '<i class="ph-image"></i>'}
@@ -1345,9 +1428,14 @@
                                 <div class="pos-cart-title">
                                     <div class="fw-semibold">${escapeHtml(row.product_name)} ${row.sku ? `<span class="text-muted fs-sm fw-normal ms-1">${escapeHtml(row.sku)}</span>` : ''}</div>
                                     <div class="text-muted fs-sm">${escapeHtml(row.variant_name || 'Standard variant')}</div>
+                                    ${isGeneratedGift(row) ? `
+                                        <div class="text-success fs-sm mt-1">
+                                            <i class="ph-gift me-1"></i>Free gift
+                                        </div>
+                                    ` : ''}
                                     ${lineDiscountAmount(row) > 0 ? `
-                                        <div class="text-warning fs-sm mt-1">
-                                            <i class="ph-tag me-1"></i>- ${moneyText(lineDiscountAmount(row))} (${escapeHtml(discountBadge(row.discount).replace(' OFF', ''))})
+                                        <div class="${row.promotion ? 'text-success' : 'text-warning'} fs-sm mt-1">
+                                            <i class="${isGeneratedGift(row) ? 'ph-gift' : 'ph-tag'} me-1"></i>- ${moneyText(lineDiscountAmount(row))} (${escapeHtml(lineDiscountLabel(row))})
                                         </div>
                                     ` : ''}
                                 </div>
@@ -1365,21 +1453,25 @@
                                         MRP ${compactMoneyText(lineSubtotal(row))}
                                     </div>
                                 ` : ''}
-                                <div class="pos-qty-control mt-2">
-                                    <button type="button" class="js-pos-decrease" data-bs-popup="tooltip" title="Decrease quantity" aria-label="Decrease quantity"><i class="ph-minus"></i></button>
-                                    <span>${row.quantity}</span>
-                                    <button type="button" class="js-pos-increase" data-bs-popup="tooltip" title="Increase quantity" aria-label="Increase quantity"><i class="ph-plus"></i></button>
-                                </div>
-                                <div class="pos-line-actions mt-1">
-                                    ${allowItemDiscount ? `
-                                        <button type="button" class="pos-line-action js-pos-line-discount-open ${lineDiscountAmount(row) > 0 ? 'is-active' : ''}" data-bs-popup="tooltip" title="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}" aria-label="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}">
-                                            <i class="ph-tag"></i>
+                                ${isGeneratedGift(row) ? `
+                                    <div class="badge bg-success bg-opacity-10 text-success mt-2">Read-only</div>
+                                ` : `
+                                    <div class="pos-qty-control mt-2">
+                                        <button type="button" class="js-pos-decrease" data-bs-popup="tooltip" title="Decrease quantity" aria-label="Decrease quantity"><i class="ph-minus"></i></button>
+                                        <span>${row.quantity}</span>
+                                        <button type="button" class="js-pos-increase" data-bs-popup="tooltip" title="Increase quantity" aria-label="Increase quantity"><i class="ph-plus"></i></button>
+                                    </div>
+                                    <div class="pos-line-actions mt-1">
+                                        ${allowItemDiscount ? `
+                                            <button type="button" class="pos-line-action js-pos-line-discount-open ${lineDiscountAmount(row) > 0 ? 'is-active' : ''}" data-bs-popup="tooltip" title="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}" aria-label="${lineDiscountAmount(row) > 0 ? 'Edit item discount' : 'Add item discount'}">
+                                                <i class="ph-tag"></i>
+                                            </button>
+                                        ` : ''}
+                                        <button type="button" class="pos-line-action js-pos-remove" title="Remove item from cart" aria-label="Remove item from cart">
+                                            <i class="ph-trash"></i>
                                         </button>
-                                    ` : ''}
-                                    <button type="button" class="pos-line-action js-pos-remove"   title="Remove item from cart" aria-label="Remove item from cart">
-                                        <i class="ph-trash"></i>
-                                    </button>
-                                </div>
+                                    </div>
+                                `}
                             </div>
                         </div>
                     `).join('');
@@ -1409,6 +1501,19 @@
                 if (orderDiscountBadge) {
                     orderDiscountBadge.textContent = discountBadge(orderDiscount);
                     orderDiscountBadge.classList.toggle('d-none', currentOrderDiscountAmount <= 0);
+                }
+                if (couponMessageEl) {
+                    const coupon = pricingPayload?.coupon || null;
+                    const message = coupon?.message || (couponCode ? 'Apply coupon to refresh totals.' : '');
+                    couponMessageEl.textContent = message;
+                    couponMessageEl.classList.remove('text-success', 'text-danger', 'text-muted');
+                    couponMessageEl.classList.add(couponStatusClass(coupon?.status));
+                }
+                if (couponRemoveButton) {
+                    couponRemoveButton.disabled = !couponCode;
+                }
+                if (couponApplyButton) {
+                    couponApplyButton.disabled = cart.size === 0 || pricingPending;
                 }
                 if (pricingStatusEl) {
                     pricingStatusEl.classList.toggle('d-none', !pricingPending && !pricingFailed);
@@ -1944,6 +2049,10 @@
                 cashInput.value = '';
                 selectedCustomer = null;
                 orderDiscount = null;
+                couponCode = '';
+                if (couponInput) {
+                    couponInput.value = '';
+                }
                 renderSelectedCustomer();
                 renderAddresses([]);
                 resetTimer();
@@ -2346,6 +2455,21 @@
                 saveCart();
             });
             paymentMethodInput.addEventListener('change', renderPaymentMethod);
+            couponApplyButton?.addEventListener('click', applyCoupon);
+            couponRemoveButton?.addEventListener('click', removeCoupon);
+            couponInput?.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyCoupon();
+                }
+            });
+            couponInput?.addEventListener('input', () => {
+                if ((couponInput.value || '').trim() !== couponCode && couponMessageEl) {
+                    couponMessageEl.textContent = couponInput.value.trim() ? 'Apply coupon to refresh totals.' : '';
+                    couponMessageEl.classList.remove('text-success', 'text-danger');
+                    couponMessageEl.classList.add('text-muted');
+                }
+            });
             lineDiscountModalEl?.addEventListener('input', updateLineDiscountPreview);
             orderDiscountModalEl?.addEventListener('input', updateOrderDiscountPreview);
             lineDiscountModalEl?.addEventListener('click', (event) => {
@@ -2588,6 +2712,7 @@
                             fulfilment_type: selectedFulfilment(),
                             customer_id: selectedCustomer?.customer_id || null,
                             shipping_address_id: selectedFulfilment() === 'delivery' ? (shippingAddressSelect?.value || null) : null,
+                            coupon_code: couponCode || null,
                             order_discount: allowOrderDiscount && orderDiscount ? {
                                 type: orderDiscount.type,
                                 value: orderDiscount.value,

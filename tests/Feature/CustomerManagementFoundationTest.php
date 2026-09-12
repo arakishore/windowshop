@@ -10,7 +10,6 @@ use App\Models\Shop;
 use App\Models\User;
 use App\Services\Merchant\MerchantCustomerService;
 use App\Services\Shared\MobileNumberNormalizer;
-use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -61,12 +60,12 @@ class CustomerManagementFoundationTest extends TestCase
         $this->assertTrue($merchant->customers()->whereKey($first->getKey())->exists());
     }
 
-    public function test_same_normalized_mobile_is_unique_per_merchant_but_allowed_across_merchants(): void
+    public function test_same_normalized_mobile_reuses_global_customer_and_links_once_per_merchant(): void
     {
         [$firstMerchant] = $this->merchantFixture('First Mobile Merchant');
         [$secondMerchant] = $this->merchantFixture('Second Mobile Merchant');
 
-        $this->customerService()->create($firstMerchant, [
+        $firstMerchantCustomer = $this->customerService()->create($firstMerchant, [
             'name' => 'First Buyer',
             'mobile' => '+91 98765 43210',
             'status' => 'active',
@@ -78,14 +77,18 @@ class CustomerManagementFoundationTest extends TestCase
         ]);
 
         $this->assertSame('919876543210', $otherMerchantCustomer->mobile_normalized);
+        $this->assertSame($firstMerchantCustomer->customer_id, $otherMerchantCustomer->customer_id);
+        $this->assertNotSame($firstMerchantCustomer->getKey(), $otherMerchantCustomer->getKey());
 
-        $this->expectException(QueryException::class);
-
-        $this->customerService()->create($firstMerchant, [
+        $duplicateForFirstMerchant = $this->customerService()->create($firstMerchant, [
             'name' => 'Duplicate Buyer',
             'mobile' => '09876543210',
             'status' => 'active',
         ]);
+
+        $this->assertSame($firstMerchantCustomer->getKey(), $duplicateForFirstMerchant->getKey());
+        $this->assertSame(1, DB::table('customers')->where('mobile_normalized', '919876543210')->count());
+        $this->assertSame(2, DB::table('merchant_customers')->where('customer_id', $firstMerchantCustomer->customer_id)->count());
     }
 
     public function test_different_indian_mobile_formats_normalize_to_the_same_value(): void
@@ -133,7 +136,7 @@ class CustomerManagementFoundationTest extends TestCase
 
         $this->assertEqualsCanonicalizing(
             [$first->getKey(), $second->getKey()],
-            $user->merchantCustomerProfiles()->pluck('id')->all(),
+            $user->merchantCustomerProfiles()->pluck('merchant_customers.id')->all(),
         );
 
         $user->forceDelete();
@@ -169,7 +172,7 @@ class CustomerManagementFoundationTest extends TestCase
 
         $this->assertNull($walkIn->customer_id);
 
-        $customer = $this->customerService()->create($merchant, [
+        $merchantCustomer = $this->customerService()->create($merchant, [
             'name' => 'Order Buyer',
             'mobile' => '9876543210',
             'email' => 'buyer@example.test',
@@ -177,13 +180,17 @@ class CustomerManagementFoundationTest extends TestCase
         ]);
         $order = $this->createOrder($merchant, $shop, [
             'order_number' => 'ORD-CUSTOMER',
-            'customer_id' => $customer->getKey(),
-            'customer_name' => $customer->name,
-            'customer_mobile' => $customer->mobile,
-            'customer_email' => $customer->email,
+            'customer_id' => $merchantCustomer->customer_id,
+            'customer_name' => $merchantCustomer->name,
+            'customer_mobile' => $merchantCustomer->mobile,
+            'customer_email' => $merchantCustomer->email,
         ]);
 
-        $customer->delete();
+        $merchantCustomer->delete();
+
+        $this->assertSame($merchantCustomer->customer_id, $order->refresh()->customer_id);
+
+        $merchantCustomer->customer->forceDelete();
 
         $this->assertNull($order->refresh()->customer_id);
         $this->assertSame('Order Buyer', $order->customer_name);

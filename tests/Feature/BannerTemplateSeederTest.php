@@ -32,16 +32,7 @@ class BannerTemplateSeederTest extends TestCase
     {
         $this->seed(BannerTemplateSeeder::class);
 
-        $this->assertSame(49, BannerTemplate::query()->count());
-        $expectedCounts = [
-            BannerTemplateCategory::GENERAL->value => 10,
-            BannerTemplateCategory::FESTIVAL->value => 12,
-            BannerTemplateCategory::SEASONAL->value => 6,
-            BannerTemplateCategory::FASHION->value => 6,
-            BannerTemplateCategory::ELECTRONICS->value => 5,
-            BannerTemplateCategory::GROCERY->value => 5,
-            BannerTemplateCategory::SERVICES->value => 5,
-        ];
+        $expectedCounts = $this->expectedCurrentPackCategoryCounts();
         $actualCounts = BannerTemplate::query()
             ->selectRaw('category, count(*) as aggregate')
             ->groupBy('category')
@@ -51,17 +42,19 @@ class BannerTemplateSeederTest extends TestCase
         ksort($expectedCounts);
         ksort($actualCounts);
 
+        $this->assertSame(array_sum($expectedCounts), BannerTemplate::query()->count());
         $this->assertSame($expectedCounts, $actualCounts);
 
         $this->assertDatabaseHas('banner_templates', [
+            'uuid' => '98ef68f7-e5f7-48d5-af21-d7d572fbedaf',
             'code' => 'generic_001',
             'category' => BannerTemplateCategory::GENERAL->value,
             'name' => 'Up to 50% OFF',
             'default_title' => 'Up to 50% OFF',
             'default_subtitle' => 'Save big on selected products.',
             'default_button_text' => 'Shop Now',
-            'desktop_image_path' => 'banner-templates/generic_001/desktop.webp',
-            'mobile_image_path' => 'banner-templates/generic_001/mobile.webp',
+            'desktop_image_path' => 'banner-templates/98ef68f7-e5f7-48d5-af21-d7d572fbedaf/desktop-6a7b1c840f6310.75116763.jpg',
+            'mobile_image_path' => 'banner-templates/98ef68f7-e5f7-48d5-af21-d7d572fbedaf/mobile-6a7b1c84153705.39858075.jpg',
             'default_position' => BannerPosition::STORE_HERO->value,
             'availability' => BannerTemplateAvailability::BOTH->value,
             'status' => BannerTemplate::STATUS_ACTIVE,
@@ -72,7 +65,12 @@ class BannerTemplateSeederTest extends TestCase
             'code' => 'festival_001',
             'event_code' => 'diwali',
             'start_offset_days' => -10,
-            'end_offset_days' => 2,
+            'end_offset_days' => 5,
+        ]);
+
+        $this->assertDatabaseMissing('banner_templates', [
+            'code' => 'electronics_001',
+            'deleted_at' => null,
         ]);
     }
 
@@ -87,12 +85,27 @@ class BannerTemplateSeederTest extends TestCase
         $this->seed(BannerTemplateSeeder::class);
         $this->seed(BannerTemplateSeeder::class);
 
-        $this->assertSame(49, BannerTemplate::query()->count());
-        $this->assertSame(49, BannerTemplate::withTrashed()->distinct('code')->count('code'));
+        $expectedTotal = array_sum($this->expectedCurrentPackCategoryCounts());
+
+        $this->assertSame($expectedTotal, BannerTemplate::query()->count());
+        $this->assertSame($expectedTotal, BannerTemplate::withTrashed()->distinct('code')->count('code'));
         $this->assertDatabaseHas('banner_templates', [
             'code' => 'generic_001',
             'uuid' => $uuid,
             'deleted_at' => null,
         ]);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function expectedCurrentPackCategoryCounts(): array
+    {
+        return [
+            BannerTemplateCategory::GENERAL->value => 4,
+            BannerTemplateCategory::FESTIVAL->value => 12,
+            BannerTemplateCategory::SEASONAL->value => 3,
+            BannerTemplateCategory::FASHION->value => 2,
+        ];
     }
 }

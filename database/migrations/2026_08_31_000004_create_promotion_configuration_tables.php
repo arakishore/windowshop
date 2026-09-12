@@ -106,6 +106,7 @@ return new class extends Migration
             $table->index(['promotion_id', 'status'], 'promotion_redemptions_promotion_status_idx');
             $table->index(['shop_id', 'customer_id', 'status'], 'promotion_redemptions_customer_status_idx');
             $table->index(['promotion_coupon_id', 'status'], 'promotion_redemptions_coupon_status_idx');
+            $table->unique(['order_id', 'promotion_id', 'promotion_coupon_id'], 'promotion_redemptions_coupon_order_unique');
         });
     }
 

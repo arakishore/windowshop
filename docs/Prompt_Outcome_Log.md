@@ -12,6 +12,905 @@ Use it as a running project memory so we can quickly see:
 - what tests or checks were run
 
 Add new entries at the top, newest first, with local time.
+## 2026-09-03
+Phase 3D — Coupon Promotion Runtime
+INVESTIGATION ONLY
+
+Do NOT modify code.
+Do NOT create migrations.
+Do NOT change schema.
+Do NOT implement UI.
+Do NOT commit.
+Do NOT push.
+
+The goal is to investigate the existing WindowShop coupon/promotion foundation and define the safest V1 runtime design for coupon-based promotions.
+
+==================================================
+1. BUSINESS GOAL
+==================================================
+
+WindowShop already supports promotion configuration with:
+
+- activation_type = automatic
+- activation_type = coupon
+
+Automatic promotions already work through the promotion calculation engine.
+
+Coupon promotions are currently intentionally excluded from runtime.
+
+We now want to investigate how a customer should be able to enter a coupon such as:
+
+WELCOME10
+DIWALI500
+SAVE20
+
+and have that coupon activate the SAME promotion engine.
+
+Do NOT design a separate coupon discount engine.
+
+Coupon should only activate an existing promotion.
+
+==================================================
+2. EXISTING COUPON FOUNDATION
+==================================================
+
+Inspect and report the current implementation of:
+
+- promotions
+- promotion_coupons
+- promotion_redemptions
+- Promotion model
+- PromotionCoupon model
+- PromotionRedemption model
+- PromotionRepository
+- PromotionCalculator
+- PromotionCombinationResolver
+- PromotionConditionEvaluator
+- PromotionRewardCalculator
+- StorePromotionRequest
+- UpdatePromotionRequest
+- PromotionController
+- merchant promotion form
+- cart services/controllers
+- checkout services/controllers
+- OrderCreationService
+- customer/session/cart architecture
+
+Confirm exactly what coupon data is already stored.
+
+Report fields such as:
+
+- coupon code
+- shop_id
+- promotion_id
+- status
+- usage limits
+- customer usage limits
+- dates
+- redemption fields
+
+Do not assume. Inspect the real schema/models.
+
+==================================================
+3. CURRENT MERCHANT COUPON CONFIGURATION
+==================================================
+
+Inspect the merchant offer form and controller.
+
+Confirm:
+
+- how merchant selects Coupon activation
+- how coupon code is entered
+- whether code is required
+- whether coupon uniqueness is per shop or global
+- whether multiple coupon codes can belong to one promotion
+- whether one coupon code can activate multiple promotions
+- whether existing validation prevents duplicate code in same shop
+- whether coupon codes are normalized for case/spacing
+
+Report current behavior only.
+
+==================================================
+4. CUSTOMER COUPON ENTRY POINT
+==================================================
+
+Inspect current storefront cart and checkout.
+
+Determine whether there is already:
+
+- coupon input
+- apply button
+- remove coupon action
+- session key
+- cart field
+- database field
+- temporary state
+- order coupon field
+
+Report what exists.
+
+If nothing exists, say so.
+
+Do NOT add UI.
+
+==================================================
+5. WHERE SHOULD APPLIED COUPON STATE LIVE?
+==================================================
+
+Evaluate possible V1 approaches:
+
+A. Store applied coupon in session
+
+B. Store applied coupon on Cart / cart table
+
+C. Store coupon code in a dedicated cart-coupon table
+
+D. Re-submit coupon from browser on every calculation
+
+E. Another existing project mechanism
+
+Consider:
+
+- guest carts
+- logged-in carts
+- cart persistence across sessions
+- multiple shops in one cart
+- native app later
+- abandoned carts
+- checkout revalidation
+- security
+- coupon removal
+- multiple browser tabs
+
+Recommend ONE V1 approach.
+
+Do NOT implement it.
+
+==================================================
+6. MULTI-SHOP CART
+==================================================
+
+This is critical.
+
+WindowShop can contain products from multiple shops.
+
+Coupon codes are shop-scoped.
+
+Example:
+
+Cart:
+Shop A products
+Shop B products
+
+Customer enters:
+
+SAVE20
+
+Questions:
+
+- Which shop does SAVE20 belong to?
+- Should coupon input be global or per-shop?
+- What if both shops independently have a coupon code SAVE20?
+- Can a customer apply one coupon per shop?
+- Can multiple shop coupons coexist in one cart?
+
+Investigate existing cart grouping and recommend the cleanest V1 behavior.
+
+Do not assume coupon code is globally unique if schema says otherwise.
+
+==================================================
+7. COUPON LOOKUP / NORMALIZATION
+==================================================
+
+Investigate how coupon codes are currently stored.
+
+Recommend:
+
+- case-sensitive or case-insensitive matching
+- trim whitespace
+- uppercase normalization or preserve display form
+- handling duplicated codes across shops
+
+Example:
+
+SAVE20
+save20
+ Save20
+
+Should these resolve to the same coupon within one shop?
+
+Explain recommendation.
+
+Do NOT change DB collation/schema.
+
+==================================================
+8. COUPON VALIDATION PIPELINE
+==================================================
+
+Define the recommended validation sequence.
+
+Investigate which checks are already available.
+
+Potential checks include:
+
+- coupon exists
+- correct shop
+- coupon active
+- promotion active
+- promotion start date
+- promotion end date
+- activation_type = coupon
+- coupon usage limit
+- per-customer usage limit
+- customer restriction
+- minimum subtotal
+- target eligibility
+- new customer only
+- stock-dependent reward validity
+- promotion still provides positive benefit
+
+Determine which belong at:
+
+- Apply Coupon action
+- Cart recalculation
+- Checkout authoritative recalculation
+
+Recommend a deterministic V1 sequence.
+
+==================================================
+9. COUPON VS AUTOMATIC PROMOTIONS
+==================================================
+
+Current frozen V1 rule:
+
+No stacking multiple promotions on the same item/unit.
+
+Automatic promotions already select the best valid customer benefit.
+
+Investigate how coupon promotions should interact.
+
+Example:
+
+Product price ₹2,000
+
+Automatic promotion:
+20% OFF
+benefit ₹400
+
+Coupon SAVE500:
+₹500 OFF
+
+If coupon is applied, should:
+
+A. coupon automatically override automatic promotion
+B. best benefit still win
+C. coupon be rejected because automatic is better
+D. customer explicitly chooses
+E. another rule
+
+My preferred direction is:
+
+Coupon participates in the SAME conflict resolver and the best valid customer benefit wins.
+
+But investigate whether this fits the existing architecture.
+
+Also answer:
+If customer enters a valid coupon but automatic promotion wins instead, what message should customer receive?
+
+==================================================
+10. MULTIPLE COUPONS
+==================================================
+
+Investigate whether V1 should support:
+
+- one coupon per entire cart
+- one coupon per shop
+- multiple coupons per shop
+- multiple coupon promotions stacking
+
+Given current no-stacking policy, recommend the simplest V1.
+
+Likely direction:
+one active coupon per shop cart group.
+
+But derive from architecture.
+
+==================================================
+11. APPLY / REMOVE COUPON FLOW
+==================================================
+
+Define recommended runtime flow.
+
+Example:
+
+Customer enters SAVE20
+→ server validates coupon
+→ stores applied coupon state
+→ cart recalculates
+→ display applied/invalid message
+
+Then:
+
+Customer removes coupon
+→ state cleared
+→ automatic promotions recalculate normally
+
+Investigate current AJAX/cart update patterns and recommend where this logic should live.
+
+Do NOT implement routes/controllers yet.
+
+==================================================
+12. AUTHORITATIVE CHECKOUT REVALIDATION
+==================================================
+
+Coupon must be revalidated during order creation.
+
+Checkout must not trust:
+
+- browser discount
+- browser promotion id
+- browser coupon id
+- browser coupon code eligibility
+- previous cart calculation
+
+Investigate how OrderCreationService currently recalculates automatic promotions.
+
+Recommend how it should receive/resolve applied coupon state authoritatively.
+
+==================================================
+13. COUPON SNAPSHOT ON ORDER
+==================================================
+
+Inspect current order/order_items/order_totals fields and metadata.
+
+Determine what historical coupon information should be snapshotted.
+
+Potential data:
+
+- promotion id
+- promotion name
+- coupon id
+- coupon code
+- actual discount
+- reward type
+- activation type = coupon
+
+Determine whether current order item metadata is enough.
+
+Also inspect whether order-level coupon fields already exist.
+
+Do NOT add fields.
+
+==================================================
+14. PROMOTION REDEMPTIONS
+==================================================
+
+Inspect `promotion_redemptions`.
+
+Report:
+
+- exact columns
+- relationships
+- intended purpose
+- whether currently used anywhere
+- whether order_id is stored
+- whether customer/user/shop/promotion/coupon ids exist
+- quantity/count semantics
+- timestamps/status
+
+Determine when redemption should be recorded:
+
+A. when coupon is applied to cart
+B. when checkout starts
+C. when order is created
+D. when order is paid
+E. when order is completed
+
+Recommend one V1 rule.
+
+Consider COD and Cash at Shop.
+
+==================================================
+15. USAGE LIMITS
+==================================================
+
+Inspect existing promotion/coupon usage limit fields.
+
+Identify:
+
+- global promotion usage limit
+- coupon usage limit
+- per-customer usage limit
+- redemption count
+- any max uses per order
+
+Determine how each should be enforced safely under concurrency.
+
+Important:
+Investigate whether checkout needs DB locking / transaction-safe enforcement so two simultaneous orders cannot exceed a final available coupon use.
+
+Do NOT implement locking.
+
+Report what is required.
+
+==================================================
+16. CUSTOMER-SPECIFIC LIMITS
+==================================================
+
+Determine how customer identity is represented for:
+
+- logged-in storefront customer
+- guest checkout
+
+If usage limit per customer exists, investigate:
+
+- can guests use it safely?
+- should guest use email/phone?
+- should per-customer restrictions only apply to authenticated customer IDs?
+- what does current architecture support?
+
+Do NOT invent identity rules beyond current architecture.
+
+Recommend V1 behavior.
+
+==================================================
+17. NEW CUSTOMER CONDITION
+==================================================
+
+We already defined:
+
+New customer = no prior eligible/completed order WITH THAT SHOP.
+
+Investigate how existing PromotionConditionEvaluator handles this.
+
+Determine whether coupon promotions can reuse the same rule unchanged.
+
+Check whether checkout customer context is available to coupon validation.
+
+==================================================
+18. MINIMUM SUBTOTAL
+==================================================
+
+Investigate coupon promotions with minimum subtotal.
+
+Clarify whether minimum subtotal is:
+
+- eligible subtotal
+- shop subtotal
+- before promotion discounts
+- after promotion discounts
+
+Use existing promotion semantics where already frozen.
+
+Do not introduce coupon-specific subtotal rules unless necessary.
+
+==================================================
+19. FIXED DISCOUNT EDGE CASE
+==================================================
+
+Example:
+
+Coupon:
+₹500 OFF
+
+Eligible subtotal:
+₹300
+
+Expected maximum discount should not exceed eligible value.
+
+Confirm existing reward calculator already caps discount appropriately.
+
+Also investigate how discount allocation across multiple lines works for coupon promotions.
+
+This is important for refunds/exchanges.
+
+==================================================
+20. COUPON TARGETS
+==================================================
+
+Confirm coupon promotions can target:
+
+- all
+- product
+- variant
+- category
+- brand
+- collection
+
+Coupon should activate a normal promotion, so target matching should reuse the same matcher.
+
+Identify any places where runtime currently assumes automatic-only.
+
+==================================================
+21. QUANTITY / BUNDLE / BXY / FREE GIFT COUPONS
+==================================================
+
+Investigate whether coupon activation can theoretically be used with all existing reward types:
+
+- percentage_discount
+- fixed_discount
+- fixed_price
+- quantity_discount
+- fixed_bundle_price
+- tier_pricing
+- buy_x_get_y_free
+- buy_x_get_y_discount
+- free_gift
+
+Current merchant foundation may already allow coupon activation for these.
+
+Determine whether Phase 3D V1 should enable coupon activation for ALL supported runtime reward types or only simple rewards initially.
+
+Recommend scope.
+
+Do not implement.
+
+==================================================
+22. FREE GIFT COUPON
+==================================================
+
+Specifically inspect Free Gift + coupon.
+
+If customer enters a coupon that triggers a Free Gift:
+
+- should virtual gift appear immediately?
+- should checkout revalidate gift stock?
+- should redemption be recorded if gift is generated?
+
+Confirm existing Free Gift runtime can accept an explicitly activated promotion without architectural redesign.
+
+==================================================
+23. BXY COUPON
+==================================================
+
+Inspect whether BXY Free / BXY Discount can be reused unchanged once coupon promotion enters the candidate set.
+
+Confirm group atomicity/no-stacking behavior.
+
+Identify any coupon-specific complication.
+
+==================================================
+24. COUPON ERROR / STATUS MESSAGES
+==================================================
+
+Recommend merchant/customer-friendly statuses.
+
+Examples:
+
+- Coupon applied
+- Invalid coupon
+- Coupon expired
+- Coupon not active yet
+- Coupon not valid for these items
+- Minimum order amount not reached
+- Coupon usage limit reached
+- Coupon already used
+- Coupon belongs to another shop
+- Better automatic offer applied
+
+Avoid exposing technical implementation details.
+
+Determine whether backend should return reason codes separately from display messages.
+
+==================================================
+25. SECURITY / TAMPERING
+==================================================
+
+Investigate threats:
+
+- customer submits promotion_id directly
+- customer changes coupon_id
+- customer changes discount amount
+- stale coupon retained after merchant disables offer
+- coupon belongs to another shop
+- coupon target changed after cart application
+
+Recommend server-side rules.
+
+Checkout must always recalculate.
+
+==================================================
+26. CART CHANGES AFTER COUPON APPLY
+==================================================
+
+Example:
+
+Coupon requires ₹2,000 subtotal.
+
+Customer applies coupon at ₹2,100.
+
+Then removes an item and subtotal becomes ₹1,500.
+
+What should happen?
+
+Likely:
+coupon state may remain stored, but current calculation reports it as not currently eligible.
+
+Or:
+coupon should be automatically removed.
+
+Investigate which behavior is better for UX and architecture.
+
+Recommend one.
+
+==================================================
+27. COUPON EXPIRY WHILE IN CART
+==================================================
+
+If coupon was applied yesterday but expires before checkout:
+
+- cart recalculation should stop applying it
+- checkout must reject/recalculate it
+
+Determine whether stored coupon state should remain with an "expired" message or be cleared automatically.
+
+Recommend V1 behavior.
+
+==================================================
+28. ORDER CANCELLATION AND REDEMPTION
+==================================================
+
+If redemption is recorded when order is created and order later gets cancelled:
+
+Should the coupon usage be restored?
+
+Investigate existing cancellation architecture and `promotion_redemptions`.
+
+Recommend V1 semantics.
+
+Consider:
+
+- merchant cancellation
+- customer cancellation
+- payment failure
+- auto-cancel
+- COD
+- Cash at Shop
+- future online payment
+
+Do not implement.
+
+==================================================
+29. REFUNDS / EXCHANGES
+==================================================
+
+Do NOT implement refund/exchange coupon logic.
+
+Investigate only what snapshot is required so later partial refund/exchange can use historical allocated coupon discount.
+
+Confirm existing order item promotion allocation is sufficient or identify gaps.
+
+==================================================
+30. COUPON DISPLAY ON BILL / INVOICE
+==================================================
+
+Determine how coupon should later appear.
+
+Example:
+
+Coupon: DIWALI500
+Promotion Discount: -₹500
+
+Should code be shown:
+- on order summary
+- invoice
+- merchant detail
+- customer detail
+
+Determine whether current metadata can support this.
+
+==================================================
+31. API / NATIVE APP LATER
+==================================================
+
+WindowShop may later have a native app.
+
+Recommend business/service APIs so coupon logic is not tied directly to Blade/session behavior.
+
+Avoid controller-only logic.
+
+Identify service boundary that Web + Native App could reuse.
+
+==================================================
+32. DATABASE / SCHEMA GAP ANALYSIS
+==================================================
+
+Explicitly answer:
+
+Can Coupon Runtime V1 be implemented with the current schema?
+
+YES / NO
+
+If NO:
+list only the minimum missing capability.
+
+Do NOT create migrations.
+
+If YES:
+explain how current tables represent:
+
+- coupon
+- active coupon state
+- redemption
+- usage limits
+- order snapshot
+
+==================================================
+33. RECOMMENDED SERVICE ARCHITECTURE
+==================================================
+
+Propose the smallest clean V1 architecture.
+
+For example, investigate whether we need concepts such as:
+
+CouponResolver
+CouponApplicationService
+PromotionRepository accepting activated coupon IDs
+CouponRedemptionService
+
+These names are examples only.
+
+Do not create classes.
+
+Prefer reusing the existing promotion engine.
+
+Clearly separate:
+
+- coupon lookup/application state
+- promotion calculation
+- checkout revalidation
+- redemption recording
+
+==================================================
+34. IMPLEMENTATION PHASE SPLIT
+==================================================
+
+Recommend whether Phase 3D should be one implementation or split.
+
+Possible example:
+
+3D-A:
+Coupon apply/remove + simple runtime integration
+
+3D-B:
+Usage limits/redemptions/concurrency
+
+3D-C:
+Complex rewards via coupon
+
+But do not force this split if current architecture supports one clean phase.
+
+Recommend the safest plan.
+
+==================================================
+35. REQUIRED TEST PLAN
+==================================================
+
+Recommend comprehensive tests, including:
+
+COUPON LOOKUP
+- valid code
+- invalid code
+- trim spaces
+- case behavior
+- same code in different shops
+
+STATUS
+- inactive coupon
+- inactive promotion
+- future promotion
+- expired promotion
+
+SHOP ISOLATION
+- Shop A coupon cannot apply to Shop B
+- same code independently used by Shop A and Shop B
+
+CART
+- apply coupon
+- remove coupon
+- cart changes after application
+- qualification lost
+- qualification regained
+- multi-shop cart
+
+CONFLICT
+- coupon vs automatic
+- automatic better
+- coupon better
+- equal benefit priority tie
+- lower promotion id tie
+- no stacking
+
+REWARD TYPES
+- percentage
+- fixed amount
+- fixed price
+- quantity
+- bundle
+- tier
+- BXY Free
+- BXY Discount
+- Free Gift
+according to recommended V1 scope
+
+USAGE
+- global limit
+- per-customer limit
+- final use concurrency
+- cancelled order behavior
+
+CHECKOUT
+- authoritative revalidation
+- stale coupon
+- merchant disables coupon before checkout
+- changed coupon target
+- browser tampering ignored
+
+ORDER
+- coupon metadata snapshot
+- allocated line discounts
+- redemption written once
+- no duplicate redemption on retries
+
+COUPON FREE GIFT
+- gift appears only when coupon valid
+- stock revalidated
+
+POS
+- coupon runtime does not accidentally affect POS unless explicitly supported
+
+REGRESSIONS
+- automatic promotion behavior unchanged
+- BXY unchanged
+- Free Gift unchanged
+- quantity promotions unchanged
+
+==================================================
+36. FINAL REPORT FORMAT
+==================================================
+
+Return:
+
+1. Existing coupon schema
+2. Existing merchant coupon configuration
+3. Existing storefront coupon UI/state
+4. Current runtime limitations
+5. Recommended coupon state storage
+6. Multi-shop coupon design
+7. Coupon normalization
+8. Validation flow
+9. Coupon vs automatic conflict behavior
+10. Multiple coupon recommendation
+11. Apply/remove flow
+12. Checkout revalidation
+13. Order snapshot requirements
+14. Redemption timing
+15. Usage-limit/concurrency findings
+16. Customer identity implications
+17. New-customer condition behavior
+18. Complex reward compatibility
+19. Free Gift coupon behavior
+20. BXY coupon behavior
+21. Cancellation/redemption behavior
+22. Refund/exchange snapshot implications
+23. Security findings
+24. API/native-app service boundary
+25. Schema gaps
+26. Recommended architecture
+27. Recommended Phase 3D implementation split
+28. Test plan
+29. Risks/unresolved decisions
+
+Again:
+
+INVESTIGATION ONLY.
+
+Do NOT modify code.
+Do NOT create migrations.
+Do NOT change schema.
+Do NOT implement UI.
+Do NOT commit.
+Do NOT push.
 
 ## 2026-08-15 - Checkout Step 1 Login/Register Gate
 

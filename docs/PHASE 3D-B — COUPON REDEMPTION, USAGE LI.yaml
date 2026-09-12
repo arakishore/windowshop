@@ -1,0 +1,243 @@
+**Grammar correction:** “Here is the Phase 3D Coupon Runtime investigation report. Please review it.”
+
+I reviewed it. The investigation is strong, and it uncovered an important point: **Coupon Runtime should be split into smaller phases rather than implemented all at once.**
+
+### Decisions I recommend freezing
+
+The architecture should remain simple:
+
+```text
+Coupon does NOT calculate a discount.
+
+Coupon
+   ↓
+activates a Promotion
+   ↓
+existing Promotion Engine
+   ↓
+existing conflict resolver
+   ↓
+pricing → tax → order
+```
+
+That is exactly the right direction.
+
+For the customer cart, I agree with the investigation: **one applied coupon per shop**, stored in session for V1. Coupon codes are already unique per shop rather than globally, and the cart itself is grouped by shop.
+
+So a multi-shop cart can conceptually have:
+
+```text
+Shop A
+Coupon: SAVE20
+
+Shop B
+Coupon: DIWALI10
+```
+
+Even if both shops independently use `SAVE20`, there is no ambiguity because coupon lookup is:
+
+```text
+shop_id + normalized coupon code
+```
+
+### Coupon vs automatic offer
+
+I also recommend freezing the investigation's proposal:
+
+> **Entering a coupon does not automatically make that promotion win. The coupon promotion joins the existing promotion candidates, and the best valid customer benefit wins.**
+
+Example:
+
+```text
+₹2,000 product
+
+Automatic 20% OFF
+Discount = ₹400
+
+Coupon SAVE500
+Discount = ₹500
+
+→ SAVE500 wins
+```
+
+But:
+
+```text
+Automatic 30% OFF
+Discount = ₹600
+
+Coupon SAVE500
+Discount = ₹500
+
+→ Automatic offer wins
+```
+
+In the second case, we should keep the coupon applied but tell the customer:
+
+> **Coupon is valid, but a better offer has been applied.**
+
+This preserves our existing no-stacking architecture instead of creating special coupon priority rules.
+
+### What happens when the cart changes?
+
+I recommend **keeping the coupon stored**, rather than automatically removing it.
+
+For example:
+
+```text
+SAVE20 requires ₹2,000
+
+Cart ₹2,100
+→ Coupon applied
+
+Customer removes item
+Cart ₹1,500
+→ Coupon remains selected
+→ "Add ₹500 more to use this coupon."
+
+Customer adds another item
+Cart ₹2,200
+→ Coupon automatically becomes eligible again
+```
+
+That's better UX than forcing the customer to type the code repeatedly.
+
+For permanently invalid states such as expired/deactivated/deleted coupon, we can report it as no longer valid and allow/remove the stored state cleanly.
+
+### Redemption timing
+
+The investigation's recommendation is also correct:
+
+> **Applying a coupon to the cart is NOT a redemption.**
+
+Redemption should happen when the **order is successfully created**.
+
+So:
+
+```text
+Enter coupon
+    ↓
+Validate / preview
+    ↓
+Cart changes
+    ↓
+Revalidate
+    ↓
+Checkout
+    ↓
+Authoritative validation
+    ↓
+Order created
+    ↓
+promotion_redemptions record
+```
+
+If the order is subsequently cancelled, its redemption should become `cancelled`, and cancelled redemptions should not consume usage limits.
+
+This is especially important because WindowShop supports COD/Cash at Shop; waiting for payment/completion before counting the coupon could allow its usage limit to be oversubscribed.
+
+### One decision I'd slightly refine
+
+The report recommends allowing guests to apply a coupon for preview even though checkout requires authentication.
+
+I agree.
+
+But for conditions that **cannot be determined for a guest**, such as:
+
+> New Customer Only
+> Per Customer Usage Limit
+
+we shouldn't necessarily tell the guest that the coupon is invalid.
+
+Better:
+
+```text
+Coupon recognized
+Sign in to confirm eligibility.
+```
+
+After login, recalculate authoritatively.
+
+---
+
+## Recommended Phase 3D split
+
+I strongly agree with Codex's split, with a slight adjustment.
+
+**Phase 3D-A — Coupon Apply/Remove + Simple Promotions**
+
+Implement the foundation first:
+
+```text
+Coupon input per shop
+Apply
+Remove
+Session state per shop
+Normalization
+CouponResolver
+CouponApplicationService
+
+Coupon → Promotion Engine
+
+percentage_discount
+fixed_discount
+fixed_price
+
+Coupon vs automatic conflict
+Cart recalculation
+Checkout authoritative revalidation
+Order metadata
+```
+
+Do **not** implement redemption/usage-limit accounting yet.
+
+Then:
+
+**Phase 3D-B — Redemption & Usage Limits**
+
+Implement:
+
+```text
+promotion_redemptions
+total_usage_limit
+coupon usage_limit
+per_customer_usage_limit
+transaction locking
+duplicate-redemption protection
+cancellation releases redemption
+```
+
+This deserves its own phase because concurrency is involved.
+
+Finally:
+
+**Phase 3D-C — Complex Coupon Rewards**
+
+Enable and test:
+
+```text
+Quantity Discount
+Any X for ₹Y
+Tier Pricing
+Buy X Get Y Free
+Buy X Get Y Discount
+Free Gift
+```
+
+The calculation logic already exists; 3D-C mainly makes those promotion types accessible through an explicitly activated coupon and verifies group/conflict behavior.
+
+### One thing I would defer
+
+I wouldn't wire `OrderTotal::CODE_COUPON_DISCOUNT` yet simply because it exists. The investigation confirms it exists but isn't currently wired.
+
+Our promotion discounts are already allocated to order items. We should decide invoice/order-summary presentation later rather than creating a second discount accounting source that might disagree with item allocations.
+
+### Phase 3D-A frozen scope
+
+So I recommend we now freeze:
+
+> **One coupon per shop, stored in session. Coupon activates an existing promotion rather than calculating discounts itself. Coupon promotions participate in the same best-benefit/no-stacking resolver as automatic promotions. Phase 3D-A supports Percentage Discount, Fixed Discount and Fixed Price only. Checkout revalidates everything server-side. Redemption and usage-limit accounting are Phase 3D-B; complex coupon rewards are Phase 3D-C.**
+
+No schema change is required for 3D-A.
+
+This gives us a much safer next implementation than trying to turn on every coupon reward and redemption rule in one large change.

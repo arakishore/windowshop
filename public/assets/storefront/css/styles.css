@@ -5412,7 +5412,7 @@ header.header-sticky.tf-header-landing {
     padding: 15px;
   }
   .popup-shopping-cart .tf-mini-cart-sroll {
-    padding: 0 16px;
+    padding: 0 0;
   }
   .popup-shopping-cart .tf-mini-cart-item {
     gap: 12px;
@@ -5449,7 +5449,7 @@ header.header-sticky.tf-header-landing {
   bottom: 0;
   right: 0;
   overflow: auto;
-  padding: 0px 24px;
+  padding: 0px 0px;
 }
 .tf-mini-cart-sroll::-webkit-scrollbar {
   width: 4px;
@@ -12572,9 +12572,12 @@ html:not([dir=rtl]) .noUi-horizontal .noUi-handle {
   font-size: 14px;
   line-height: 46px;
   box-sizing: border-box;
+   border-radius: 0;
 }
 .tf-product-info-wrap .product-delivery-check__input:focus {
   outline: 0;
+  border-color:var(--line);
+  border-radius: 0;
 }
 .tf-product-info-wrap .product-delivery-check__input.is-invalid {
   color: #b42318;

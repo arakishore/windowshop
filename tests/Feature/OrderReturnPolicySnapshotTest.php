@@ -12,12 +12,18 @@ use App\Models\OrderStatus;
 use App\Models\Product;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
+use App\Models\Promotion;
+use App\Models\PromotionCondition;
+use App\Models\PromotionCoupon;
+use App\Models\PromotionTarget;
+use App\Models\PromotionTemplate;
 use App\Models\ProductReturnPolicy;
 use App\Models\ProductVariant;
 use App\Models\ReturnReason;
 use App\Models\Shop;
 use App\Models\ShopSetting;
 use App\Models\User;
+use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use App\Services\Checkout\StorefrontCheckoutOrderService;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\Order\OrderCreationService;
@@ -152,6 +158,211 @@ class OrderReturnPolicySnapshotTest extends TestCase
         $this->assertSame(6, $newItem->refund_window_days);
         $this->assertFalse($newItem->exchange_allowed);
         $this->assertSame(0, $newItem->exchange_window_days);
+    }
+
+    public function test_promotion_refund_and_exchange_policy_override_is_snapshotted_after_promotion_edit(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        Carbon::setTestNow(Carbon::parse('2026-09-01 10:00:00'));
+
+        try {
+            [$user, $shop, $variant] = $this->fixture();
+            $this->setShopPolicy($shop, false, 0, true, 7);
+            $promotion = $this->promotion($shop, 'fixed_discount', [
+                'status' => Promotion::STATUS_ACTIVE,
+                'refund_policy_mode' => Promotion::POLICY_ALLOWED,
+                'refund_window_days' => 3,
+                'exchange_policy_mode' => Promotion::POLICY_ALLOWED,
+                'exchange_window_days' => 4,
+            ], ['value_amount' => '10.00']);
+            $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $variant->product_id);
+
+            $order = $this->createOrder($user, $shop, $variant, [
+                'created_source' => Order::SOURCE_STOREFRONT,
+            ]);
+            $item = $order->items->first();
+
+            $promotion->forceFill([
+                'refund_policy_mode' => Promotion::POLICY_NOT_ALLOWED,
+                'refund_window_days' => null,
+                'exchange_policy_mode' => Promotion::POLICY_NOT_ALLOWED,
+                'exchange_window_days' => null,
+            ])->save();
+
+            $freshItem = $item->fresh();
+            $eligibility = app(OrderReturnExchangeEligibilityService::class)
+                ->forOrder($order->fresh(['items', 'statusHistories']), Carbon::parse('2026-09-03 10:00:00'));
+            $facts = $eligibility['items'][$freshItem->getKey()];
+
+            $this->assertTrue($freshItem->refund_allowed);
+            $this->assertSame(3, $freshItem->refund_window_days);
+            $this->assertTrue($freshItem->exchange_allowed);
+            $this->assertSame(4, $freshItem->exchange_window_days);
+            $this->assertSame('promotion', $freshItem->metadata['return_exchange_policy']['refund_source']);
+            $this->assertSame('promotion', $freshItem->metadata['return_exchange_policy']['exchange_source']);
+            $this->assertTrue($facts['refund']['customer_eligible']);
+            $this->assertTrue($facts['exchange']['customer_eligible']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_non_participating_item_does_not_inherit_promotion_policy_override(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        [$user, $merchant, $shop, $root, $category] = $this->baseFixture();
+        $this->setShopPolicy($shop, true, 10, true, 10);
+        $participating = $this->variant($this->product($merchant, $shop, $root, $category, 'Participating Shirt'), 'Default', 150);
+        $regular = $this->variant($this->product($merchant, $shop, $root, $category, 'Regular Shirt'), 'Default', 150);
+        $promotion = $this->promotion($shop, 'fixed_discount', [
+            'status' => Promotion::STATUS_ACTIVE,
+            'refund_policy_mode' => Promotion::POLICY_NOT_ALLOWED,
+            'exchange_policy_mode' => Promotion::POLICY_ALLOWED,
+            'exchange_window_days' => 2,
+        ], ['value_amount' => '10.00']);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $participating->product_id);
+
+        $order = $this->createOrder($user, $shop, $participating, [
+            'created_source' => Order::SOURCE_STOREFRONT,
+            'items' => [
+                ['product_variant_id' => $participating->getKey(), 'quantity' => 1],
+                ['product_variant_id' => $regular->getKey(), 'quantity' => 1],
+            ],
+        ]);
+
+        $participatingItem = $order->items->firstWhere('product_variant_id', $participating->getKey());
+        $regularItem = $order->items->firstWhere('product_variant_id', $regular->getKey());
+
+        $this->assertFalse($participatingItem->refund_allowed);
+        $this->assertSame(0, $participatingItem->refund_window_days);
+        $this->assertTrue($participatingItem->exchange_allowed);
+        $this->assertSame(2, $participatingItem->exchange_window_days);
+        $this->assertTrue($regularItem->refund_allowed);
+        $this->assertSame(10, $regularItem->refund_window_days);
+        $this->assertTrue($regularItem->exchange_allowed);
+        $this->assertSame(10, $regularItem->exchange_window_days);
+        $this->assertNull($regularItem->metadata);
+    }
+
+    public function test_coupon_promotion_policy_is_snapshotted(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        [$user, $shop, $variant] = $this->fixture();
+        $this->setShopPolicy($shop, true, 10, true, 10);
+        $coupon = $this->couponPromotion($shop, 'fixed_discount', 'RETURNS10', [
+            'refund_policy_mode' => Promotion::POLICY_NOT_ALLOWED,
+            'exchange_policy_mode' => Promotion::POLICY_ALLOWED,
+            'exchange_window_days' => 5,
+        ], ['value_amount' => '10.00']);
+
+        $order = $this->createOrder($user, $shop, $variant, [
+            'created_source' => Order::SOURCE_STOREFRONT,
+            'applied_coupon_code' => 'RETURNS10',
+        ]);
+        $item = $order->items->first();
+
+        $this->assertFalse($item->refund_allowed);
+        $this->assertSame(0, $item->refund_window_days);
+        $this->assertTrue($item->exchange_allowed);
+        $this->assertSame(5, $item->exchange_window_days);
+        $this->assertSame(Promotion::ACTIVATION_COUPON, $item->metadata['promotion']['activation_type']);
+        $this->assertSame($coupon->getKey(), $item->metadata['promotion']['coupon_id']);
+        $this->assertSame('RETURNS10', $item->metadata['promotion']['coupon_code']);
+    }
+
+    public function test_bogo_buy_get_history_survives_promotion_changes(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        [$user, $merchant, $shop, $root, $category] = $this->baseFixture();
+        $buy = $this->variant($this->product($merchant, $shop, $root, $category, 'Buy Shirt'), 'Default', 200);
+        $get = $this->variant($this->product($merchant, $shop, $root, $category, 'Get Shirt'), 'Default', 150);
+        $promotion = $this->promotion($shop, 'buy_x_get_y_free', [
+            'status' => Promotion::STATUS_ACTIVE,
+            'refund_policy_mode' => Promotion::POLICY_NOT_ALLOWED,
+            'exchange_policy_mode' => Promotion::POLICY_ALLOWED,
+            'exchange_window_days' => 9,
+        ], ['buy_quantity' => 1, 'get_quantity' => 1]);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $buy->product_id, PromotionTarget::ROLE_BUY);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $get->product_id, PromotionTarget::ROLE_GET);
+
+        $order = $this->createOrder($user, $shop, $buy, [
+            'created_source' => Order::SOURCE_STOREFRONT,
+            'items' => [
+                ['product_variant_id' => $buy->getKey(), 'quantity' => 1],
+                ['product_variant_id' => $get->getKey(), 'quantity' => 1],
+            ],
+        ]);
+        $promotion->forceFill(['name' => 'Edited BOGO'])->save();
+
+        $buyItem = $order->items->firstWhere('product_variant_id', $buy->getKey())->fresh();
+        $getItem = $order->items->firstWhere('product_variant_id', $get->getKey())->fresh();
+
+        $this->assertSame($promotion->getKey(), $buyItem->metadata['promotion']['id']);
+        $this->assertSame(['buy'], $buyItem->metadata['promotion']['details']['roles']);
+        $this->assertSame(['get'], $getItem->metadata['promotion']['details']['roles']);
+        $this->assertSame(1, $buyItem->metadata['promotion']['details']['participating_buy_quantity']);
+        $this->assertSame(1, $getItem->metadata['promotion']['details']['rewarded_get_quantity']);
+        $this->assertFalse($buyItem->refund_allowed);
+        $this->assertTrue($getItem->exchange_allowed);
+        $this->assertSame(9, $getItem->exchange_window_days);
+    }
+
+    public function test_free_gift_dependency_history_survives_promotion_changes(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        [$user, $merchant, $shop, $root, $category] = $this->baseFixture();
+        $qualifying = $this->variant($this->product($merchant, $shop, $root, $category, 'Qualifying Shirt'), 'Default', 250);
+        $gift = $this->variant($this->product($merchant, $shop, $root, $category, 'Gift Socks'), 'Default', 75);
+        $promotion = $this->promotion($shop, 'free_gift', [
+            'status' => Promotion::STATUS_ACTIVE,
+            'refund_policy_mode' => Promotion::POLICY_ALLOWED,
+            'refund_window_days' => 1,
+            'exchange_policy_mode' => Promotion::POLICY_NOT_ALLOWED,
+        ]);
+        $this->target($promotion, PromotionTarget::TYPE_PRODUCT, $qualifying->product_id);
+        $this->target($promotion, PromotionTarget::TYPE_VARIANT, $gift->getKey(), PromotionTarget::ROLE_GIFT);
+        $this->condition($promotion, PromotionCondition::TYPE_MINIMUM_ELIGIBLE_SUBTOTAL, '200.00');
+
+        $order = $this->createOrder($user, $shop, $qualifying, [
+            'created_source' => Order::SOURCE_STOREFRONT,
+        ]);
+        $promotion->conditions()->delete();
+
+        $qualifyingItem = $order->items->firstWhere('product_variant_id', $qualifying->getKey())->fresh();
+        $giftItem = $order->items->firstWhere('product_variant_id', $gift->getKey())->fresh();
+
+        $this->assertNotNull($giftItem);
+        $this->assertSame('qualifying', $qualifyingItem->metadata['promotion']['details']['role']);
+        $this->assertSame($gift->getKey(), $qualifyingItem->metadata['promotion']['details']['gift_variant_id']);
+        $this->assertSame('gift', $giftItem->metadata['promotion']['details']['role']);
+        $this->assertSame($qualifying->getKey(), $giftItem->metadata['promotion']['details']['qualifying_lines'][0]['variant_id']);
+        $this->assertTrue($giftItem->refund_allowed);
+        $this->assertSame(1, $giftItem->refund_window_days);
+        $this->assertFalse($giftItem->exchange_allowed);
+    }
+
+    public function test_product_price_changes_do_not_affect_historical_refund_values(): void
+    {
+        [$user, $shop, $variant] = $this->fixture();
+        $this->setShopPolicy($shop, true, 7, true, 7);
+        $order = $this->createOrder($user, $shop, $variant, ['quantity' => 2])->load('items');
+        $item = $order->items->first();
+        $variant->forceFill(['selling_price' => 999])->save();
+        $reason = $this->returnReason($order);
+
+        $refund = app(OrderRefundService::class)->create($order, [
+            'return_reason_id' => $reason->getKey(),
+            'refund_method' => Order::PAYMENT_METHOD_CASH,
+            'items' => [
+                $item->getKey() => ['quantity' => 1, 'do_not_restock' => true],
+            ],
+        ], $user);
+        $refundItem = $refund->items->first();
+
+        $this->assertSame('150.00', $refundItem->unit_price);
+        $this->assertSame('150.00', $refundItem->line_total);
+        $this->assertSame('150.00', $refund->refund_subtotal);
+        $this->assertSame('150.00', $refund->refund_total);
     }
 
     public function test_exchange_replacement_preserves_original_policy_snapshot_after_policy_change(): void
@@ -543,13 +754,7 @@ class OrderReturnPolicySnapshotTest extends TestCase
 
     private function refund(Order $order): OrderRefund
     {
-        $reason = ReturnReason::query()->create([
-            'uuid' => (string) Str::uuid(),
-            'merchant_id' => $order->merchant_id,
-            'code' => 'reason-'.Str::random(6),
-            'name' => 'Reason',
-            'status' => 'active',
-        ]);
+        $reason = $this->returnReason($order);
 
         return OrderRefund::query()->create([
             'refund_number' => 'REFUND-'.Str::random(8),
@@ -560,6 +765,77 @@ class OrderReturnPolicySnapshotTest extends TestCase
             'reason_name' => $reason->name,
             'refund_method' => 'cash',
             'status' => OrderRefund::STATUS_COMPLETED,
+        ]);
+    }
+
+    private function returnReason(Order $order): ReturnReason
+    {
+        return ReturnReason::query()->create([
+            'uuid' => (string) Str::uuid(),
+            'merchant_id' => $order->merchant_id,
+            'code' => 'reason-'.Str::random(6),
+            'name' => 'Reason',
+            'status' => 'active',
+        ]);
+    }
+
+    private function promotion(Shop $shop, string $templateCode, array $overrides = [], array $reward = []): Promotion
+    {
+        $template = PromotionTemplate::query()->where('code', $templateCode)->firstOrFail();
+        $promotion = Promotion::query()->create([
+            'merchant_id' => $shop->merchant_id,
+            'shop_id' => $shop->getKey(),
+            'promotion_template_id' => $template->getKey(),
+            'name' => $overrides['name'] ?? 'Policy Promotion '.Str::random(6),
+            'slug' => Str::slug($overrides['name'] ?? 'policy-promotion-'.Str::random(6)),
+            'status' => Promotion::STATUS_DRAFT,
+            'activation_type' => Promotion::ACTIVATION_AUTOMATIC,
+            'origin' => Promotion::ORIGIN_MERCHANT,
+            'refund_policy_mode' => Promotion::POLICY_INHERIT,
+            'exchange_policy_mode' => Promotion::POLICY_INHERIT,
+            ...$overrides,
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => $template->reward_type,
+            ...$reward,
+        ]);
+
+        return $promotion;
+    }
+
+    private function couponPromotion(Shop $shop, string $templateCode, string $code, array $overrides = [], array $reward = []): PromotionCoupon
+    {
+        $promotion = $this->promotion($shop, $templateCode, [
+            'status' => Promotion::STATUS_ACTIVE,
+            'activation_type' => Promotion::ACTIVATION_COUPON,
+            ...$overrides,
+        ], $reward);
+        $this->target($promotion, PromotionTarget::TYPE_ALL);
+
+        return $promotion->coupons()->create([
+            'shop_id' => $shop->getKey(),
+            'code' => $code,
+            'status' => PromotionCoupon::STATUS_ACTIVE,
+        ]);
+    }
+
+    private function target(Promotion $promotion, string $type, ?int $id = null, string $role = PromotionTarget::ROLE_ELIGIBLE): void
+    {
+        $promotion->targets()->create([
+            'target_role' => $role,
+            'target_type' => $type,
+            'target_id' => $id,
+            'sort_order' => 10,
+        ]);
+    }
+
+    private function condition(Promotion $promotion, string $type, string $value): void
+    {
+        $promotion->conditions()->create([
+            'condition_type' => $type,
+            'operator' => '>=',
+            'value_numeric' => $value,
+            'sort_order' => 10,
         ]);
     }
 

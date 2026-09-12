@@ -372,16 +372,21 @@ class StorefrontCustomerOrdersTest extends TestCase
             'action' => 'merchant_complete_pickup',
         ]);
 
-        $response = $this->actingAs($customer)
-            ->withSession(['active_role_id' => $roleId])
-            ->get(route('storefront.account.orders.show', $order));
+        Carbon::setTestNow(Carbon::parse('2026-09-02 10:00:00'));
+        try {
+            $response = $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->get(route('storefront.account.orders.show', $order));
 
-        $response->assertOk()
-            ->assertSee('Visit the shop for exchange handling.')
-            ->assertSee('Refund is not available for this item.')
-            ->assertSee('Exchange available until '.app_datetime($collectedAt->copy()->addDays(7)).'.')
-            ->assertDontSee('Policy window started')
-            ->assertDontSee('Request Pickup');
+            $response->assertOk()
+                ->assertSee('Visit the shop for exchange handling.')
+                ->assertSee('Refund is not available for this item.')
+                ->assertSee('Exchange available until '.app_datetime($collectedAt->copy()->addDays(7)).'.')
+                ->assertDontSee('Policy window started')
+                ->assertDontSee('Request Pickup');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_customer_return_exchange_copy_handles_expired_and_not_started_windows(): void
