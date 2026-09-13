@@ -102,6 +102,28 @@
             font-size: 13px;
         }
 
+        .category-shop-control .tf-dropdown-sort {
+            position: relative;
+        }
+
+        .category-shop-control .tf-dropdown-sort .dropdown-menu {
+            right: 0 !important;
+            left: auto !important;
+            width: 220px;
+            min-width: 220px;
+            max-width: min(220px, calc(100vw - 32px));
+            transform: translate3d(0, 30px, 0) !important;
+        }
+
+        @media (max-width: 767px) {
+            .category-shop-control .tf-dropdown-sort .dropdown-menu {
+                right: auto !important;
+                left: 0 !important;
+                width: min(220px, calc(100vw - 36px));
+                min-width: min(220px, calc(100vw - 36px));
+            }
+        }
+
     </style>
 @endpush
 
@@ -144,7 +166,7 @@
                 $selectedSort = array_key_exists($selectedSort, $sortOptions) ? $selectedSort : 'popularity';
                 $sortBaseQuery = request()->except(['sort', 'page']);
             @endphp
-            <div class="tf-shop-control sticky-top no-offset sticky-top no-offset">
+            <div class="tf-shop-control sticky-top no-offset category-shop-control">
                 <a href="#filterShop" data-bs-toggle="offcanvas" class="tf-btn-filter">
                     <span class="icon icon-filter"></span>
                     <span class="text">Filters</span>

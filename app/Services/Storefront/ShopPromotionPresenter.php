@@ -70,6 +70,51 @@ class ShopPromotionPresenter
             ->values();
     }
 
+    /**
+     * @param iterable<int, int|string> $shopIds
+     * @return array<int, int>
+     */
+    public function currentOfferShopIds(iterable $shopIds): array
+    {
+        $shopIds = collect($shopIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($shopIds->isEmpty()) {
+            return [];
+        }
+
+        return Promotion::query()
+            ->with([
+                'template:id,name,reward_type',
+                'rewards',
+                'targets',
+                'conditions',
+                'coupons' => fn ($query) => $this->activeCouponScope($query),
+            ])
+            ->activeNow(now())
+            ->whereIn('shop_id', $shopIds->all())
+            ->where(function (Builder $query): void {
+                $query
+                    ->where('activation_type', Promotion::ACTIVATION_AUTOMATIC)
+                    ->orWhere(function (Builder $query): void {
+                        $query
+                            ->where('activation_type', Promotion::ACTIVATION_COUPON)
+                            ->whereHas('coupons', fn (Builder $query) => $this->activeCouponScope($query));
+                    });
+            })
+            ->whereHas('rewards', fn (Builder $query) => $query->whereIn('reward_type', $this->supportedRewardTypes()))
+            ->get()
+            ->filter(fn (Promotion $promotion): bool => $promotion->isSetupComplete())
+            ->pluck('shop_id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     private function activeCouponScope($query)
     {
         $now = now();

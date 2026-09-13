@@ -9,6 +9,13 @@
             <span class="shop-type-badge">{{ $store['shop_type'] }}</span>
         @endif
 
+        @if (!empty($store['has_offers']))
+            <span class="shop-offers-badge" aria-label="Offers available">
+                <span>SPECIAL</span>
+                <strong>OFFERS</strong>
+            </span>
+        @endif
+
         <div class="shop-logo {{ empty($store['logo']) ? 'shop-logo-initial' : '' }}">
             @if (!empty($store['logo']))
                 <img loading="lazy" width="56" height="56" src="{{ asset($store['logo']) }}"
@@ -42,8 +49,8 @@
             </div>
         </div>
 
-        <a href="{{ $store['store_url'] }}" class="tf-btn animate-btn small">
-            Shop the Collection <i class="icon icon-ArrowUpRight1"></i>
+        <a href="{{ $store['store_url'] }}" class="shop-card-cta">
+            Explore Shop <i class="icon icon-ArrowUpRight1"></i>
         </a>
     </div>
 </div>

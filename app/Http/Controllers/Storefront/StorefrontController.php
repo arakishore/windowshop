@@ -109,8 +109,11 @@ class StorefrontController extends Controller
         $stores = $storesQuery
             ->orderBy('name')
             ->paginate(24)
-            ->withQueryString()
-            ->through(fn (Shop $shop): array => $this->storeCardData($shop));
+            ->withQueryString();
+        $offerShopIds = $this->shopPromotions->currentOfferShopIds(
+            $stores->getCollection()->pluck('id')->all()
+        );
+        $stores = $stores->through(fn (Shop $shop): array => $this->storeCardData($shop, $offerShopIds));
 
         return view('storefront.pages.stores', [
             'stores' => $stores,
@@ -189,7 +192,7 @@ class StorefrontController extends Controller
         }
     }
 
-    private function storeCardData(Shop $shop): array
+    private function storeCardData(Shop $shop, array $offerShopIds = []): array
     {
         $imagePath = $shop->banner_path ?: $shop->logo_path;
         $storeUrl = route('storefront.stores.show', $shop->slug);
@@ -229,6 +232,7 @@ class StorefrontController extends Controller
             'maps_url' => $mapsUrl,
             'shop_type' => $shop->rootProductCategory?->name,
             'audiences' => $shop->audiences->pluck('name')->values()->all(),
+            'has_offers' => in_array((int) $shop->getKey(), $offerShopIds, true),
             'image' => $imagePath ? 'storage/'.$imagePath : 'assets/storefront/images/no-image-icon.png',
             'logo' => $shop->logo_path ? 'storage/'.$shop->logo_path : null,
             'initials' => $this->storeInitials($shop->name),
@@ -287,9 +291,11 @@ class StorefrontController extends Controller
 
         $addMatches($baseQuery());
 
+        $matches = $matches->take($limit)->values();
+        $offerShopIds = $this->shopPromotions->currentOfferShopIds($matches->pluck('id')->all());
+
         return $matches
-            ->take($limit)
-            ->map(fn (Shop $shop): array => $this->storeCardData($shop))
+            ->map(fn (Shop $shop): array => $this->storeCardData($shop, $offerShopIds))
             ->values();
     }
 

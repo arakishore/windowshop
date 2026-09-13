@@ -70,9 +70,13 @@
     display: inline-block;
 }
 
-.customer-location-trigger .location-pin-icon::before {
+.customer-location-trigger .location-pin-icon::before,
+.customer-location-trigger .location-pin-icon::after {
     content: "";
     position: absolute;
+}
+
+.customer-location-trigger .location-pin-icon::before {
     left: 50%;
     top: 1px;
     width: 14px;
@@ -80,11 +84,10 @@
     border: 2px solid currentColor;
     border-radius: 50% 50% 50% 0;
     transform: translateX(-50%) rotate(-45deg);
+    z-index: 1;
 }
 
 .customer-location-trigger .location-pin-icon::after {
-    content: "";
-    position: absolute;
     left: 50%;
     top: 6px;
     width: 4px;
@@ -92,6 +95,29 @@
     border-radius: 50%;
     background: currentColor;
     transform: translateX(-50%);
+    z-index: 2;
+}
+
+.customer-location-trigger .location-pin-icon {
+    color: #f97316;
+    filter: drop-shadow(0 0 6px rgba(249, 115, 22, .42));
+}
+
+.customer-location-trigger .location-pin-icon::before {
+    animation: locationPinGlow 1.8s ease-in-out infinite;
+}
+
+@keyframes locationPinGlow {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 28%, transparent),
+            0 0 8px rgba(249, 115, 22, .36);
+    }
+
+    50% {
+        box-shadow: 0 0 0 7px color-mix(in srgb, currentColor 0%, transparent),
+            0 0 15px rgba(249, 115, 22, .62);
+    }
 }
 
 .customer-location-trigger[data-location-tooltip]::after {

@@ -291,20 +291,21 @@
             background: #fff;
             border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 6px 24px rgba(15, 23, 42, 0.08);
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .shop-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 34px rgba(15, 23, 42, 0.13);
         }
 
         .shop-image-wrapper {
             position: relative;
             width: 100%;
             aspect-ratio: 16 / 10;
-            overflow: hidden;
+            overflow: visible;
+            background: #f3f4f6;
         }
 
         .shop-image {
@@ -316,40 +317,79 @@
 
         .shop-logo {
             position: absolute;
-            top: 14px;
-            left: 14px;
-            width: 56px;
-            height: 56px;
+            bottom: -26px;
+            left: 18px;
+            width: 58px;
+            height: 58px;
 
             border-radius: 12px;
             background: #fff;
-            border: 2px solid rgba(255, 255, 255, 0.9);
+            border: 3px solid #fff;
 
             display: flex;
             align-items: center;
             justify-content: center;
 
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
             overflow: hidden;
+            z-index: 3;
         }
 
         .shop-type-badge {
             position: absolute;
-            right: 14px;
             top: 14px;
-            max-width: calc(100% - 92px);
-            padding: 6px 10px;
+            left: 14px;
+            max-width: calc(100% - 110px);
+            padding: 5px 9px;
             border: 1px solid rgba(255, 255, 255, .72);
             border-radius: 999px;
-            background: rgba(17, 24, 39, .72);
+            background: rgba(17, 24, 39, .76);
             color: #fff;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             line-height: 1;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
             backdrop-filter: blur(8px);
+        }
+
+        .shop-offers-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 120px;
+            height: 100px;
+            padding: 14px 12px;
+            border: 2px solid rgba(255, 237, 213, .95);
+            background: linear-gradient(135deg, #ef4444 0%, #f97316 58%, #f59e0b 100%);
+            color: #fff;
+            text-align: center;
+            line-height: .95;
+            text-shadow: 0 1px 1px rgba(127, 29, 29, .35);
+            clip-path: polygon(50% 0%, 60% 14%, 76% 8%, 79% 25%, 96% 28%, 85% 41%, 100% 54%, 83% 61%, 88% 78%, 69% 76%, 61% 94%, 50% 81%, 38% 96%, 31% 78%, 13% 84%, 17% 65%, 0% 57%, 14% 44%, 4% 29%, 21% 26%, 24% 8%, 40% 14%);
+            box-shadow: 0 9px 20px rgba(234, 88, 12, .28);
+            transform: rotate(6deg);
+            z-index: 2;
+        }
+
+        .shop-offers-badge span {
+            font-size: 15px;
+            font-weight: 900;
+            letter-spacing: .05em;
+            line-height: 1;
+        }
+
+        .shop-offers-badge strong {
+            color: #fff7ad;
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: .02em;
+            line-height: 1;
         }
 
         .shop-logo img {
@@ -391,14 +431,14 @@
         }
 
         .shop-content {
-            padding: 18px 20px 20px;
+            padding: 38px 18px 18px;
         }
 
         .shop-name {
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 700;
             color: #111;
-            margin-bottom: 14px;
+            margin-bottom: 10px;
             line-height: 1.3;
         }
 
@@ -410,7 +450,7 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
-            margin-bottom: 18px;
+            margin-bottom: 14px;
         }
 
         .meta-row {
@@ -473,11 +513,26 @@
             }
 
             .shop-content {
-                padding: 16px;
+                padding: 36px 16px 16px;
             }
 
             .shop-name {
                 font-size: 17px;
+            }
+
+            .shop-offers-badge {
+                width: 96px;
+                height: 80px;
+                right: 8px;
+                top: 8px;
+            }
+
+            .shop-offers-badge span {
+                font-size: 12px;
+            }
+
+            .shop-offers-badge strong {
+                font-size: 16px;
             }
         }
     </style>
