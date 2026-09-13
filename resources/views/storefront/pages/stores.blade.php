@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Stores Near You | WindowShop')
-@section('meta_description', 'Discover local shops around your selected location on WindowShop.')
+@section('title', 'Stores Near You | ' . $marketplaceName)
+@section('meta_description', 'Discover local shops around your selected location on '.$marketplaceName.'.')
 
 @push('styles')
     <style>
@@ -526,7 +526,7 @@
                         <i class="icon icon-CaretRightThin cl-text-3"></i>
                         <span class="text-caption-01 cl-text-3">Our Stores</span>
                     </div>
-                    <div class="store-eyebrow">WindowShop Marketplace</div>
+                    <div class="store-eyebrow">{{ $marketplaceName }} Marketplace</div>
                     <h1>Stores Near You</h1>
                     <p>Discover shops around your selected location.</p>
                 </div>

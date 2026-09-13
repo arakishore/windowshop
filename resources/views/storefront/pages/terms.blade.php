@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Terms & Conditions | WindowShop')
-@section('meta_description', 'WindowShop terms and conditions for using the local storefront platform.')
+@section('title', 'Terms & Conditions | ' . $marketplaceName)
+@section('meta_description', $marketplaceName.' terms and conditions for using the local storefront platform.')
 
 @section('content')
     <section class="section-page-title text-center storefront-page-title">
@@ -21,8 +21,8 @@
         <div class="container">
             <div class="content">
                 <div class="term-item">
-                    <h5 class="term-title">1. Use Of WindowShop</h5>
-                    <p class="term-text cl-text-2">WindowShop provides a local storefront and discovery experience for customers and merchants. By using the website, you agree to use it for lawful browsing, discovery, communication, and shopping-related purposes.</p>
+                    <h5 class="term-title">1. Use Of {{ $marketplaceName }}</h5>
+                    <p class="term-text cl-text-2">{{ $marketplaceName }} provides a local storefront and discovery experience for customers and merchants. By using the website, you agree to use it for lawful browsing, discovery, communication, and shopping-related purposes.</p>
                 </div>
                 <div class="term-item">
                     <h5 class="term-title">2. Store And Product Information</h5>
@@ -38,7 +38,7 @@
                 </div>
                 <div class="term-item">
                     <h5 class="term-title">5. Updates To Terms</h5>
-                    <p class="term-text cl-text-2">We may update these terms as the platform grows. Continued use of WindowShop after updates means you accept the latest version.</p>
+                    <p class="term-text cl-text-2">We may update these terms as the platform grows. Continued use of {{ $marketplaceName }} after updates means you accept the latest version.</p>
                 </div>
             </div>
         </div>

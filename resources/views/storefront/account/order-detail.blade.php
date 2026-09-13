@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', $order->order_number.' | WindowShop')
-@section('meta_description', 'WindowShop customer order details.')
+@section('title', $order->order_number.' | '.$marketplaceName)
+@section('meta_description', $marketplaceName.' customer order details.')
 
 @section('content')
     @component('storefront.account.partials.shell', ['customer' => $customer, 'accountPageTitle' => 'Order '.$order->order_number])
@@ -27,7 +27,7 @@
                     <span class="account-status-badge {{ $presenter->statusClass($order->order_status) }}">{{ $presenter->statusLabel($order->order_status) }}</span>
                 </div>
                 <p class="cl-text-2 mb-0">Placed {{ app_datetime($order->created_at) }}</p>
-                <p class="fw-medium mb-0">{{ $order->shop?->name ?? 'WindowShop Store' }}</p>
+                <p class="fw-medium mb-0">{{ $order->shop?->name ?? $marketplaceName.' Store' }}</p>
             </div>
             <div class="account-order-actions">
                 @if ($canCancelOrder)

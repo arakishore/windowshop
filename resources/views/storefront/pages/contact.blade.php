@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Contact Us | WindowShop')
-@section('meta_description', 'Contact WindowShop for support, merchant enquiries, local shop onboarding, and customer questions.')
+@section('title', 'Contact Us | ' . $marketplaceName)
+@section('meta_description', 'Contact '.$marketplaceName.' for support, merchant enquiries, local shop onboarding, and customer questions.')
 
 @push('styles')
     <style>

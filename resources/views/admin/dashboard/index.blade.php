@@ -1,15 +1,15 @@
 {{-- Purpose: Demonstrates the reusable admin layout and Blade components for the WindowShop dashboard. --}}
 @extends('layouts.admin')
 
-@section('title', 'Dashboard | WindowShop')
+@section('title', 'Dashboard | ' . $marketplaceName)
 
 @section('content')
     <div class="alert alert-success">
-        Welcome to WindowShop Admin
+        Welcome to {{ $marketplaceName }} Admin
     </div>
 
     <x-page-header
-        title="WindowShop Dashboard"
+        :title="$marketplaceName.' Dashboard'"
         :breadcrumbs="['Home' => url('/'), 'Dashboard' => null]"
     />
 

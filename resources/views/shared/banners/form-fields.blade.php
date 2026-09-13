@@ -63,7 +63,7 @@
                                     <div class="d-flex flex-wrap gap-3">
                                         <label class="form-check">
                                             <input type="radio" name="source_type" value="template" class="form-check-input js-banner-source" @checked($sourceType === 'template')>
-                                            <span class="form-check-label">Use WindowShop Template</span>
+                                            <span class="form-check-label">Use {{ $marketplaceName }} Template</span>
                                         </label>
                                         <label class="form-check">
                                             <input type="radio" name="source_type" value="custom_upload" class="form-check-input js-banner-source" @checked($sourceType !== 'template')>

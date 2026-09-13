@@ -25,7 +25,7 @@
         : ($heroSlides->first()['image'] ?? asset('assets/storefront/images/category/cate-1.jpg'));
 @endphp
 
-@section('title', $shopName.' | WindowShop')
+@section('title', $shopName.' | '.$marketplaceName)
 @section('meta_description', $shopProfile['description'] ?: 'Explore products and shop details from '.$shopName.'.')
 
 @push('styles')

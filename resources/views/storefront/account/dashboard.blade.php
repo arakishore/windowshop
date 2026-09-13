@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'My Account | WindowShop')
-@section('meta_description', 'WindowShop customer account overview.')
+@section('title', 'My Account | ' . $marketplaceName)
+@section('meta_description', $marketplaceName.' customer account overview.')
 
 @section('content')
     @component('storefront.account.partials.shell', ['customer' => $customer, 'accountPageTitle' => 'My Account'])

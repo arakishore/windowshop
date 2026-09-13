@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Order Placed | WindowShop')
-@section('meta_description', 'Your WindowShop order has been placed successfully.')
+@section('title', 'Order Placed | ' . $marketplaceName)
+@section('meta_description', 'Your '.$marketplaceName.' order has been placed successfully.')
 
 @push('styles')
     <style>

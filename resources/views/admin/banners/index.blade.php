@@ -87,7 +87,7 @@
                                 </td>
                                 <td>
                                     @if($banner->usesTemplate())
-                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">WindowShop Template</span>
+                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">{{ $marketplaceName }} Template</span>
                                         <div class="text-muted fs-sm">{{ $banner->bannerTemplate?->name ?? 'Historical template' }}</div>
                                     @else
                                         <span class="badge bg-light text-body border">Custom Upload</span>

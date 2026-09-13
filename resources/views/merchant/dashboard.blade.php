@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant dashboard using active-shop-scoped metrics and Limitless UI patterns. --}}
 @extends('layouts.merchant')
 
-@section('title', 'Merchant Dashboard | WindowShop')
+@section('title', 'Merchant Dashboard | ' . $marketplaceName)
 
 @section('page_title', 'Merchant Dashboard')
 

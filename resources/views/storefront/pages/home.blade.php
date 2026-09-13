@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'WindowShop Storefront')
-@section('meta_description', 'Static WindowShop storefront Blade preview converted from the selected HTML template.')
+@section('title', $marketplaceName.' Storefront')
+@section('meta_description', $marketplaceName.' storefront Blade preview converted from the selected HTML template.')
 
 @php
     $heroSlides = [
@@ -14,8 +14,8 @@
         ],
         [
             'image' => 'assets/storefront/images/slider/slider-2.jpg',
-            'eyebrow' => 'Join WindowShop Today',
-            'title' => 'Onboard your store and reach a wider audience with WindowShop',
+            'eyebrow' => 'Join '.$marketplaceName.' Today',
+            'title' => 'Onboard your store and reach a wider audience with '.$marketplaceName,
             'subtitle' => '',
             'button' => 'Register now',
         ],

@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Shopping Cart | WindowShop')
-@section('meta_description', 'Review your selected local shop products before checkout on WindowShop.')
+@section('title', 'Shopping Cart | ' . $marketplaceName)
+@section('meta_description', 'Review your selected local shop products before checkout on '.$marketplaceName.'.')
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('assets/admin/icons/fontawesome/styles.min.css') }}">

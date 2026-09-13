@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Checkout | WindowShop')
-@section('meta_description', 'Complete checkout for selected local shop products on WindowShop.')
+@section('title', 'Checkout | ' . $marketplaceName)
+@section('meta_description', 'Complete checkout for selected local shop products on '.$marketplaceName.'.')
 
 @php
     $addressFormDefaults = [

@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Shipping | WindowShop')
-@section('meta_description', 'WindowShop shipping information for local store orders and delivery expectations.')
+@section('title', 'Shipping | ' . $marketplaceName)
+@section('meta_description', $marketplaceName.' shipping information for local store orders and delivery expectations.')
 
 @section('content')
     <section class="section-page-title text-center storefront-page-title">
@@ -38,7 +38,7 @@
                 </div>
                 <div class="term-item">
                     <h5 class="term-title">5. Delivery Support</h5>
-                    <p class="term-text cl-text-2">For delivery questions, contact the merchant first. WindowShop can help with platform-level support and routing where needed.</p>
+                    <p class="term-text cl-text-2">For delivery questions, contact the merchant first. {{ $marketplaceName }} can help with platform-level support and routing where needed.</p>
                 </div>
             </div>
         </div>

@@ -1,14 +1,14 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'My Orders | WindowShop')
-@section('meta_description', 'WindowShop customer order area.')
+@section('title', 'My Orders | ' . $marketplaceName)
+@section('meta_description', $marketplaceName.' customer order area.')
 
 @section('content')
     @component('storefront.account.partials.shell', ['customer' => $customer, 'accountPageTitle' => 'My Orders'])
         <div class="mb-24">
             <p class="text-caption-01 cl-text-3 mb-6">My Orders</p>
             <h4 class="mb-10">My Orders</h4>
-            <p class="cl-text-2 mb-0">Track your orders from all WindowShop stores.</p>
+            <p class="cl-text-2 mb-0">Track your orders from all {{ $marketplaceName }} stores.</p>
         </div>
 
         <div class="account-order-list">
@@ -23,7 +23,7 @@
                     <div class="account-order-head">
                         <div>
                             <a href="{{ route('storefront.account.orders.show', $order) }}" class="account-order-number">{{ $order->order_number }}</a>
-                            <p class="cl-text-2 mb-0">{{ $order->shop?->name ?? 'WindowShop Store' }}</p>
+                            <p class="cl-text-2 mb-0">{{ $order->shop?->name ?? $marketplaceName.' Store' }}</p>
                         </div>
                         <span class="account-status-badge {{ $presenter->statusClass($order->order_status) }}">{{ $presenter->statusLabel($order->order_status) }}</span>
                     </div>

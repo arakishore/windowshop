@@ -3,11 +3,11 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="author" content="WindowShop">
+    <meta name="author" content="{{ $marketplaceName }}">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <meta name="description" content="@yield('meta_description', 'WindowShop storefront preview.')">
+    <meta name="description" content="@yield('meta_description', $marketplaceName.' storefront preview.')">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'WindowShop Storefront')</title>
+    <title>@yield('title', $marketplaceName.' Storefront')</title>
     @hasSection('canonical_url')
         <link rel="canonical" href="@yield('canonical_url')">
     @endif

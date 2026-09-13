@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant settings editor backed by the generic merchant_settings table. --}}
 @extends('layouts.merchant')
 
-@section('title', 'Settings | WindowShop')
+@section('title', 'Settings | ' . $marketplaceName)
 
 @section('page_title', 'Settings')
 
@@ -341,7 +341,7 @@
                             <h5 class="mb-0">General Settings</h5>
                         </div>
                         <div class="card-body text-muted">
-                            General merchant preferences will appear here as WindowShop grows.
+                            General merchant preferences will appear here as {{ $marketplaceName }} grows.
                         </div>
                     </div>
                 </div>

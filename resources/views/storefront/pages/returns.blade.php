@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Return & Refund | WindowShop')
-@section('meta_description', 'WindowShop return and refund information for customers and local merchant orders.')
+@section('title', 'Return & Refund | ' . $marketplaceName)
+@section('meta_description', $marketplaceName.' return and refund information for customers and local merchant orders.')
 
 @section('content')
     <section class="section-page-title text-center storefront-page-title">
@@ -26,7 +26,7 @@
                 </div>
                 <div class="term-item">
                     <h5 class="term-title">2. Return Process</h5>
-                    <p class="term-text cl-text-2">Contact the merchant or WindowShop support with your order details and reason for return. The team will guide you on whether pickup, store return, or another process applies.</p>
+                    <p class="term-text cl-text-2">Contact the merchant or {{ $marketplaceName }} support with your order details and reason for return. The team will guide you on whether pickup, store return, or another process applies.</p>
                 </div>
                 <div class="term-item">
                     <h5 class="term-title">3. Refunds</h5>

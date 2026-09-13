@@ -1,7 +1,7 @@
 {{-- Purpose: Admin-owned global settings inherited by every merchant and POS surface. --}}
 @extends('layouts.admin')
 
-@section('title', 'Admin Settings | WindowShop')
+@section('title', 'Admin Settings | ' . $marketplaceName)
 
 @section('page_title', 'Admin Settings')
 
@@ -204,7 +204,7 @@
                     <div class="card admin-settings-card">
                         <div class="card-header">
                             <h5 class="mb-0">Marketplace Logo</h5>
-                            <div class="text-muted fs-sm mt-1">Global WindowShop logo used by admin marketplace surfaces.</div>
+                            <div class="text-muted fs-sm mt-1">Global {{ $marketplaceName }} logo used by admin marketplace surfaces.</div>
                         </div>
                         <div class="card-body">
                             <div class="admin-settings-grid">
@@ -244,7 +244,7 @@
                                         <div class="form-check mt-3">
                                             <input id="remove_marketplace_logo" name="remove_marketplace_logo" type="checkbox" value="1" class="form-check-input @error('remove_marketplace_logo') is-invalid @enderror">
                                             <label for="remove_marketplace_logo" class="form-check-label">Remove Logo</label>
-                                            <div class="form-text">Removing the uploaded logo restores the default WindowShop logo.</div>
+                                            <div class="form-text">Removing the uploaded logo restores the default {{ $marketplaceName }} logo.</div>
                                         </div>
                                         @error('remove_marketplace_logo')
                                             <div class="invalid-feedback d-block">{{ $message }}</div>

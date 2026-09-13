@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', $title.' | WindowShop')
-@section('meta_description', 'Manage your saved WindowShop delivery and billing address.')
+@section('title', $title.' | '.$marketplaceName)
+@section('meta_description', 'Manage your saved '.$marketplaceName.' delivery and billing address.')
 
 @php
     $currentLabel = old('label', $address?->label ?? 'Home');

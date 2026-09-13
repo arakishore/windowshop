@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Addresses | WindowShop')
-@section('meta_description', 'Review your saved WindowShop delivery and billing addresses.')
+@section('title', 'Addresses | ' . $marketplaceName)
+@section('meta_description', 'Review your saved '.$marketplaceName.' delivery and billing addresses.')
 
 @php
     $locationLine = function ($address): string {

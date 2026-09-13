@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Products | WindowShop')
-@section('meta_description', 'Browse products available from local shops on WindowShop.')
+@section('title', 'Products | ' . $marketplaceName)
+@section('meta_description', 'Browse products available from local shops on '.$marketplaceName.'.')
 
 @section('content')
     <section class="section-page-title text-center storefront-page-title">

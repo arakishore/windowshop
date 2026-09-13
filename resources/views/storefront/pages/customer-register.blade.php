@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Customer Register | WindowShop')
-@section('meta_description', 'Static customer registration page for WindowShop shoppers.')
+@section('title', 'Customer Register | ' . $marketplaceName)
+@section('meta_description', 'Customer registration page for '.$marketplaceName.' shoppers.')
 
 @php($checkoutMode = $checkoutMode ?? false)
 @php($defaultCountryCode = strtoupper((string) ($defaultCountryCode ?? config('location.default_country_code', 'IN'))))
@@ -314,7 +314,7 @@
                 </div>
 
                 <div class="customer-register-visual">
-                    <h3>Join WindowShop For Faster Local Shopping</h3>
+                    <h3>Join {{ $marketplaceName }} For Faster Local Shopping</h3>
                     <p>
                         Create an account once and keep your favourite nearby shops, order details, and customer
                         information ready whenever you return.

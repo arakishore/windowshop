@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant-owned shop list. --}}
 @extends('layouts.merchant')
 
-@section('title', 'My Shops | WindowShop')
+@section('title', 'My Shops | ' . $marketplaceName)
 
 @section('page_title', 'My Shops')
 

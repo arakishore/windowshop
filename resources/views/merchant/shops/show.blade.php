@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant-safe shop detail page. --}}
 @extends('layouts.merchant')
 
-@section('title', $shop->name.' | My Shops | WindowShop')
+@section('title', $shop->name.' | My Shops | '.$marketplaceName)
 
 @section('page_title', 'Shop Details')
 

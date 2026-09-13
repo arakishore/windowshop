@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'FAQs | WindowShop')
-@section('meta_description', 'Frequently asked questions about WindowShop, local shops, orders, shipping, returns, and support.')
+@section('title', 'FAQs | ' . $marketplaceName)
+@section('meta_description', 'Frequently asked questions about '.$marketplaceName.', local shops, orders, shipping, returns, and support.')
 
 @section('content')
     <section class="section-page-title text-center storefront-page-title">
@@ -31,12 +31,12 @@
                                 <div class="accordion-faq">
                                     <div class="accordion-title" data-bs-target="#faq-windowshop" role="button"
                                         data-bs-toggle="collapse" aria-expanded="true" aria-controls="faq-windowshop">
-                                        <span class="text h6">1. What is WindowShop?</span>
+                                        <span class="text h6">1. What is {{ $marketplaceName }}?</span>
                                         <span class="icon"><span class="ic-accordion-custom"></span></span>
                                     </div>
                                     <div id="faq-windowshop" class="collapse show" data-bs-parent="#general-faq">
                                         <div class="accordion-body">
-                                            <p class="cl-text-2">WindowShop helps customers discover nearby shops, browse products, check offers, and visit merchant store pages.</p>
+                                            <p class="cl-text-2">{{ $marketplaceName }} helps customers discover nearby shops, browse products, check offers, and visit merchant store pages.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -65,7 +65,7 @@
                                     </div>
                                     <div id="faq-order-help" class="collapse" data-bs-parent="#orders-faq">
                                         <div class="accordion-body">
-                                            <p class="cl-text-2">For store-specific stock, order, or product questions, customers should contact the listed shop. WindowShop can help route general platform questions.</p>
+                                            <p class="cl-text-2">For store-specific stock, order, or product questions, customers should contact the listed shop. {{ $marketplaceName }} can help route general platform questions.</p>
                                         </div>
                                     </div>
                                 </div>

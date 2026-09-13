@@ -1,6 +1,6 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Shopping Bag Box Demo | WindowShop')
+@section('title', 'Shopping Bag Box Demo | ' . $marketplaceName)
 @section('meta_description', 'Demo page for testing a shopping bag shaped content box.')
 
 @push('styles')

@@ -1,7 +1,7 @@
 {{-- Purpose: Read-only merchant reference for active tax slabs configured by admin. --}}
 @extends('layouts.merchant')
 
-@section('title', 'Tax Slabs | WindowShop')
+@section('title', 'Tax Slabs | ' . $marketplaceName)
 
 @section('page_title', 'Tax Slabs')
 

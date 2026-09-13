@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant POS screen for fast active-shop cash sales. --}}
 @extends('layouts.merchant')
 
-@section('title', 'Merchant POS | WindowShop')
+@section('title', 'Merchant POS | ' . $marketplaceName)
 
 @push('styles')
     <style>

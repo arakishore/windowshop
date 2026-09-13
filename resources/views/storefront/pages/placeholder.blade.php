@@ -1,6 +1,6 @@
 @extends('storefront.layouts.app')
 
-@section('title', $pageTitle.' | WindowShop')
+@section('title', $pageTitle.' | '.$marketplaceName)
 @section('meta_description', $pageDescription)
 
 @section('content')

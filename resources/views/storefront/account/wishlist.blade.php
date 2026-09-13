@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Wishlist | WindowShop')
-@section('meta_description', 'WindowShop customer wishlist area.')
+@section('title', 'Wishlist | ' . $marketplaceName)
+@section('meta_description', $marketplaceName.' customer wishlist area.')
 
 @section('content')
     @component('storefront.account.partials.shell', ['customer' => $customer, 'accountPageTitle' => 'Wishlist'])

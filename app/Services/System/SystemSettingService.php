@@ -6,13 +6,22 @@ use App\Models\SystemSetting;
 
 class SystemSettingService
 {
+    /**
+     * @var array<string, SystemSetting|null>
+     */
+    private array $settingCache = [];
+
     public function get(string $key, mixed $default = null): mixed
     {
-        $setting = SystemSetting::query()
-            ->where('key', $key)
-            ->where('status', SystemSetting::STATUS_ACTIVE)
-            ->whereNull('deleted_at')
-            ->first();
+        if (! array_key_exists($key, $this->settingCache)) {
+            $this->settingCache[$key] = SystemSetting::query()
+                ->where('key', $key)
+                ->where('status', SystemSetting::STATUS_ACTIVE)
+                ->whereNull('deleted_at')
+                ->first();
+        }
+
+        $setting = $this->settingCache[$key];
 
         if ($setting === null) {
             return $default;

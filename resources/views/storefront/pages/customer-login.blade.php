@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Customer Login | WindowShop')
-@section('meta_description', 'Customer login page for WindowShop shoppers.')
+@section('title', 'Customer Login | ' . $marketplaceName)
+@section('meta_description', 'Customer login page for '.$marketplaceName.' shoppers.')
 
 @php($checkoutMode = $checkoutMode ?? false)
 

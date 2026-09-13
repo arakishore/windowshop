@@ -1,7 +1,6 @@
 @extends('storefront.layouts.app')
 
 @php
-    $marketplaceName = app(\App\Services\System\SystemSettingService::class)->marketplaceName();
     $singleImage = fn(string $image): string => $image;
     $productMetaTitle = $product['meta_title'].' | '.$marketplaceName;
     $productMetaDescription = rtrim($product['meta_description'], '.').' on '.$marketplaceName.'.';

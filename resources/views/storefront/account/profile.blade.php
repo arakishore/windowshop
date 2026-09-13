@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Profile | WindowShop')
-@section('meta_description', 'Review your WindowShop customer profile.')
+@section('title', 'Profile | ' . $marketplaceName)
+@section('meta_description', 'Review your '.$marketplaceName.' customer profile.')
 
 @section('content')
     @component('storefront.account.partials.shell', ['customer' => $customer, 'accountPageTitle' => 'Profile'])

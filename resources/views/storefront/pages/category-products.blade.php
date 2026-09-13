@@ -1,7 +1,6 @@
 @extends('storefront.layouts.app')
 
 @php
-    $marketplaceName = app(\App\Services\System\SystemSettingService::class)->marketplaceName();
     $categoryMetaTitleBase = $category->meta_title ?: $category->name;
     $legacyMarketplaceSuffix = ' | WindowShop';
 
@@ -11,7 +10,7 @@
 
     $categoryMetaTitle = $categoryMetaTitleBase.' | '.$marketplaceName;
     $categoryMetaDescriptionBase = $category->meta_description
-        ?: ($category->description ?: 'Browse '.$category->name.' products available from local shops on WindowShop.');
+        ?: ($category->description ?: 'Browse '.$category->name.' products available from local shops on '.$marketplaceName.'.');
 
     if (str_ends_with($categoryMetaDescriptionBase, ' on WindowShop.')) {
         $categoryMetaDescriptionBase = substr($categoryMetaDescriptionBase, 0, -strlen(' on WindowShop.')).'.';
