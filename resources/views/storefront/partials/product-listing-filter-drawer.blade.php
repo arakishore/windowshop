@@ -28,11 +28,18 @@
     $selectedDiscounts = collect($selectedFilters['discount_min'] ?? [])->map(fn ($value) => (string) $value);
     $selectedShopIds = collect($selectedFilters['shops'] ?? [])->map(fn ($value) => (string) $value);
     $productSearch = (string) ($selectedFilters['search'] ?? '');
+    $preservedQuery = collect(['promotion'])
+        ->mapWithKeys(fn (string $key): array => request()->filled($key) ? [$key => request()->query($key)] : [])
+        ->all();
+    $resetUrl = url()->current().($preservedQuery !== [] ? '?'.http_build_query($preservedQuery) : '');
 @endphp
 
 <div class="offcanvas offcanvas-start canvas-filter" id="{{ $filterDrawerId }}">
     <form class="canvas-wrapper" method="GET" action="{{ url()->current() }}">
         <input type="hidden" name="sort" value="{{ $selectedSort }}">
+        @foreach ($preservedQuery as $queryKey => $queryValue)
+            <input type="hidden" name="{{ $queryKey }}" value="{{ $queryValue }}">
+        @endforeach
         <div class="canvas-header">
             <div class="h5 title">{{ $filterTitle }}</div>
             <span class="icon-X2 fs-24 link icon-close-popup" data-bs-dismiss="offcanvas"></span>
@@ -216,7 +223,7 @@
         </div>
         <div class="canvas-bottom">
             <div class="d-flex gap-2">
-                <a href="{{ url()->current() }}" class="tf-btn btn-stroke animate-btn w-100">Reset</a>
+                <a href="{{ $resetUrl }}" class="tf-btn btn-stroke animate-btn w-100">Reset</a>
                 <button type="submit" class="tf-btn animate-btn w-100">Apply Filters</button>
             </div>
         </div>

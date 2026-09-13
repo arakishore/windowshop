@@ -7,6 +7,7 @@ use App\Enums\BannerPosition;
 use App\Models\PostalCode;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Promotion;
 use App\Models\Shop;
 use App\Models\ShopAudience;
 use App\Models\WishlistItem;
@@ -855,15 +856,27 @@ class StorefrontController extends Controller
             'merchant:id,status',
         ]);
         $selectedFilters = $this->selectedProductFilters($request);
-        $offerProductIds = $this->offerProducts->productIdsForShop($shop);
+        $promotionIdentifier = trim((string) $request->query('promotion', ''));
+        $selectedPromotion = $promotionIdentifier !== ''
+            ? $this->offerProducts->currentPromotionForShop($shop, $promotionIdentifier)
+            : null;
+        $invalidPromotionFilter = $promotionIdentifier !== '' && $selectedPromotion === null;
+        $offerProductIds = $selectedPromotion instanceof Promotion
+            ? $this->offerProducts->productIdsForPromotion($selectedPromotion, $shop)
+            : ($invalidPromotionFilter ? [] : $this->offerProducts->productIdsForShop($shop));
         $products = $this->productListings->shopProductsByIds($shop, $offerProductIds, $selectedFilters);
         $shopProfile = $this->shopProfileData($shop);
         $shopProfile['product_count'] = $products->total();
+        $selectedOffer = $selectedPromotion instanceof Promotion
+            ? $this->shopPromotions->card($selectedPromotion, $shop)
+            : null;
 
         return view('storefront.pages.store-offers', [
             'shop' => $shop,
             'shopProfile' => $shopProfile,
             'products' => $products,
+            'selectedOffer' => $selectedOffer,
+            'invalidPromotionFilter' => $invalidPromotionFilter,
             'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
             'categoryFilterOptions' => $this->productListings->shopCategoryFilters($shop),
             'attributeFilters' => $this->productListings->shopAttributeFilters($shop),

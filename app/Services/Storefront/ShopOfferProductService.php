@@ -40,11 +40,28 @@ class ShopOfferProductService
             ->all();
     }
 
+    public function currentPromotionForShop(Shop $shop, string $identifier): ?Promotion
+    {
+        $identifier = trim($identifier);
+
+        if ($identifier === '') {
+            return null;
+        }
+
+        return $this->promotions
+            ->currentPromotionModels($shop)
+            ->first(fn (Promotion $promotion): bool => hash_equals((string) $promotion->uuid, $identifier));
+    }
+
     /**
      * @return array<int, int>
      */
-    private function productIdsForPromotion(Promotion $promotion, Shop $shop): array
+    public function productIdsForPromotion(Promotion $promotion, Shop $shop): array
     {
+        if ((int) $promotion->shop_id !== (int) $shop->getKey()) {
+            return [];
+        }
+
         $reward = $promotion->rewards->first();
 
         if (! $reward instanceof PromotionReward) {
@@ -161,11 +178,7 @@ class ShopOfferProductService
     {
         return match ($reward->reward_type) {
             PromotionReward::TYPE_BUY_X_GET_Y_FREE,
-            PromotionReward::TYPE_BUY_X_GET_Y_DISCOUNT => [
-                PromotionTarget::ROLE_BUY,
-                PromotionTarget::ROLE_GET,
-                PromotionTarget::ROLE_ELIGIBLE,
-            ],
+            PromotionReward::TYPE_BUY_X_GET_Y_DISCOUNT => [PromotionTarget::ROLE_BUY],
             default => [PromotionTarget::ROLE_ELIGIBLE],
         };
     }

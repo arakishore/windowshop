@@ -226,6 +226,11 @@
                                 @endif
                             </div>
 
+                            @if (!empty($offer['products_url']))
+                                <a href="{{ $offer['products_url'] }}" class="shop-profile-offer-link">
+                                    View Products <i class="icon icon-CaretRightThin"></i>
+                                </a>
+                            @endif
                         </article>
                     @endforeach
                 </div>

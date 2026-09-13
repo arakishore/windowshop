@@ -66,7 +66,7 @@ class ShopPromotionPresenter
     public function currentForShop(Shop $shop, ?int $limit = null): Collection
     {
         return $this->currentPromotionModels($shop, $limit)
-            ->map(fn (Promotion $promotion): array => $this->card($promotion))
+            ->map(fn (Promotion $promotion): array => $this->card($promotion, $shop))
             ->values();
     }
 
@@ -83,7 +83,7 @@ class ShopPromotionPresenter
     /**
      * @return array<string, mixed>
      */
-    private function card(Promotion $promotion): array
+    public function card(Promotion $promotion, ?Shop $shop = null): array
     {
         $display = $this->productPromotions->forPromotion($promotion);
         $coupon = $promotion->activation_type === Promotion::ACTIVATION_COUPON
@@ -91,6 +91,7 @@ class ShopPromotionPresenter
             : null;
 
         return [
+            'identifier' => $promotion->uuid,
             'label' => $display['promotion_label'],
             'icon' => $display['promotion_icon'],
             'name' => $this->displayName($promotion, $coupon),
@@ -98,6 +99,12 @@ class ShopPromotionPresenter
             'scope' => $this->scopeLabel($promotion),
             'activation_type' => $promotion->activation_type,
             'ends_at' => $promotion->ends_at,
+            'products_url' => $shop instanceof Shop
+                ? route('storefront.stores.offers', [
+                    'slug' => $shop->slug,
+                    'promotion' => $promotion->uuid,
+                ])
+                : null,
         ];
     }
 

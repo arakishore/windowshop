@@ -729,6 +729,36 @@
     background: #f9fafb;
 }
 
+.shop-profile-offer-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 14px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-decoration: none;
+}
+
+.shop-profile-offer-link:hover {
+    color: #047857;
+    text-decoration: underline;
+}
+
+.shop-offer-context {
+    display: inline-flex;
+    margin-top: 8px;
+    padding: 5px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    background: #f9fafb;
+    color: #374151;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
 .shop-profile-offer-toggle-wrap {
     display: flex;
     justify-content: center;
