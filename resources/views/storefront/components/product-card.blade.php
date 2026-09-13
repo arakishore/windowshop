@@ -16,9 +16,9 @@
                     </a>
                 </li>
                 <li>
-                    <a href="#quickView" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon">
+                    <a href="{{ $product['url'] ?? '#;' }}" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon">
                         <span class="icon icon-Eye"></span>
-                        <span class="tooltip">Quick view</span>
+                        <span class="tooltip">View</span>
                     </a>
                 </li>
             </ul>

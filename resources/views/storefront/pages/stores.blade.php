@@ -385,6 +385,10 @@
             line-height: 1.3;
         }
 
+        .shop-name a {
+            color: inherit;
+        }
+
         .shop-meta {
             display: flex;
             flex-direction: column;
@@ -614,7 +618,7 @@
                 <div class="tf-grid-layout sm-col-2 xl-col-3 flat-spacing-2 pb-0">
                     @forelse($stores as $store)
                         <div class="shop-card">
-                            <div class="shop-image-wrapper">
+                            <a href="{{ $store['store_url'] }}" class="shop-image-wrapper d-block">
                                 <img class="shop-image" loading="lazy" width="450" height="338"
                                     src="{{ asset($store['image']) }}" alt="{{ $store['name'] }}"
                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -638,10 +642,10 @@
                                         </span>
                                     @endif
                                 </div>
-                            </div>
+                            </a>
 
                             <div class="shop-content">
-                                <h3 class="shop-name">{{ $store['name'] }}</h3>
+                                <h3 class="shop-name"><a href="{{ $store['store_url'] }}">{{ $store['name'] }}</a></h3>
 
                                 <div class="shop-meta">
                                     <div class="meta-row">

@@ -43,7 +43,7 @@
 @endpush
 
 @section('content')
-    <div class="flat-spacing pt-0 pb-0">
+    <div class="flat-spacing pt-0 pb-2">
         <div class="container">
             <div class="category-listing-header product-detail-breadcrumb-header">
                 <div class="category-listing-breadcrumbs pb-3">
@@ -772,9 +772,9 @@
                                     @include('storefront.components.wishlist-button', ['product' => $relatedProduct, 'wishlistedProductIds' => $wishlistedProductIds ?? []])
                                 </li>
                                 <li>
-                                    <a href="#;" class="hover-tooltip tooltip-left box-icon">
+                                    <a href="{{ $relatedProduct['url'] }}" class="hover-tooltip tooltip-left box-icon">
                                         <span class="icon icon-Eye"></span>
-                                        <span class="tooltip">Quick view</span>
+                                        <span class="tooltip">View</span>
                                     </a>
                                 </li>
                             </ul>
@@ -785,11 +785,11 @@
                                     </li>
                                 </ul>
                             @endif
-                            <div class="product-action_bot">
+                            {{-- <div class="product-action_bot">
                                 <a href="#shoppingCart" data-bs-toggle="offcanvas" class="tf-btn btn-white small w-100">
                                     Add to cart
                                 </a>
-                            </div>
+                            </div> --}}
                         </div>
                         <div class="card-product_info">
                             <a href="{{ $relatedProduct['url'] }}"

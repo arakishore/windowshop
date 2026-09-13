@@ -115,7 +115,7 @@
                                         <a href="#shoppingCart" data-bs-toggle="offcanvas"
                                             class="hover-tooltip box-icon">
                                             <span class="icon icon-Handbag"></span>
-                                            <span class="tooltip">Add to Cart</span>
+                                            <span class="tooltip">Add to Cart1</span>
                                         </a>
                                     </li>
                                     <li class="wishlist">
@@ -126,9 +126,9 @@
                                         ])
                                     </li>
                                     <li>
-                                        <a href="#;" class="hover-tooltip box-icon">
+                                        <a href="{{ $product['url'] }}" class="hover-tooltip box-icon">
                                             <span class="icon icon-Eye"></span>
-                                            <span class="tooltip">Quick view</span>
+                                            <span class="tooltip">View</span>
                                         </a>
                                     </li>
                                 </ul>
@@ -158,9 +158,9 @@
                                         @include('storefront.components.wishlist-button', ['product' => $product, 'wishlistedProductIds' => $wishlistedProductIds ?? []])
                                     </li>
                                     <li>
-                                        <a href="#;" class="hover-tooltip tooltip-left box-icon">
+                                        <a href="{{ $product['url'] }}" class="hover-tooltip tooltip-left box-icon">
                                             <span class="icon icon-Eye"></span>
-                                            <span class="tooltip">Quick view</span>
+                                            <span class="tooltip">View</span>
                                         </a>
                                     </li>
                                 </ul>
@@ -170,12 +170,12 @@
                                             {{ $product['badge'] }}</li>
                                     </ul>
                                 @endif
-                                <div class="product-action_bot">
+                                {{-- <div class="product-action_bot">
                                     <a href="#shoppingCart" data-bs-toggle="offcanvas"
                                         class="tf-btn btn-white small w-100">
-                                        Add to cart
+                                        Add to cart4
                                     </a>
-                                </div>
+                                </div> --}}
                             </div>
                             <div class="card-product_info">
                                 <a href="{{ $product['url'] }}"

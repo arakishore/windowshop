@@ -71,6 +71,38 @@
             line-height: 1.4;
         }
 
+        .storefront-filter-field {
+            margin-bottom: 24px;
+        }
+
+        .storefront-filter-label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: var(--main);
+        }
+
+        .storefront-filter-input {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .storefront-shop-filter-list {
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .storefront-shop-filter-empty {
+            display: none;
+            padding: 8px 0;
+            color: var(--text-2, #777);
+            font-size: 13px;
+        }
+
     </style>
 @endpush
 
@@ -99,6 +131,20 @@
                 </p>
             </div>
 
+            @php
+                $sortOptions = [
+                    'popularity' => 'Popularity',
+                    'new-arrivals' => 'New Arrivals',
+                    'top-sellers' => 'Top Sellers',
+                    'price-high-low' => 'Price High to Low',
+                    'price-low-high' => 'Price Low to High',
+                    'discount-high-low' => 'Discount High to Low',
+                    'rating-high-low' => 'Rating High To Low',
+                ];
+                $selectedSort = (string) ($selectedFilters['sort'] ?? 'popularity');
+                $selectedSort = array_key_exists($selectedSort, $sortOptions) ? $selectedSort : 'popularity';
+                $sortBaseQuery = request()->except(['sort', 'page']);
+            @endphp
             <div class="tf-shop-control sticky-top no-offset sticky-top no-offset">
                 <a href="#filterShop" data-bs-toggle="offcanvas" class="tf-btn-filter">
                     <span class="icon icon-filter"></span>
@@ -106,33 +152,23 @@
                 </a>
 
                 <div class="tf-control-sorting">
+                    <span class="text-caption-01 cl-text-2 me-2">Sort By</span>
                     <div class="tf-dropdown-sort" data-bs-toggle="dropdown">
                         <div class="btn-select">
-                            <span class="text-sort-value">Sort</span>
+                            <span class="text-sort-value">{{ $sortOptions[$selectedSort] }}</span>
                             <span class="icon icon-CaretDown"></span>
                         </div>
                         <div class="dropdown-menu">
-                            <div class="select-item active" data-sort-value="popularity">
-                                <span class="text-value-item">Popularity</span>
-                            </div>
-                            <div class="select-item" data-sort-value="new-arrivals">
-                                <span class="text-value-item">New Arrivals</span>
-                            </div>
-                            <div class="select-item" data-sort-value="top-sellers">
-                                <span class="text-value-item">Top Sellers</span>
-                            </div>
-                            <div class="select-item" data-sort-value="price-high-low">
-                                <span class="text-value-item">Price High to Low</span>
-                            </div>
-                            <div class="select-item" data-sort-value="price-low-high">
-                                <span class="text-value-item">Price Low to High</span>
-                            </div>
-                            <div class="select-item" data-sort-value="discount-high-low">
-                                <span class="text-value-item">Discount High to Low</span>
-                            </div>
-                            <div class="select-item" data-sort-value="rating-high-low">
-                                <span class="text-value-item">Rating High To Low</span>
-                            </div>
+                            @foreach ($sortOptions as $sortValue => $sortLabel)
+                                <a
+                                    class="select-item {{ $selectedSort === $sortValue ? 'active' : '' }}"
+                                    data-sort-value="{{ $sortValue }}"
+                                    data-server-sort-link
+                                    href="{{ url()->current().'?'.http_build_query(array_merge($sortBaseQuery, ['sort' => $sortValue])) }}"
+                                >
+                                    <span class="text-value-item">{{ $sortLabel }}</span>
+                                </a>
+                            @endforeach
                         </div>
                     </div>
                 </div>
@@ -155,9 +191,9 @@
                                         @include('storefront.components.wishlist-button', ['product' => $product, 'wishlistedProductIds' => $wishlistedProductIds ?? []])
                                     </li>
                                     <li>
-                                        <a href="#;" class="hover-tooltip tooltip-left box-icon">
+                                        <a href="{{ $product['url'] }}" class="hover-tooltip tooltip-left box-icon">
                                             <span class="icon icon-Eye"></span>
-                                            <span class="tooltip">Quick view</span>
+                                            <span class="tooltip">View</span>
                                         </a>
                                     </li>
                                 </ul>
@@ -167,12 +203,12 @@
                                             {{ $product['badge'] }}</li>
                                     </ul>
                                 @endif
-                                <div class="product-action_bot">
+                                {{-- <div class="product-action_bot">
                                     <a href="#shoppingCart" data-bs-toggle="offcanvas"
                                         class="tf-btn btn-white small w-100">
-                                        Add to cart
+                                        Add to cart2
                                     </a>
-                                </div>
+                                </div> --}}
                             </div>
                             <div class="card-product_info">
                                 <a href="{{ $product['url'] }}"
@@ -202,6 +238,7 @@
 
     <div class="offcanvas offcanvas-start canvas-filter" id="filterShop">
         <form class="canvas-wrapper" method="GET" action="{{ url()->current() }}">
+            <input type="hidden" name="sort" value="{{ $selectedSort }}">
             @php
                 $priceOptions = [
                     '' => 'Min',
@@ -222,6 +259,8 @@
                     '10000' => '&#8377;10000',
                 ];
                 $selectedDiscounts = collect($selectedFilters['discount_min'] ?? [])->map(fn ($value) => (string) $value);
+                $selectedShopIds = collect($selectedFilters['shops'] ?? [])->map(fn ($value) => (string) $value);
+                $productSearch = (string) ($selectedFilters['search'] ?? '');
             @endphp
             <div class="canvas-header">
                 <div class="h5 title">Filters - {{ $category->parent?->name ?? $category->name }}</div>
@@ -232,6 +271,59 @@
                     <button type="button" class="link text-caption-01 fw-semibold storefront-filter-expand-all">Expand all</button>
                     <button type="button" class="link text-caption-01 fw-semibold storefront-filter-collapse-all">Collapse all</button>
                 </div>
+                <div class="storefront-filter-field">
+                    <label for="product-filter-search" class="storefront-filter-label">Search Products</label>
+                    <input
+                        id="product-filter-search"
+                        class="storefront-filter-input"
+                        type="search"
+                        name="search"
+                        value="{{ $productSearch }}"
+                        placeholder="Search by product name"
+                        autocomplete="off"
+                    >
+                </div>
+                @if ($shopFilterOptions->isNotEmpty())
+                    <div class="widget-facet">
+                        <div class="facet-title" data-bs-target="#filter-shop-options" role="button" data-bs-toggle="collapse"
+                            aria-expanded="true" aria-controls="filter-shop-options">
+                            <h6>Shop</h6>
+                            <span class="icon icon-CaretDown"></span>
+                        </div>
+                        <div id="filter-shop-options" class="collapse show storefront-filter-collapse">
+                            <div class="collapse-body">
+                                <input
+                                    class="storefront-filter-input mb-12"
+                                    type="search"
+                                    placeholder="Search shops"
+                                    autocomplete="off"
+                                    data-shop-option-search
+                                >
+                                <ul class="filter-group-check group-category storefront-shop-filter-list">
+                                    @foreach ($shopFilterOptions as $shopOption)
+                                        @php
+                                            $shopOptionId = (string) $shopOption->getKey();
+                                        @endphp
+                                        <li class="list-item" data-shop-option data-shop-name="{{ \Illuminate\Support\Str::lower($shopOption->name) }}">
+                                            <input
+                                                id="shop-filter-{{ $shopOption->getKey() }}"
+                                                class="tf-check"
+                                                type="checkbox"
+                                                name="shops[]"
+                                                value="{{ $shopOption->getKey() }}"
+                                                @checked($selectedShopIds->contains($shopOptionId))
+                                            >
+                                            <label for="shop-filter-{{ $shopOption->getKey() }}" class="label">
+                                                {{ $shopOption->name }}
+                                            </label>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                                <div class="storefront-shop-filter-empty" data-shop-option-empty>No matching shops.</div>
+                            </div>
+                        </div>
+                    </div>
+                @endif
                 <div class="widget-facet">
                     <div class="facet-title" data-bs-target="#filter-category" role="button" data-bs-toggle="collapse"
                         aria-expanded="false" aria-controls="filter-category">
@@ -354,6 +446,14 @@
 @push('scripts')
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('[data-server-sort-link]').forEach((link) => {
+                link.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    window.location.assign(link.href);
+                }, true);
+            });
+
             const filterDrawer = document.getElementById('filterShop');
 
             if (!filterDrawer || typeof bootstrap === 'undefined') {
@@ -370,6 +470,26 @@
                 filterDrawer.querySelectorAll('.storefront-filter-collapse').forEach((element) => {
                     bootstrap.Collapse.getOrCreateInstance(element, { toggle: false }).hide();
                 });
+            });
+
+            const shopSearch = filterDrawer.querySelector('[data-shop-option-search]');
+
+            shopSearch?.addEventListener('input', () => {
+                const term = shopSearch.value.trim().toLowerCase();
+                let visibleCount = 0;
+
+                filterDrawer.querySelectorAll('[data-shop-option]').forEach((option) => {
+                    const isVisible = (option.dataset.shopName || '').includes(term);
+
+                    option.style.display = isVisible ? '' : 'none';
+                    visibleCount += isVisible ? 1 : 0;
+                });
+
+                const emptyState = filterDrawer.querySelector('[data-shop-option-empty]');
+
+                if (emptyState) {
+                    emptyState.style.display = visibleCount === 0 ? 'block' : 'none';
+                }
             });
         });
     </script>

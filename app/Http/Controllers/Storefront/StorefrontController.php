@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Enums\BannerPosition;
 use App\Models\PostalCode;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -185,7 +186,8 @@ class StorefrontController extends Controller
     private function storeCardData(Shop $shop): array
     {
         $imagePath = $shop->banner_path ?: $shop->logo_path;
-        $storeUrl = route('storefront.store.show', $shop->slug);
+        $storeUrl = route('storefront.stores.show', $shop->slug);
+        $storefrontUrl = route('storefront.store.show', $shop->slug);
         $fullAddress = collect([
             $shop->address_line_1,
             $shop->address_line_2,
@@ -220,7 +222,7 @@ class StorefrontController extends Controller
             'image' => $imagePath ? 'storage/'.$imagePath : 'assets/storefront/images/no-image-icon.png',
             'logo' => $shop->logo_path ? 'storage/'.$shop->logo_path : null,
             'initials' => $this->storeInitials($shop->name),
-            'website_url' => $shop->website_url ?: $storeUrl,
+            'website_url' => $shop->website_url ?: $storefrontUrl,
             'store_url' => $storeUrl,
         ];
     }
@@ -632,12 +634,7 @@ class StorefrontController extends Controller
 
     private function categoryListingView(Request $request, ProductCategory $category): View
     {
-        $selectedFilters = [
-            'attributes' => $request->array('attributes'),
-            'price_min' => $request->input('price_min'),
-            'price_max' => $request->input('price_max'),
-            'discount_min' => $request->array('discount_min'),
-        ];
+        $selectedFilters = $this->selectedProductFilters($request);
 
         return view('storefront.pages.category-products', [
             'category' => $category,
@@ -646,11 +643,27 @@ class StorefrontController extends Controller
             'products' => $products = $this->productListings->categoryProducts($category, $selectedFilters),
             'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
             'attributeFilters' => $this->productListings->categoryAttributeFilters($category),
+            'shopFilterOptions' => $this->productListings->categoryShopFilters($category),
             'storefrontUrls' => $this->urls,
             'selectedFilters' => $selectedFilters,
             'selectedAttributeFilters' => $selectedFilters['attributes'],
+            'selectedCategoryFilters' => $selectedFilters['categories'],
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
+    }
+
+    private function selectedProductFilters(Request $request): array
+    {
+        return [
+            'search' => $request->input('search'),
+            'shops' => $request->array('shops'),
+            'categories' => $request->array('categories'),
+            'sort' => $request->input('sort'),
+            'attributes' => $request->array('attributes'),
+            'price_min' => $request->input('price_min'),
+            'price_max' => $request->input('price_max'),
+            'discount_min' => $request->array('discount_min'),
+        ];
     }
 
     /**
@@ -712,15 +725,48 @@ class StorefrontController extends Controller
             ->all();
     }
 
-    public function store(string $slug): View
+    public function store(Request $request, string $slug): View
     {
-        $shop = $this->activeShopBySlug($slug);
+        return $this->shopPageView($request, $slug, true);
+    }
 
-        return view('storefront.pages.placeholder', [
-            'pageTitle' => $shop->name,
-            'pageDescription' => 'Merchant storefront content is intentionally deferred.',
-            'storefrontShop' => $shop,
-            'storefrontNavigationCategories' => $this->navigation->getMerchantCategories($shop),
+    public function storeProfile(Request $request, string $slug): View
+    {
+        return $this->shopPageView($request, $slug, false);
+    }
+
+    private function shopPageView(Request $request, string $slug, bool $merchantStorefront): View
+    {
+        $shop = $this->activeShopBySlug($slug)->load([
+            'rootProductCategory:id,name,slug',
+            'audiences:id,name,slug',
+            'city:id,name',
+            'state:id,name',
+            'country:id,name',
+            'merchant:id,status',
+        ]);
+        $selectedFilters = $this->selectedProductFilters($request);
+        $products = $this->productListings->shopProducts($shop, $selectedFilters);
+        $shopProfile = $this->shopProfileData($shop);
+        $shopProfile['product_count'] = $products->total();
+
+        return view('storefront.pages.store-profile', [
+            'shop' => $shop,
+            'shopProfile' => $shopProfile,
+            'products' => $products,
+            'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
+            'heroBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_HERO),
+            'middleBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_MIDDLE),
+            'categoryFilterOptions' => $this->productListings->shopCategoryFilters($shop),
+            'attributeFilters' => $this->productListings->shopAttributeFilters($shop),
+            'selectedFilters' => $selectedFilters,
+            'selectedAttributeFilters' => $selectedFilters['attributes'],
+            'selectedCategoryFilters' => $selectedFilters['categories'],
+            'showShopFilter' => false,
+            'storefrontShop' => $merchantStorefront ? $shop : null,
+            'storefrontNavigationCategories' => $merchantStorefront
+                ? $this->navigation->getMerchantCategories($shop)
+                : $this->navigation->getMarketplaceCategories(),
         ]);
     }
 
@@ -745,7 +791,59 @@ class StorefrontController extends Controller
         return Shop::query()
             ->where('slug', $slug)
             ->where('status', 'active')
+            ->whereHas('merchant', fn ($query) => $query->where('status', 'active'))
             ->firstOrFail();
+    }
+
+    private function shopProfileData(Shop $shop): array
+    {
+        $address = $this->shopAddress($shop);
+
+        return [
+            'name' => $shop->name,
+            'initials' => $this->storeInitials($shop->name),
+            'logo' => $shop->logo_path ? 'storage/'.$shop->logo_path : null,
+            'cover' => $shop->banner_path ? 'storage/'.$shop->banner_path : null,
+            'shop_type' => $shop->rootProductCategory?->name,
+            'audiences' => $shop->audiences->pluck('name')->values()->all(),
+            'address' => $address,
+            'maps_url' => $this->shopMapsUrl($shop, $address),
+            'description' => $shop->description ?: $shop->short_description,
+            'website_url' => route('storefront.store.show', $shop->slug),
+            'product_count' => 0,
+        ];
+    }
+
+    private function shopAddress(Shop $shop): string
+    {
+        return collect([
+            $shop->address_line_1,
+            $shop->address_line_2,
+            $shop->landmark,
+            $shop->city?->name,
+            $shop->pincode,
+        ])->filter()->implode(', ');
+    }
+
+    private function shopMapsUrl(Shop $shop, string $address): ?string
+    {
+        $latitude = is_numeric($shop->latitude) ? (float) $shop->latitude : null;
+        $longitude = is_numeric($shop->longitude) ? (float) $shop->longitude : null;
+
+        if ($latitude !== null && $longitude !== null) {
+            return "https://www.google.com/maps?q={$latitude},{$longitude}";
+        }
+
+        $searchQuery = collect([
+            $shop->name,
+            $address,
+            $shop->state?->name,
+            $shop->country?->name,
+        ])->filter()->implode(', ');
+
+        return $searchQuery !== ''
+            ? 'https://www.google.com/maps/search/?api=1&query='.urlencode($searchQuery)
+            : null;
     }
 
     private function homepageCategoryCards(): Collection
