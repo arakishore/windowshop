@@ -19,6 +19,7 @@ use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductLocationSorter;
 use App\Services\Storefront\ProductListingService;
 use App\Services\Storefront\StorefrontCustomerContext;
+use App\Services\Storefront\StorefrontCountryResolver;
 use App\Services\Storefront\StorefrontUrlService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -369,7 +370,7 @@ class StorefrontController extends Controller
         ]);
     }
 
-    public function register(Request $request, CheckoutFlowService $checkout, StorefrontCustomerContext $customerContext): View|RedirectResponse
+    public function register(Request $request, CheckoutFlowService $checkout, StorefrontCustomerContext $customerContext, StorefrontCountryResolver $countries): View|RedirectResponse
     {
         $checkoutMode = $request->query('from') === 'checkout' && $checkout->hasCartItems($request);
 
@@ -385,6 +386,7 @@ class StorefrontController extends Controller
 
         return view('storefront.pages.customer-register', [
             'checkoutMode' => $checkoutMode,
+            'defaultCountryCode' => $countries->defaultCountryCode(),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }

@@ -4,6 +4,7 @@
 @section('meta_description', 'Static customer registration page for WindowShop shoppers.')
 
 @php($checkoutMode = $checkoutMode ?? false)
+@php($defaultCountryCode = strtoupper((string) ($defaultCountryCode ?? config('location.default_country_code', 'IN'))))
 
 @push('styles')
     <style>
@@ -226,13 +227,13 @@
                     <h1>Create Your Account</h1>
                     <p class="auth-subtitle">Welcome back! Please enter your details.</p>
 
-                    <form action="{{ route('storefront.register.store') }}" method="POST" class="form-get" data-customer-register-form novalidate>
+                    <form action="{{ route('storefront.register.store') }}" method="POST" class="form-get" data-customer-register-form data-default-country="{{ $defaultCountryCode }}" novalidate>
                         @csrf
                         <h6 class="mb-16">Your Personal Details</h6>
                         <div class="mb-16">
-                            <label for="customer_first_name" class="form-label">First Name</label>
+                            <label for="customer_first_name" class="form-label">First Name <span class="text-primary">*</span></label>
                             <fieldset>
-                                <input id="customer_first_name" name="name" type="text" value="{{ old('name') }}" data-register-name>
+                                <input id="customer_first_name" name="name" type="text" value="{{ old('name') }}" data-register-name required>
                             </fieldset>
                             <p class="text-caption-01 customer-register-field-error" data-field-error="name"></p>
                             @error('name')
@@ -249,9 +250,9 @@
                             @enderror
                         </div>
                         <div class="mb-16">
-                            <label for="customer_mobile" class="form-label">Phone Number</label>
+                            <label for="customer_mobile" class="form-label">Mobile Number <span class="text-primary">*</span></label>
                             <fieldset>
-                                <input id="customer_mobile" name="mobile" type="tel" value="{{ old('mobile') }}" data-register-mobile>
+                                <input id="customer_mobile" name="mobile" type="tel" value="{{ old('mobile') }}" maxlength="{{ $defaultCountryCode === 'IN' ? 10 : 20 }}" inputmode="{{ $defaultCountryCode === 'IN' ? 'numeric' : 'tel' }}" data-register-mobile required>
                             </fieldset>
                             <p class="text-caption-01 customer-register-field-error" data-field-error="mobile"></p>
                             @error('mobile')
@@ -259,9 +260,9 @@
                             @enderror
                         </div>
                         <div class="mb-16">
-                            <label for="customer_register_email" class="form-label">E-Mail</label>
+                            <label for="customer_register_email" class="form-label">E-Mail <span class="text-primary">*</span></label>
                             <fieldset>
-                                <input id="customer_register_email" name="email" type="email" value="{{ old('email') }}" data-register-email>
+                                <input id="customer_register_email" name="email" type="email" value="{{ old('email') }}" data-register-email required>
                             </fieldset>
                             <p class="text-caption-01 customer-register-field-error" data-field-error="email"></p>
                             @error('email')
@@ -271,9 +272,9 @@
 
                         <h6 class="mb-16 mt-24">Your Password</h6>
                         <div class="mb-16">
-                            <label for="customer_register_password" class="form-label">Password</label>
+                            <label for="customer_register_password" class="form-label">Password <span class="text-primary">*</span></label>
                             <fieldset>
-                                <input id="customer_register_password" name="password" type="password" data-register-password>
+                                <input id="customer_register_password" name="password" type="password" data-register-password required>
                             </fieldset>
                             <p class="text-caption-01 customer-register-field-error" data-field-error="password"></p>
                             @error('password')
@@ -281,19 +282,20 @@
                             @enderror
                         </div>
                         <div class="mb-16">
-                            <label for="customer_confirm_password" class="form-label">Confirm password: <span class="text-primary">*</span></label>
+                            <label for="customer_confirm_password" class="form-label">Confirm Password <span class="text-primary">*</span></label>
                             <fieldset>
-                                <input id="customer_confirm_password" name="password_confirmation" type="password" data-register-password-confirmation>
+                                <input id="customer_confirm_password" name="password_confirmation" type="password" data-register-password-confirmation required>
                             </fieldset>
                             <p class="text-caption-01 customer-register-field-error" data-field-error="password_confirmation"></p>
                         </div>
 
                         <label class="checkbox-wrap mb-0">
-                            <input type="checkbox" name="terms" value="1" {{ old('terms') ? 'checked' : '' }} data-register-terms>
+                            <input type="checkbox" name="terms" value="1" {{ old('terms') ? 'checked' : '' }} data-register-terms required>
                             <span class="checkbox-box"></span>
                             <span class="text-caption-01">
                                 I accept the
-                                <a href="{{ route('storefront.terms') }}" target="_blank" rel="noopener noreferrer" class="customer-auth-link">Terms &amp; Conditions</a>.
+                                <a href="{{ route('storefront.terms') }}" target="_blank" rel="noopener noreferrer" class="customer-auth-link">Terms &amp; Conditions</a>
+                                <span class="text-primary">*</span>.
                             </span>
                         </label>
                         <p class="text-caption-01 customer-register-field-error" data-field-error="terms"></p>
@@ -386,7 +388,12 @@
                 terms: form.querySelector('[data-register-terms]'),
             };
             const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            const mobilePattern = /^[0-9+\-\s()]{7,20}$/;
+            const defaultCountry = (form.dataset.defaultCountry || 'IN').toUpperCase();
+            const mobilePattern = defaultCountry === 'IN' ? /^[0-9]{10}$/ : null;
+            const mobileFormatMessage = defaultCountry === 'IN'
+                ? 'Please enter a 10-digit mobile number without country code.'
+                : 'Please enter a valid mobile number.';
+            let hasSubmitted = false;
 
             const setError = (input, field, message = '') => {
                 const error = form.querySelector(`[data-field-error="${field}"]`);
@@ -398,59 +405,100 @@
                 }
             };
 
+            const validateField = (field) => {
+                if (field === 'name') {
+                    if (!fields.name.value.trim()) {
+                        setError(fields.name, 'name', 'Please enter your name.');
+                        return fields.name;
+                    }
+
+                    setError(fields.name, 'name');
+                    return null;
+                }
+
+                if (field === 'mobile') {
+                    if (!fields.mobile.value.trim()) {
+                        setError(fields.mobile, 'mobile', 'Please enter your mobile number.');
+                        return fields.mobile;
+                    }
+
+                    if (mobilePattern && !mobilePattern.test(fields.mobile.value.trim())) {
+                        setError(fields.mobile, 'mobile', mobileFormatMessage);
+                        return fields.mobile;
+                    }
+
+                    setError(fields.mobile, 'mobile');
+                    return null;
+                }
+
+                if (field === 'email') {
+                    if (!fields.email.value.trim()) {
+                        setError(fields.email, 'email', 'Please enter your email address.');
+                        return fields.email;
+                    }
+
+                    if (!emailPattern.test(fields.email.value.trim())) {
+                        setError(fields.email, 'email', 'Please enter a valid email address.');
+                        return fields.email;
+                    }
+
+                    setError(fields.email, 'email');
+                    return null;
+                }
+
+                if (field === 'password') {
+                    if (!fields.password.value) {
+                        setError(fields.password, 'password', 'Please enter a password.');
+                        return fields.password;
+                    }
+
+                    if (fields.password.value.length < 8) {
+                        setError(fields.password, 'password', 'Password must be at least 8 characters.');
+                        return fields.password;
+                    }
+
+                    setError(fields.password, 'password');
+                    if (fields.passwordConfirmation.value) {
+                        validateField('passwordConfirmation');
+                    }
+
+                    return null;
+                }
+
+                if (field === 'passwordConfirmation') {
+                    if (!fields.passwordConfirmation.value) {
+                        setError(fields.passwordConfirmation, 'password_confirmation', 'Please confirm your password.');
+                        return fields.passwordConfirmation;
+                    }
+
+                    if (fields.password.value !== fields.passwordConfirmation.value) {
+                        setError(fields.passwordConfirmation, 'password_confirmation', 'Passwords do not match.');
+                        return fields.passwordConfirmation;
+                    }
+
+                    setError(fields.passwordConfirmation, 'password_confirmation');
+                    return null;
+                }
+
+                if (field === 'terms') {
+                    if (!fields.terms.checked) {
+                        setError(fields.terms, 'terms', 'Please accept the terms and conditions.');
+                        return fields.terms;
+                    }
+
+                    setError(fields.terms, 'terms');
+                    return null;
+                }
+
+                return null;
+            };
+
             const validate = (shouldFocus = false) => {
                 let firstInvalid = null;
 
-                if (!fields.name.value.trim()) {
-                    setError(fields.name, 'name', 'Please enter your name.');
-                    firstInvalid = firstInvalid || fields.name;
-                } else {
-                    setError(fields.name, 'name');
-                }
-
-                if (fields.mobile.value.trim() && !mobilePattern.test(fields.mobile.value.trim())) {
-                    setError(fields.mobile, 'mobile', 'Please enter a valid phone number.');
-                    firstInvalid = firstInvalid || fields.mobile;
-                } else {
-                    setError(fields.mobile, 'mobile');
-                }
-
-                if (!fields.email.value.trim()) {
-                    setError(fields.email, 'email', 'Please enter your email address.');
-                    firstInvalid = firstInvalid || fields.email;
-                } else if (!emailPattern.test(fields.email.value.trim())) {
-                    setError(fields.email, 'email', 'Please enter a valid email address.');
-                    firstInvalid = firstInvalid || fields.email;
-                } else {
-                    setError(fields.email, 'email');
-                }
-
-                if (!fields.password.value) {
-                    setError(fields.password, 'password', 'Please enter a password.');
-                    firstInvalid = firstInvalid || fields.password;
-                } else if (fields.password.value.length < 8) {
-                    setError(fields.password, 'password', 'Password must be at least 8 characters.');
-                    firstInvalid = firstInvalid || fields.password;
-                } else {
-                    setError(fields.password, 'password');
-                }
-
-                if (!fields.passwordConfirmation.value) {
-                    setError(fields.passwordConfirmation, 'password_confirmation', 'Please confirm your password.');
-                    firstInvalid = firstInvalid || fields.passwordConfirmation;
-                } else if (fields.password.value !== fields.passwordConfirmation.value) {
-                    setError(fields.passwordConfirmation, 'password_confirmation', 'Passwords do not match.');
-                    firstInvalid = firstInvalid || fields.passwordConfirmation;
-                } else {
-                    setError(fields.passwordConfirmation, 'password_confirmation');
-                }
-
-                if (!fields.terms.checked) {
-                    setError(fields.terms, 'terms', 'Please accept the terms and conditions.');
-                    firstInvalid = firstInvalid || fields.terms;
-                } else {
-                    setError(fields.terms, 'terms');
-                }
+                ['name', 'mobile', 'email', 'password', 'passwordConfirmation', 'terms'].forEach((field) => {
+                    firstInvalid = firstInvalid || validateField(field);
+                });
 
                 if (shouldFocus) {
                     firstInvalid?.focus();
@@ -459,11 +507,17 @@
                 return firstInvalid === null;
             };
 
-            Object.values(fields).forEach((input) => {
-                input?.addEventListener(input.type === 'checkbox' ? 'change' : 'input', () => validate(false));
+            Object.entries(fields).forEach(([field, input]) => {
+                input?.addEventListener(input.type === 'checkbox' ? 'change' : 'input', () => {
+                    input.dataset.wasTouched = '1';
+                    if (hasSubmitted || input.value || input.type === 'checkbox') {
+                        validateField(field);
+                    }
+                });
             });
 
             form.addEventListener('submit', (event) => {
+                hasSubmitted = true;
                 if (!validate(true)) {
                     event.preventDefault();
                 }

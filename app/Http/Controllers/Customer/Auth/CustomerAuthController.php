@@ -10,6 +10,7 @@ use App\Services\Cart\CartResolver;
 use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Customer\CustomerIdentityResolver;
 use App\Services\Storefront\StorefrontCustomerContext;
+use App\Services\Storefront\StorefrontCountryResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,6 +25,7 @@ class CustomerAuthController extends Controller
         private readonly CartMergeService $cartMerge,
         private readonly CheckoutFlowService $checkout,
         private readonly CustomerIdentityResolver $customers,
+        private readonly StorefrontCountryResolver $countries,
     ) {
     }
 
@@ -71,13 +73,25 @@ class CustomerAuthController extends Controller
 
     public function register(Request $request): RedirectResponse
     {
+        $defaultCountry = $this->countries->defaultCountry();
+        $mobileRules = ['required', 'unique:users,mobile'];
+
+        if ($this->countries->isIndia($defaultCountry)) {
+            $mobileRules[] = 'digits:10';
+        } else {
+            $mobileRules[] = 'string';
+            $mobileRules[] = 'max:20';
+        }
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'mobile' => ['nullable', 'string', 'max:20', 'unique:users,mobile'],
+            'mobile' => $mobileRules,
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'terms' => ['accepted'],
+        ], [
+            'mobile.digits' => 'Please enter a 10-digit mobile number without country code.',
         ]);
 
         $guestToken = $request->session()->get(CartResolver::SESSION_TOKEN_KEY);
