@@ -47,6 +47,7 @@ Route::post('/location/postal-code', [CustomerLocationController::class, 'store'
 Route::post('/location/detect', [CustomerLocationController::class, 'detect'])->name('storefront.location.detect');
 Route::get('/about-us', [StorefrontController::class, 'about'])->name('storefront.about');
 Route::get('/stores', [StorefrontController::class, 'stores'])->name('storefront.stores');
+Route::get('/stores/{slug}/offers', [StorefrontController::class, 'storeOfferProducts'])->name('storefront.stores.offers');
 Route::get('/stores/{slug}', [StorefrontController::class, 'storeProfile'])->name('storefront.stores.show');
 Route::get('/testimonials', [StorefrontController::class, 'testimonials'])->name('storefront.testimonials');
 Route::get('/faq', [StorefrontController::class, 'faq'])->name('storefront.faq');

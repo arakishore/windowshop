@@ -333,6 +333,25 @@
             overflow: hidden;
         }
 
+        .shop-type-badge {
+            position: absolute;
+            right: 14px;
+            top: 14px;
+            max-width: calc(100% - 92px);
+            padding: 6px 10px;
+            border: 1px solid rgba(255, 255, 255, .72);
+            border-radius: 999px;
+            background: rgba(17, 24, 39, .72);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            backdrop-filter: blur(8px);
+        }
+
         .shop-logo img {
             width: 100%;
             height: 100%;
@@ -372,7 +391,7 @@
         }
 
         .shop-content {
-            padding: 18px 20px 22px;
+            padding: 18px 20px 20px;
         }
 
         .shop-name {
@@ -390,7 +409,7 @@
         .shop-meta {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
             margin-bottom: 18px;
         }
 
@@ -410,67 +429,28 @@
             flex-shrink: 0;
         }
 
-        .meta-label {
-            font-weight: 500;
-            color: #555;
-            white-space: nowrap;
-        }
-
         .meta-value {
             color: #333;
             word-break: break-word;
         }
 
-        .website-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            min-width: 0;
-        }
-
-        .website-url {
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            color: #333;
-            font-size: 14px;
-        }
-
-        .copy-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 4px;
-            color: #666;
-            font-size: 15px;
-            border-radius: 4px;
-            flex-shrink: 0;
-            transition: color 0.15s, background 0.15s;
-        }
-
-        .copy-btn:hover {
-            color: #111;
-            background: #f0f0f0;
-        }
-
-        .open-store-link {
+        .shop-card-cta {
             display: inline-flex;
             align-items: center;
             gap: 6px;
             font-size: 14px;
-            font-weight: 500;
-            color: #1a73e8;
+            font-weight: 700;
+            color: #111827;
             text-decoration: none;
             transition: color 0.15s;
         }
 
-        .open-store-link:hover {
-            color: #0d47a1;
+        .shop-card-cta:hover {
+            color: #047857;
             text-decoration: underline;
         }
 
-        .open-store-link i {
+        .shop-card-cta i {
             font-size: 13px;
         }
 
@@ -613,92 +593,7 @@
             @if ($stores->count())
                 <div class="tf-grid-layout sm-col-2 xl-col-3 flat-spacing-2 pb-0">
                     @forelse($stores as $store)
-                        <div class="shop-card">
-                            <a href="{{ $store['store_url'] }}" class="shop-image-wrapper d-block">
-                                <img class="shop-image" loading="lazy" width="450" height="338"
-                                    src="{{ asset($store['image']) }}" alt="{{ $store['name'] }}"
-                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                <div class="no-image" style="display:none;">No Image</div>
-
-                                <div class="shop-logo {{ empty($store['logo']) ? 'shop-logo-initial' : '' }}">
-                                    @if (!empty($store['logo']))
-                                        <img loading="lazy" width="56" height="56" src="{{ asset($store['logo']) }}"
-                                            alt="{{ $store['name'] }} logo">
-                                    @else
-                                        <span class="shop-initial">
-                                            @php
-                                                $initials = collect(preg_split('/\s+/', trim($store['name'])))
-                                                    ->filter()
-                                                    ->map(fn($word) => mb_strtoupper(mb_substr($word, 0, 1)))
-                                                    ->take(3)
-                                                    ->implode('');
-                                            @endphp
-
-                                            {{ $initials }}
-                                        </span>
-                                    @endif
-                                </div>
-                            </a>
-
-                            <div class="shop-content">
-                                <h3 class="shop-name"><a href="{{ $store['store_url'] }}">{{ $store['name'] }}</a></h3>
-
-                                <div class="shop-meta">
-                                    <div class="meta-row">
-                                        <i class="icon icon-Tag"></i>
-                                        <span><span class="meta-label">Shop Type:</span> <span
-                                                class="meta-value">{{ $store['shop_type'] ?: 'General Store' }}</span></span>
-                                    </div>
-
-                                    @if (!empty($store['audiences']))
-                                        <div class="meta-row">
-                                            <i class="icon icon-Users"></i>
-                                            <span><span class="meta-label">Audience:</span> <span
-                                                    class="meta-value">{{ implode(', ', $store['audiences']) }}</span></span>
-                                        </div>
-                                    @endif
-
-                                    <div class="meta-row">
-                                        <i class="icon icon-MapPin"></i>
-                                        <span>
-                                            <span class="meta-label">Address:</span>
-                                            <span class="meta-value">
-                                                @if (!empty($store['maps_url']))
-                                                    <a href="{{ $store['maps_url'] }}" target="_blank"
-                                                        rel="noopener noreferrer" class="link"
-                                                        title="Open address in Google Maps">
-                                                        {{ $store['address'] ?: 'Address unavailable' }}
-                                                        <i class="icon icon-ArrowUpRight1"></i>
-                                                    </a>
-                                                @else
-                                                    <span>{{ $store['address'] ?: 'Address unavailable' }}</span>
-                                                @endif
-                                            </span>
-                                        </span>
-                                    </div>
-
-                                    <div class="meta-row">
-                                        <i class="icon icon-Globe"></i>
-                                        <div class="website-row">
-                                            <span class="meta-label">Website URL:</span>
-                                            <span class="website-url" title="{{ $store['website_url'] }}">
-                                                {{ $store['website_url'] }}</span>
-                                            <button class="copy-btn" type="button" data-copy-url="{{ $store['website_url'] }}"
-                                                title="Copy URL">
-                                                <i class="icon icon-CopySimple"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <a href="{{ $store['store_url'] }}" class="open-store-link" target="_blank"
-                                    rel="noopener">
-                                    Open Store Website <i class="icon icon-ArrowUpRight1"></i>
-                                </a>
-                            </div>
-                        </div>
-
-
+                        @include('storefront.components.shop-card', ['store' => $store])
                     @empty
                         <p class="text-body-1 cl-text-2">No stores are currently available.</p>
                     @endforelse

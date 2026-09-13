@@ -18,6 +18,7 @@ use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductLocationSorter;
 use App\Services\Storefront\ProductListingService;
+use App\Services\Storefront\ShopOfferProductService;
 use App\Services\Storefront\ShopPromotionPresenter;
 use App\Services\Storefront\StorefrontCustomerContext;
 use App\Services\Storefront\StorefrontCountryResolver;
@@ -36,6 +37,7 @@ class StorefrontController extends Controller
         private readonly BannerService $banners,
         private readonly ProductListingService $productListings,
         private readonly ShopPromotionPresenter $shopPromotions,
+        private readonly ShopOfferProductService $offerProducts,
         private readonly StorefrontCustomerContext $customerContext,
         private readonly StorefrontUrlService $urls,
     ) {}
@@ -190,13 +192,16 @@ class StorefrontController extends Controller
     {
         $imagePath = $shop->banner_path ?: $shop->logo_path;
         $storeUrl = route('storefront.stores.show', $shop->slug);
-        $storefrontUrl = route('storefront.store.show', $shop->slug);
         $fullAddress = collect([
             $shop->address_line_1,
             $shop->address_line_2,
             $shop->landmark,
             $shop->city?->name,
             $shop->pincode,
+        ])->filter()->implode(', ');
+        $locationLabel = collect([
+            $shop->landmark,
+            $shop->city?->name,
         ])->filter()->implode(', ');
 
         $latitude = is_numeric($shop->latitude) ? (float) $shop->latitude : null;
@@ -219,15 +224,72 @@ class StorefrontController extends Controller
         return [
             'name' => $shop->name,
             'address' => $fullAddress ?: null,
+            'location_label' => $locationLabel ?: ($fullAddress ?: null),
             'maps_url' => $mapsUrl,
             'shop_type' => $shop->rootProductCategory?->name,
             'audiences' => $shop->audiences->pluck('name')->values()->all(),
             'image' => $imagePath ? 'storage/'.$imagePath : 'assets/storefront/images/no-image-icon.png',
             'logo' => $shop->logo_path ? 'storage/'.$shop->logo_path : null,
             'initials' => $this->storeInitials($shop->name),
-            'website_url' => $shop->website_url ?: $storefrontUrl,
             'store_url' => $storeUrl,
         ];
+    }
+
+    private function similarShops(Shop $shop, int $limit = 4): Collection
+    {
+        $categoryId = $shop->root_product_category_id ? (int) $shop->root_product_category_id : null;
+        $audienceIds = $shop->audiences
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->filter()
+            ->values()
+            ->all();
+        $matches = collect();
+
+        $addMatches = function ($query) use (&$matches, $limit): void {
+            if ($matches->count() >= $limit) {
+                return;
+            }
+
+            $existingIds = $matches->pluck('id')->all();
+
+            if ($existingIds !== []) {
+                $query->whereNotIn('id', $existingIds);
+            }
+
+            $shops = $query
+                ->orderBy('name')
+                ->limit($limit - $matches->count())
+                ->get();
+
+            $matches = $matches->concat($shops);
+        };
+
+        $baseQuery = fn () => $this->storeDiscoveryBaseQuery()
+            ->whereKeyNot($shop->getKey());
+
+        if ($categoryId !== null && $audienceIds !== []) {
+            $addMatches($baseQuery()
+                ->where('root_product_category_id', $categoryId)
+                ->whereHas('audiences', fn ($query) => $query->whereIn('shop_audiences.id', $audienceIds)));
+        }
+
+        if ($categoryId !== null) {
+            $addMatches($baseQuery()
+                ->where('root_product_category_id', $categoryId));
+        }
+
+        if ($audienceIds !== []) {
+            $addMatches($baseQuery()
+                ->whereHas('audiences', fn ($query) => $query->whereIn('shop_audiences.id', $audienceIds)));
+        }
+
+        $addMatches($baseQuery());
+
+        return $matches
+            ->take($limit)
+            ->map(fn (Shop $shop): array => $this->storeCardData($shop))
+            ->values();
     }
 
     private function storeInitials(string $name): string
@@ -753,6 +815,8 @@ class StorefrontController extends Controller
         $products = $this->productListings->shopProducts($shop, $selectedFilters);
         $shopProfile = $this->shopProfileData($shop);
         $shopProfile['product_count'] = $products->total();
+        $offerProductIds = $this->offerProducts->productIdsForShop($shop);
+        $offerPreview = $this->productListings->shopProductPreviewByIds($shop, $offerProductIds, ProductListingService::PER_PAGE);
 
         return view('storefront.pages.store-profile', [
             'shop' => $shop,
@@ -762,6 +826,11 @@ class StorefrontController extends Controller
             'heroBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_HERO),
             'middleBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_MIDDLE),
             'shopPromotions' => $this->shopPromotions->currentForShop($shop),
+            'offerProducts' => $offerPreview['products'],
+            'offerProductsTotal' => $offerPreview['total'],
+            'offerProductsUrl' => route('storefront.stores.offers', $shop->slug),
+            'similarShops' => $this->similarShops($shop),
+            'shopLocation' => $this->shopLocationData($shop),
             'categoryFilterOptions' => $this->productListings->shopCategoryFilters($shop),
             'attributeFilters' => $this->productListings->shopAttributeFilters($shop),
             'selectedFilters' => $selectedFilters,
@@ -772,6 +841,38 @@ class StorefrontController extends Controller
             'storefrontNavigationCategories' => $merchantStorefront
                 ? $this->navigation->getMerchantCategories($shop)
                 : $this->navigation->getMarketplaceCategories(),
+        ]);
+    }
+
+    public function storeOfferProducts(Request $request, string $slug): View
+    {
+        $shop = $this->activeShopBySlug($slug)->load([
+            'rootProductCategory:id,name,slug',
+            'audiences:id,name,slug',
+            'city:id,name',
+            'state:id,name',
+            'country:id,name',
+            'merchant:id,status',
+        ]);
+        $selectedFilters = $this->selectedProductFilters($request);
+        $offerProductIds = $this->offerProducts->productIdsForShop($shop);
+        $products = $this->productListings->shopProductsByIds($shop, $offerProductIds, $selectedFilters);
+        $shopProfile = $this->shopProfileData($shop);
+        $shopProfile['product_count'] = $products->total();
+
+        return view('storefront.pages.store-offers', [
+            'shop' => $shop,
+            'shopProfile' => $shopProfile,
+            'products' => $products,
+            'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
+            'categoryFilterOptions' => $this->productListings->shopCategoryFilters($shop),
+            'attributeFilters' => $this->productListings->shopAttributeFilters($shop),
+            'selectedFilters' => $selectedFilters,
+            'selectedAttributeFilters' => $selectedFilters['attributes'],
+            'selectedCategoryFilters' => $selectedFilters['categories'],
+            'showShopFilter' => false,
+            'storefrontShop' => null,
+            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
 
@@ -819,6 +920,113 @@ class StorefrontController extends Controller
         ];
     }
 
+    private function shopLocationData(Shop $shop): array
+    {
+        $address = $this->shopFullAddress($shop);
+        $latitude = is_numeric($shop->latitude) ? (float) $shop->latitude : null;
+        $longitude = is_numeric($shop->longitude) ? (float) $shop->longitude : null;
+        $hasCoordinates = $latitude !== null && $longitude !== null;
+        $mapLatitude = $latitude;
+        $mapLongitude = $longitude;
+        $mapPrecision = $hasCoordinates ? 'shop' : null;
+        $showMarker = $hasCoordinates;
+        $zoom = 15;
+
+        if (! $hasCoordinates) {
+            $postalCoordinates = $this->postalCodeCoordinates($shop);
+
+            if ($postalCoordinates !== null) {
+                $mapLatitude = $postalCoordinates['latitude'];
+                $mapLongitude = $postalCoordinates['longitude'];
+                $mapPrecision = 'postal_code';
+                $zoom = 13;
+            } else {
+                $cityCoordinates = $this->cityCoordinates($shop);
+
+                if ($cityCoordinates !== null) {
+                    $mapLatitude = $cityCoordinates['latitude'];
+                    $mapLongitude = $cityCoordinates['longitude'];
+                    $mapPrecision = 'city';
+                    $zoom = 11;
+                }
+            }
+        }
+
+        return [
+            'name' => $shop->name,
+            'address' => $address,
+            'area' => $shop->landmark,
+            'city' => $shop->city?->name,
+            'state' => $shop->state?->name,
+            'pincode' => $shop->pincode,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'has_coordinates' => $hasCoordinates,
+            'map_latitude' => $mapLatitude,
+            'map_longitude' => $mapLongitude,
+            'map_available' => $mapLatitude !== null && $mapLongitude !== null,
+            'map_precision' => $mapPrecision,
+            'show_marker' => $showMarker,
+            'zoom' => $zoom,
+            'directions_url' => $this->shopDirectionsUrl($shop, $address),
+        ];
+    }
+
+    private function postalCodeCoordinates(Shop $shop): ?array
+    {
+        $pincode = trim((string) $shop->pincode);
+
+        if ($pincode === '') {
+            return null;
+        }
+
+        $postalCode = PostalCode::query()
+            ->active()
+            ->where('postal_code', $pincode)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->orderByDesc('shipping_enabled')
+            ->orderBy('office_name')
+            ->first(['latitude', 'longitude']);
+
+        if (! $postalCode || ! is_numeric($postalCode->latitude) || ! is_numeric($postalCode->longitude)) {
+            return null;
+        }
+
+        return [
+            'latitude' => (float) $postalCode->latitude,
+            'longitude' => (float) $postalCode->longitude,
+        ];
+    }
+
+    private function cityCoordinates(Shop $shop): ?array
+    {
+        $city = trim((string) $shop->city?->name);
+        $state = trim((string) $shop->state?->name);
+
+        if ($city === '') {
+            return null;
+        }
+
+        $coordinates = PostalCode::query()
+            ->active()
+            ->where('district', $city)
+            ->when($state !== '', fn ($query) => $query->where('state', $state))
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->selectRaw('AVG(latitude) as latitude, AVG(longitude) as longitude')
+            ->first();
+
+        if (! $coordinates || ! is_numeric($coordinates->latitude) || ! is_numeric($coordinates->longitude)) {
+            return null;
+        }
+
+        return [
+            'latitude' => (float) $coordinates->latitude,
+            'longitude' => (float) $coordinates->longitude,
+        ];
+    }
+
     private function shopAddress(Shop $shop): string
     {
         return collect([
@@ -828,6 +1036,35 @@ class StorefrontController extends Controller
             $shop->city?->name,
             $shop->pincode,
         ])->filter()->implode(', ');
+    }
+
+    private function shopFullAddress(Shop $shop): string
+    {
+        return collect([
+            $shop->address_line_1,
+            $shop->address_line_2,
+            $shop->landmark,
+            $shop->city?->name,
+            $shop->state?->name,
+            $shop->pincode,
+            $shop->country?->name,
+        ])->filter()->implode(', ');
+    }
+
+    private function shopDirectionsUrl(Shop $shop, string $address): ?string
+    {
+        $latitude = is_numeric($shop->latitude) ? (float) $shop->latitude : null;
+        $longitude = is_numeric($shop->longitude) ? (float) $shop->longitude : null;
+
+        if ($latitude !== null && $longitude !== null) {
+            return "https://www.google.com/maps/dir/?api=1&destination={$latitude},{$longitude}";
+        }
+
+        if ($address !== '') {
+            return 'https://www.google.com/maps/dir/?api=1&destination='.urlencode($address);
+        }
+
+        return null;
     }
 
     private function shopMapsUrl(Shop $shop, string $address): ?string

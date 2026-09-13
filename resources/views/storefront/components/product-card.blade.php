@@ -1,4 +1,7 @@
-<div class="swiper-slide wow fadeInUp">
+@php $wrapSlide = $wrapSlide ?? true; @endphp
+@if($wrapSlide)
+    <div class="swiper-slide wow fadeInUp">
+@endif
     <div class="card-product {{ $product['has_size'] ?? false ? 'has-size' : '' }}">
         <div class="card-product_wrapper">
             <a href="{{ $product['url'] ?? '#;' }}" class="product-img">
@@ -59,4 +62,6 @@
             @endif
         </div>
     </div>
-</div>
+@if($wrapSlide)
+    </div>
+@endif

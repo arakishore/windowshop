@@ -66,6 +66,45 @@ class ProductListingService
     }
 
     /**
+     * @param array<int, int> $productIds
+     */
+    public function shopProductsByIds(Shop $shop, array $productIds, array $filters = [], int $perPage = self::PER_PAGE): LengthAwarePaginator
+    {
+        $filters = $this->sanitizeListingFilters($filters);
+
+        return $this->storefrontQuery(null, $filters)
+            ->where('products.shop_id', $shop->getKey())
+            ->whereIn('products.id', $productIds === [] ? [0] : $productIds)
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(fn (Product $product): array => $this->cardData($product));
+    }
+
+    /**
+     * @param array<int, int> $productIds
+     * @return array{products: Collection<int, array<string, mixed>>, total: int}
+     */
+    public function shopProductPreviewByIds(Shop $shop, array $productIds, int $limit = self::PER_PAGE): array
+    {
+        $query = $this->storefrontQuery()
+            ->where('products.shop_id', $shop->getKey())
+            ->whereIn('products.id', $productIds === [] ? [0] : $productIds);
+
+        $total = (clone $query)
+            ->withoutEagerLoads()
+            ->reorder()
+            ->count();
+
+        return [
+            'products' => $query
+                ->limit($limit)
+                ->get()
+                ->map(fn (Product $product): array => $this->cardData($product)),
+            'total' => $total,
+        ];
+    }
+
+    /**
      * @return Collection<int, ProductCategoryAttributeGroup>
      */
     public function categoryAttributeFilters(ProductCategory $category): Collection

@@ -244,20 +244,57 @@
             </section>
         @endif
 
-        <section class="shop-profile-section" id="shop-products">
-            @include('storefront.partials.product-listing-controls', [
-                'selectedFilters' => $selectedFilters,
-                'filterDrawerId' => 'filterShop',
-            ])
+        @if (($offerProducts ?? collect())->isNotEmpty())
+            <section class="shop-profile-section" id="shop-offer-products">
+                <div class="shop-profile-section-head">
+                    <div class="shop-section-heading">
+                        <div class="shop-section-heading-icon">
+                            <i class="icon icon-Gift"></i>
+                        </div>
+                        <div>
+                            <h2 class="shop-profile-section-title">Products on Offer</h2>
+                            <div class="text-caption-01 cl-text-2 mt-1">Current offers from {{ $shopName }}</div>
+                        </div>
+                    </div>
+                    @if (($offerProductsTotal ?? 0) > $offerProducts->count())
+                        <a href="{{ $offerProductsUrl }}" class="shop-profile-section-link">
+                            View All Offer Products <i class="icon icon-CaretRightThin"></i>
+                        </a>
+                    @endif
+                </div>
 
+                <div class="shop-profile-product-grid">
+                    @foreach ($offerProducts as $product)
+                        @include('storefront.components.product-card', [
+                            'product' => $product,
+                            'wishlistedProductIds' => $wishlistedProductIds ?? [],
+                            'wrapSlide' => false,
+                        ])
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
+        <section class="shop-profile-section" id="shop-products">
             <div class="shop-profile-section-head">
-                <div>
-                    <h2 class="shop-profile-section-title">Products from {{ $shopName }}</h2>
-                    <div class="text-caption-01 cl-text-2 mt-1">
-                        Showing {{ $products->firstItem() ?? 0 }}-{{ $products->lastItem() ?? 0 }} of
-                        {{ $products->total() }} products
+                <div class="shop-section-heading">
+                    <div class="shop-section-heading-icon">
+                        <i class="icon icon-Package"></i>
+                    </div>
+                    <div>
+                        <h2 class="shop-profile-section-title">Products from {{ $shopName }}</h2>
+                        <div class="text-caption-01 cl-text-2 mt-1">
+                            Showing {{ $products->firstItem() ?? 0 }}-{{ $products->lastItem() ?? 0 }} of
+                            {{ $products->total() }} products
+                        </div>
                     </div>
                 </div>
+                @include('storefront.partials.product-listing-controls', [
+                    'selectedFilters' => $selectedFilters,
+                    'filterDrawerId' => 'filterShop',
+                    'sticky' => false,
+                    'controlsClass' => 'shop-section-controls',
+                ])
             </div>
 
             @if ($products->count() > 0)
@@ -326,6 +363,112 @@
                 </div>
             @endif
         </section>
+
+        @if (($similarShops ?? collect())->isNotEmpty())
+            <section class="shop-profile-section" id="similar-shops">
+                <div class="shop-profile-section-head">
+                    <div class="shop-section-heading">
+                        <div class="shop-section-heading-icon">
+                            <i class="icon icon-Tag"></i>
+                        </div>
+                        <div>
+                            <h2 class="shop-profile-section-title">Similar Shops</h2>
+                            <div class="text-caption-01 cl-text-2 mt-1">
+                                More shops like {{ $shopName }}.
+                            </div>
+                        </div>
+                    </div>
+                    <a href="{{ route('storefront.stores') }}" class="shop-profile-section-link">
+                        View All Shops <i class="icon icon-CaretRightThin"></i>
+                    </a>
+                </div>
+
+                <div class="shop-profile-similar-grid">
+                    @foreach ($similarShops as $store)
+                        @include('storefront.components.shop-card', ['store' => $store])
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
+        @if (!empty($shopLocation['address']) || !empty($shopLocation['directions_url']))
+            <section class="shop-profile-section shop-location-section" id="shop-location">
+                <div class="shop-location-heading">
+                    <div class="shop-location-icon">
+                        <i class="icon icon-MapPin"></i>
+                    </div>
+                    <div>
+                        <h2 class="shop-profile-section-title">Shop Location</h2>
+                        <div class="text-caption-01 cl-text-2 mt-1">Visit our shop or get directions</div>
+                    </div>
+                </div>
+
+                <div class="shop-location-card">
+                    <div class="shop-location-details">
+                        <h3 class="shop-location-name">{{ $shopName }}</h3>
+
+                        @if (!empty($shopLocation['address']))
+                            <div class="shop-location-address">
+                                <i class="icon icon-MapPin"></i>
+                                <span>{{ $shopLocation['address'] }}</span>
+                            </div>
+                        @endif
+
+                        <div class="shop-location-facts">
+                            @if (!empty($shopLocation['area']))
+                                <div class="shop-location-fact">
+                                    <span>Area</span>
+                                    <strong>{{ $shopLocation['area'] }}</strong>
+                                </div>
+                            @endif
+                            @if (!empty($shopLocation['city']))
+                                <div class="shop-location-fact">
+                                    <span>City</span>
+                                    <strong>{{ $shopLocation['city'] }}</strong>
+                                </div>
+                            @endif
+                            @if (!empty($shopLocation['state']))
+                                <div class="shop-location-fact">
+                                    <span>State</span>
+                                    <strong>{{ $shopLocation['state'] }}</strong>
+                                </div>
+                            @endif
+                            @if (!empty($shopLocation['pincode']))
+                                <div class="shop-location-fact">
+                                    <span>PIN Code</span>
+                                    <strong>{{ $shopLocation['pincode'] }}</strong>
+                                </div>
+                            @endif
+                        </div>
+
+                        @if (!empty($shopLocation['directions_url']))
+                            <a href="{{ $shopLocation['directions_url'] }}" class="shop-location-directions"
+                                target="_blank" rel="noopener noreferrer">
+                                <i class="icon icon-MapPin"></i>
+                                Get Directions
+                                <i class="icon icon-ArrowUpRight1"></i>
+                            </a>
+                            <div class="shop-location-note">This will open Google Maps in a new tab</div>
+                        @endif
+                    </div>
+
+                    @if (!empty($shopLocation['map_available']))
+                        <div class="shop-location-map-wrap">
+                            <div class="shop-location-map" id="shop-location-map" aria-label="{{ $shopName }} map"></div>
+                            @if (($shopLocation['map_precision'] ?? null) === 'postal_code')
+                                <div class="shop-location-map-note">Map shows the PIN code area. Use directions for the shop address.</div>
+                            @elseif (($shopLocation['map_precision'] ?? null) === 'city')
+                                <div class="shop-location-map-note">Map shows the city area. Use directions for the shop address.</div>
+                            @endif
+                        </div>
+                    @else
+                        <div class="shop-location-map shop-location-map-empty">
+                            Map unavailable because usable location coordinates are not set.
+                        </div>
+                    @endif
+                </div>
+            </section>
+        @endif
         </div>
     </main>
 
@@ -343,6 +486,9 @@
 
 @push('scripts')
     @include('storefront.partials.product-listing-filter-script')
+    @if (!empty($shopLocation['map_available']))
+        <script src="{{ asset('assets/admin/js/vendor/maps/leaflet/leaflet.min.js') }}"></script>
+    @endif
     <script>
         document.addEventListener('click', (event) => {
             const button = event.target.closest('[data-shop-offers-toggle]');
@@ -368,6 +514,63 @@
             if (label) {
                 label.textContent = nextExpanded ? 'Show less' : `Show all offers (${hiddenCount})`;
             }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const mapData = @json($shopLocation ?? null);
+            const mapElement = document.getElementById('shop-location-map');
+
+            if (!mapData || !mapData.map_available || !mapElement || !window.L || mapElement.dataset.mapInitialized) {
+                return;
+            }
+
+            mapElement.dataset.mapInitialized = '1';
+
+            const shopMap = L.map(mapElement, {
+                attributionControl: true,
+                scrollWheelZoom: false,
+            }).setView([mapData.map_latitude, mapData.map_longitude], mapData.zoom || 13);
+
+            // Same OpenStreetMap tile setup used on /stores.
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19,
+            }).addTo(shopMap);
+
+            const escapeHtml = function(value) {
+                return String(value || '').replace(/[&<>"']/g, function(char) {
+                    return {
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#039;',
+                    }[char];
+                });
+            };
+
+            if (mapData.show_marker) {
+                const markerIcon = L.icon({
+                    iconUrl: @json(asset('assets/admin/images/vendor/leaflet/marker-icon.png')),
+                    iconRetinaUrl: @json(asset('assets/admin/images/vendor/leaflet/marker-icon-2x.png')),
+                    shadowUrl: @json(asset('assets/admin/images/vendor/leaflet/marker-shadow.png')),
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41],
+                });
+
+                L.marker([mapData.map_latitude, mapData.map_longitude], {
+                        icon: markerIcon,
+                        title: mapData.name,
+                    })
+                    .addTo(shopMap)
+                    .bindPopup(`<strong>${escapeHtml(mapData.name)}</strong><br>${escapeHtml(mapData.address)}`);
+            }
+
+            setTimeout(function() {
+                shopMap.invalidateSize();
+            }, 150);
         });
     </script>
 @endpush

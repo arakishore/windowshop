@@ -12,9 +12,11 @@
     $selectedSort = array_key_exists($selectedSort, $sortOptions) ? $selectedSort : 'popularity';
     $sortBaseQuery = request()->except(['sort', 'page']);
     $filterDrawerId = $filterDrawerId ?? 'filterShop';
+    $sticky = $sticky ?? true;
+    $controlsClass = trim((string) ($controlsClass ?? ''));
 @endphp
 
-<div class="tf-shop-control sticky-top no-offset sticky-top no-offset">
+<div class="tf-shop-control {{ $sticky ? 'sticky-top no-offset' : '' }} {{ $controlsClass }}">
     <a href="#{{ $filterDrawerId }}" data-bs-toggle="offcanvas" class="tf-btn-filter">
         <span class="icon icon-filter"></span>
         <span class="text">Filters</span>

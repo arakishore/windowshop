@@ -18,9 +18,9 @@ class ShopPromotionPresenter
     }
 
     /**
-     * @return Collection<int, array<string, mixed>>
+     * @return Collection<int, Promotion>
      */
-    public function currentForShop(Shop $shop, ?int $limit = null): Collection
+    public function currentPromotionModels(Shop $shop, ?int $limit = null): Collection
     {
         $query = Promotion::query()
             ->with([
@@ -57,7 +57,15 @@ class ShopPromotionPresenter
             $promotions = $promotions->take(max(1, $limit));
         }
 
-        return $promotions
+        return $promotions->values();
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function currentForShop(Shop $shop, ?int $limit = null): Collection
+    {
+        return $this->currentPromotionModels($shop, $limit)
             ->map(fn (Promotion $promotion): array => $this->card($promotion))
             ->values();
     }
