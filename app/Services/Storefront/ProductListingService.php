@@ -32,6 +32,7 @@ class ProductListingService
         private readonly CustomerPurchaseAvailabilityGuard $availabilityGuard,
         private readonly StorefrontUrlService $urls,
         private readonly StorefrontProductPolicyPresenter $policyPresenter,
+        private readonly ProductPromotionPresenter $promotionPresenter,
     ) {
     }
 
@@ -229,6 +230,7 @@ class ProductListingService
                 'category:id,parent_id,name,slug',
                 'category.parent:id,parent_id,name,slug',
                 'category.parent.parent:id,parent_id,name,slug',
+                'collections:id',
                 'shop:id,merchant_id,name,slug,status',
                 'primaryImage' => fn ($query) => $query
                     ->where('status', 'active')
@@ -519,6 +521,7 @@ class ProductListingService
         $discountPercent = $hasDiscount ? (int) round((($mrp - $sellingPrice) / $mrp) * 100) : 0;
         $image = $this->imageUrl($product);
         $availability = $this->availabilityGuard->decision($variant, 1);
+        $promotion = $this->promotionPresenter->forProduct($product);
 
         return [
             'product_id' => (int) $product->getKey(),
@@ -541,6 +544,9 @@ class ProductListingService
             'old_price' => $hasDiscount ? $this->money($mrp) : null,
             'badge' => $discountPercent > 0 ? '-'.$discountPercent.'%' : null,
             'badge_class' => $discountPercent > 0 ? 'sale' : null,
+            'promotion_label' => $promotion['promotion_label'],
+            'promotion_text' => $promotion['promotion_text'],
+            'promotion_icon' => $promotion['promotion_icon'],
             'description' => $product->short_description ?: 'A local shop product listing with clean catalogue-ready details.',
             'show_rating' => false,
             'swatches' => [],

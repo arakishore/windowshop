@@ -27,6 +27,7 @@
                     <li class="product-badge_item text-caption-01 {{ strtolower($product['badge']) }}">{{ $product['badge'] }}</li>
                 </ul>
             @endif
+            @include('storefront.components.product-promotion', ['product' => $product])
             <div class="product-action_bot">
                 <a href="#quickAdd" data-bs-toggle="modal" class="tf-btn btn-white small w-100">Quick Add</a>
             </div>
@@ -44,6 +45,7 @@
                     <span class="price-old text-caption-01 cl-text-3">{{ $product['old_price'] }}</span>
                 @endif
             </div>
+            @include('storefront.components.product-promotion-text', ['product' => $product])
             @if(!empty($product['swatches']))
                 <ul class="product-color_list">
                     @foreach($product['swatches'] as $swatch)

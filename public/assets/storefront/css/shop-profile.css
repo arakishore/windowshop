@@ -242,6 +242,115 @@
     gap: 28px 18px;
 }
 
+.shop-profile-offer-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.shop-profile-offer-card[hidden] {
+    display: none;
+}
+
+.shop-profile-offer-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 198px;
+    padding: 18px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+}
+
+.shop-profile-offer-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    color: #047857;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.shop-profile-offer-label .icon {
+    font-size: 18px;
+}
+
+.shop-profile-offer-title {
+    display: -webkit-box;
+    margin: 0 0 7px;
+    min-height: 41px;
+    overflow: hidden;
+    color: #111827;
+    font-size: 15px;
+    line-height: 1.35;
+    font-weight: 800;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.shop-profile-offer-desc {
+    display: -webkit-box;
+    min-height: 38px;
+    margin: 0 0 12px;
+    overflow: hidden;
+    color: #6b7280;
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.shop-profile-offer-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.shop-profile-offer-meta span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 3px 9px;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    background: #f9fafb;
+}
+
+.shop-profile-offer-toggle-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 18px;
+}
+
+.shop-profile-offer-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    background: transparent;
+    color: #345174;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.shop-profile-offer-toggle .icon {
+    font-size: 13px;
+    transition: transform .18s ease;
+}
+
+.shop-profile-offer-toggle.is-expanded .icon {
+    transform: rotate(180deg);
+}
+
 .shop-profile-empty {
     padding: 42px;
     border: 1px solid #e5e7eb;
@@ -296,6 +405,10 @@
     .shop-profile-product-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+
+    .shop-profile-offer-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 767px) {
@@ -341,5 +454,19 @@
     .shop-profile-product-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 22px 12px;
+    }
+
+    .shop-profile-offer-grid {
+        display: flex;
+        gap: 12px;
+        margin-inline: -18px;
+        padding-inline: 18px;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+    }
+
+    .shop-profile-offer-card {
+        flex: 0 0 82%;
+        scroll-snap-align: start;
     }
 }

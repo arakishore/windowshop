@@ -18,6 +18,7 @@ use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductLocationSorter;
 use App\Services\Storefront\ProductListingService;
+use App\Services\Storefront\ShopPromotionPresenter;
 use App\Services\Storefront\StorefrontCustomerContext;
 use App\Services\Storefront\StorefrontCountryResolver;
 use App\Services\Storefront\StorefrontUrlService;
@@ -34,6 +35,7 @@ class StorefrontController extends Controller
         private readonly NavigationService $navigation,
         private readonly BannerService $banners,
         private readonly ProductListingService $productListings,
+        private readonly ShopPromotionPresenter $shopPromotions,
         private readonly StorefrontCustomerContext $customerContext,
         private readonly StorefrontUrlService $urls,
     ) {}
@@ -759,6 +761,7 @@ class StorefrontController extends Controller
             'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
             'heroBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_HERO),
             'middleBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_MIDDLE),
+            'shopPromotions' => $this->shopPromotions->currentForShop($shop),
             'categoryFilterOptions' => $this->productListings->shopCategoryFilters($shop),
             'attributeFilters' => $this->productListings->shopAttributeFilters($shop),
             'selectedFilters' => $selectedFilters,

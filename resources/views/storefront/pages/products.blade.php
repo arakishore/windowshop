@@ -83,6 +83,7 @@
                                             {{ $product['badge'] }}</li>
                                     </ul>
                                 @endif
+                                @include('storefront.components.product-promotion', ['product' => $product])
                             </div>
                             <div class="card-product_info">
                                 <a href="{{ $product['url'] }}"
@@ -96,6 +97,7 @@
                                         <span class="price-old text-caption-01 cl-text-3">{{ $product['old_price'] }}</span>
                                     @endif
                                 </div>
+                                @include('storefront.components.product-promotion-text', ['product' => $product])
                                 <p class="description text-caption-01 mb-10">
                                     {{ $product['description'] }}
                                 </p>
@@ -170,6 +172,7 @@
                                             {{ $product['badge'] }}</li>
                                     </ul>
                                 @endif
+                                @include('storefront.components.product-promotion', ['product' => $product])
                                 {{-- <div class="product-action_bot">
                                     <a href="#shoppingCart" data-bs-toggle="offcanvas"
                                         class="tf-btn btn-white small w-100">
@@ -189,6 +192,7 @@
                                         <span class="price-old text-caption-01 cl-text-3">{{ $product['old_price'] }}</span>
                                     @endif
                                 </div>
+                                @include('storefront.components.product-promotion-text', ['product' => $product])
                                 @if (! empty($product['swatches']))
                                     <ul class="product-color_list">
                                         @foreach ($product['swatches'] as $swatch)

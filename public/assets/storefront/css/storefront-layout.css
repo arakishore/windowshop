@@ -324,3 +324,57 @@
         text-align: center;
     }
 }
+
+.card-product_wrapper {
+    position: relative;
+}
+
+.product-promo-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: calc(100% - 90px);
+    padding: 5px 8px;
+    border: 1px solid #a7f3d0;
+    border-radius: 999px;
+    background: #ecfdf5;
+    color: #047857;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: right;
+    box-shadow: 0 1px 2px rgb(16 24 40 / 8%);
+}
+
+.product-promo-badge .icon {
+    font-size: 13px;
+    line-height: 1;
+}
+
+.card-product_wrapper:has(.product-promo-badge) .product-action_list {
+    top: 48px;
+}
+
+.product-promo-text {
+    margin-top: 4px;
+    color: #047857;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+@media (max-width: 575px) {
+    .product-promo-badge {
+        top: 8px;
+        right: 8px;
+        max-width: calc(100% - 70px);
+        font-size: 9px;
+    }
+
+    .card-product_wrapper:has(.product-promo-badge) .product-action_list {
+        top: 42px;
+    }
+}

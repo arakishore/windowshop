@@ -202,6 +202,7 @@
                                             {{ $product['badge'] }}</li>
                                     </ul>
                                 @endif
+                                @include('storefront.components.product-promotion', ['product' => $product])
                                 {{-- <div class="product-action_bot">
                                     <a href="#shoppingCart" data-bs-toggle="offcanvas"
                                         class="tf-btn btn-white small w-100">
@@ -221,6 +222,7 @@
                                         <span class="price-old text-caption-01 cl-text-3">{{ $product['old_price'] }}</span>
                                     @endif
                                 </div>
+                                @include('storefront.components.product-promotion-text', ['product' => $product])
                             </div>
                         </div>
                     @empty
