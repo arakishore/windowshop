@@ -86,7 +86,7 @@
         }
 
         .store-eyebrow {
-            color: #047857;
+            color: #fd8301;
             font-size: 13px;
             font-weight: 700;
             letter-spacing: .04em;
@@ -119,10 +119,9 @@
 
         .store-location-card {
             background: #fff;
-            border: 1px solid #d1fae5;
+            border: 1px solid #ffe1c5;
             border-radius: 14px;
             box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
-            min-width: 260px;
             padding: 16px 18px;
         }
 
@@ -142,11 +141,10 @@
         }
 
         .store-location-change {
-            color: #047857;
+            color: #fd8301;
             display: inline-flex;
             font-size: 13px;
             font-weight: 700;
-            margin-top: 8px;
             text-decoration: none;
         }
 
@@ -534,11 +532,9 @@
                 </div>
 
                 <div class="store-location-card">
-                    <div class="store-location-label">Selected PIN</div>
-                    <div class="store-location-value">{{ $selectedPostalCode ?: 'Not selected' }}</div>
                     <a href="#customer-location-modal" data-bs-toggle="modal"
                         class="store-location-change customer-location-trigger">
-                        Change Location
+                        <span class="location-pin-icon" aria-hidden="true"></span> Change Location
                     </a>
                 </div>
             </div>
