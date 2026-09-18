@@ -995,14 +995,19 @@ class ProductListingService
             return null;
         }
 
+        $shopName = $shop->name ?: 'your shop';
+        $message = "Hello {$shopName}! I am interested in your {$product->product_name}.";
+
+        return $this->shopWhatsappUrl($shop, $message);
+    }
+
+    public function shopWhatsappUrl(Shop $shop, string $message): ?string
+    {
         $phone = $this->whatsappPhone($shop->whatsapp_number ?: $shop->mobile);
 
         if ($phone === null) {
             return null;
         }
-
-        $shopName = $shop->name ?: 'your shop';
-        $message = "Hello {$shopName}! I am interested in your {$product->product_name}.";
 
         return 'https://wa.me/'.$phone.'?text='.rawurlencode($message);
     }

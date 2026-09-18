@@ -77,7 +77,7 @@
 @endpush
 
 @section('content')
-    <main class="shop-profile-page">
+    <main class="shop-profile-page" id="shop-home">
         <div class="container shop-profile-shell">
             <nav class="shop-profile-breadcrumbs" aria-label="Breadcrumb">
                 <a href="{{ route('storefront.home') }}">Home</a>
@@ -170,8 +170,29 @@
                         @endif
                     </div>
                 </div>
-        </div>
-        </section>
+            </section>
+
+        <nav class="shop-profile-nav" aria-label="Shop navigation">
+            <div class="shop-profile-nav-items">
+                <a class="shop-profile-nav-item is-active" href="#shop-home" aria-current="page"><i class="icon icon-HouseLine" aria-hidden="true"></i>Shop Home</a>
+                <span class="shop-profile-nav-item is-disabled" aria-disabled="true" title="Collections coming soon"><i class="icon icon-SquaresFour" aria-hidden="true"></i>Collections</span>
+                @if (($shopPromotions ?? collect())->isNotEmpty())
+                    <a class="shop-profile-nav-item" href="#offers"><i class="icon icon-Tag" aria-hidden="true"></i>Offers</a>
+                @else
+                    <span class="shop-profile-nav-item is-disabled" aria-disabled="true"><i class="icon icon-Tag" aria-hidden="true"></i>Offers</span>
+                @endif
+                <a class="shop-profile-nav-item" href="#shop-products"><i class="icon icon-Package" aria-hidden="true"></i>All Products</a>
+                <span class="shop-profile-nav-item is-disabled" aria-disabled="true" title="About Us coming soon"><i class="icon icon-Info" aria-hidden="true"></i>About Us</span>
+                @if (!empty($shopLocation['address']) || !empty($shopLocation['directions_url']))
+                    <a class="shop-profile-nav-item" href="#shop-location"><i class="icon icon-MapPin" aria-hidden="true"></i>Location</a>
+                @else
+                    <span class="shop-profile-nav-item is-disabled" aria-disabled="true"><i class="icon icon-MapPin" aria-hidden="true"></i>Location</span>
+                @endif
+                @if ($shopWhatsappUrl)
+                    <a class="shop-profile-nav-item shop-profile-nav-whatsapp" href="{{ $shopWhatsappUrl }}" target="_blank" rel="noopener noreferrer"><i class="icon icon-WhatsappLogo" aria-hidden="true"></i>WhatsApp</a>
+                @endif
+            </div>
+        </nav>
 
         @if ($middleBanners->isNotEmpty())
             <section class="shop-profile-section">
@@ -194,7 +215,7 @@
                 $initialOfferCount = 4;
                 $hiddenOfferCount = max(0, $shopPromotions->count() - $initialOfferCount);
             @endphp
-            <section class="shop-profile-section shop-profile-offers" aria-labelledby="shop-profile-offers-title" data-shop-offers>
+            <section class="shop-profile-section shop-profile-offers" id="offers" aria-labelledby="shop-profile-offers-title" data-shop-offers>
                 <div class="shop-profile-section-head">
                     <div>
                         <h2 class="shop-profile-section-title" id="shop-profile-offers-title">Offers from {{ $shopName }}</h2>

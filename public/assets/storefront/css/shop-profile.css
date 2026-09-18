@@ -18,6 +18,72 @@
     text-underline-offset: 2px;
 }
 
+.shop-profile-nav {
+    margin-top: 12px;
+    overflow-x: auto;
+    border: 1px solid #e1e7ef;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(17, 24, 39, .05);
+    scrollbar-width: thin;
+}
+
+.shop-profile-nav-items {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+    height: 52px;
+}
+
+.shop-profile-nav-item {
+    display: inline-flex;
+    flex: 1 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 0 17px;
+    border-bottom: 2px solid transparent;
+    color: #263344;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.shop-profile-nav-item .icon {
+    font-size: 18px;
+}
+
+.shop-profile-nav-item:hover,
+.shop-profile-nav-item.is-active {
+    border-bottom-color: #a51d2d;
+    color: #8c1726;
+}
+
+.shop-profile-nav-item.is-disabled {
+    color: #8b96a5;
+    cursor: default;
+}
+
+.shop-profile-nav-item.is-disabled:hover {
+    border-bottom-color: transparent;
+}
+
+.shop-profile-nav-whatsapp .icon {
+    color: #159447;
+}
+
+.shop-profile-page#shop-home,
+.shop-profile-page #offers,
+.shop-profile-page #shop-products,
+.shop-profile-page #shop-location {
+    scroll-margin-top: 90px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    html:has(.shop-profile-page) { scroll-behavior: smooth; }
+}
+
 .shop-profile-hero {
     position: relative;
     overflow: hidden;

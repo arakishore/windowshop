@@ -828,6 +828,7 @@ class StorefrontController extends Controller
         return view('storefront.pages.store-profile', [
             'shop' => $shop,
             'shopProfile' => $shopProfile,
+            'shopWhatsappUrl' => $this->productListings->shopWhatsappUrl($shop, "Hello {$shop->name}!"),
             'products' => $products,
             'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
             'heroBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_HERO),
