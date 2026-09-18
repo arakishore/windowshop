@@ -24,6 +24,7 @@ use App\Http\Controllers\Merchant\PromotionController;
 use App\Http\Controllers\Merchant\ProductController;
 use App\Http\Controllers\Merchant\ReturnReasonController;
 use App\Http\Controllers\Merchant\SalesHistoryController;
+use App\Http\Controllers\Merchant\ShopPageController;
 use App\Http\Controllers\Merchant\TaxSlabController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,6 +60,10 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
     });
 
     Route::middleware(['auth', 'merchant.role', 'merchant.active_shop'])->group(function (): void {
+        Route::get('shop-pages/{shopPage}/preview', [ShopPageController::class, 'preview'])->name('shop-pages.preview');
+        Route::resource('shop-pages', ShopPageController::class)
+            ->except(['show'])
+            ->parameters(['shop-pages' => 'shopPage']);
         Route::get('/dashboard', [MerchantAuthController::class, 'dashboard'])->name('dashboard');
         Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
         Route::get('/pos/search', [PosController::class, 'search'])->name('pos.search');

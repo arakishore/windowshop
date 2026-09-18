@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Promotion;
 use App\Models\Shop;
+use App\Models\ShopPage;
 use App\Models\ShopAudience;
 use App\Models\WishlistItem;
 use App\Services\Banner\BannerService;
@@ -808,6 +809,26 @@ class StorefrontController extends Controller
         return $this->shopPageView($request, $slug, false);
     }
 
+    public function storeCmsPage(string $slug, string $pageSlug): View
+    {
+        $shop = $this->activeShopBySlug($slug);
+        $page = $shop->pages()
+            ->where('slug', $pageSlug)
+            ->where('status', ShopPage::STATUS_PUBLISHED)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->firstOrFail();
+
+        return view('storefront.pages.store-cms-page', [
+            'shop' => $shop,
+            'page' => $page,
+            'shopProfile' => $this->shopProfileData($shop),
+            'shopFooterPages' => $this->publishedStandardPages($shop),
+            'storefrontShop' => $shop,
+            'storefrontNavigationCategories' => $this->navigation->getMerchantCategories($shop),
+        ]);
+    }
+
     private function shopPageView(Request $request, string $slug, bool $merchantStorefront): View
     {
         $shop = $this->activeShopBySlug($slug)->load([
@@ -839,6 +860,7 @@ class StorefrontController extends Controller
             'offerProductsUrl' => route('storefront.stores.offers', $shop->slug),
             'similarShops' => $this->similarShops($shop),
             'shopLocation' => $this->shopLocationData($shop),
+            'shopFooterPages' => $this->publishedStandardPages($shop),
             'categoryFilterOptions' => $this->productListings->shopCategoryFilters($shop),
             'attributeFilters' => $this->productListings->shopAttributeFilters($shop),
             'selectedFilters' => $selectedFilters,
@@ -919,6 +941,18 @@ class StorefrontController extends Controller
             ->where('status', 'active')
             ->whereHas('merchant', fn ($query) => $query->where('status', 'active'))
             ->firstOrFail();
+    }
+
+    private function publishedStandardPages(Shop $shop): Collection
+    {
+        return $shop->pages()
+            ->where('page_type', ShopPage::TYPE_STANDARD)
+            ->where('status', ShopPage::STATUS_PUBLISHED)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->whereIn('page_key', ['about', 'privacy', 'terms', 'policies'])
+            ->get(['page_key', 'slug', 'title'])
+            ->keyBy('page_key');
     }
 
     private function shopProfileData(Shop $shop): array

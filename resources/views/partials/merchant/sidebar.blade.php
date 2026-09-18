@@ -71,14 +71,17 @@
                     </ul>
                 </li>
 
-                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'nav-item-expanded nav-item-open' : '' }}">
-                    <a href="#" class="nav-link {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'active' : '' }}">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.shop-pages.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.shop-pages.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'active' : '' }}">
                         <i class="ph-storefront"></i>
                         <span>Shop Management</span>
                     </a>
-                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'show' : '' }}">
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.shop-pages.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'show' : '' }}">
                         <li class="nav-item">
                             <a href="{{ route('merchant.shops.index') }}" class="nav-link {{ request()->routeIs('merchant.shops.*') ? 'active' : '' }}">My Shops</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.shop-pages.index') }}" class="nav-link {{ request()->routeIs('merchant.shop-pages.*') ? 'active' : '' }}">Shop Pages</a>
                         </li>
                         <li class="nav-item">
                             <a href="{{ route('merchant.postal-code-restrictions.index') }}" class="nav-link {{ request()->routeIs('merchant.postal-code-restrictions.*') ? 'active' : '' }}">Postal Code Restrictions</a>

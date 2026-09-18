@@ -766,6 +766,118 @@
     text-align: center;
 }
 
+.shop-mini-footer {
+    display: grid;
+    grid-template-columns: minmax(240px, .9fr) minmax(280px, 1.4fr) auto;
+    align-items: center;
+    gap: 24px;
+    margin-top: 18px;
+    padding: 20px;
+    border: 1px solid #e7edf5;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+}
+
+.shop-mini-footer-identity {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 14px;
+}
+
+.shop-mini-footer-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 58px;
+    width: 58px;
+    height: 58px;
+    overflow: hidden;
+    border: 1px solid #edf2f7;
+    border-radius: 14px;
+    background: #f8fafc;
+    color: #6d28d9;
+    font-size: 17px;
+    font-weight: 800;
+}
+
+.shop-mini-footer-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.shop-mini-footer-copy {
+    min-width: 0;
+}
+
+.shop-mini-footer-name {
+    overflow: hidden;
+    color: #111827;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.shop-mini-footer-location {
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.shop-mini-footer-links {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+}
+
+.shop-mini-footer-links a {
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-decoration: none;
+}
+
+.shop-mini-footer-links a:hover {
+    color: #8c1726;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.shop-mini-footer-whatsapp {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
+    padding: 10px 16px;
+    border: 1px solid #bbf7d0;
+    border-radius: 999px;
+    background: #ecfdf5;
+    color: #047857;
+    font-size: 13px;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.shop-mini-footer-whatsapp:hover {
+    background: #25d366;
+    border-color: #25d366;
+    color: #fff;
+}
+
+.shop-mini-footer-whatsapp .icon {
+    font-size: 18px;
+}
+
 .shop-profile-offer-card[hidden] {
     display: none;
 }
@@ -969,6 +1081,19 @@
     .shop-location-map {
         height: 240px;
     }
+
+    .shop-mini-footer {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .shop-mini-footer-links {
+        justify-content: flex-start;
+    }
+
+    .shop-mini-footer-whatsapp {
+        width: fit-content;
+    }
 }
 
 @media (max-width: 767px) {
@@ -1079,5 +1204,28 @@
 
     .shop-location-fact {
         grid-template-columns: 82px minmax(0, 1fr);
+    }
+
+    .shop-mini-footer {
+        gap: 18px;
+        padding: 16px;
+    }
+
+    .shop-mini-footer-identity {
+        align-items: flex-start;
+    }
+
+    .shop-mini-footer-name {
+        white-space: normal;
+    }
+
+    .shop-mini-footer-links {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .shop-mini-footer-whatsapp {
+        width: 100%;
     }
 }

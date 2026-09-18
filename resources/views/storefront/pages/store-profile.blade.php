@@ -31,6 +31,10 @@
     $coverImage = $shopProfile['cover']
         ? asset($shopProfile['cover'])
         : $heroSlides->first()['image'] ?? asset('assets/storefront/images/category/cate-1.jpg');
+    $shopFooterLocation = collect([
+        $shopLocation['area'] ?? null,
+        $shopLocation['city'] ?? null,
+    ])->filter()->implode(', ') ?: ($shopProfile['address'] ?? null);
 @endphp
 
 @section('title', $shopName . ' | ' . $marketplaceName)
@@ -182,7 +186,11 @@
                     <span class="shop-profile-nav-item is-disabled" aria-disabled="true"><i class="icon icon-Tag" aria-hidden="true"></i>Offers</span>
                 @endif
                 <a class="shop-profile-nav-item" href="#shop-products"><i class="icon icon-Package" aria-hidden="true"></i>All Products</a>
-                <span class="shop-profile-nav-item is-disabled" aria-disabled="true" title="About Us coming soon"><i class="icon icon-Info" aria-hidden="true"></i>About Us</span>
+                @if ($shopFooterPages->has('about'))
+                    <a class="shop-profile-nav-item" href="{{ route('storefront.stores.pages.show', [$shop->slug, $shopFooterPages['about']->slug]) }}"><i class="icon icon-Info" aria-hidden="true"></i>About Us</a>
+                @else
+                    <span class="shop-profile-nav-item is-disabled" aria-disabled="true"><i class="icon icon-Info" aria-hidden="true"></i>About Us</span>
+                @endif
                 @if (!empty($shopLocation['address']) || !empty($shopLocation['directions_url']))
                     <a class="shop-profile-nav-item" href="#shop-location"><i class="icon icon-MapPin" aria-hidden="true"></i>Location</a>
                 @else
@@ -495,6 +503,8 @@
                 </div>
             </section>
         @endif
+
+            @include('storefront.partials.shop-mini-footer')
         </div>
     </main>
 
@@ -517,6 +527,13 @@
     @endif
     <script>
         document.addEventListener('click', (event) => {
+            const placeholderLink = event.target.closest('[data-shop-footer-placeholder]');
+
+            if (placeholderLink) {
+                event.preventDefault();
+                return;
+            }
+
             const button = event.target.closest('[data-shop-offers-toggle]');
 
             if (!button) {
