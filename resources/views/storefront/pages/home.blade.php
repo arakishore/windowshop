@@ -4,39 +4,7 @@
 @section('meta_description', $marketplaceName.' storefront Blade preview converted from the selected HTML template.')
 
 @php
-    $fallbackCategories = [
-        [
-            'name' => 'Outerwear',
-            'image' => 'assets/storefront/images/category/cate-1.jpg',
-            'url' => '#top-picks',
-        ],
-        [
-            'name' => 'Tops & Shirts',
-            'image' => 'assets/storefront/images/category/cate-2.jpg',
-            'url' => '#top-picks',
-        ],
-        [
-            'name' => 'Bottoms',
-            'image' => 'assets/storefront/images/category/cate-3.jpg',
-            'url' => '#top-picks',
-        ],
-        [
-            'name' => 'Dresses',
-            'image' => 'assets/storefront/images/category/cate-4.jpg',
-            'url' => '#top-picks',
-        ],
-        [
-            'name' => 'Footwear',
-            'image' => 'assets/storefront/images/category/cate-5.jpg',
-            'url' => '#top-picks',
-        ],
-        [
-            'name' => 'Accessories',
-            'image' => 'assets/storefront/images/category/cate-6.jpg',
-            'url' => '#top-picks',
-        ],
-    ];
-    $categories = ($homepageCategories ?? collect())->isNotEmpty() ? $homepageCategories : collect($fallbackCategories);
+    $categories = $homepageCategories ?? collect();
 
     $demoProducts = [
         [
@@ -152,168 +120,26 @@
 @endphp
 
 @push('styles')
-    <style>
-        #categories .category-bag-card {
-            position: relative;
-            display: block;
-            padding-top: 22px;
-            color: inherit;
-        }
-
-        #categories .category-bag-frame {
-            position: relative;
-            width: min(100%, 148px);
-            aspect-ratio: 1 / 1.05;
-            margin: 0 auto 12px;
-            border-radius: 18px;
-            /* background:
-                linear-gradient(135deg, #083a6b 0 38%, transparent 38%),
-                linear-gradient(135deg, transparent 0 57%, #ff8a00 57% 100%),
-                #ffffff; */
-            box-shadow: 0 12px 24px rgba(8, 28, 52, .16);
-            overflow: visible;
-            transition: transform .25s ease, box-shadow .25s ease;
-        }
-
-        #categories .category-bag-card:hover .category-bag-frame {
-            transform: translateY(-3px);
-            box-shadow: 0 16px 30px rgba(8, 28, 52, .2);
-        }
-
-        #categories .category-bag-handle {
-            position: absolute;
-            left: 50%;
-            top: -20%;
-            width: 54%;
-            height: 36%;
-            transform: translateX(-50%);
-            border: 9px solid #5b5050d9;
-            border-bottom: 0;
-            border-radius: 999px 999px 0 0;
-            z-index: 1;
-        }
-
-        #categories .category-bag-ring {
-            position: absolute;
-            top: 0%;
-            width: 21px;
-            height: 21px;
-            border: 4px solid #ffffff;
-            border-radius: 50%;
-            background: #cec5c5;
-            box-shadow: 0 5px 12px rgba(0, 0, 0, .16);
-            z-index: 3;
-        }
-
-        #categories .category-bag-ring.left {
-            left: 18%;
-        }
-
-        #categories .category-bag-ring.right {
-            right: 18%;
-        }
-
-        #categories .category-bag-photo {
-            position: absolute;
-            left: 50%;
-            top: 55%;
-            width: 95%;
-            height: 90%;
-            transform: translate(-50%, -50%);
-            margin: 0;
-            padding: 4px;
-            border-radius: 20%;
-            background: #ffffff;
-            box-shadow: 0 9px 18px rgba(8, 28, 52, .16);
-            z-index: 4;
-            overflow: hidden;
-        }
-
-        #categories .category-bag-photo img {
-            display: block;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            object-position: center top;
-        }
-
-        #categories .category-bag-shine {
-            position: absolute;
-            right: 12%;
-            top: 40%;
-            width: 18%;
-            height: 5%;
-            transform: rotate(-34deg);
-            border-radius: 999px;
-            background: rgba(255, 255, 255, .82);
-            z-index: 2;
-        }
-
-        #categories .category-bag-card .cate-name {
-            margin: 0;
-            color: var(--main);
-            font-size: 15px;
-            line-height: 1.16;
-            font-weight: 600;
-            text-align: center;
-            overflow-wrap: anywhere;
-        }
-
-        #categories .category-bag-card:hover .cate-name,
-        #categories .category-bag-card:focus .cate-name,
-        #categories .category-bag-card:visited .cate-name {
-            color: var(--main);
-        }
-
-        @media (max-width: 575px) {
-            #categories .category-bag-card {
-                padding-top: 18px;
-            }
-
-            #categories .category-bag-frame {
-                width: min(100%, 132px);
-                border-radius: 16px;
-            }
-
-            #categories .category-bag-handle {
-                border-width: 7px;
-            }
-
-            #categories .category-bag-ring {
-                width: 18px;
-                height: 18px;
-                border-width: 4px;
-            }
-
-            #categories .category-bag-card .cate-name {
-                font-size: 13px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="{{ asset('assets/storefront/css/home-categories.css') }}">
 @endpush
 
 @section('content')
     @include('storefront.partials.hero')
 
-    <section id="categories" class="flat-spacing">
-        <div class="container">
-            <div class="sect-heading type-2 text-center wow fadeInUp">
+    <section id="categories" class="home-categories">
+        <div class="container home-categories__content">
+            <div class="sect-heading type-2 text-center home-categories__heading wow fadeInUp">
                 <h3 class="s-title">
                     Shop By Categories
                 </h3>
                 <p class="s-desc text-body-1 cl-text-2">
-                    Top styles everyone's talking about.
+                    Explore products from local stores near you.
                 </p>
             </div>
-            <div dir="ltr" class="swiper tf-swiper" data-preview="8" data-tablet="4" data-mobile-sm="3" data-mobile="2"
-                data-space-lg="30" data-space-md="15" data-space="10" data-pagination="2" data-pagination-sm="3"
-                data-pagination-md="4" data-pagination-lg="8">
-                <div class="swiper-wrapper">
-                    @foreach ($categories as $category)
-                        @include('storefront.components.category-card', ['category' => $category])
-                    @endforeach
-                </div>
-                <div class="sw-line-default style-2 tf-sw-pagination"></div>
+            <div class="home-categories__rail" role="list" aria-label="Product categories">
+                @foreach ($categories as $category)
+                    @include('storefront.components.category-card', ['category' => $category])
+                @endforeach
             </div>
         </div>
     </section>

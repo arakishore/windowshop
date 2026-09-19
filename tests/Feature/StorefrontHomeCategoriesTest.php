@@ -27,7 +27,7 @@ class StorefrontHomeCategoriesTest extends TestCase
         }
     }
 
-    public function test_homepage_category_slider_uses_active_root_categories(): void
+    public function test_homepage_category_section_uses_active_root_categories(): void
     {
         $category = $this->category('Local Fashion', imagePath: 'product-categories/local-fashion/web.webp');
 
@@ -35,13 +35,14 @@ class StorefrontHomeCategoriesTest extends TestCase
         $section = $this->categorySection($response->getContent());
 
         $this->assertStringContainsString('Shop By Categories', $section);
+        $this->assertStringContainsString('Explore products from local stores near you.', $section);
         $this->assertStringContainsString('Local Fashion', $section);
         $this->assertStringContainsString($this->categoryUrl($category), $section);
         $this->assertStringContainsString('/storage/product-categories/local-fashion/web.webp', $section);
         $this->assertStringNotContainsString('Outerwear', $section);
     }
 
-    public function test_homepage_category_slider_excludes_inactive_and_child_categories(): void
+    public function test_homepage_category_section_excludes_inactive_and_child_categories(): void
     {
         $root = $this->category('Active Root');
         $this->category('Inactive Root', status: 'inactive');
@@ -55,7 +56,7 @@ class StorefrontHomeCategoriesTest extends TestCase
         $this->assertStringNotContainsString('Child Category', $section);
     }
 
-    public function test_homepage_category_slider_follows_sort_order_and_limit(): void
+    public function test_homepage_category_section_follows_sort_order_and_limit(): void
     {
         for ($i = 1; $i <= NavigationService::HOMEPAGE_CATEGORY_LIMIT + 1; $i++) {
             $this->category('Category '.$i, sortOrder: $i);
@@ -82,14 +83,15 @@ class StorefrontHomeCategoriesTest extends TestCase
         $this->assertStringContainsString('assets/storefront/images/category/cate-1.jpg', $section);
     }
 
-    public function test_homepage_category_slider_keeps_static_fallback_when_no_dynamic_categories_exist(): void
+    public function test_homepage_category_section_does_not_render_demo_categories_when_empty(): void
     {
         $response = $this->get(route('storefront.home'))->assertOk();
         $section = $this->categorySection($response->getContent());
 
-        $this->assertStringContainsString('Outerwear', $section);
-        $this->assertStringContainsString('Tops &amp; Shirts', $section);
-        $this->assertStringContainsString('assets/storefront/images/category/cate-1.jpg', $section);
+        $this->assertStringContainsString('Shop By Categories', $section);
+        $this->assertStringNotContainsString('Outerwear', $section);
+        $this->assertStringNotContainsString('swiper-wrapper', $section);
+        $this->assertStringNotContainsString('tf-sw-pagination', $section);
     }
 
     private function category(
