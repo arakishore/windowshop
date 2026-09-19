@@ -39,7 +39,11 @@ class StorefrontHomeHeroBannerTest extends TestCase
             ->assertOk()
             ->assertSee('Dynamic Hero Banner')
             ->assertSee('/storage/banners/test/desktop.jpg', false)
-            ->assertDontSee('Elevate Your Everyday Style');
+            ->assertSee('class="swiper tf-swiper sw-slide-show slider_effect_fade"', false)
+            ->assertSee('data-loop="true"', false)
+            ->assertSee('data-auto="true"', false)
+            ->assertSee('tf-sw-pagination', false)
+            ->assertDontSee('Shop Genuine');
     }
 
     public function test_inactive_hero_banner_does_not_appear(): void
@@ -52,7 +56,7 @@ class StorefrontHomeHeroBannerTest extends TestCase
         $this->get(route('storefront.home'))
             ->assertOk()
             ->assertDontSee('Inactive Hero Banner')
-            ->assertSee('Elevate Your Everyday Style');
+            ->assertSee('Shop Genuine');
     }
 
     public function test_future_hero_banner_does_not_appear_before_start_time(): void
@@ -65,7 +69,7 @@ class StorefrontHomeHeroBannerTest extends TestCase
         $this->get(route('storefront.home'))
             ->assertOk()
             ->assertDontSee('Future Hero Banner')
-            ->assertSee('Elevate Your Everyday Style');
+            ->assertSee('Shop Genuine');
     }
 
     public function test_expired_hero_banner_does_not_appear_after_end_time(): void
@@ -78,7 +82,7 @@ class StorefrontHomeHeroBannerTest extends TestCase
         $this->get(route('storefront.home'))
             ->assertOk()
             ->assertDontSee('Expired Hero Banner')
-            ->assertSee('Elevate Your Everyday Style');
+            ->assertSee('Shop Genuine');
     }
 
     public function test_active_hero_banner_with_no_schedule_appears(): void
@@ -127,7 +131,7 @@ class StorefrontHomeHeroBannerTest extends TestCase
         $this->get(route('storefront.home'))
             ->assertOk()
             ->assertDontSee('Shop Specific Homepage Hero')
-            ->assertSee('Elevate Your Everyday Style');
+            ->assertSee('Shop Genuine');
     }
 
     public function test_mobile_image_falls_back_to_desktop_image_when_missing(): void
@@ -148,8 +152,26 @@ class StorefrontHomeHeroBannerTest extends TestCase
     {
         $this->get(route('storefront.home'))
             ->assertOk()
-            ->assertSee('Elevate Your Everyday Style')
-            ->assertSee('assets/storefront/images/slider/slider-1.jpg', false);
+            ->assertSee('Shop Local')
+            ->assertSee('Shop Genuine')
+            ->assertSee('Discover amazing products from trusted local shops in')
+            ->assertSee('Explore Stores')
+            ->assertSee('href="'.route('storefront.stores').'"', false)
+            ->assertSee('assets/storefront/images/hero/hero-market.png', false)
+            ->assertSee('assets/storefront/images/hero/hero-lady.png', false)
+            ->assertSee('assets/storefront/images/hero/hero-location-mark.png', false)
+            ->assertDontSee('Onboard your store and reach a wider audience');
+
+        $fallbackHero = view('storefront.partials.hero', [
+            'heroBanners' => collect(),
+            'heroCity' => 'NASHIK',
+        ])->render();
+
+        $this->assertStringNotContainsString('swiper-wrapper', $fallbackHero);
+        $this->assertStringNotContainsString('swiper-slide', $fallbackHero);
+        $this->assertStringNotContainsString('tf-sw-pagination', $fallbackHero);
+        $this->assertStringNotContainsString('data-auto=', $fallbackHero);
+        $this->assertStringNotContainsString('data-loop=', $fallbackHero);
     }
 
     public function test_homepage_hero_banner_limit_is_respected(): void

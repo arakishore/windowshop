@@ -41,7 +41,7 @@
             </div>
 
             <div class="account-address-actions">
-                <button type="submit" class="account-primary-button">Save Profile</button>
+                <button type="submit" class="account-primary-button animate-btn">Save Profile</button>
             </div>
         </form>
     @endcomponent

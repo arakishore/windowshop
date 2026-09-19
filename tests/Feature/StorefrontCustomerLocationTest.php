@@ -131,6 +131,17 @@ class StorefrontCustomerLocationTest extends TestCase
             ->assertSee('data-auto-open="0"', false);
     }
 
+    public function test_homepage_hero_uses_the_selected_postal_code_district(): void
+    {
+        $this->postalCode('422009', district: 'Nashik');
+
+        $this->withSession([CustomerLocationService::SESSION_KEY => '422009'])
+            ->get(route('storefront.home'))
+            ->assertOk()
+            ->assertSee('trusted local shops in <strong>NASHIK</strong>', false)
+            ->assertSee('<strong>NASHIK</strong><span>Your Local Market</span>', false);
+    }
+
     public function test_guest_without_pin_can_access_storefront_and_modal_is_marked_for_auto_open(): void
     {
         $this->get(route('storefront.home'))

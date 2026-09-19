@@ -7,6 +7,7 @@
         ['label' => 'Wishlist', 'route' => 'storefront.account.wishlist', 'icon' => 'icon-HeartStraight'],
     ];
     $accountPageTitle = $accountPageTitle ?? 'My Account';
+    $accountCompact = $accountCompact ?? false;
     $isAccountLinkActive = function (array $link): bool {
         return $link['route'] === 'storefront.account'
             ? request()->routeIs('storefront.account')
@@ -28,6 +29,33 @@
                 border: 1px solid #e5e7eb;
                 border-radius: 6px;
                 background: #fff;
+            }
+
+            .account-compact-section {
+                padding-top: 24px;
+            }
+
+            .account-inline-breadcrumbs {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                align-items: center;
+                margin-bottom: 18px;
+                color: #7b8490;
+                font-size: 12px;
+            }
+
+            .account-inline-breadcrumbs a {
+                color: #5f6873;
+            }
+
+            .account-compact-content {
+                border: 0;
+                background: transparent;
+            }
+
+            .account-compact-content .account-content-inner {
+                padding: 0;
             }
 
             .account-sidebar {
@@ -411,21 +439,32 @@
     @endpush
 @endonce
 
-<section class="section-page-title text-center storefront-page-title">
-    <div class="container">
-        <div class="main-page-title">
-            <div class="breadcrumbs">
-                <a href="{{ route('storefront.home') }}" class="text-caption-01 cl-text-3 link">Home</a>
-                <i class="icon icon-CaretRightThin cl-text-3"></i>
-                <p class="text-caption-01">{{ $accountPageTitle }}</p>
+@unless ($accountCompact)
+    <section class="section-page-title text-center storefront-page-title">
+        <div class="container">
+            <div class="main-page-title">
+                <div class="breadcrumbs">
+                    <a href="{{ route('storefront.home') }}" class="text-caption-01 cl-text-3 link">Home</a>
+                    <i class="icon icon-CaretRightThin cl-text-3"></i>
+                    <p class="text-caption-01">{{ $accountPageTitle }}</p>
+                </div>
+                <h3>{{ $accountPageTitle }}</h3>
             </div>
-            <h3>{{ $accountPageTitle }}</h3>
         </div>
-    </div>
-</section>
+    </section>
+@endunless
 
-<section class="flat-spacing">
+<section class="flat-spacing {{ $accountCompact ? 'account-compact-section' : '' }}">
     <div class="container">
+        @if ($accountCompact)
+            <nav class="account-inline-breadcrumbs" aria-label="Breadcrumb">
+                <a href="{{ route('storefront.home') }}">Home</a>
+                <span>/</span>
+                <a href="{{ route('storefront.account') }}">My Account</a>
+                <span>/</span>
+                <span aria-current="page">{{ $accountPageTitle }}</span>
+            </nav>
+        @endif
         <div class="account-mobile-nav">
             <select aria-label="Account navigation" onchange="if (this.value) window.location.href = this.value">
                 @foreach ($accountLinks as $link)
@@ -463,7 +502,7 @@
                 </div>
             </aside>
 
-            <div class="account-panel">
+            <div class="account-panel {{ $accountCompact ? 'account-compact-content' : '' }}">
                 <div class="account-content-inner">
                     {{ $slot }}
                 </div>

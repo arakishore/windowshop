@@ -19,7 +19,7 @@
                 <h4 class="mb-10">Saved Addresses</h4>
                 <p class="cl-text-2 mb-0">These are the same saved addresses used during checkout.</p>
             </div>
-            <a href="{{ route('storefront.account.addresses.create') }}" class="account-primary-button">
+            <a href="{{ route('storefront.account.addresses.create') }}" class="account-primary-button animate-btn">
                 <i class="icon icon-Plus"></i>
                 <span>Add Address</span>
             </a>

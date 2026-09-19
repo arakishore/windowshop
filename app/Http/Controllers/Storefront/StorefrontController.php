@@ -47,10 +47,14 @@ class StorefrontController extends Controller
         private readonly StorefrontUrlService $urls,
     ) {}
 
-    public function home(): View
+    public function home(Request $request, CustomerLocationService $location): View
     {
+        $postalCode = $location->postalCode($request);
+        $district = $postalCode ? trim((string) $location->postalCodeRecord($postalCode)?->district) : '';
+
         return view('storefront.pages.home', [
             'heroBanners' => $this->banners->getMarketplaceHeroBanners(),
+            'heroCity' => mb_strtoupper($district !== '' ? $district : 'NASHIK'),
             'homepageCategories' => $this->homepageCategoryCards(),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);

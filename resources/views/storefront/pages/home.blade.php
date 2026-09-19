@@ -4,24 +4,6 @@
 @section('meta_description', $marketplaceName.' storefront Blade preview converted from the selected HTML template.')
 
 @php
-    $heroSlides = [
-        [
-            'image' => 'assets/storefront/images/slider/slider-1.jpg',
-            'eyebrow' => 'SUMMER COLLECTION',
-            'title' => 'Elevate Your Everyday Style',
-            'subtitle' => 'Fresh marketplace picks from local sellers and curated brands.',
-            'button' => 'Shop Styles',
-        ],
-        [
-            'image' => 'assets/storefront/images/slider/slider-2.jpg',
-            'eyebrow' => 'Join '.$marketplaceName.' Today',
-            'title' => 'Onboard your store and reach a wider audience with '.$marketplaceName,
-            'subtitle' => '',
-            'button' => 'Register now',
-        ],
-
-    ];
-
     $fallbackCategories = [
         [
             'name' => 'Outerwear',
