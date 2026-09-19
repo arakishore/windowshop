@@ -30,12 +30,13 @@
                 <span>Products on Offer</span>
             </nav>
 
-            <section class="shop-profile-section mt-0" id="shop-offer-products">
-                @include('storefront.partials.product-listing-controls', [
-                    'selectedFilters' => $selectedFilters,
-                    'filterDrawerId' => 'filterOfferProducts',
-                ])
+            @if ($selectedOffer && !empty($selectedOffer['promotional_image_url']))
+                <div class="shop-offer-artwork">
+                    <img src="{{ $selectedOffer['promotional_image_url'] }}" alt="{{ $selectedOffer['name'] }} promotional banner">
+                </div>
+            @endif
 
+            <section class="shop-profile-section mt-0" id="shop-offer-products">
                 <div class="shop-profile-section-head">
                     <div>
                         <h1 class="shop-profile-section-title">{{ $invalidPromotionFilter ? 'Offer not available' : $pageTitle }}</h1>
@@ -48,6 +49,11 @@
                     </div>
                 </div>
 
+                @include('storefront.partials.product-listing-controls', [
+                    'selectedFilters' => $selectedFilters,
+                    'filterDrawerId' => 'filterOfferProducts',
+                ])
+
                 @if ($products->count() > 0)
                     <div class="shop-profile-product-grid">
                         @foreach ($products as $product)
@@ -55,6 +61,8 @@
                                 'product' => $product,
                                 'wishlistedProductIds' => $wishlistedProductIds ?? [],
                                 'wrapSlide' => false,
+                                'showCompare' => false,
+                                'showQuickAdd' => false,
                             ])
                         @endforeach
                     </div>

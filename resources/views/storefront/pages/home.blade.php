@@ -121,6 +121,8 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('assets/storefront/css/home-categories.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/storefront/css/shop-profile.css') }}?v={{ filemtime(public_path('assets/storefront/css/shop-profile.css')) }}">
+    <link rel="stylesheet" href="{{ asset('assets/storefront/css/home-stores.css') }}">
 @endpush
 
 @section('content')
@@ -148,6 +150,58 @@
             </div>
         </div>
     </section>
+    <section id="stores-near-you" class="home-stores">
+        <div class="container">
+            <div class="home-stores__header">
+                <div class="sect-heading type-2 home-stores__heading">
+                    <h3 class="s-title">Stores Near You</h3>
+                    <p class="s-desc text-body-1 cl-text-2">
+                        Explore local stores{{ !empty($nearbyStoresLocationLabel) ? ' near '.$nearbyStoresLocationLabel : ' near you' }}
+                    </p>
+                </div>
+                <a href="{{ route('storefront.stores') }}" class="home-stores__all">
+                    View All Stores <i class="icon icon-ArrowRight" aria-hidden="true"></i>
+                </a>
+            </div>
+
+            @if($nearbyStores->isNotEmpty())
+                <div class="home-stores__rail" role="list" aria-label="Stores near you">
+                    @foreach($nearbyStores as $store)
+                        <div class="home-stores__item" role="listitem">
+                            @include('storefront.components.shop-card', ['store' => $store, 'homepageVariant' => true])
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="home-stores__empty">No local stores are available right now.</div>
+            @endif
+        </div>
+    </section>
+    @if(($nearbyOffers ?? collect())->isNotEmpty() && $nearbyOfferShop)
+        <section id="offers-near-you" class="home-offers">
+            <div class="container">
+                <div class="sect-heading type-2 home-offers__heading">
+                    <h3 class="s-title">Offers Near You</h3>
+                    <p class="s-desc text-body-1 cl-text-2">Current offers from a local store near you.</p>
+                </div>
+
+                @include('storefront.partials.shop-offers-carousel', [
+                    'offers' => $nearbyOffers,
+                    'sectionId' => 'home-nearby-offers-carousel',
+                    'sectionClass' => 'home-offers__carousel',
+                    'title' => 'Offers from '.$nearbyOfferShop->name,
+                    'primaryActionLabel' => 'Visit Store',
+                    'primaryActionUrl' => route('storefront.stores.show', $nearbyOfferShop->slug),
+                    'secondaryActionLabel' => 'View All Offers',
+                    'secondaryActionUrl' => route('storefront.stores.offers', $nearbyOfferShop->slug),
+                    'featuredOffer' => $nearbyFeaturedOffer,
+                    'actionLinkClass' => 'home-stores__all',
+                ])
+            </div>
+        </section>
+    @endif
+    {{-- Legacy promotional/demo sections retired from the homepage. Keep shared theme assets intact. --}}
+    {{--
     <!-- banner -->
     <div class="banner-v01">
         <div class="bn_image">
@@ -488,28 +542,36 @@
     <!-- /Collection -->
 
     <!-- /Banner Countdown -->
-    <section id="top-picks" class="flat-spacing">
-        <div class="container">
-            <div class="sect-heading type-2 text-center wow fadeInUp">
-                <h3 class="s-title">
-                    New Arrivals
-                </h3>
-                <p class="s-desc text-body-1 cl-text-2">
-                    Fresh styles just in! Elevate your look.
-                </p>
-            </div>
-            <div dir="ltr" class="swiper tf-swiper wrap-sw-over" data-preview="4" data-tablet="3"
-                data-mobile-sm="2" data-mobile="1" data-space-lg="30" data-space-md="20" data-space="15">
-                <div class="swiper-wrapper">
-                    @foreach ($demoProducts as $product)
-                        @include('storefront.components.product-card', ['product' => $product])
+    --}}
+    @if(($newArrivalProducts ?? collect())->isNotEmpty())
+        <section id="top-picks" class="home-new-arrivals flat-spacing">
+            <div class="container">
+                <div class="home-new-arrivals__header">
+                    <div class="sect-heading type-2 home-new-arrivals__heading">
+                        <h3 class="s-title">New Arrivals</h3>
+                        <p class="s-desc text-body-1 cl-text-2">Fresh products recently added by local stores.</p>
+                    </div>
+                    <a href="{{ route('storefront.products') }}" class="home-stores__all">
+                        View All <i class="icon icon-ArrowRight" aria-hidden="true"></i>
+                    </a>
+                </div>
+                <div class="home-new-arrivals__grid">
+                    @foreach ($newArrivalProducts as $product)
+                        @include('storefront.components.product-card', [
+                            'product' => $product,
+                            'wrapSlide' => false,
+                            'showStore' => true,
+                            'showCompare' => false,
+                            'showQuickAdd' => false,
+                            'wishlistedProductIds' => $newArrivalWishlistedProductIds ?? [],
+                        ])
                     @endforeach
                 </div>
-                <div class="sw-dot-default tf-sw-pagination"></div>
             </div>
-        </div>
-    </section>
+        </section>
+    @endif
 
+    {{-- Static Shop by Store demo retired from the homepage.
     <!-- Store -->
     <section class="themesFlat">
         <div class="container">
@@ -596,6 +658,7 @@
         </div>
     </section>
     <!-- /Gallery -->
+    --}}
     <!-- Testimonial -->
     <section class="flat-spacing">
         <div class="container">

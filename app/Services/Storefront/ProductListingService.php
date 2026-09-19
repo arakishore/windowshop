@@ -44,6 +44,27 @@ class ProductListingService
             ->through(fn (Product $product): array => $this->cardData($product));
     }
 
+    /**
+     * @param array<int, int> $shopIds
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function newestProductsForShopIds(array $shopIds, int $limit = 8): Collection
+    {
+        $shopIds = $this->sanitizeIdList($shopIds);
+
+        if ($shopIds === [] || $limit < 1) {
+            return collect();
+        }
+
+        return $this->storefrontQuery(null, [
+            'shops' => $shopIds,
+            'sort' => 'new-arrivals',
+        ])
+            ->limit($limit)
+            ->get()
+            ->map(fn (Product $product): array => $this->cardData($product));
+    }
+
     public function categoryProducts(ProductCategory $category, array $filters = [], int $perPage = self::PER_PAGE): LengthAwarePaginator
     {
         $filters = $this->sanitizeListingFilters($filters);
@@ -567,6 +588,7 @@ class ProductListingService
             'name' => $product->product_name,
             'brand' => $product->brand?->name,
             'store' => $product->shop?->name ?? 'Local Store',
+            'store_url' => $product->shop?->slug ? route('storefront.stores.show', $product->shop->slug) : null,
             'url' => $this->urls->product($product),
             'wishlist_store_url' => route('storefront.wishlist.products.store', $product),
             'wishlist_destroy_url' => route('storefront.wishlist.products.destroy', $product),

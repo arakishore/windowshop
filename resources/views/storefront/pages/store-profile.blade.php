@@ -82,50 +82,11 @@
         @endif
 
         @if (($shopPromotions ?? collect())->isNotEmpty())
-            <section class="shop-profile-section shop-profile-offers tf-btn-swiper-main" id="offers" aria-labelledby="shop-profile-offers-title">
-                <div class="shop-profile-section-head">
-                    <div class="shop-section-heading">
-                        <div class="shop-section-heading-icon"><i class="icon icon-Tag" aria-hidden="true"></i></div>
-                        <div>
-                            <h2 class="shop-profile-section-title" id="shop-profile-offers-title">Offers from {{ $shopName }}</h2>
-                            <div class="text-caption-01 cl-text-2 mt-1">Current offers and promotions available from this shop.</div>
-                        </div>
-                    </div>
-                    <a class="shop-profile-section-link" href="{{ route('storefront.stores.offers', $shop->slug) }}">View All Offers <i class="icon icon-ArrowRight" aria-hidden="true"></i></a>
-                </div>
-
-                <div class="swiper tf-swiper shop-profile-offer-carousel" data-preview="6" data-tablet="3" data-mobile-sm="2" data-mobile="1" data-space="16" data-speed="600" aria-label="Shop offers">
-                    <div class="swiper-wrapper">
-                        @foreach ($shopPromotions as $offer)
-                            <div class="swiper-slide">
-                                <article class="shop-profile-offer-card shop-profile-offer-card--{{ ['mint', 'rose', 'blue', 'amber'][$loop->index % 4] }}">
-                                    <div class="shop-profile-offer-top">
-                                        <div>
-                                            <div class="shop-profile-offer-label">{{ $offer['label'] }}</div>
-                                            <h3 class="shop-profile-offer-title">{{ $offer['name'] }}</h3>
-                                        </div>
-                                        <span class="shop-profile-offer-icon" aria-hidden="true"><i class="icon {{ $offer['icon'] ?: 'icon-Tag' }}"></i></span>
-                                    </div>
-                                    @if (!empty($offer['description']))
-                                        <p class="shop-profile-offer-desc">{{ $offer['description'] }}</p>
-                                    @endif
-                                    <div class="shop-profile-offer-bottom">
-                                        <span class="shop-profile-offer-code">{{ !empty($offer['code']) ? 'Code: '.$offer['code'] : 'Auto applied' }}</span>
-                                        <a href="{{ $offer['products_url'] }}" class="shop-profile-offer-link">View Products <i class="icon icon-ArrowRight" aria-hidden="true"></i></a>
-                                    </div>
-                                </article>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-
-                @if ($shopPromotions->count() > 1)
-                    <div class="shop-profile-offer-controls">
-                        <button type="button" class="nav-prev-swiper" aria-label="Previous offers" title="Previous offers"><i class="icon icon-CaretLeft" aria-hidden="true"></i></button>
-                        <button type="button" class="nav-next-swiper" aria-label="Next offers" title="Next offers"><i class="icon icon-CaretRightThin" aria-hidden="true"></i></button>
-                    </div>
-                @endif
-            </section>
+            @include('storefront.partials.shop-offers-carousel', [
+                'offers' => $shopPromotions,
+                'title' => 'Offers from '.$shopName,
+                'primaryActionUrl' => route('storefront.stores.offers', $shop->slug),
+            ])
         @endif
 
         @if (($offerProducts ?? collect())->isNotEmpty())
@@ -153,6 +114,8 @@
                             'product' => $product,
                             'wishlistedProductIds' => $wishlistedProductIds ?? [],
                             'wrapSlide' => false,
+                            'showCompare' => false,
+                            'showQuickAdd' => false,
                         ])
                     @endforeach
                 </div>

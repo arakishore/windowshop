@@ -85,6 +85,28 @@
     color: #768073;
     font-size: 13px;
     line-height: 1.4;
+    transition: transform .24s ease;
+}
+
+.home-local-hero:not(.is-revealed) .home-local-hero__benefit {
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.home-local-hero.is-revealed .home-local-hero__benefit {
+    animation: home-hero-benefit-rise .78s cubic-bezier(.22, .75, .3, 1) both;
+}
+
+.home-local-hero.is-revealed .home-local-hero__benefit:nth-child(2) {
+    animation-delay: .13s;
+}
+
+.home-local-hero.is-revealed .home-local-hero__benefit:nth-child(3) {
+    animation-delay: .26s;
+}
+
+.home-local-hero.is-revealed .home-local-hero__benefit:nth-child(4) {
+    animation-delay: .39s;
 }
 
 .home-local-hero__benefit > i {
@@ -99,6 +121,7 @@
     color: #e43243;
     font-size: 21px;
     box-shadow: 0 7px 20px rgba(48, 67, 38, .08);
+    transition: color .24s ease, background-color .24s ease, border-color .24s ease, box-shadow .24s ease, transform .24s ease;
 }
 
 .home-local-hero__benefit strong,
@@ -110,6 +133,24 @@
     margin-bottom: 2px;
     color: #20251f;
     font-size: 14px;
+    transition: color .24s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .home-local-hero__benefit:hover {
+        transform: translateY(-3px);
+    }
+
+    .home-local-hero__benefit:hover > i {
+        border-color: rgba(228, 50, 67, .28);
+        background: #fff7f8;
+        box-shadow: 0 10px 24px rgba(228, 50, 67, .14);
+        transform: translateY(-2px);
+    }
+
+    .home-local-hero__benefit:hover strong {
+        color: #e43243;
+    }
 }
 
 .home-local-hero__visual {
@@ -190,6 +231,17 @@
 @keyframes home-hero-market-depth {
     from { transform: translate3d(0, 0, 0) scale(1); }
     to { transform: translate3d(2px, -1px, 0) scale(1.03); }
+}
+
+@keyframes home-hero-benefit-rise {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 @media (min-width: 1200px) {
@@ -423,7 +475,23 @@
 
 @media (prefers-reduced-motion: reduce) {
     .home-local-hero__market,
-    .home-local-hero__location img {
+    .home-local-hero__location img,
+    .home-local-hero__benefit {
         animation: none;
+    }
+
+    .home-local-hero__benefit,
+    .home-local-hero__benefit > i {
+        transition: none;
+    }
+
+    .home-local-hero:not(.is-revealed) .home-local-hero__benefit {
+        opacity: 1;
+        transform: none;
+    }
+
+    .home-local-hero__benefit:hover,
+    .home-local-hero__benefit:hover > i {
+        transform: none;
     }
 }

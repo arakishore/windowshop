@@ -50,12 +50,44 @@ class StorefrontController extends Controller
     public function home(Request $request, CustomerLocationService $location): View
     {
         $postalCode = $location->postalCode($request);
-        $district = $postalCode ? trim((string) $location->postalCodeRecord($postalCode)?->district) : '';
+        $postalCodeRecord = $postalCode ? $location->postalCodeRecord($postalCode) : null;
+        $district = trim((string) ($postalCodeRecord?->district ?? ''));
+        $state = trim((string) ($postalCodeRecord?->state ?? ''));
+        $nearbyStoresQuery = $this->storeDiscoveryBaseQuery();
+        $this->applyStoreLocationScope($nearbyStoresQuery, $district, $state);
+        $eligibleShopIds = (clone $nearbyStoresQuery)->reorder()->pluck('shops.id')->all();
+        $offerCounts = $this->shopPromotions->currentOfferCountsForShopIds($eligibleShopIds);
+        $offerShopIds = array_keys($offerCounts);
+
+        if ($offerShopIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($offerShopIds), '?'));
+            $nearbyStoresQuery->orderByRaw("CASE WHEN shops.id IN ({$placeholders}) THEN 0 ELSE 1 END", $offerShopIds);
+        }
+
+        $nearbyStoreModels = $nearbyStoresQuery
+            ->orderByDesc('shops.created_at')
+            ->orderByDesc('shops.id')
+            ->limit(6)
+            ->get();
+        $nearbyOfferShop = $nearbyStoreModels->first(fn (Shop $shop): bool => isset($offerCounts[(int) $shop->getKey()]));
+        $nearbyStores = $nearbyStoreModels
+            ->map(fn (Shop $shop): array => $this->storeCardData($shop, $offerShopIds, $offerCounts));
+        $nearbyOffers = $nearbyOfferShop instanceof Shop
+            ? $this->shopPromotions->currentForShop($nearbyOfferShop, 6)
+            : collect();
+        $newArrivalProducts = $this->productListings->newestProductsForShopIds($eligibleShopIds);
 
         return view('storefront.pages.home', [
             'heroBanners' => $this->banners->getMarketplaceHeroBanners(),
             'heroCity' => mb_strtoupper($district !== '' ? $district : 'NASHIK'),
             'homepageCategories' => $this->homepageCategoryCards(),
+            'nearbyStores' => $nearbyStores,
+            'nearbyStoresLocationLabel' => $district !== '' ? $district : $postalCode,
+            'nearbyOfferShop' => $nearbyOfferShop,
+            'nearbyOffers' => $nearbyOffers,
+            'nearbyFeaturedOffer' => $nearbyOffers->first(fn (array $offer): bool => ! empty($offer['promotional_image_url'])),
+            'newArrivalProducts' => $newArrivalProducts,
+            'newArrivalWishlistedProductIds' => $this->wishlistedProductIds($request, $newArrivalProducts),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
@@ -200,7 +232,7 @@ class StorefrontController extends Controller
         }
     }
 
-    private function storeCardData(Shop $shop, array $offerShopIds = []): array
+    private function storeCardData(Shop $shop, array $offerShopIds = [], array $offerCounts = []): array
     {
         $imagePath = $shop->banner_path ?: $shop->logo_path;
         $storeUrl = route('storefront.stores.show', $shop->slug);
@@ -241,6 +273,8 @@ class StorefrontController extends Controller
             'shop_type' => $shop->rootProductCategory?->name,
             'audiences' => $shop->audiences->pluck('name')->values()->all(),
             'has_offers' => in_array((int) $shop->getKey(), $offerShopIds, true),
+            'offer_count' => (int) ($offerCounts[(int) $shop->getKey()] ?? 0),
+            'image_is_placeholder' => $imagePath === null,
             'image' => $imagePath ? 'storage/'.$imagePath : 'assets/storefront/images/no-image-icon.png',
             'logo' => $shop->logo_path ? 'storage/'.$shop->logo_path : null,
             'initials' => $this->storeInitials($shop->name),

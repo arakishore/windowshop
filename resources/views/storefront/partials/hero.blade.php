@@ -5,7 +5,7 @@
 @endphp
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('assets/storefront/css/home-hero.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/storefront/css/home-hero.css') }}?v={{ filemtime(public_path('assets/storefront/css/home-hero.css')) }}">
 @endpush
 
 @if ($heroBanners->isNotEmpty())
@@ -116,3 +116,30 @@
         </div>
     </section>
 @endif
+
+@push('scripts')
+    <script>
+        (() => {
+            const hero = document.querySelector('.home-local-hero');
+
+            if (!hero) return;
+
+            const preloader = document.getElementById('preload');
+            const reveal = () => requestAnimationFrame(() => hero.classList.add('is-revealed'));
+
+            if (!preloader) {
+                reveal();
+                return;
+            }
+
+            const observer = new MutationObserver(() => {
+                if (!document.body.contains(preloader)) {
+                    observer.disconnect();
+                    reveal();
+                }
+            });
+
+            observer.observe(document.body, { childList: true });
+        })();
+    </script>
+@endpush

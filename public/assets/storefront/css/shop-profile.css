@@ -18,6 +18,22 @@
     text-underline-offset: 2px;
 }
 
+.shop-offer-artwork {
+    width: 100%;
+    margin-bottom: 16px;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #f3f4f6;
+}
+
+.shop-offer-artwork img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 1;
+    object-fit: cover;
+}
+
 .shop-profile-nav {
     margin-top: 12px;
     overflow-x: auto;
@@ -879,6 +895,14 @@
 
 .shop-profile-offers .shop-profile-section-head {
     align-items: center;
+}
+
+.shop-offers-heading-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px 18px;
 }
 
 .shop-profile-offer-carousel {

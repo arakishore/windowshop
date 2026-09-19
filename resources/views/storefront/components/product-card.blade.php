@@ -1,4 +1,8 @@
-@php $wrapSlide = $wrapSlide ?? true; @endphp
+@php
+    $wrapSlide = $wrapSlide ?? true;
+    $showCompare = $showCompare ?? true;
+    $showQuickAdd = $showQuickAdd ?? true;
+@endphp
 @if($wrapSlide)
     <div class="swiper-slide wow fadeInUp">
 @endif
@@ -12,12 +16,14 @@
                 <li class="wishlist">
                     @include('storefront.components.wishlist-button', ['product' => $product, 'wishlistedProductIds' => $wishlistedProductIds ?? []])
                 </li>
-                <li class="compare">
-                    <a href="#compare" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon">
-                        <span class="icon icon-ArrowsLeftRight"></span>
-                        <span class="tooltip">Compare</span>
-                    </a>
-                </li>
+                @if($showCompare)
+                    <li class="compare">
+                        <a href="#compare" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon">
+                            <span class="icon icon-ArrowsLeftRight"></span>
+                            <span class="tooltip">Compare</span>
+                        </a>
+                    </li>
+                @endif
                 <li>
                     <a href="{{ $product['url'] ?? '#;' }}" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon">
                         <span class="icon icon-Eye"></span>
@@ -31,12 +37,21 @@
                 </ul>
             @endif
             @include('storefront.components.product-promotion', ['product' => $product])
-            <div class="product-action_bot">
-                <a href="#quickAdd" data-bs-toggle="modal" class="tf-btn btn-white small w-100">Quick Add</a>
-            </div>
+            @if($showQuickAdd)
+                <div class="product-action_bot">
+                    <a href="#quickAdd" data-bs-toggle="modal" class="tf-btn btn-white small w-100">Quick Add</a>
+                </div>
+            @endif
         </div>
         <div class="card-product_info">
             <a href="{{ $product['url'] ?? '#;' }}" class="name-product lh-24 fw-medium link-underline-text">{{ $product['name'] }}</a>
+            @if(!empty($showStore) && !empty($product['store']))
+                @if(!empty($product['store_url']))
+                    <a href="{{ $product['store_url'] }}" class="home-new-arrival__store link">{{ $product['store'] }}</a>
+                @else
+                    <span class="home-new-arrival__store">{{ $product['store'] }}</span>
+                @endif
+            @endif
             <div class="star-wrap d-flex align-items-center">
                 @for($i = 0; $i < 5; $i++)
                     <i class="icon icon-Star"></i>

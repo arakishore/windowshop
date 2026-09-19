@@ -239,6 +239,67 @@ class PromotionFoundationTest extends TestCase
         $this->assertSame([], Storage::disk('public')->allFiles('promotions'));
     }
 
+    public function test_selected_storefront_offer_displays_promotional_artwork_before_offer_details(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-storefront-artwork@example.test');
+        $promotion = $this->promotion($fixture, 'Storefront Artwork Offer', [
+            'status' => Promotion::STATUS_ACTIVE,
+            'promotional_image_path' => 'promotions/storefront/artwork/version/web.webp',
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => PromotionReward::TYPE_FIXED_DISCOUNT,
+            'value_amount' => 100,
+        ]);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'sort_order' => 10,
+        ]);
+
+        $this->get(route('storefront.stores.offers', [
+            'slug' => $fixture['shop']->slug,
+            'promotion' => $promotion->uuid,
+        ]))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'shop-profile-breadcrumbs',
+                'shop-offer-artwork',
+                'Storefront Artwork Offer',
+                'tf-shop-control',
+            ], false)
+            ->assertSee('storage/promotions/storefront/artwork/version/web.webp', false);
+    }
+
+    public function test_selected_storefront_offer_without_artwork_preserves_the_existing_layout(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-storefront-no-artwork@example.test');
+        $promotion = $this->promotion($fixture, 'No Artwork Offer', [
+            'status' => Promotion::STATUS_ACTIVE,
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => PromotionReward::TYPE_FIXED_DISCOUNT,
+            'value_amount' => 100,
+        ]);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'sort_order' => 10,
+        ]);
+
+        $this->get(route('storefront.stores.offers', [
+            'slug' => $fixture['shop']->slug,
+            'promotion' => $promotion->uuid,
+        ]))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'No Artwork Offer',
+                'tf-shop-control',
+            ], false)
+            ->assertDontSee('shop-offer-artwork', false);
+    }
+
     public function test_merchant_cannot_edit_another_shop_promotion_and_soft_delete_sets_deleted_at(): void
     {
         $this->seed(PromotionTemplateSeeder::class);
@@ -916,6 +977,10 @@ class PromotionFoundationTest extends TestCase
             'target_id' => $brand->getKey(),
             'sort_order' => 10,
         ]);
+        $publicOfferUrl = route('storefront.stores.offers', [
+            'slug' => $fixture['shop']->slug,
+            'promotion' => $promotion->uuid,
+        ]);
 
         $this->actingAs($fixture['user'])
             ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
@@ -930,6 +995,7 @@ class PromotionFoundationTest extends TestCase
             ->assertSee('enctype="multipart/form-data"', false)
             ->assertSee('name="promotional_image"', false)
             ->assertSee('Recommended 1800 x 600 px')
+            ->assertDontSee('Public Offer URL')
             ->assertSee('Leave blank to start immediately')
             ->assertSee('Leave blank for unlimited');
 
@@ -951,6 +1017,15 @@ class PromotionFoundationTest extends TestCase
             ->assertSee('enctype="multipart/form-data"', false)
             ->assertSee('storage/promotions/example/artwork/version/web.webp', false)
             ->assertSee('name="remove_promotional_image"', false)
+            ->assertSee('id="promotional_image_preview"', false)
+            ->assertSee('js-clear-promotional-image', false)
+            ->assertSee('URL.createObjectURL(file)', false)
+            ->assertSee('Storefront &amp; Promotion', false)
+            ->assertSee('value="'.$publicOfferUrl.'"', false)
+            ->assertSee('href="'.$publicOfferUrl.'" target="_blank"', false)
+            ->assertSee('js-copy-offer-url', false)
+            ->assertSee('navigator.clipboard.writeText(input.value)', false)
+            ->assertSee("label.textContent = 'Copied!'", false)
             ->assertSee('value="brands" selected', false)
             ->assertSee('Editable Brand')
             ->assertSee('Selected: Editable Brand')

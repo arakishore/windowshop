@@ -9,6 +9,7 @@ use App\Models\PromotionTarget;
 use App\Models\Shop;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 class ShopPromotionPresenter
 {
@@ -22,26 +23,8 @@ class ShopPromotionPresenter
      */
     public function currentPromotionModels(Shop $shop, ?int $limit = null): Collection
     {
-        $query = Promotion::query()
-            ->with([
-                'template:id,name,reward_type',
-                'rewards',
-                'targets',
-                'conditions',
-                'coupons' => fn ($query) => $this->activeCouponScope($query),
-            ])
-            ->activeNow(now())
+        $query = $this->currentPromotionQuery()
             ->where('shop_id', $shop->getKey())
-            ->where(function (Builder $query): void {
-                $query
-                    ->where('activation_type', Promotion::ACTIVATION_AUTOMATIC)
-                    ->orWhere(function (Builder $query): void {
-                        $query
-                            ->where('activation_type', Promotion::ACTIVATION_COUPON)
-                            ->whereHas('coupons', fn (Builder $query) => $this->activeCouponScope($query));
-                    });
-            })
-            ->whereHas('rewards', fn (Builder $query) => $query->whereIn('reward_type', $this->supportedRewardTypes()))
             ->orderByDesc('priority')
             ->orderBy('id');
 
@@ -76,6 +59,15 @@ class ShopPromotionPresenter
      */
     public function currentOfferShopIds(iterable $shopIds): array
     {
+        return array_keys($this->currentOfferCountsForShopIds($shopIds));
+    }
+
+    /**
+     * @param iterable<int, int|string> $shopIds
+     * @return array<int, int>
+     */
+    public function currentOfferCountsForShopIds(iterable $shopIds): array
+    {
         $shopIds = collect($shopIds)
             ->map(fn ($id): int => (int) $id)
             ->filter()
@@ -86,6 +78,17 @@ class ShopPromotionPresenter
             return [];
         }
 
+        return $this->currentPromotionQuery()
+            ->whereIn('shop_id', $shopIds->all())
+            ->get()
+            ->filter(fn (Promotion $promotion): bool => $promotion->isSetupComplete())
+            ->countBy(fn (Promotion $promotion): int => (int) $promotion->shop_id)
+            ->map(fn ($count): int => (int) $count)
+            ->all();
+    }
+
+    private function currentPromotionQuery(): Builder
+    {
         return Promotion::query()
             ->with([
                 'template:id,name,reward_type',
@@ -95,7 +98,6 @@ class ShopPromotionPresenter
                 'coupons' => fn ($query) => $this->activeCouponScope($query),
             ])
             ->activeNow(now())
-            ->whereIn('shop_id', $shopIds->all())
             ->where(function (Builder $query): void {
                 $query
                     ->where('activation_type', Promotion::ACTIVATION_AUTOMATIC)
@@ -105,14 +107,7 @@ class ShopPromotionPresenter
                             ->whereHas('coupons', fn (Builder $query) => $this->activeCouponScope($query));
                     });
             })
-            ->whereHas('rewards', fn (Builder $query) => $query->whereIn('reward_type', $this->supportedRewardTypes()))
-            ->get()
-            ->filter(fn (Promotion $promotion): bool => $promotion->isSetupComplete())
-            ->pluck('shop_id')
-            ->map(fn ($id): int => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
+            ->whereHas('rewards', fn (Builder $query) => $query->whereIn('reward_type', $this->supportedRewardTypes()));
     }
 
     private function activeCouponScope($query)
@@ -145,6 +140,9 @@ class ShopPromotionPresenter
             'code' => $coupon?->code,
             'activation_type' => $promotion->activation_type,
             'ends_at' => $promotion->ends_at,
+            'promotional_image_url' => $promotion->promotional_image_path
+                ? Storage::disk('public')->url($promotion->promotional_image_path)
+                : null,
             'products_url' => $shop instanceof Shop
                 ? route('storefront.stores.offers', [
                     'slug' => $shop->slug,

@@ -28,6 +28,15 @@
     };
     $isEdit = $promotion->exists;
     $removePromotionalImage = old('remove_promotional_image') && $promotion->promotional_image_path;
+    $promotionalImageSrc = $promotion->promotional_image_path && ! $removePromotionalImage
+        ? asset('storage/'.$promotion->promotional_image_path)
+        : '';
+    $currentPromotionalImageSrc = $promotion->promotional_image_path
+        ? asset('storage/'.$promotion->promotional_image_path)
+        : '';
+    $publicOfferUrl = $isEdit
+        ? route('storefront.stores.offers', ['slug' => $activeShop->slug, 'promotion' => $promotion->uuid])
+        : null;
     $currentTemplate = $isEdit
         ? $promotion->template
         : $templates->firstWhere('id', (int) old('promotion_template_id', $promotion->promotion_template_id ?: $templates->first()?->id));
@@ -285,22 +294,32 @@
                     <textarea id="description" name="description" rows="3" class="form-control">{{ old('description', $promotion->description) }}</textarea>
                 </div>
                 <div class="col-12">
-                    <label class="form-label" for="promotional_image">Promotional Banner</label>
-                    @if($promotion->promotional_image_path && ! $removePromotionalImage)
-                        <div class="mb-3">
-                            <img src="{{ asset('storage/'.$promotion->promotional_image_path) }}" alt="Current promotional banner" class="img-fluid rounded border" style="width: min(100%, 600px); aspect-ratio: 3 / 1; object-fit: cover;">
+                    <label class="form-label d-block">Promotional Banner</label>
+                    <div class="card border-dashed p-3 mb-0">
+                        <div class="d-flex flex-column align-items-start gap-3">
+                            <div class="rounded overflow-hidden bg-light border d-flex align-items-center justify-content-center w-100" style="max-width: 600px; aspect-ratio: 3 / 1;">
+                                <img id="promotional_image_preview" src="{{ $promotionalImageSrc }}" data-current-src="{{ $currentPromotionalImageSrc }}" alt="Promotional banner preview" class="img-fluid {{ $promotionalImageSrc ? '' : 'd-none' }}" style="width: 100%; height: 100%; object-fit: cover;">
+                                <div id="promotional_image_placeholder" class="text-muted {{ $promotionalImageSrc ? 'd-none' : '' }}">{{ $removePromotionalImage ? 'Will remove' : 'Promotional Banner' }}</div>
+                            </div>
+                            <div class="w-100">
+                                <label for="promotional_image" class="btn btn-outline-primary btn-sm">
+                                    <i class="ph-upload me-1" aria-hidden="true"></i>
+                                    {{ $promotion->promotional_image_path ? 'Change Image' : 'Choose Image' }}
+                                </label>
+                                <button type="button" class="btn btn-link btn-sm text-muted js-clear-promotional-image">Clear</button>
+                                <input id="promotional_image" name="promotional_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="d-none @error('promotional_image') is-invalid @enderror">
+                                <div class="form-text">JPG, PNG or WebP. Recommended 1800 x 600 px, minimum 600 x 200 px, up to {{ (int) config('images.offer_banner_web.max_upload_kb', 8192) / 1024 }} MB.</div>
+                                @error('promotional_image')<div class="text-danger small">{{ $message }}</div>@enderror
+                                @if($promotion->promotional_image_path)
+                                    <div class="form-check mt-2">
+                                        <input id="remove_promotional_image" name="remove_promotional_image" type="checkbox" value="1" class="form-check-input @error('remove_promotional_image') is-invalid @enderror" @checked($removePromotionalImage)>
+                                        <label for="remove_promotional_image" class="form-check-label">Remove current promotional banner</label>
+                                        @error('remove_promotional_image')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                    </div>
+                                @endif
+                            </div>
                         </div>
-                    @endif
-                    <input id="promotional_image" name="promotional_image" type="file" accept="image/jpeg,image/png,image/webp" class="form-control @error('promotional_image') is-invalid @enderror">
-                    @error('promotional_image')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    <div class="form-text">JPG, PNG or WebP. Recommended 1800 x 600 px, minimum 600 x 200 px, up to {{ (int) config('images.offer_banner_web.max_upload_kb', 8192) / 1024 }} MB.</div>
-                    @if($promotion->promotional_image_path)
-                        <div class="form-check mt-2">
-                            <input id="remove_promotional_image" name="remove_promotional_image" type="checkbox" value="1" class="form-check-input @error('remove_promotional_image') is-invalid @enderror" @checked($removePromotionalImage)>
-                            <label for="remove_promotional_image" class="form-check-label">Remove current promotional banner</label>
-                            @error('remove_promotional_image')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    @endif
+                    </div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label" for="starts_at">Starts At</label>
@@ -546,6 +565,26 @@
             </div>
         </div>
 
+        @if($isEdit)
+            <div class="card">
+                <div class="card-header"><h5 class="mb-0">Storefront &amp; Promotion</h5></div>
+                <div class="card-body">
+                    <label class="form-label" for="public_offer_url">Public Offer URL</label>
+                    <div class="input-group">
+                        <input id="public_offer_url" type="text" class="form-control" value="{{ $publicOfferUrl }}" readonly>
+                        <button type="button" class="btn btn-outline-secondary js-copy-offer-url" data-copy-label="Copy">
+                            <i class="ph-copy me-1" aria-hidden="true"></i>
+                            <span>Copy</span>
+                        </button>
+                    </div>
+                    <a href="{{ $publicOfferUrl }}" target="_blank" rel="noopener" class="btn btn-light mt-3">
+                        <i class="ph-arrow-square-out me-1" aria-hidden="true"></i>
+                        View Offer
+                    </a>
+                </div>
+            </div>
+        @endif
+
         <div class="d-flex justify-content-end gap-2">
             <a href="{{ route('merchant.promotions.index') }}" class="btn btn-light">Cancel</a>
             <button type="submit" class="btn btn-primary">
@@ -570,6 +609,12 @@
             const exchangeWindow = document.querySelector('.js-exchange-window-wrapper');
             const valueType = document.querySelector('#value_type');
             const giftProduct = document.querySelector('#gift_product_id');
+            const copyOfferUrl = document.querySelector('.js-copy-offer-url');
+            const promotionalImageInput = document.querySelector('#promotional_image');
+            const promotionalImagePreview = document.querySelector('#promotional_image_preview');
+            const promotionalImagePlaceholder = document.querySelector('#promotional_image_placeholder');
+            const removePromotionalImage = document.querySelector('#remove_promotional_image');
+            const clearPromotionalImage = document.querySelector('.js-clear-promotional-image');
             const valueAmountLabel = document.querySelector('.js-value-amount-label');
             const previewText = document.querySelector('.js-offer-preview-text');
             const fieldMap = {
@@ -593,6 +638,80 @@
             function selectedCode() {
                 return templateInputs.find((input) => input.checked)?.dataset.templateCode || form?.dataset.currentTemplateCode || '';
             }
+
+            copyOfferUrl?.addEventListener('click', async function () {
+                const input = document.querySelector('#public_offer_url');
+
+                if (!input) {
+                    return;
+                }
+
+                if (!navigator.clipboard) {
+                    return;
+                }
+
+                try {
+                    await navigator.clipboard.writeText(input.value);
+                } catch (error) {
+                    return;
+                }
+
+                const label = this.querySelector('span');
+                label.textContent = 'Copied!';
+                window.setTimeout(() => {
+                    label.textContent = this.dataset.copyLabel || 'Copy';
+                }, 1600);
+            });
+
+            let promotionalImageObjectUrl = null;
+
+            function showPromotionalImage(src, placeholder = 'Promotional Banner') {
+                promotionalImagePreview.src = src;
+                promotionalImagePreview.classList.toggle('d-none', !src);
+                promotionalImagePlaceholder.textContent = placeholder;
+                promotionalImagePlaceholder.classList.toggle('d-none', !!src);
+            }
+
+            promotionalImageInput?.addEventListener('change', function () {
+                const file = this.files && this.files[0];
+
+                if (!file || !/^image\/(jpeg|jpg|png|webp)$/i.test(file.type)) {
+                    return;
+                }
+
+                if (promotionalImageObjectUrl) {
+                    URL.revokeObjectURL(promotionalImageObjectUrl);
+                }
+
+                promotionalImageObjectUrl = URL.createObjectURL(file);
+                removePromotionalImage && (removePromotionalImage.checked = false);
+                showPromotionalImage(promotionalImageObjectUrl);
+            });
+
+            clearPromotionalImage?.addEventListener('click', function () {
+                promotionalImageInput.value = '';
+
+                if (promotionalImageObjectUrl) {
+                    URL.revokeObjectURL(promotionalImageObjectUrl);
+                    promotionalImageObjectUrl = null;
+                }
+
+                showPromotionalImage(promotionalImagePreview.dataset.currentSrc || '');
+            });
+
+            removePromotionalImage?.addEventListener('change', function () {
+                if (this.checked) {
+                    promotionalImageInput.value = '';
+                    if (promotionalImageObjectUrl) {
+                        URL.revokeObjectURL(promotionalImageObjectUrl);
+                        promotionalImageObjectUrl = null;
+                    }
+                    showPromotionalImage('', 'Will remove');
+                    return;
+                }
+
+                showPromotionalImage(promotionalImagePreview.dataset.currentSrc || '');
+            });
 
             function setVisible(element, visible, disableControls = true) {
                 if (!element) {

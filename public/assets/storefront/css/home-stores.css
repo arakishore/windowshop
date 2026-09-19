@@ -1,0 +1,427 @@
+.home-stores {
+    padding: 64px 0 72px;
+    background: #f7f8fa;
+}
+
+.home-stores__header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 28px;
+}
+
+.home-stores__heading {
+    margin: 0;
+}
+
+.home-stores__all,
+.home-store-card .shop-card-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.home-stores__all:hover,
+.home-store-card .shop-card-cta:hover {
+    color: var(--primary);
+}
+
+.home-stores__rail {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+}
+
+.home-stores__item {
+    min-width: 0;
+}
+
+.home-store-card {
+    height: 100%;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 5px 18px rgba(17, 24, 39, .06);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.home-store-card:hover {
+    box-shadow: 0 12px 34px rgba(15, 23, 42, .13);
+    transform: translateY(-3px);
+}
+
+.home-store-card .shop-image-wrapper {
+    position: relative;
+    display: block;
+    aspect-ratio: 64 / 27;
+    background: #eef1f4;
+}
+
+.home-store-card .shop-image,
+.home-store-card .home-store-placeholder {
+    width: 100%;
+    height: 100%;
+}
+
+.home-store-card .shop-image {
+    display: block;
+    object-fit: cover;
+}
+
+.home-store-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: #64748b;
+    background: #eef1f4;
+}
+
+.home-store-placeholder i {
+    font-size: 25px;
+}
+
+.home-store-placeholder span {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.home-store-card .shop-type-badge {
+    position: absolute;
+    top: 12px;
+    z-index: 2;
+    max-width: calc(100% - 145px);
+    overflow: hidden;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.home-store-card .shop-type-badge {
+    left: 12px;
+    padding: 6px 9px;
+    background: rgba(17, 24, 39, .78);
+    color: #fff;
+}
+
+.home-store-card .shop-offers-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    display: inline-flex;
+    width: 120px;
+    height: 100px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 14px 12px;
+    background: linear-gradient(135deg, #ef4444 0%, #f97316 58%, #f59e0b 100%);
+    box-shadow: 0 9px 20px rgba(234, 88, 12, .28);
+    clip-path: polygon(50% 0%, 60% 14%, 76% 8%, 79% 25%, 96% 28%, 85% 41%, 100% 54%, 83% 61%, 88% 78%, 69% 76%, 61% 94%, 50% 81%, 38% 96%, 31% 78%, 13% 84%, 17% 65%, 0% 57%, 14% 44%, 4% 29%, 21% 26%, 24% 8%, 40% 14%);
+    color: #fff;
+    line-height: .95;
+    text-align: center;
+    text-shadow: 0 1px 1px rgba(127, 29, 29, .35);
+    transform: rotate(6deg);
+}
+
+.home-store-card .shop-offers-badge span {
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: .05em;
+    line-height: 1;
+}
+
+.home-store-card .shop-offers-badge strong {
+    color: #fff7ad;
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: .02em;
+    line-height: 1;
+}
+
+.home-store-card .shop-logo {
+    position: absolute;
+    bottom: 10px;
+    left: 16px;
+    z-index: 3;
+    display: flex;
+    width: 54px;
+    height: 54px;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 3px solid #fff;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 6px 16px rgba(17, 24, 39, .14);
+}
+
+.home-store-card .shop-logo img,
+.home-store-card .shop-initial {
+    width: 100%;
+    height: 100%;
+}
+
+.home-store-card .shop-logo img {
+    object-fit: cover;
+}
+
+.home-store-card .shop-initial {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #263238;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.home-store-card .shop-content {
+    padding: 16px 16px 16px;
+}
+
+.home-store-card .shop-name {
+    margin: 0 0 9px;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.home-store-card .shop-name a {
+    color: #111827;
+}
+
+.home-store-card .shop-meta {
+    /* min-height: 0px; */
+    margin-bottom: 4px;
+}
+
+.home-store-card .meta-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    color: #667085;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.home-store-card .meta-row i {
+    flex: 0 0 auto;
+    margin-top: 2px;
+}
+
+.home-store-card .meta-value,
+.home-store-card .meta-value a {
+    color: inherit;
+}
+
+.home-stores__empty {
+    padding: 34px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    color: #667085;
+    text-align: center;
+}
+
+.home-offers {
+    padding: 64px 0 72px;
+    background: #fff;
+}
+
+.home-offers__heading {
+    margin-bottom: 28px;
+}
+
+.home-offers__carousel {
+    margin-top: 0;
+}
+
+.home-offers .shop-offers-heading-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px 18px;
+}
+
+.home-offers .shop-featured-offer-artwork {
+    display: block;
+    width: 100%;
+    margin-bottom: 24px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f7f8fa;
+}
+
+.home-offers .shop-featured-offer-artwork img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 1;
+    object-fit: contain;
+}
+
+.home-new-arrivals__header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 28px;
+}
+
+.home-new-arrivals__heading {
+    margin: 0;
+}
+
+.home-new-arrivals__grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 36px 24px;
+}
+
+.home-new-arrival__store {
+    display: block;
+    margin-top: 5px;
+    overflow: hidden;
+    color: #667085;
+    font-size: 13px;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.home-new-arrival__store:hover {
+    color: var(--primary);
+}
+
+@media (max-width: 991px) {
+    .home-stores__rail {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .home-new-arrivals__grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 767px) {
+    .home-stores {
+        padding: 46px 0 52px;
+    }
+
+    .home-offers {
+        padding: 46px 0 52px;
+    }
+
+    .home-offers .shop-profile-section-head {
+        align-items: flex-start;
+    }
+
+    .home-offers .shop-offers-heading-actions {
+        justify-content: flex-start;
+    }
+
+    .home-offers .shop-featured-offer-artwork {
+        margin-bottom: 18px;
+    }
+
+    .home-stores__header {
+        align-items: flex-end;
+        gap: 14px;
+        margin-bottom: 12px;
+    }
+
+    .home-new-arrivals__header {
+        align-items: flex-end;
+        gap: 14px;
+        margin-bottom: 24px;
+    }
+
+    .home-new-arrivals__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 28px 14px;
+    }
+
+    .home-stores__all {
+        flex: 0 0 auto;
+        font-size: 13px;
+    }
+
+    .home-stores__rail {
+        display: flex;
+        gap: 14px;
+        margin-right: calc(var(--bs-gutter-x) * -.5);
+        padding-right: 34px;
+        padding-bottom: 12px;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-color: #c4c9d0 #eceff2;
+        scrollbar-width: thin;
+    }
+
+    .home-stores__rail::-webkit-scrollbar {
+        height: 5px;
+    }
+
+    .home-stores__rail::-webkit-scrollbar-track {
+        background: #eceff2;
+    }
+
+    .home-stores__rail::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: #c4c9d0;
+    }
+
+    .home-stores__item {
+        flex: 0 0 min(82vw, 330px);
+        scroll-snap-align: start;
+    }
+
+    .home-store-card .shop-offers-badge {
+        top: 8px;
+        right: 8px;
+        width: 96px;
+        height: 80px;
+    }
+
+    .home-store-card .shop-offers-badge span {
+        font-size: 12px;
+    }
+
+    .home-store-card .shop-offers-badge strong {
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 390px) {
+    .home-stores__header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .home-new-arrivals__header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .home-store-card {
+        transition: none;
+    }
+
+    .home-store-card:hover {
+        transform: none;
+    }
+}
