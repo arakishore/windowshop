@@ -318,13 +318,13 @@
 
 @media (max-width: 767px) {
     .home-local-hero {
-        min-height: 760px;
+        min-height: 690px;
         background-position: 24% center;
     }
 
     .home-local-hero__container {
         display: block;
-        min-height: 760px;
+        min-height: 690px;
     }
 
     .home-local-hero__content {
@@ -367,7 +367,7 @@
     }
 
     .home-local-hero__location {
-        top: 2%;
+        top: -2%;
         right: 41%;
         width: 130px;
     }
@@ -375,12 +375,20 @@
     .home-local-hero__location img {
         width: 54px;
     }
+
+    .home-local-hero__location p {
+        padding: 6px 9px;
+        border: 1px solid rgba(206, 213, 199, .88);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, .94);
+        box-shadow: 0 7px 16px rgba(55, 64, 45, .12);
+    }
 }
 
 @media (max-width: 575px) {
     .home-local-hero,
     .home-local-hero__container {
-        min-height: 680px;
+        min-height: 640px;
     }
 
     .home-local-hero__content {
@@ -408,7 +416,7 @@
     }
 
     .home-local-hero__location {
-        top: 0;
+        top: -2%;
         right: 36%;
     }
 }

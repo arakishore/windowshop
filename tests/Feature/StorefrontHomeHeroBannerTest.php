@@ -154,7 +154,7 @@ class StorefrontHomeHeroBannerTest extends TestCase
             ->assertOk()
             ->assertSee('Shop Local')
             ->assertSee('Shop Genuine')
-            ->assertSee('Discover amazing products from trusted local shops in')
+            ->assertSee('Discover amazing products from trusted local shops.')
             ->assertSee('Explore Stores')
             ->assertSee('href="'.route('storefront.stores').'"', false)
             ->assertSee('assets/storefront/images/hero/hero-market.png', false)

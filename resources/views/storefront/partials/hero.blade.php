@@ -70,7 +70,7 @@
                     <span>Shop Genuine</span>
                 </h1>
                 <p class="home-local-hero__description">
-                    Discover amazing products from trusted local shops.</strong>.
+                    Discover amazing products from trusted local shops.
                 </p>
                 <div>
                     <a href="{{ route('storefront.stores') }}" class="tf-btn animate-btn home-local-hero__cta">

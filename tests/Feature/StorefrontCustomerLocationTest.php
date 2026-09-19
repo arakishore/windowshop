@@ -138,7 +138,7 @@ class StorefrontCustomerLocationTest extends TestCase
         $this->withSession([CustomerLocationService::SESSION_KEY => '422009'])
             ->get(route('storefront.home'))
             ->assertOk()
-            ->assertSee('trusted local shops in <strong>NASHIK</strong>', false)
+            ->assertSee('Discover amazing products from trusted local shops.')
             ->assertSee('<strong>NASHIK</strong><span>Your Local Market</span>', false);
     }
 
