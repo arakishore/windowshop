@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
 use App\Enums\BannerPosition;
+use App\Models\CmsPage;
 use App\Models\PostalCode;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -16,6 +17,7 @@ use App\Services\Banner\BannerService;
 use App\Services\Cart\CartPageService;
 use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Delivery\ShopDeliveryServiceabilityService;
+use App\Services\Merchant\ShopPageContent;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductLocationSorter;
@@ -40,6 +42,7 @@ class StorefrontController extends Controller
         private readonly ProductListingService $productListings,
         private readonly ShopPromotionPresenter $shopPromotions,
         private readonly ShopOfferProductService $offerProducts,
+        private readonly ShopPageContent $pageContent,
         private readonly StorefrontCustomerContext $customerContext,
         private readonly StorefrontUrlService $urls,
     ) {}
@@ -389,30 +392,22 @@ class StorefrontController extends Controller
 
     public function terms(): View
     {
-        return view('storefront.pages.terms', [
-            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
-        ]);
+        return $this->marketplaceCmsPage('terms', 'storefront.pages.terms');
     }
 
     public function privacy(): View
     {
-        return view('storefront.pages.privacy', [
-            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
-        ]);
+        return $this->marketplaceCmsPage('privacy', 'storefront.pages.privacy');
     }
 
     public function returns(): View
     {
-        return view('storefront.pages.returns', [
-            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
-        ]);
+        return $this->marketplaceCmsPage('return_refund', 'storefront.pages.returns');
     }
 
     public function shipping(): View
     {
-        return view('storefront.pages.shipping', [
-            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
-        ]);
+        return $this->marketplaceCmsPage('shipping', 'storefront.pages.shipping');
     }
 
     public function contact(): View
@@ -811,18 +806,32 @@ class StorefrontController extends Controller
 
     public function storeCmsPage(string $slug, string $pageSlug): View
     {
-        $shop = $this->activeShopBySlug($slug);
+        $shop = $this->activeShopBySlug($slug)->load([
+            'rootProductCategory:id,name,slug',
+            'audiences:id,name,slug',
+            'city:id,name',
+            'state:id,name',
+            'country:id,name',
+        ]);
         $page = $shop->pages()
             ->where('slug', $pageSlug)
             ->where('status', ShopPage::STATUS_PUBLISHED)
             ->whereNotNull('published_at')
             ->where('published_at', '<=', now())
             ->firstOrFail();
+        $heroProducts = $this->productListings->shopProducts($shop, [], 5);
+        $shopProfile = $this->shopProfileData($shop);
+        $shopProfile['product_count'] = $heroProducts->total();
 
         return view('storefront.pages.store-cms-page', [
             'shop' => $shop,
             'page' => $page,
-            'shopProfile' => $this->shopProfileData($shop),
+            'shopProfile' => $shopProfile,
+            'heroProducts' => $heroProducts,
+            'heroBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_HERO),
+            'shopLocation' => $this->shopLocationData($shop),
+            'shopWhatsappUrl' => $this->productListings->shopWhatsappUrl($shop, "Hello {$shop->name}!"),
+            'hasShopOffers' => $this->shopPromotions->currentForShop($shop, 1)->isNotEmpty(),
             'shopFooterPages' => $this->publishedStandardPages($shop),
             'storefrontShop' => $shop,
             'storefrontNavigationCategories' => $this->navigation->getMerchantCategories($shop),
@@ -1155,6 +1164,28 @@ class StorefrontController extends Controller
                     'url' => $this->urls->category($category),
                 ];
             });
+    }
+
+    private function marketplaceCmsPage(string $pageKey, string $fallbackView): View
+    {
+        $navigation = $this->navigation->getMarketplaceCategories();
+        $page = CmsPage::query()
+            ->where('page_type', CmsPage::TYPE_STANDARD)
+            ->where('page_key', $pageKey)
+            ->where('status', CmsPage::STATUS_PUBLISHED)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->first();
+
+        if (! $page) {
+            return view($fallbackView, ['storefrontNavigationCategories' => $navigation]);
+        }
+
+        return view('storefront.pages.marketplace-cms-page', [
+            'page' => $page,
+            'pageBody' => $this->pageContent->render($page->body),
+            'storefrontNavigationCategories' => $navigation,
+        ]);
     }
 
     private function findCategoryInTree(iterable $categories, string $slug): ?ProductCategory

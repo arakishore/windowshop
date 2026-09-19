@@ -71,6 +71,16 @@
 							</a>
 						</li>
 
+						<li class="nav-item nav-item-submenu {{ request()->routeIs('admin.cms-pages.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+							<a href="#" class="nav-link {{ request()->routeIs('admin.cms-pages.*') ? 'active' : '' }}">
+								<i class="ph-file-text"></i>
+								<span>Content Management</span>
+							</a>
+							<ul class="nav-group-sub collapse {{ request()->routeIs('admin.cms-pages.*') ? 'show' : '' }}">
+								<li class="nav-item"><a href="{{ route('admin.cms-pages.index') }}" class="nav-link {{ request()->routeIs('admin.cms-pages.*') ? 'active' : '' }}">Pages</a></li>
+							</ul>
+						</li>
+
 						<li class="nav-item nav-item-submenu {{ $isMarketingActive ? 'nav-item-expanded nav-item-open' : '' }}">
 							<a href="#" class="nav-link {{ $isMarketingActive ? 'active' : '' }}">
 								<i class="ph-megaphone"></i>

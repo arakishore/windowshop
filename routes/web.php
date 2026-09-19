@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\BannerLibraryController;
 use App\Http\Controllers\Admin\BannerTemplateController;
+use App\Http\Controllers\Admin\CmsPageController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
@@ -45,6 +46,7 @@ Route::get('/', function () {
 Route::get('/storefront', [StorefrontController::class, 'home'])->name('storefront.home');
 Route::post('/location/postal-code', [CustomerLocationController::class, 'store'])->name('storefront.location.postal-code.store');
 Route::post('/location/detect', [CustomerLocationController::class, 'detect'])->name('storefront.location.detect');
+Route::get('/about', [StorefrontController::class, 'about'])->name('storefront.about.short');
 Route::get('/about-us', [StorefrontController::class, 'about'])->name('storefront.about');
 Route::get('/stores', [StorefrontController::class, 'stores'])->name('storefront.stores');
 Route::get('/stores/{slug}/offers', [StorefrontController::class, 'storeOfferProducts'])->name('storefront.stores.offers');
@@ -131,6 +133,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware(['auth', 'admin.role'])->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('cms-pages/{cmsPage}/preview', [CmsPageController::class, 'preview'])->name('cms-pages.preview');
+        Route::post('cms-pages/bulk-action', [CmsPageController::class, 'bulkAction'])->name('cms-pages.bulk-action');
+        Route::resource('cms-pages', CmsPageController::class)
+            ->except(['show'])
+            ->parameters(['cms-pages' => 'cmsPage']);
         Route::resource('master/shop-audiences', ShopAudienceController::class)
             ->except(['show'])
             ->names('master.shop-audiences');

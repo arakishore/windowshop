@@ -19,28 +19,8 @@
                 <span>{{ $page->title }}</span>
             </nav>
 
-            <header class="shop-cms-identity">
-                <a class="shop-cms-identity-link" href="{{ route('storefront.stores.show', $shop->slug) }}">
-                    @if ($shopProfile['logo'])
-                        <img src="{{ asset($shopProfile['logo']) }}" width="54" height="54" alt="{{ $shop->name }} logo">
-                    @else
-                        <span class="shop-cms-initials">{{ $shopProfile['initials'] }}</span>
-                    @endif
-                    <span>{{ $shop->name }}</span>
-                </a>
-                <a class="shop-cms-back" href="{{ route('storefront.stores.show', $shop->slug) }}">Back to shop <i class="icon icon-ArrowRight" aria-hidden="true"></i></a>
-            </header>
-
-            <nav class="shop-profile-nav" aria-label="Shop navigation">
-                <div class="shop-profile-nav-items">
-                    <a class="shop-profile-nav-item" href="{{ route('storefront.stores.show', $shop->slug) }}"><i class="icon icon-HouseLine" aria-hidden="true"></i>Shop Home</a>
-                    <a class="shop-profile-nav-item" href="{{ route('storefront.stores.show', $shop->slug) }}#shop-products"><i class="icon icon-Package" aria-hidden="true"></i>All Products</a>
-                    @if ($shopFooterPages->has('about'))
-                        <a class="shop-profile-nav-item {{ $page->page_key === 'about' ? 'is-active' : '' }}" href="{{ route('storefront.stores.pages.show', [$shop->slug, $shopFooterPages['about']->slug]) }}"><i class="icon icon-Info" aria-hidden="true"></i>About Us</a>
-                    @endif
-                    <a class="shop-profile-nav-item" href="{{ route('storefront.stores.show', $shop->slug) }}#shop-location"><i class="icon icon-MapPin" aria-hidden="true"></i>Location</a>
-                </div>
-            </nav>
+            @include('storefront.partials.shop-hero')
+            @include('storefront.partials.shop-navigation')
 
             <article class="shop-cms-article">
                 <h1>{{ $page->title }}</h1>

@@ -378,12 +378,6 @@
     gap: 28px 18px;
 }
 
-.shop-profile-offer-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 16px;
-}
-
 .shop-profile-similar-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -878,96 +872,143 @@
     font-size: 18px;
 }
 
-.shop-profile-offer-card[hidden] {
-    display: none;
+.shop-profile-offers .shop-section-heading-icon {
+    background: #fff0f0;
+    color: #c92e43;
+}
+
+.shop-profile-offers .shop-profile-section-head {
+    align-items: center;
+}
+
+.shop-profile-offer-carousel {
+    overflow: hidden;
+}
+
+.shop-profile-offer-carousel .swiper-slide {
+    height: auto;
 }
 
 .shop-profile-offer-card {
     display: flex;
     flex-direction: column;
     min-width: 0;
-    min-height: 198px;
-    padding: 18px;
-    border: 1px solid #e5e7eb;
+    min-height: 172px;
+    height: 100%;
+    padding: 16px 18px;
+    border: 1px solid var(--offer-border);
     border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+    background: var(--offer-bg);
+}
+
+.shop-profile-offer-card--mint { --offer-bg: #f5fffb; --offer-border: #bcebd8; --offer-color: #13734c; --offer-icon-bg: #ddf7eb; }
+.shop-profile-offer-card--rose { --offer-bg: #fff9fa; --offer-border: #f7cbd0; --offer-color: #ba2739; --offer-icon-bg: #ffe4e7; }
+.shop-profile-offer-card--blue { --offer-bg: #f7fbff; --offer-border: #c7e0ff; --offer-color: #175b9b; --offer-icon-bg: #e1efff; }
+.shop-profile-offer-card--amber { --offer-bg: #fffcf6; --offer-border: #f1dcb4; --offer-color: #865514; --offer-icon-bg: #fff0cf; }
+
+.shop-profile-offer-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.shop-profile-offer-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    background: var(--offer-icon-bg);
+    color: var(--offer-color);
+    font-size: 17px;
 }
 
 .shop-profile-offer-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 12px;
-    color: #047857;
-    font-size: 18px;
+    margin-bottom: 4px;
+    color: var(--offer-color);
+    font-size: 16px;
     font-weight: 800;
-    line-height: 1.15;
-}
-
-.shop-profile-offer-label .icon {
-    font-size: 18px;
+    line-height: 1.2;
 }
 
 .shop-profile-offer-title {
-    display: -webkit-box;
-    margin: 0 0 7px;
-    min-height: 41px;
-    overflow: hidden;
-    color: #111827;
-    font-size: 15px;
-    line-height: 1.35;
-    font-weight: 800;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    margin: 0;
+    color: #263241;
+    font-size: 13px;
+    line-height: 1.4;
+    font-weight: 500;
 }
 
 .shop-profile-offer-desc {
-    display: -webkit-box;
-    min-height: 38px;
-    margin: 0 0 12px;
-    overflow: hidden;
-    color: #6b7280;
-    font-size: 13px;
-    line-height: 1.45;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-}
-
-.shop-profile-offer-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: auto;
-    color: #6b7280;
+    margin: 8px 0 0;
+    color: #536171;
     font-size: 12px;
+    line-height: 1.4;
 }
 
-.shop-profile-offer-meta span {
+.shop-profile-offer-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 11px;
+    margin-top: auto;
+    padding-top: 15px;
+}
+
+.shop-profile-offer-code {
     display: inline-flex;
     align-items: center;
-    min-height: 24px;
-    padding: 3px 9px;
-    border: 1px solid #e5e7eb;
-    border-radius: 999px;
-    background: #f9fafb;
+    max-width: 100%;
+    min-height: 27px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    background: var(--offer-icon-bg);
+    color: #46576a;
+    font-size: 12px;
+    overflow-wrap: anywhere;
 }
 
 .shop-profile-offer-link {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    margin-top: 14px;
-    color: #111827;
-    font-size: 13px;
-    font-weight: 800;
+    color: #203244;
+    font-size: 12px;
+    font-weight: 700;
     line-height: 1.2;
     text-decoration: none;
 }
 
 .shop-profile-offer-link:hover {
-    color: #047857;
+    color: var(--offer-color);
     text-decoration: underline;
+}
+
+.shop-profile-offer-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.shop-profile-offer-controls button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid #dbe3ea;
+    border-radius: 5px;
+    background: #fff;
+    color: #294457;
+}
+
+.shop-profile-offer-controls button.swiper-button-disabled {
+    opacity: .4;
+    cursor: default;
 }
 
 .shop-offer-context {
@@ -981,34 +1022,6 @@
     font-size: 12px;
     font-weight: 700;
     line-height: 1.2;
-}
-
-.shop-profile-offer-toggle-wrap {
-    display: flex;
-    justify-content: center;
-    margin-top: 18px;
-}
-
-.shop-profile-offer-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border: 0;
-    background: transparent;
-    color: #345174;
-    font-size: 14px;
-    font-weight: 700;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-}
-
-.shop-profile-offer-toggle .icon {
-    font-size: 13px;
-    transition: transform .18s ease;
-}
-
-.shop-profile-offer-toggle.is-expanded .icon {
-    transform: rotate(180deg);
 }
 
 .shop-profile-empty {
@@ -1064,10 +1077,6 @@
 
     .shop-profile-product-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .shop-profile-offer-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .shop-profile-similar-grid {
@@ -1154,20 +1163,6 @@
     .shop-profile-product-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 22px 12px;
-    }
-
-    .shop-profile-offer-grid {
-        display: flex;
-        gap: 12px;
-        margin-inline: -18px;
-        padding-inline: 18px;
-        overflow-x: auto;
-        scroll-snap-type: x mandatory;
-    }
-
-    .shop-profile-offer-card {
-        flex: 0 0 82%;
-        scroll-snap-align: start;
     }
 
     .shop-profile-similar-grid {

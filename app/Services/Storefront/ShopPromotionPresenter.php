@@ -142,6 +142,7 @@ class ShopPromotionPresenter
             'name' => $this->displayName($promotion, $coupon),
             'description' => $this->description($promotion),
             'scope' => $this->scopeLabel($promotion),
+            'code' => $coupon?->code,
             'activation_type' => $promotion->activation_type,
             'ends_at' => $promotion->ends_at,
             'products_url' => $shop instanceof Shop

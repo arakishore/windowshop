@@ -2,35 +2,6 @@
 
 @php
     $shopName = $shopProfile['name'];
-    $heroSlides = collect($heroBanners)
-        ->map(function ($banner) {
-            return [
-                'title' => $banner->title ?: 'Featured at this shop',
-                'subtitle' => $banner->subtitle ?: $banner->description,
-                'image' => $banner->desktop_image_path ? asset('storage/' . $banner->desktop_image_path) : null,
-                'url' => null,
-            ];
-        })
-        ->filter(fn($slide) => !empty($slide['image']))
-        ->values();
-
-    if ($heroSlides->isEmpty()) {
-        $heroSlides = collect($products->items())
-            ->take(5)
-            ->map(
-                fn($product) => [
-                    'title' => $product['name'],
-                    'subtitle' => $product['price'],
-                    'image' => $product['image'],
-                    'url' => $product['url'],
-                ],
-            )
-            ->values();
-    }
-
-    $coverImage = $shopProfile['cover']
-        ? asset($shopProfile['cover'])
-        : $heroSlides->first()['image'] ?? asset('assets/storefront/images/category/cate-1.jpg');
     $shopFooterLocation = collect([
         $shopLocation['area'] ?? null,
         $shopLocation['city'] ?? null,
@@ -91,116 +62,8 @@
                 <span>{{ $shopName }}</span>
             </nav>
 
-            <section class="shop-profile-hero" style="--shop-cover: url('{{ $coverImage }}');">
-                <div class="shop-profile-hero-inner">
-                    <div class="shop-profile-identity">
-                        <div class="shop-profile-logo">
-                            @if ($shopProfile['logo'])
-                                <img src="{{ asset($shopProfile['logo']) }}" width="84" height="84"
-                                    alt="{{ $shopName }} logo">
-                            @else
-                                <span>{{ $shopProfile['initials'] }}</span>
-                            @endif
-                        </div>
-
-
-
-                        <h1 class="shop-profile-title">{{ $shopName }}</h1>
-
-                        @if ($shopProfile['description'])
-                            <p class="shop-profile-description">{{ $shopProfile['description'] }}</p>
-                        @endif
-
-                        <div class="shop-profile-actions">
-                            {{-- <a href="{{ $shopProfile['website_url'] }}" class="shop-profile-action" target="_blank" rel="noopener">
-                                Visit Shop Website <i class="icon icon-ArrowUpRight1"></i>
-                            </a> --}}
-                            {{-- @if ($shopProfile['maps_url'])
-                                <a href="{{ $shopProfile['maps_url'] }}" class="shop-profile-action secondary" target="_blank" rel="noopener">
-                                    View on Maps <i class="icon icon-MapPin"></i>
-                                </a>
-                            @endif --}}
-                        </div>
-                        <div class="shop-profile-facts">
-                            <span class="shop-profile-fact"><i
-                                    class="icon icon-Tag"></i>{{ $shopProfile['shop_type'] ?: 'General Store' }}</span>
-                            @if (!empty($shopProfile['audiences']))
-                                <span class="shop-profile-fact"><i
-                                        class="icon icon-Users"></i>{{ implode(', ', $shopProfile['audiences']) }}</span>
-                            @endif
-                            <span class="shop-profile-fact"><i
-                                    class="icon icon-Package"></i>{{ $shopProfile['product_count'] }} products</span>
-                            <span class="shop-profile-fact"><i class="icon icon-ShieldCheck"></i>Active Shop</span>
-                        </div>
-                    </div>
-
-                    <div class="shop-profile-slider">
-                        <div dir="ltr" class="swiper tf-swiper" data-preview="1" data-tablet="1" data-mobile="1"
-                            data-space="0" data-loop="{{ $heroSlides->count() > 1 ? 'true' : 'false' }}"
-                            data-auto="{{ $heroSlides->count() > 1 ? 'true' : 'false' }}" data-delay="4500">
-                            <div class="swiper-wrapper">
-                                @forelse ($heroSlides as $slide)
-                                    <div class="swiper-slide">
-                                        @if (!empty($slide['url']))
-                                            <a href="{{ $slide['url'] }}" class="shop-profile-slide-card">
-                                            @else
-                                                <div class="shop-profile-slide-card">
-                                        @endif
-                                        <img loading="{{ $loop->first ? 'eager' : 'lazy' }}" src="{{ $slide['image'] }}"
-                                            alt="{{ $slide['title'] }}">
-                                        <div class="shop-profile-slide-caption">
-                                            {{ $slide['title'] }}
-                                            @if (!empty($slide['subtitle']))
-                                                <div class="text-caption-01 fw-normal mt-1">{{ $slide['subtitle'] }}</div>
-                                            @endif
-                                        </div>
-                                        @if (!empty($slide['url']))
-                                            </a>
-                                        @else
-                                    </div>
-                                @endif
-                            </div>
-                        @empty
-                            <div class="swiper-slide">
-                                <div class="shop-profile-slide-card">
-                                    <img loading="eager" src="{{ $coverImage }}" alt="{{ $shopName }}">
-                                    <div class="shop-profile-slide-caption">{{ $shopName }}</div>
-                                </div>
-                            </div>
-                            @endforelse
-                        </div>
-                        @if ($heroSlides->count() > 1)
-                            <div class="sw-dot-default tf-sw-pagination"></div>
-                        @endif
-                    </div>
-                </div>
-            </section>
-
-        <nav class="shop-profile-nav" aria-label="Shop navigation">
-            <div class="shop-profile-nav-items">
-                <a class="shop-profile-nav-item is-active" href="#shop-home" aria-current="page"><i class="icon icon-HouseLine" aria-hidden="true"></i>Shop Home</a>
-                <span class="shop-profile-nav-item is-disabled" aria-disabled="true" title="Collections coming soon"><i class="icon icon-SquaresFour" aria-hidden="true"></i>Collections</span>
-                @if (($shopPromotions ?? collect())->isNotEmpty())
-                    <a class="shop-profile-nav-item" href="#offers"><i class="icon icon-Tag" aria-hidden="true"></i>Offers</a>
-                @else
-                    <span class="shop-profile-nav-item is-disabled" aria-disabled="true"><i class="icon icon-Tag" aria-hidden="true"></i>Offers</span>
-                @endif
-                <a class="shop-profile-nav-item" href="#shop-products"><i class="icon icon-Package" aria-hidden="true"></i>All Products</a>
-                @if ($shopFooterPages->has('about'))
-                    <a class="shop-profile-nav-item" href="{{ route('storefront.stores.pages.show', [$shop->slug, $shopFooterPages['about']->slug]) }}"><i class="icon icon-Info" aria-hidden="true"></i>About Us</a>
-                @else
-                    <span class="shop-profile-nav-item is-disabled" aria-disabled="true"><i class="icon icon-Info" aria-hidden="true"></i>About Us</span>
-                @endif
-                @if (!empty($shopLocation['address']) || !empty($shopLocation['directions_url']))
-                    <a class="shop-profile-nav-item" href="#shop-location"><i class="icon icon-MapPin" aria-hidden="true"></i>Location</a>
-                @else
-                    <span class="shop-profile-nav-item is-disabled" aria-disabled="true"><i class="icon icon-MapPin" aria-hidden="true"></i>Location</span>
-                @endif
-                @if ($shopWhatsappUrl)
-                    <a class="shop-profile-nav-item shop-profile-nav-whatsapp" href="{{ $shopWhatsappUrl }}" target="_blank" rel="noopener noreferrer"><i class="icon icon-WhatsappLogo" aria-hidden="true"></i>WhatsApp</a>
-                @endif
-            </div>
-        </nav>
+            @include('storefront.partials.shop-hero')
+            @include('storefront.partials.shop-navigation')
 
         @if ($middleBanners->isNotEmpty())
             <section class="shop-profile-section">
@@ -219,60 +82,47 @@
         @endif
 
         @if (($shopPromotions ?? collect())->isNotEmpty())
-            @php
-                $initialOfferCount = 4;
-                $hiddenOfferCount = max(0, $shopPromotions->count() - $initialOfferCount);
-            @endphp
-            <section class="shop-profile-section shop-profile-offers" id="offers" aria-labelledby="shop-profile-offers-title" data-shop-offers>
+            <section class="shop-profile-section shop-profile-offers tf-btn-swiper-main" id="offers" aria-labelledby="shop-profile-offers-title">
                 <div class="shop-profile-section-head">
-                    <div>
-                        <h2 class="shop-profile-section-title" id="shop-profile-offers-title">Offers from {{ $shopName }}</h2>
-                        <div class="text-caption-01 cl-text-2 mt-1">Current deals and promotions available from this shop.</div>
+                    <div class="shop-section-heading">
+                        <div class="shop-section-heading-icon"><i class="icon icon-Tag" aria-hidden="true"></i></div>
+                        <div>
+                            <h2 class="shop-profile-section-title" id="shop-profile-offers-title">Offers from {{ $shopName }}</h2>
+                            <div class="text-caption-01 cl-text-2 mt-1">Current offers and promotions available from this shop.</div>
+                        </div>
+                    </div>
+                    <a class="shop-profile-section-link" href="{{ route('storefront.stores.offers', $shop->slug) }}">View All Offers <i class="icon icon-ArrowRight" aria-hidden="true"></i></a>
+                </div>
+
+                <div class="swiper tf-swiper shop-profile-offer-carousel" data-preview="6" data-tablet="3" data-mobile-sm="2" data-mobile="1" data-space="16" data-speed="600" aria-label="Shop offers">
+                    <div class="swiper-wrapper">
+                        @foreach ($shopPromotions as $offer)
+                            <div class="swiper-slide">
+                                <article class="shop-profile-offer-card shop-profile-offer-card--{{ ['mint', 'rose', 'blue', 'amber'][$loop->index % 4] }}">
+                                    <div class="shop-profile-offer-top">
+                                        <div>
+                                            <div class="shop-profile-offer-label">{{ $offer['label'] }}</div>
+                                            <h3 class="shop-profile-offer-title">{{ $offer['name'] }}</h3>
+                                        </div>
+                                        <span class="shop-profile-offer-icon" aria-hidden="true"><i class="icon {{ $offer['icon'] ?: 'icon-Tag' }}"></i></span>
+                                    </div>
+                                    @if (!empty($offer['description']))
+                                        <p class="shop-profile-offer-desc">{{ $offer['description'] }}</p>
+                                    @endif
+                                    <div class="shop-profile-offer-bottom">
+                                        <span class="shop-profile-offer-code">{{ !empty($offer['code']) ? 'Code: '.$offer['code'] : 'Auto applied' }}</span>
+                                        <a href="{{ $offer['products_url'] }}" class="shop-profile-offer-link">View Products <i class="icon icon-ArrowRight" aria-hidden="true"></i></a>
+                                    </div>
+                                </article>
+                            </div>
+                        @endforeach
                     </div>
                 </div>
 
-                <div class="shop-profile-offer-grid">
-                    @foreach ($shopPromotions as $offer)
-                        <article class="shop-profile-offer-card {{ $loop->iteration > $initialOfferCount ? 'shop-profile-offer-extra' : '' }}"
-                            @if ($loop->iteration > $initialOfferCount) hidden data-shop-offer-extra @endif>
-                            <div class="shop-profile-offer-label">
-                                @if (!empty($offer['icon']))
-                                    <i class="icon {{ $offer['icon'] }}" aria-hidden="true"></i>
-                                @endif
-                                {{ $offer['label'] }}
-                            </div>
-
-                            <h3 class="shop-profile-offer-title">{{ $offer['name'] }}</h3>
-
-                            @if (!empty($offer['description']))
-                                <p class="shop-profile-offer-desc">{{ $offer['description'] }}</p>
-                            @endif
-
-                            <div class="shop-profile-offer-meta">
-                                <span>{{ $offer['scope'] }}</span>
-                                @if (!empty($offer['ends_at']))
-                                    <span>Ends {{ $offer['ends_at']->format('d M') }}</span>
-                                @endif
-                            </div>
-
-                            @if (!empty($offer['products_url']))
-                                <a href="{{ $offer['products_url'] }}" class="shop-profile-offer-link">
-                                    View Products <i class="icon icon-CaretRightThin"></i>
-                                </a>
-                            @endif
-                        </article>
-                    @endforeach
-                </div>
-
-                @if ($hiddenOfferCount > 0)
-                    <div class="shop-profile-offer-toggle-wrap">
-                        <button type="button"
-                            class="shop-profile-offer-toggle"
-                            data-shop-offers-toggle
-                            aria-expanded="false">
-                            <span data-shop-offers-toggle-label>Show all offers ({{ $hiddenOfferCount }})</span>
-                            <i class="icon icon-CaretDown" aria-hidden="true"></i>
-                        </button>
+                @if ($shopPromotions->count() > 1)
+                    <div class="shop-profile-offer-controls">
+                        <button type="button" class="nav-prev-swiper" aria-label="Previous offers" title="Previous offers"><i class="icon icon-CaretLeft" aria-hidden="true"></i></button>
+                        <button type="button" class="nav-next-swiper" aria-label="Next offers" title="Next offers"><i class="icon icon-CaretRightThin" aria-hidden="true"></i></button>
                     </div>
                 @endif
             </section>
@@ -534,29 +384,6 @@
                 return;
             }
 
-            const button = event.target.closest('[data-shop-offers-toggle]');
-
-            if (!button) {
-                return;
-            }
-
-            const section = button.closest('[data-shop-offers]');
-            const extras = section ? section.querySelectorAll('[data-shop-offer-extra]') : [];
-            const isExpanded = button.getAttribute('aria-expanded') === 'true';
-            const nextExpanded = !isExpanded;
-            const label = button.querySelector('[data-shop-offers-toggle-label]');
-            const hiddenCount = extras.length;
-
-            extras.forEach((card) => {
-                card.hidden = !nextExpanded;
-            });
-
-            button.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
-            button.classList.toggle('is-expanded', nextExpanded);
-
-            if (label) {
-                label.textContent = nextExpanded ? 'Show less' : `Show all offers (${hiddenCount})`;
-            }
         });
 
         document.addEventListener('DOMContentLoaded', function() {

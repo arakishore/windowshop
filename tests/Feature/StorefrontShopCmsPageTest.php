@@ -44,8 +44,15 @@ class StorefrontShopCmsPageTest extends TestCase
             ->assertSee('<h2>Our beginnings</h2>', false)
             ->assertSee('<strong>Welcome</strong>', false)
             ->assertSee('<title>About Us | Page Shop | WindowShop</title>', false)
+            ->assertSeeInOrder(['shop-profile-hero', 'shop-profile-nav', 'shop-cms-article'], false)
+            ->assertSee(route('storefront.stores.show', $shop->slug).'#shop-products', false)
+            ->assertSee(route('storefront.stores.show', $shop->slug).'#shop-location', false)
+            ->assertSee('aria-current="page"', false)
             ->assertDontSee('Our Story');
-        $this->get($this->url($shop, $custom->slug))->assertOk()->assertSee('Custom story');
+        $this->get($this->url($shop, $custom->slug))->assertOk()
+            ->assertSee('shop-profile-hero', false)
+            ->assertSee('shop-profile-nav', false)
+            ->assertSee('Custom story');
         $this->get($this->url($other, 'about'))->assertNotFound();
         $this->get($this->url($other, $custom->slug))->assertNotFound();
         $this->get($this->url($shop, 'missing'))->assertNotFound();
