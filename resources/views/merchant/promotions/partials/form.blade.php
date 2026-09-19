@@ -27,6 +27,7 @@
         };
     };
     $isEdit = $promotion->exists;
+    $removePromotionalImage = old('remove_promotional_image') && $promotion->promotional_image_path;
     $currentTemplate = $isEdit
         ? $promotion->template
         : $templates->firstWhere('id', (int) old('promotion_template_id', $promotion->promotion_template_id ?: $templates->first()?->id));
@@ -282,6 +283,24 @@
                 <div class="col-12">
                     <label class="form-label" for="description">Description</label>
                     <textarea id="description" name="description" rows="3" class="form-control">{{ old('description', $promotion->description) }}</textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="promotional_image">Promotional Banner</label>
+                    @if($promotion->promotional_image_path && ! $removePromotionalImage)
+                        <div class="mb-3">
+                            <img src="{{ asset('storage/'.$promotion->promotional_image_path) }}" alt="Current promotional banner" class="img-fluid rounded border" style="width: min(100%, 600px); aspect-ratio: 3 / 1; object-fit: cover;">
+                        </div>
+                    @endif
+                    <input id="promotional_image" name="promotional_image" type="file" accept="image/jpeg,image/png,image/webp" class="form-control @error('promotional_image') is-invalid @enderror">
+                    @error('promotional_image')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    <div class="form-text">JPG, PNG or WebP. Recommended 1800 x 600 px, minimum 600 x 200 px, up to {{ (int) config('images.offer_banner_web.max_upload_kb', 8192) / 1024 }} MB.</div>
+                    @if($promotion->promotional_image_path)
+                        <div class="form-check mt-2">
+                            <input id="remove_promotional_image" name="remove_promotional_image" type="checkbox" value="1" class="form-check-input @error('remove_promotional_image') is-invalid @enderror" @checked($removePromotionalImage)>
+                            <label for="remove_promotional_image" class="form-check-label">Remove current promotional banner</label>
+                            @error('remove_promotional_image')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                    @endif
                 </div>
                 <div class="col-md-6">
                     <label class="form-label" for="starts_at">Starts At</label>

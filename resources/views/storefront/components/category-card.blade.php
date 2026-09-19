@@ -1,4 +1,4 @@
-<div class="home-categories__item wow fadeInUp" role="listitem">
+<div class="swiper-slide home-categories__item wow fadeInUp" role="listitem">
     <a href="{{ $category['url'] ?? '#;' }}" class="category-v01 home-category-card hover-img">
         <div class="cate-image home-category-card__image img-style">
             <img class="aspect-ratio-1" loading="lazy" width="250" height="250"

@@ -90,8 +90,9 @@ class StorefrontHomeCategoriesTest extends TestCase
 
         $this->assertStringContainsString('Shop By Categories', $section);
         $this->assertStringNotContainsString('Outerwear', $section);
-        $this->assertStringNotContainsString('swiper-wrapper', $section);
-        $this->assertStringNotContainsString('tf-sw-pagination', $section);
+        $this->assertStringContainsString('swiper-wrapper', $section);
+        $this->assertStringContainsString('data-mobile="2.2"', $section);
+        $this->assertStringContainsString('sw-line-default style-2 tf-sw-pagination', $section);
     }
 
     private function category(

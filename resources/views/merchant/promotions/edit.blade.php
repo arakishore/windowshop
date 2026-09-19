@@ -12,7 +12,7 @@
 @endsection
 
 @section('content')
-    <form method="POST" action="{{ route('merchant.promotions.update', $promotion) }}">
+    <form method="POST" action="{{ route('merchant.promotions.update', $promotion) }}" enctype="multipart/form-data">
         @csrf
         @method('PUT')
         @include('merchant.promotions.partials.form')

@@ -136,10 +136,15 @@
                     Explore products from local stores near you.
                 </p>
             </div>
-            <div class="home-categories__rail" role="list" aria-label="Product categories">
-                @foreach ($categories as $category)
-                    @include('storefront.components.category-card', ['category' => $category])
-                @endforeach
+            <div dir="ltr" class="swiper tf-swiper home-categories__rail" data-preview="8" data-tablet="4"
+                data-mobile-sm="2.2" data-mobile="2.2" data-space-lg="24" data-space-md="18" data-space="14"
+                role="region" aria-label="Product categories">
+                <div class="swiper-wrapper" role="list">
+                    @foreach ($categories as $category)
+                        @include('storefront.components.category-card', ['category' => $category])
+                    @endforeach
+                </div>
+                <div class="sw-line-default style-2 tf-sw-pagination home-categories__pagination"></div>
             </div>
         </div>
     </section>

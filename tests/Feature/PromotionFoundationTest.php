@@ -16,9 +16,11 @@ use App\Models\Shop;
 use App\Models\User;
 use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PDO;
 use Tests\TestCase;
@@ -113,6 +115,128 @@ class PromotionFoundationTest extends TestCase
             'target_type' => PromotionTarget::TYPE_PRODUCT,
             'target_id' => $product->getKey(),
         ]);
+        $this->assertNull($promotion->promotional_image_path);
+    }
+
+    public function test_merchant_can_upload_promotional_artwork_to_an_owned_promotion_directory(): void
+    {
+        Storage::fake('public');
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-artwork-create@example.test');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->post(route('merchant.promotions.store'), $this->payload('fixed_discount', [
+                'name' => 'Artwork Offer',
+                'promotional_image' => UploadedFile::fake()->image('offer.jpg', 1800, 600),
+            ]))
+            ->assertRedirect();
+
+        $promotion = Promotion::query()->where('slug', 'artwork-offer')->firstOrFail();
+
+        $this->assertNotNull($promotion->promotional_image_path);
+        $this->assertStringStartsWith("promotions/{$promotion->uuid}/artwork/", $promotion->promotional_image_path);
+        $this->assertStringEndsWith('/web.webp', $promotion->promotional_image_path);
+        Storage::disk('public')->assertExists($promotion->promotional_image_path);
+        Storage::disk('public')->assertExists(dirname($promotion->promotional_image_path).'/thumb.webp');
+    }
+
+    public function test_promotional_artwork_upload_must_be_a_valid_configured_image(): void
+    {
+        Storage::fake('public');
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-artwork-invalid@example.test');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->from(route('merchant.promotions.create'))
+            ->post(route('merchant.promotions.store'), $this->payload('fixed_discount', [
+                'name' => 'Invalid Artwork Offer',
+                'promotional_image' => UploadedFile::fake()->create('offer.txt', 20, 'text/plain'),
+            ]))
+            ->assertRedirect(route('merchant.promotions.create'))
+            ->assertSessionHasErrors('promotional_image');
+
+        $this->assertDatabaseMissing('promotions', ['slug' => 'invalid-artwork-offer']);
+        $this->assertSame([], Storage::disk('public')->allFiles('promotions'));
+    }
+
+    public function test_editing_without_an_upload_preserves_existing_promotional_artwork(): void
+    {
+        Storage::fake('public');
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-artwork-preserve@example.test');
+        $promotion = $this->promotion($fixture, 'Preserved Artwork', [
+            'promotional_image_path' => 'promotions/existing/artwork/version/web.webp',
+        ]);
+        Storage::disk('public')->put($promotion->promotional_image_path, 'existing');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->put(route('merchant.promotions.update', $promotion), $this->payload('fixed_discount', [
+                'name' => 'Preserved Artwork Updated',
+            ]))
+            ->assertRedirect();
+
+        $this->assertSame('promotions/existing/artwork/version/web.webp', $promotion->fresh()->promotional_image_path);
+        Storage::disk('public')->assertExists('promotions/existing/artwork/version/web.webp');
+    }
+
+    public function test_replacing_and_removing_promotional_artwork_cleans_up_owned_variants(): void
+    {
+        Storage::fake('public');
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-artwork-replace@example.test');
+        $promotion = $this->promotion($fixture, 'Replace Artwork');
+        $oldDirectory = "promotions/{$promotion->uuid}/artwork/old-version";
+        $oldPath = "{$oldDirectory}/web.webp";
+        $promotion->forceFill(['promotional_image_path' => $oldPath])->save();
+        Storage::disk('public')->put($oldPath, 'old web');
+        Storage::disk('public')->put("{$oldDirectory}/thumb.webp", 'old thumb');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->put(route('merchant.promotions.update', $promotion), $this->payload('fixed_discount', [
+                'promotional_image' => UploadedFile::fake()->image('replacement.png', 1800, 600),
+            ]))
+            ->assertRedirect();
+
+        $newPath = $promotion->fresh()->promotional_image_path;
+        $this->assertNotSame($oldPath, $newPath);
+        Storage::disk('public')->assertMissing($oldPath);
+        Storage::disk('public')->assertMissing("{$oldDirectory}/thumb.webp");
+        Storage::disk('public')->assertExists($newPath);
+        Storage::disk('public')->assertExists(dirname($newPath).'/thumb.webp');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->put(route('merchant.promotions.update', $promotion), $this->payload('fixed_discount', [
+                'remove_promotional_image' => '1',
+            ]))
+            ->assertRedirect();
+
+        $this->assertNull($promotion->fresh()->promotional_image_path);
+        Storage::disk('public')->assertMissing($newPath);
+        Storage::disk('public')->assertMissing(dirname($newPath).'/thumb.webp');
+    }
+
+    public function test_merchant_cannot_replace_another_shops_promotional_artwork(): void
+    {
+        Storage::fake('public');
+        $this->seed(PromotionTemplateSeeder::class);
+        $owner = $this->fixture('promo-artwork-owner@example.test');
+        $other = $this->fixture('promo-artwork-other@example.test');
+        $promotion = $this->promotion($other, 'Protected Artwork');
+
+        $this->actingAs($owner['user'])
+            ->withSession(['active_shop_id' => $owner['shop']->getKey()])
+            ->put(route('merchant.promotions.update', $promotion), $this->payload('fixed_discount', [
+                'promotional_image' => UploadedFile::fake()->image('unauthorized.jpg', 1800, 600),
+            ]))
+            ->assertNotFound();
+
+        $this->assertNull($promotion->fresh()->promotional_image_path);
+        $this->assertSame([], Storage::disk('public')->allFiles('promotions'));
     }
 
     public function test_merchant_cannot_edit_another_shop_promotion_and_soft_delete_sets_deleted_at(): void
@@ -775,6 +899,7 @@ class PromotionFoundationTest extends TestCase
             'activation_type' => Promotion::ACTIVATION_COUPON,
             'refund_policy_mode' => Promotion::POLICY_ALLOWED,
             'refund_window_days' => 3,
+            'promotional_image_path' => 'promotions/example/artwork/version/web.webp',
         ]);
         $promotion->rewards()->create([
             'reward_type' => PromotionReward::TYPE_FIXED_DISCOUNT,
@@ -802,6 +927,9 @@ class PromotionFoundationTest extends TestCase
             ->assertSee('Fixed Amount Discount')
             ->assertSee('Offer Preview')
             ->assertSee('Activation & Usage', false)
+            ->assertSee('enctype="multipart/form-data"', false)
+            ->assertSee('name="promotional_image"', false)
+            ->assertSee('Recommended 1800 x 600 px')
             ->assertSee('Leave blank to start immediately')
             ->assertSee('Leave blank for unlimited');
 
@@ -820,6 +948,9 @@ class PromotionFoundationTest extends TestCase
             ->assertDontSee('Tier / Bulk Pricing')
             ->assertSee('Editable UI Offer')
             ->assertSee('EDIT500')
+            ->assertSee('enctype="multipart/form-data"', false)
+            ->assertSee('storage/promotions/example/artwork/version/web.webp', false)
+            ->assertSee('name="remove_promotional_image"', false)
             ->assertSee('value="brands" selected', false)
             ->assertSee('Editable Brand')
             ->assertSee('Selected: Editable Brand')
@@ -835,6 +966,7 @@ class PromotionFoundationTest extends TestCase
             'merchant_id',
             'shop_id',
             'promotion_template_id',
+            'promotional_image_path',
             'activation_type',
             'origin',
             'refund_policy_mode',
