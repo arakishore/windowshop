@@ -43,6 +43,14 @@ class CheckoutController extends Controller
                 ->with('error', 'Your cart is empty.');
         }
 
+        if ($request->query->has('shop') && ! $this->checkout->selectShop($request, (int) $request->query('shop'))) {
+            return redirect()->route('storefront.cart')->with('error', 'Please choose a valid shop from your cart.');
+        }
+
+        if ($this->checkout->selectedShopId($request) === null) {
+            return redirect()->route('storefront.cart')->with('error', 'Please choose a shop to continue checkout.');
+        }
+
         $this->checkout->rememberIntent($request);
 
         $customer = $this->customerContext->user($request);
@@ -66,6 +74,10 @@ class CheckoutController extends Controller
             return redirect()
                 ->route('storefront.cart')
                 ->with('error', 'Your cart is empty.');
+        }
+
+        if ($this->checkout->selectedShopId($request) === null) {
+            return redirect()->route('storefront.cart')->with('error', 'Please choose a shop to continue checkout.');
         }
 
         $this->checkout->rememberIntent($request);
@@ -92,7 +104,7 @@ class CheckoutController extends Controller
         $globalCustomer = $this->customerContext->customer($request);
         abort_unless($globalCustomer instanceof Customer, 403);
 
-        if (! $this->checkout->hasCartItems($request)) {
+        if (! $this->checkout->hasCheckoutItems($request)) {
             return response()->json([
                 'ok' => false,
                 'message' => 'Your cart is empty.',
@@ -133,7 +145,7 @@ class CheckoutController extends Controller
         $globalCustomer = $this->customerContext->customer($request);
         abort_unless($globalCustomer instanceof Customer, 403);
 
-        if (! $this->checkout->hasCartItems($request)) {
+        if (! $this->checkout->hasCheckoutItems($request)) {
             return redirect()
                 ->route('storefront.cart')
                 ->with('error', 'Your cart is empty.');

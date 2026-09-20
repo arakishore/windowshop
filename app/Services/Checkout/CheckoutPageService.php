@@ -10,6 +10,7 @@ use App\Services\Cart\CartPageService;
 use App\Services\Storefront\CustomerLocationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 class CheckoutPageService
 {
@@ -23,6 +24,7 @@ class CheckoutPageService
         private readonly CustomerLocationService $location,
         private readonly StorefrontDeliveryService $delivery,
         private readonly StorefrontPaymentMethodService $payments,
+        private readonly CheckoutFlowService $checkout,
     ) {
     }
 
@@ -32,7 +34,13 @@ class CheckoutPageService
     public function pageData(Request $request, User $customer): array
     {
         $cart = $this->cartPage->currentCart($request);
-        $cartData = $this->cartPage->pageData($request);
+        $cartData = $this->checkout->checkoutData($request);
+
+        if ($cartData === null) {
+            throw ValidationException::withMessages([
+                'cart' => 'Please choose a shop from your cart to continue checkout.',
+            ]);
+        }
         $addresses = $this->addressesFor($customer);
         $selectedAddress = $this->selectedAddress($request, $addresses);
         $billingSameAsDelivery = $this->billingSameAsDelivery($request);
@@ -61,7 +69,7 @@ class CheckoutPageService
             'selectedBillingAddress' => $selectedBillingAddress,
             'selectedBillingAddressId' => $selectedBillingAddress?->getKey(),
             'selectedPostalCode' => $selectedPostalCode,
-            'primaryMerchantId' => $this->primaryMerchantId($cart),
+            'primaryMerchantId' => $this->primaryMerchantId($cart, $this->checkout->selectedShopId($request)),
             'countries' => $this->postalLookup->countries(),
             'defaultCountry' => $this->postalLookup->defaultCountry(),
             'shippingOptions' => $deliveryData['options'],
@@ -174,9 +182,11 @@ class CheckoutPageService
         return null;
     }
 
-    private function primaryMerchantId(?Cart $cart): ?int
+    private function primaryMerchantId(?Cart $cart, ?int $shopId): ?int
     {
-        $item = $cart?->items->first();
+        $item = $cart?->items->first(
+            fn ($item): bool => (int) $item->shop_id === $shopId,
+        );
 
         return $item?->shop?->merchant_id !== null ? (int) $item->shop->merchant_id : null;
     }

@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductCategory;
+use App\Models\ProductReview;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
@@ -627,6 +628,14 @@ class ProductListingService
         $images = $this->detailImages($product);
         $description = $product->description ?: ($product->short_description ?: 'A local shop product listing with clean catalogue-ready details.');
         $availability = $this->availabilityGuard->decision($variant, 1);
+        $approvedReviews = ProductReview::query()
+            ->approved()
+            ->with(['customer:id,name', 'images'])
+            ->where('product_id', $product->getKey())
+            ->latest('created_at')
+            ->get();
+        $reviewCount = $approvedReviews->count();
+        $averageRating = $reviewCount > 0 ? round((float) $approvedReviews->avg('rating'), 1) : 0.0;
 
         return [
             'product_id' => (int) $product->getKey(),
@@ -660,7 +669,19 @@ class ProductListingService
             'old_price' => $hasDiscount ? $this->money($mrp) : null,
             'discount' => $discountPercent > 0 ? '-'.$discountPercent.'%' : null,
             'sku' => $variant->sku ?: 'SKU-'.$variant->getKey(),
-            'reviews' => '0 reviews',
+            'review_count' => $reviewCount,
+            'average_rating' => $averageRating,
+            'reviews' => $approvedReviews->map(fn (ProductReview $review): array => [
+                'rating' => $review->rating,
+                'title' => $review->title,
+                'text' => $review->review_text,
+                'customer_name' => $review->customerDisplayName(),
+                'date' => $review->created_at->format('M j, Y'),
+                'images' => $review->images->map(fn ($image): array => [
+                    'url' => Storage::disk('public')->url($image->image_path),
+                    'thumbnail_url' => Storage::disk('public')->url($image->thumbnail_path),
+                ]),
+            ]),
             'sold_text' => 'Available from local shop',
             'viewing_text' => 'Check product details before visiting the store',
             'description' => $description,

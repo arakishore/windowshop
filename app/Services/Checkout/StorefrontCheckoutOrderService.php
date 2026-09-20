@@ -30,6 +30,7 @@ class StorefrontCheckoutOrderService
         private readonly MerchantCustomerService $merchantCustomers,
         private readonly AdminSettingsService $adminSettings,
         private readonly CouponSessionStore $couponStore,
+        private readonly CheckoutFlowService $checkout,
     ) {
     }
 
@@ -45,7 +46,15 @@ class StorefrontCheckoutOrderService
     {
         return DB::transaction(function () use ($request, $actor, $customer, $fulfillment, $paymentMethod, $billingAddress, $customerOrderNote): Order {
             $cart = $this->lockedCart($request);
-            $cartData = $this->cartPage->pageData($request);
+            $selectedShopId = $this->checkout->selectedShopId($request);
+
+            if ($selectedShopId === null || ! $cart->items->contains(fn ($item): bool => (int) $item->shop_id === $selectedShopId)) {
+                throw ValidationException::withMessages([
+                    'cart' => 'Please choose a valid shop from your cart.',
+                ]);
+            }
+
+            $cartData = $this->cartPage->dataForCartShop($cart, $request, $selectedShopId);
 
             if ((bool) ($cartData['is_empty'] ?? true)) {
                 throw ValidationException::withMessages([
@@ -91,6 +100,11 @@ class StorefrontCheckoutOrderService
             }
 
             $group = $groups->first();
+            if ((int) ($group['shop_id'] ?? 0) !== $selectedShopId) {
+                throw ValidationException::withMessages([
+                    'cart' => 'The checkout items do not belong to the selected shop.',
+                ]);
+            }
             $shop = $cart->items
                 ->map(fn ($item): ?Shop => $item->shop)
                 ->filter()
@@ -125,7 +139,16 @@ class StorefrontCheckoutOrderService
                 'totals' => $this->totalsRows((int) $deliveryData['shipping_cents'], $deliveryData),
             ], $actor);
 
-            $cart->items()->delete();
+            $purchasedItemIds = collect($group['items'] ?? [])
+                ->reject(fn (array $item): bool => (bool) ($item['is_generated_gift'] ?? false))
+                ->pluck('id')
+                ->filter(fn ($id): bool => is_numeric($id))
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+            $cart->items()
+                ->where('shop_id', $selectedShopId)
+                ->whereKey($purchasedItemIds)
+                ->delete();
             $this->couponStore->forget($request, (int) $shop->getKey());
             $this->clearCheckoutState($request);
 
@@ -277,6 +300,7 @@ class StorefrontCheckoutOrderService
             CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY,
             StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY,
             StorefrontPaymentMethodService::SELECTED_PAYMENT_SESSION_KEY,
+            CheckoutFlowService::SELECTED_SHOP_SESSION_KEY,
         ]);
     }
 

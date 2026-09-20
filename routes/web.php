@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\MasterData\TaxRateController;
 use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantShopController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ProductReviewController as AdminProductReviewController;
 use App\Http\Controllers\Admin\SystemSettingController;
 use App\Http\Controllers\Customer\Auth\CustomerAuthController;
 use App\Http\Controllers\Storefront\AccountAddressController;
@@ -35,6 +36,7 @@ use App\Http\Controllers\Storefront\CheckoutController;
 use App\Http\Controllers\Storefront\CouponController;
 use App\Http\Controllers\Storefront\CustomerAccountController;
 use App\Http\Controllers\Storefront\CustomerLocationController;
+use App\Http\Controllers\Storefront\ProductReviewController;
 use App\Http\Controllers\Storefront\StorefrontController;
 use App\Http\Controllers\Storefront\WishlistController;
 use Illuminate\Support\Facades\Route;
@@ -80,6 +82,10 @@ Route::post('/account/addresses/{address}/default-billing', [AccountAddressContr
 Route::get('/account/orders', [CustomerAccountController::class, 'orders'])->name('storefront.account.orders');
 Route::get('/account/orders/{order}', [CustomerAccountController::class, 'orderDetail'])->name('storefront.account.orders.show');
 Route::post('/account/orders/{order}/cancel', [CustomerAccountController::class, 'cancelOrder'])->name('storefront.account.orders.cancel');
+Route::get('/account/order-items/{orderItem}/review', [ProductReviewController::class, 'create'])->name('storefront.account.reviews.create');
+Route::post('/account/order-items/{orderItem}/review', [ProductReviewController::class, 'store'])->name('storefront.account.reviews.store');
+Route::get('/account/reviews/{review}/edit', [ProductReviewController::class, 'edit'])->name('storefront.account.reviews.edit');
+Route::put('/account/reviews/{review}', [ProductReviewController::class, 'update'])->name('storefront.account.reviews.update');
 Route::get('/account/wishlist', [CustomerAccountController::class, 'wishlist'])->name('storefront.account.wishlist');
 Route::get('/forgot-password', [StorefrontController::class, 'forgotPassword'])->name('storefront.forgot-password');
 Route::view('/demo/shopping-bag-box', 'storefront.pages.demo-shopping-bag-box')->name('storefront.demo.shopping-bag-box');
@@ -133,6 +139,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware(['auth', 'admin.role'])->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/product-reviews', [AdminProductReviewController::class, 'index'])->name('product-reviews.index');
+        Route::post('/product-reviews/bulk-action', [AdminProductReviewController::class, 'bulkAction'])->name('product-reviews.bulk-action');
+        Route::patch('/product-reviews/{review}/approve', [AdminProductReviewController::class, 'approve'])->name('product-reviews.approve');
+        Route::patch('/product-reviews/{review}/reject', [AdminProductReviewController::class, 'reject'])->name('product-reviews.reject');
+        Route::delete('/product-reviews/{review}', [AdminProductReviewController::class, 'destroy'])->name('product-reviews.destroy');
+        Route::patch('/product-reviews/{review}/restore', [AdminProductReviewController::class, 'restore'])->withTrashed()->name('product-reviews.restore');
+        Route::delete('/product-reviews/{review}/force-delete', [AdminProductReviewController::class, 'forceDelete'])->withTrashed()->name('product-reviews.force-delete');
         Route::get('cms-pages/{cmsPage}/preview', [CmsPageController::class, 'preview'])->name('cms-pages.preview');
         Route::post('cms-pages/bulk-action', [CmsPageController::class, 'bulkAction'])->name('cms-pages.bulk-action');
         Route::resource('cms-pages', CmsPageController::class)

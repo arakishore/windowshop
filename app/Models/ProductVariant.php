@@ -91,6 +91,11 @@ class ProductVariant extends Model
             ->where('target_type', PromotionTarget::TYPE_VARIANT);
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class);
+    }
+
     public function scopeDefault($query)
     {
         return $query->where('is_default', true);

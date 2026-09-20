@@ -1492,7 +1492,7 @@
                                                     </p>
                                                 </div>
                                                 <div>
-                                                    <a href="{{ route('storefront.checkout') }}"
+                                                    <a href="{{ route('storefront.checkout', ['shop' => $shopGroup['shop_id']]) }}"
                                                         class="btn btn-ws-primary w-100 d-flex align-items-center justify-content-center gap-2 mt-3 px-4"
                                                         style="height:42px;">
                                                         Proceed to checkout <i class="fa-solid fa-arrow-right" style="font-size:12px;"></i>

@@ -121,6 +121,22 @@
                                     @if ($item->variant_name)
                                         <p class="text-caption-01 cl-text-3 mb-0">{{ $item->variant_name }}</p>
                                     @endif
+                                    @if ($order->order_status === \App\Models\Order::STATUS_COMPLETED && $item->product_id)
+                                        <div class="mt-12 d-flex align-items-center gap-2 flex-wrap">
+                                            @if ($item->review)
+                                                <a class="tf-btn btn-line small" href="{{ route('storefront.account.reviews.edit', $item->review) }}">Edit Review</a>
+                                                @if ($item->review->status === \App\Models\ProductReview::STATUS_PENDING)
+                                                    <span class="badge bg-warning-subtle text-warning-emphasis">Pending Approval</span>
+                                                @elseif ($item->review->status === \App\Models\ProductReview::STATUS_REJECTED)
+                                                    <span class="badge bg-danger-subtle text-danger-emphasis">Rejected - edit to resubmit</span>
+                                                @endif
+                                            @elseif ($item->reviewIncludingDeleted)
+                                                <span class="text-caption-01 cl-text-3">Review removed</span>
+                                            @else
+                                                <a class="tf-btn btn-line small" href="{{ route('storefront.account.reviews.create', $item) }}">Write a Review</a>
+                                            @endif
+                                        </div>
+                                    @endif
                                     @if ($item->sku)
                                         <p class="text-caption-01 cl-text-3 mb-0">SKU: {{ $item->sku }}</p>
                                     @endif

@@ -1037,11 +1037,13 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertJsonPath('total', '₹700.00');
     }
 
-    public function test_checkout_multishop_delivery_sums_shop_charges_and_hides_pickup(): void
+    public function test_multishop_cart_checkout_is_scoped_to_selected_shop_items_totals_delivery_and_payment(): void
     {
         $customer = $this->customerUser('delivery-multishop@example.test');
         $first = $this->productFixture(price: 600);
         $second = $this->productFixture(price: 700);
+        $first['product']->forceFill(['product_name' => 'Selected Shop Product'])->save();
+        $second['product']->forceFill(['product_name' => 'Other Shop Product'])->save();
         $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
         $this->cartItem($cart, $first['variant']);
         $this->cartItem($cart, $second['variant']);
@@ -1052,43 +1054,43 @@ class StorefrontCheckoutGateTest extends TestCase
             'is_default_billing' => true,
         ]);
         $this->shopSetting($first['shop'], 'fulfillment', 'delivery_flat_charge', 50, ShopSetting::TYPE_DECIMAL);
-        $this->shopSetting($second['shop'], 'fulfillment', 'delivery_flat_charge', 40, ShopSetting::TYPE_DECIMAL);
-        $this->shopSetting($second['shop'], 'fulfillment', 'free_delivery_above', 500, ShopSetting::TYPE_DECIMAL);
+        $this->shopSetting($first['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($second['shop'], 'fulfillment', 'delivery_enabled', false, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($second['shop'], 'payment', 'cod_enabled', false, ShopSetting::TYPE_BOOLEAN);
 
-        $this->actingAs($customer)
+        $response = $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
-            ->get(route('storefront.checkout'))
-            ->assertOk()
+            ->get(route('storefront.checkout', ['shop' => $first['shop']->getKey()]));
+
+        $response->assertOk()
+            ->assertSee('Selected Shop Product')
             ->assertSee('₹50.00')
-            ->assertSee('₹1,350.00')
-            ->assertDontSee('Pickup from Shop');
+            ->assertSee('₹650.00')
+            ->assertSee('Pickup from Shop')
+            ->assertSee('Cash on Delivery')
+            ->assertSessionHas(CheckoutFlowService::SELECTED_SHOP_SESSION_KEY, $first['shop']->getKey());
+
+        $cartData = $response->viewData('cartData');
+        $this->assertSame([$first['shop']->getKey()], collect($cartData['shop_groups'])->pluck('shop_id')->all());
+        $this->assertSame([$first['variant']->getKey()], collect($cartData['shop_groups'][0]['items'])->pluck('product_variant_id')->all());
+        $this->assertSame(60000, $cartData['subtotal_cents']);
     }
 
-    public function test_checkout_multishop_minimum_uses_each_shop_subtotal_not_whole_cart(): void
+    public function test_checkout_rejects_shop_that_is_not_in_the_current_cart(): void
     {
-        $customer = $this->customerUser('delivery-multishop-minimum@example.test');
+        $customer = $this->customerUser('invalid-checkout-shop@example.test');
         $first = $this->productFixture(price: 2000);
-        $second = $this->productFixture(price: 5000);
+        $other = $this->productFixture(price: 5000);
         $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
         $this->cartItem($cart, $first['variant']);
-        $this->cartItem($cart, $second['variant']);
-        $this->postalCode('422009');
-        $this->customerAddress($customer, $first['merchant'], [
-            'postal_code' => '422009',
-            'is_default_shipping' => true,
-            'is_default_billing' => true,
-        ]);
-        $this->shopSetting($first['shop'], 'fulfillment', 'delivery_min_order_amount', 5000, ShopSetting::TYPE_DECIMAL);
-        $this->shopSetting($second['shop'], 'fulfillment', 'delivery_min_order_amount', 3000, ShopSetting::TYPE_DECIMAL);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
-            ->get(route('storefront.checkout'))
-            ->assertOk()
-            ->assertSee('Standard Delivery')
-            ->assertSee('Unavailable')
-            ->assertSee($first['shop']->name.': Minimum order of')
-            ->assertDontSee($second['shop']->name.': Minimum order of');
+            ->get(route('storefront.checkout', ['shop' => $other['shop']->getKey()]))
+            ->assertRedirect(route('storefront.cart'))
+            ->assertSessionHas('error', 'Please choose a valid shop from your cart.');
+
+        $this->assertFalse(session()->has(CheckoutFlowService::SELECTED_SHOP_SESSION_KEY));
     }
 
     public function test_checkout_delivery_shows_selected_cod_when_enabled_without_limits(): void
@@ -1424,6 +1426,50 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Cash at Shop')
             ->assertSee('Pay when you collect your order.')
             ->assertSee($fixture['shop']->name);
+    }
+
+    public function test_multishop_order_creates_and_cleans_up_only_the_selected_shop(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $customer = $this->customerUser('place-selected-shop@example.test');
+        $first = $this->productFixture(price: 700);
+        $second = $this->productFixture(price: 1200);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $firstItem = $this->cartItem($cart, $first['variant']);
+        $secondItem = $this->cartItem($cart, $second['variant']);
+        $address = $this->customerAddress($customer, $first['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+        $this->couponPromotion($second, 'fixed_discount', 'SECOND200', ['value_amount' => '200.00']);
+
+        $response = $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                CheckoutFlowService::SELECTED_SHOP_SESSION_KEY => $first['shop']->getKey(),
+                CouponSessionStore::SESSION_KEY => [$second['shop']->getKey() => 'SECOND200'],
+            ])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ]);
+
+        $order = Order::query()->with('items')->sole();
+        $response->assertRedirect(route('storefront.checkout.success', $order));
+
+        $this->assertSame($first['shop']->getKey(), $order->shop_id);
+        $this->assertSame('700.00', $order->grand_total);
+        $this->assertCount(1, $order->items);
+        $this->assertSame($first['variant']->getKey(), $order->items->first()->product_variant_id);
+        $this->assertDatabaseMissing('cart_items', ['id' => $firstItem->getKey()]);
+        $this->assertDatabaseHas('cart_items', [
+            'id' => $secondItem->getKey(),
+            'cart_id' => $cart->getKey(),
+            'shop_id' => $second['shop']->getKey(),
+        ]);
+        $this->assertSame('SECOND200', session(CouponSessionStore::SESSION_KEY.'.'.$second['shop']->getKey()));
     }
 
     public function test_checkout_place_order_applies_session_coupon_through_authoritative_order_creation(): void

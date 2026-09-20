@@ -17,12 +17,15 @@ use App\Models\PaymentStatus;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductImage;
+use App\Models\ProductReview;
+use App\Models\ProductReviewImage;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\User;
 use Database\Seeders\OrderStatusSeeder;
 use Database\Seeders\PaymentStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -843,6 +846,234 @@ class StorefrontCustomerOrdersTest extends TestCase
         $select = $this->cancellationReasonSelect($response->getContent());
         $this->assertLessThan(strpos($select, 'Second Global Reason'), strpos($select, 'First Global Reason'));
         $this->assertStringContainsString('value="first_global_reason" data-requires-note="1"', $select);
+    }
+
+    public function test_completed_pickup_and_delivery_items_can_be_reviewed_and_variant_resolves_to_parent_product(): void
+    {
+        foreach ([Order::FULFILMENT_PICKUP, Order::FULFILMENT_DELIVERY] as $index => $fulfilment) {
+            $user = $this->customerUser("review-{$index}@example.test", 'Review Customer', '94229452'.str_pad((string) $index, 2, '0', STR_PAD_LEFT));
+            $roleId = $this->assignRole($user, 'customer');
+            $customer = $this->globalCustomer($user);
+            $fixture = $this->fixture('Review Shop '.$index);
+            $product = $this->product($fixture, 'Reviewed Product '.$index);
+            $variant = $this->variant($product);
+            $order = $this->order($customer, $fixture, ['fulfilment_type' => $fulfilment, 'order_status' => Order::STATUS_COMPLETED]);
+            $item = $this->item($order, $product, ['product_variant_id' => $variant->getKey()]);
+
+            $this->actingAs($user)->withSession(['active_role_id' => $roleId])
+                ->post(route('storefront.account.reviews.store', $item), ['rating' => 5, 'title' => 'Excellent', 'review_text' => 'A genuine purchase review.'])
+                ->assertRedirect(route('storefront.account.orders.show', $order));
+
+            $review = ProductReview::query()->where('order_item_id', $item->getKey())->firstOrFail();
+            $this->assertSame(ProductReview::STATUS_PENDING, $review->status);
+            $this->assertSame($product->getKey(), $review->product_id);
+            $this->assertSame($variant->getKey(), $review->product_variant_id);
+            $this->assertDatabaseMissing('product_reviews', ['order_item_id' => $item->getKey(), 'status' => ProductReview::STATUS_APPROVED]);
+        }
+    }
+
+    public function test_review_security_validation_duplicates_and_edit_ownership_are_enforced(): void
+    {
+        $owner = $this->customerUser('review-owner@example.test', 'Owner Customer', '9422945301');
+        $ownerRole = $this->assignRole($owner, 'customer');
+        $ownerCustomer = $this->globalCustomer($owner);
+        $other = $this->customerUser('review-other@example.test', 'Other Customer', '9422945302');
+        $otherRole = $this->assignRole($other, 'customer');
+        $this->globalCustomer($other);
+        $fixture = $this->fixture('Review Security Shop');
+        $product = $this->product($fixture, 'Security Product');
+        $this->variant($product);
+        $pendingOrder = $this->order($ownerCustomer, $fixture, ['order_status' => Order::STATUS_PROCESSING]);
+        $pendingItem = $this->item($pendingOrder, $product);
+
+        $this->actingAs($owner)->withSession(['active_role_id' => $ownerRole])
+            ->post(route('storefront.account.reviews.store', $pendingItem), ['rating' => 5, 'review_text' => 'Too early'])->assertForbidden();
+
+        $completed = $this->order($ownerCustomer, $fixture, ['order_status' => Order::STATUS_COMPLETED]);
+        $item = $this->item($completed, $product);
+        $this->actingAs($other)->withSession(['active_role_id' => $otherRole])
+            ->post(route('storefront.account.reviews.store', $item), ['rating' => 5, 'review_text' => 'Forged purchase', 'status' => 'approved', 'verified_purchase' => true])->assertForbidden();
+
+        $this->actingAs($owner)->withSession(['active_role_id' => $ownerRole])
+            ->post(route('storefront.account.reviews.store', $item), ['rating' => 6, 'review_text' => 'Invalid'])->assertSessionHasErrors('rating');
+        $this->actingAs($owner)->withSession(['active_role_id' => $ownerRole])
+            ->post(route('storefront.account.reviews.store', $item), ['rating' => 4, 'review_text' => 'Valid', 'status' => 'approved', 'verified_purchase' => false]);
+        $review = ProductReview::query()->where('order_item_id', $item->getKey())->firstOrFail();
+        $this->assertSame(ProductReview::STATUS_PENDING, $review->status);
+        $this->assertFalse(array_key_exists('verified_purchase', $review->getAttributes()));
+
+        $this->actingAs($other)->withSession(['active_role_id' => $otherRole])
+            ->put(route('storefront.account.reviews.update', $review), ['rating' => 1, 'review_text' => 'Not mine'])->assertForbidden();
+        $this->actingAs($owner)->withSession(['active_role_id' => $ownerRole])
+            ->post(route('storefront.account.reviews.store', $item), ['rating' => 4, 'review_text' => 'Duplicate'])->assertConflict();
+
+        $review->update(['status' => ProductReview::STATUS_APPROVED]);
+        $this->actingAs($owner)->withSession(['active_role_id' => $ownerRole])
+            ->put(route('storefront.account.reviews.update', $review), ['rating' => 3, 'review_text' => 'Updated review'])->assertRedirect();
+        $this->assertSame(ProductReview::STATUS_PENDING, $review->fresh()->status);
+    }
+
+    public function test_admin_moderation_controls_public_review_aggregate(): void
+    {
+        $customerUser = $this->customerUser('review-public@example.test', 'Public Customer', '9422945401');
+        $customer = $this->globalCustomer($customerUser);
+        $fixture = $this->fixture('Public Review Shop');
+        $product = $this->product($fixture, 'Public Review Product');
+        $variant = $this->variant($product);
+        $order = $this->order($customer, $fixture, ['order_status' => Order::STATUS_COMPLETED]);
+        $item = $this->item($order, $product, ['product_variant_id' => $variant->getKey()]);
+        $review = ProductReview::query()->create(['customer_id' => $customer->getKey(), 'order_id' => $order->getKey(), 'order_item_id' => $item->getKey(), 'product_id' => $product->getKey(), 'product_variant_id' => $variant->getKey(), 'rating' => 5, 'title' => 'Excellent', 'review_text' => 'Approved text', 'status' => ProductReview::STATUS_PENDING]);
+
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))->assertOk()->assertSee('No reviews yet')->assertDontSee('Approved text');
+
+        $admin = $this->customerUser('review-admin@example.test', 'Review Admin', '9422945402');
+        $this->assignRole($admin, 'admin');
+        $this->actingAs($admin)->patch(route('admin.product-reviews.approve', $review))->assertRedirect();
+        $this->assertSame(ProductReview::STATUS_APPROVED, $review->fresh()->status);
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))->assertOk()->assertSee('5.0 (1 Review)')->assertSee('Approved text')->assertSee('Verified Purchase')->assertSee('href="#customer-reviews"', false)->assertSee('data-review-summary-link', false);
+        $this->actingAs($admin)->patch(route('admin.product-reviews.reject', $review))->assertRedirect();
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))->assertOk()->assertSee('No reviews yet')->assertDontSee('Approved text');
+
+        $secondItem = $this->item($order, $product);
+        $secondReview = ProductReview::query()->create(['customer_id' => $customer->getKey(), 'order_id' => $order->getKey(), 'order_item_id' => $secondItem->getKey(), 'product_id' => $product->getKey(), 'product_variant_id' => $variant->getKey(), 'rating' => 4, 'review_text' => 'Second pending review', 'status' => ProductReview::STATUS_PENDING]);
+
+        $this->actingAs($admin)->post(route('admin.product-reviews.bulk-action'), [
+            'action' => 'approve',
+            'review_ids' => [$review->getKey(), $secondReview->getKey()],
+        ])->assertRedirect();
+        $this->assertSame(ProductReview::STATUS_APPROVED, $review->fresh()->status);
+        $this->assertSame(ProductReview::STATUS_APPROVED, $secondReview->fresh()->status);
+        $this->assertSame($admin->getKey(), $secondReview->fresh()->moderated_by);
+        $this->assertNotNull($secondReview->fresh()->moderated_at);
+
+        $this->actingAs($admin)->post(route('admin.product-reviews.bulk-action'), [
+            'action' => 'reject',
+            'review_ids' => [$review->getKey(), $secondReview->getKey()],
+        ])->assertRedirect();
+        $this->assertSame(ProductReview::STATUS_REJECTED, $review->fresh()->status);
+        $this->assertSame(ProductReview::STATUS_REJECTED, $secondReview->fresh()->status);
+
+        $this->actingAs($admin)->post(route('admin.product-reviews.bulk-action'), [
+            'action' => 'publish',
+            'review_ids' => [$review->getKey()],
+        ])->assertSessionHasErrors('action');
+    }
+
+    public function test_review_images_are_optional_limited_owned_and_cleaned_up_on_edit(): void
+    {
+        $user = $this->customerUser('review-images@example.test', 'Image Customer', '9422945501');
+        $roleId = $this->assignRole($user, 'customer');
+        $customer = $this->globalCustomer($user);
+        $fixture = $this->fixture('Review Image Shop');
+        $product = $this->product($fixture, 'Review Image Product');
+        $this->variant($product);
+        $order = $this->order($customer, $fixture, ['order_status' => Order::STATUS_COMPLETED]);
+        $item = $this->item($order, $product);
+
+        $uploads = collect(range(1, 5))->map(fn (int $index) => UploadedFile::fake()->image("review-{$index}.jpg", 800, 800))->all();
+        $this->actingAs($user)->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.reviews.store', $item), [
+                'rating' => 5,
+                'review_text' => 'Review with genuine product photos.',
+                'images' => $uploads,
+            ])->assertRedirect();
+
+        $review = ProductReview::query()->where('order_item_id', $item->getKey())->firstOrFail();
+        $this->assertCount(5, $review->images);
+        $review->images->each(function (ProductReviewImage $image) use ($review): void {
+            $this->assertStringStartsWith("product-reviews/{$review->uuid}/images/", $image->image_path);
+            Storage::disk('public')->assertExists($image->image_path);
+            Storage::disk('public')->assertExists($image->thumbnail_path);
+        });
+
+        $removed = $review->images->first();
+        $removedWeb = $removed->image_path;
+        $removedThumb = $removed->thumbnail_path;
+        $this->actingAs($user)->withSession(['active_role_id' => $roleId])
+            ->put(route('storefront.account.reviews.update', $review), [
+                'rating' => 4,
+                'review_text' => 'Updated review photos.',
+                'remove_image_ids' => [$removed->getKey()],
+                'images' => [UploadedFile::fake()->image('replacement.webp', 800, 800)],
+            ])->assertRedirect();
+
+        $this->assertCount(5, $review->fresh()->images);
+        Storage::disk('public')->assertMissing($removedWeb);
+        Storage::disk('public')->assertMissing($removedThumb);
+        $this->assertSame(ProductReview::STATUS_PENDING, $review->fresh()->status);
+
+        $publicImage = $review->fresh()->images->last();
+        $publicImageUrl = Storage::disk('public')->url($publicImage->thumbnail_path);
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))
+            ->assertOk()
+            ->assertDontSee($publicImageUrl, false);
+        $review->update(['status' => ProductReview::STATUS_APPROVED]);
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))
+            ->assertOk()
+            ->assertSee($publicImageUrl, false);
+
+        $sixthItem = $this->item($order, $product);
+        $sixUploads = collect(range(1, 6))->map(fn (int $index) => UploadedFile::fake()->image("too-many-{$index}.png", 400, 400))->all();
+        $this->actingAs($user)->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.reviews.store', $sixthItem), [
+                'rating' => 5,
+                'review_text' => 'Too many images.',
+                'images' => $sixUploads,
+            ])->assertSessionHasErrors('images');
+        $this->assertDatabaseMissing('product_reviews', ['order_item_id' => $sixthItem->getKey()]);
+
+        $videoItem = $this->item($order, $product);
+        $this->actingAs($user)->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.reviews.store', $videoItem), [
+                'rating' => 5,
+                'review_text' => 'Video uploads are not supported.',
+                'images' => [UploadedFile::fake()->create('review.mp4', 100, 'video/mp4')],
+            ])->assertSessionHasErrors('images.0');
+        $this->assertDatabaseMissing('product_reviews', ['order_item_id' => $videoItem->getKey()]);
+    }
+
+    public function test_admin_can_trash_restore_and_permanently_delete_review_with_image_cleanup(): void
+    {
+        $customerUser = $this->customerUser('review-trash-customer@example.test', 'Trash Customer', '9422945601');
+        $customerRole = $this->assignRole($customerUser, 'customer');
+        $customer = $this->globalCustomer($customerUser);
+        $fixture = $this->fixture('Review Trash Shop');
+        $product = $this->product($fixture, 'Review Trash Product');
+        $this->variant($product);
+        $order = $this->order($customer, $fixture, ['order_status' => Order::STATUS_COMPLETED]);
+        $item = $this->item($order, $product);
+        $review = ProductReview::query()->create(['customer_id' => $customer->getKey(), 'order_id' => $order->getKey(), 'order_item_id' => $item->getKey(), 'product_id' => $product->getKey(), 'rating' => 5, 'review_text' => 'Review scheduled for deletion', 'status' => ProductReview::STATUS_APPROVED]);
+        $directory = "product-reviews/{$review->uuid}/images/test-image";
+        $image = $review->images()->create(['uuid' => (string) Str::uuid(), 'image_path' => "{$directory}/web.webp", 'thumbnail_path' => "{$directory}/thumb.webp", 'sort_order' => 0]);
+        Storage::disk('public')->put($image->image_path, 'web');
+        Storage::disk('public')->put($image->thumbnail_path, 'thumb');
+
+        $admin = $this->customerUser('review-trash-admin@example.test', 'Trash Admin', '9422945602');
+        $this->assignRole($admin, 'admin');
+
+        $this->actingAs($customerUser)->withSession(['active_role_id' => $customerRole])
+            ->delete(route('admin.product-reviews.destroy', $review))->assertForbidden();
+        $this->actingAs($admin)->delete(route('admin.product-reviews.destroy', $review))->assertRedirect();
+        $this->assertSoftDeleted($review);
+        $this->assertDatabaseHas('product_reviews', ['id' => $review->getKey(), 'order_item_id' => $item->getKey()]);
+        $this->actingAs($admin)->get(route('admin.product-reviews.index'))->assertOk()->assertDontSee('Review scheduled for deletion');
+        $this->actingAs($admin)->get(route('admin.product-reviews.index', ['status' => 'trash']))->assertOk()->assertSee('Review scheduled for deletion')->assertSee('Delete Permanently');
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))->assertOk()->assertSee('No reviews yet')->assertDontSee('Review scheduled for deletion');
+
+        $this->actingAs($customerUser)->withSession(['active_role_id' => $customerRole])
+            ->post(route('storefront.account.reviews.store', $item), ['rating' => 4, 'review_text' => 'Duplicate after deletion'])
+            ->assertConflict();
+
+        $this->actingAs($admin)->patch(route('admin.product-reviews.restore', $review))->assertRedirect();
+        $this->assertNull($review->fresh()->deleted_at);
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))->assertOk()->assertSee('5.0 (1 Review)');
+
+        $this->actingAs($admin)->delete(route('admin.product-reviews.destroy', $review))->assertRedirect();
+        $this->actingAs($admin)->delete(route('admin.product-reviews.force-delete', $review))->assertRedirect();
+        $this->assertDatabaseMissing('product_reviews', ['id' => $review->getKey()]);
+        $this->assertDatabaseMissing('product_review_images', ['id' => $image->getKey()]);
+        Storage::disk('public')->assertMissing($image->image_path);
+        Storage::disk('public')->assertMissing($image->thumbnail_path);
     }
 
     /**

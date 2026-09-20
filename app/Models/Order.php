@@ -164,6 +164,11 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function productReviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class);
+    }
+
     public function totals(): HasMany
     {
         return $this->hasMany(OrderTotal::class)

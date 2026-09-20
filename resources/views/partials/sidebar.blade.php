@@ -63,6 +63,11 @@
 							</a>
 						</li>
 						<li class="nav-item">
+							<a href="{{ route('admin.product-reviews.index') }}" class="nav-link {{ request()->routeIs('admin.product-reviews.*') ? 'active' : '' }}">
+								<i class="ph-star"></i><span>Product Reviews</span>
+							</a>
+						</li>
+						<li class="nav-item">
 							<a href="{{ route('admin.settings.edit') }}" class="nav-link {{ request()->routeIs('admin.settings.*') ? 'active' : '' }}">
 								<i class="ph-gear"></i>
 								<span>

@@ -67,6 +67,39 @@ class CartPageService
     /**
      * @return array<string, mixed>
      */
+    public function pageDataForShop(Request $request, int $shopId): array
+    {
+        $attribute = self::PAGE_DATA_ATTRIBUTE.'_shop_'.$shopId;
+
+        if ($request->attributes->has($attribute)) {
+            return $request->attributes->get($attribute);
+        }
+
+        $cart = $this->currentCart($request);
+        $items = $cart?->items
+            ->filter(fn (CartItem $item): bool => (int) $item->shop_id === $shopId)
+            ->values() ?? collect();
+        $data = $items->isEmpty() ? $this->emptyData() : $this->dataFromItems($items, $request);
+        $request->attributes->set($attribute, $data);
+
+        return $data;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function dataForCartShop(Cart $cart, Request $request, int $shopId): array
+    {
+        $items = $cart->items
+            ->filter(fn (CartItem $item): bool => (int) $item->shop_id === $shopId)
+            ->values();
+
+        return $items->isEmpty() ? $this->emptyData() : $this->dataFromItems($items, $request);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     public function payload(Request $request): array
     {
         return [

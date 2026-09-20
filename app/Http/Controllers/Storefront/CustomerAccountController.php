@@ -160,6 +160,8 @@ class CustomerAccountController extends Controller
             'shop.city',
             'items.product.primaryImage',
             'items.product.category.parent.parent',
+            'items.review',
+            'items.reviewIncludingDeleted',
             'items.taxComponents',
             'totals',
             'statusHistories',

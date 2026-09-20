@@ -64,6 +64,16 @@ return [
         ],
     ],
 
+    'product_review' => [
+        'max_upload_kb' => 5120,
+        'quality' => 82,
+        'fit' => 'cover',
+        'variants' => [
+            'thumb' => [240, 240],
+            'web' => [1200, 1200],
+        ],
+    ],
+
     'offer_banner_app' => [
         'max_upload_kb' => 6144,
         'quality' => 80,

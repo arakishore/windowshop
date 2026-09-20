@@ -1,0 +1,2555 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="Tests\Feature\StorefrontCheckoutGateTest" file="D:\xampp82\htdocs\unwanted\localhyper\windowshop\tests\Feature\StorefrontCheckoutGateTest.php" tests="1" assertions="3" errors="0" failures="1" skipped="0" time="2.587207">
+    <testcase name="test_multishop_cart_checkout_is_scoped_to_selected_shop_items_totals_delivery_and_payment" file="D:\xampp82\htdocs\unwanted\localhyper\windowshop\tests\Feature\StorefrontCheckoutGateTest.php" line="1040" class="Tests\Feature\StorefrontCheckoutGateTest" classname="Tests.Feature.StorefrontCheckoutGateTest" assertions="3" time="2.587207">
+      <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\StorefrontCheckoutGateTest::test_multishop_cart_checkout_is_scoped_to_selected_shop_items_totals_delivery_and_payment&#13;
+Failed asserting that '&lt;!doctype html&gt;\n
+&lt;html lang="en"&gt;\n
+\n
+&lt;head&gt;\n
+    &lt;meta charset="utf-8"&gt;\n
+    &lt;meta name="author" content="WindowShop"&gt;\n
+    &lt;meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"&gt;\n
+    &lt;meta name="description" content="Complete checkout for selected local shop products on WindowShop."&gt;\n
+    &lt;meta name="csrf-token" content="rt5Pz0RbZQ8uXiq10fb7Z0W35s4aDKw3arWZVkBr"&gt;\n
+    &lt;title&gt;Checkout | WindowShop&lt;/title&gt;\n
+    \n
+    &lt;link rel="stylesheet" href="http://localhost/assets/storefront/fonts/fonts.css"&gt;\n
+    &lt;link rel="stylesheet" href="http://localhost/assets/storefront/icon/icomoon/style.css"&gt;\n
+    &lt;link rel="stylesheet" href="http://localhost/assets/storefront/css/bootstrap.min.css"&gt;\n
+    &lt;link rel="stylesheet" href="http://localhost/assets/storefront/css/swiper-bundle.min.css"&gt;\n
+    &lt;link rel="stylesheet" href="http://localhost/assets/storefront/css/animate.css"&gt;\n
+    &lt;link rel="stylesheet" href="http://localhost/assets/storefront/css/styles.css"&gt;\n
+    &lt;link rel="stylesheet" href="http://localhost/assets/storefront/css/storefront-layout.css"&gt;\n
+    &lt;link rel="shortcut icon" href="http://localhost/assets/storefront/images/logo/favicon.svg"&gt;\n
+    &lt;link rel="apple-touch-icon-precomposed" href="http://localhost/assets/storefront/images/logo/favicon.svg"&gt;\n
+\n
+            &lt;style&gt;\n
+        .checkout-grid {\n
+            display: grid;\n
+            grid-template-columns: minmax(0, 1fr) 360px;\n
+            gap: 32px;\n
+            align-items: start;\n
+        }\n
+\n
+        .checkout-section {\n
+            padding: 24px;\n
+            border: 1px solid #e5e7eb;\n
+            border-radius: 6px;\n
+            background: #fff;\n
+        }\n
+\n
+        .checkout-section + .checkout-section {\n
+            margin-top: 20px;\n
+        }\n
+\n
+        .checkout-section-title {\n
+            display: flex;\n
+            align-items: center;\n
+            justify-content: space-between;\n
+            gap: 16px;\n
+            margin-bottom: 18px;\n
+        }\n
+\n
+        .checkout-address-list,\n
+        .checkout-options {\n
+            display: grid;\n
+            gap: 12px;\n
+        }\n
+\n
+        .checkout-address-card,\n
+        .checkout-option {\n
+            display: grid;\n
+            grid-template-columns: auto 1fr;\n
+            gap: 12px;\n
+            padding: 16px;\n
+            border: 1px solid #e5e7eb;\n
+            border-radius: 6px;\n
+            background: #fff;\n
+        }\n
+\n
+        .checkout-address-card.is-selected,\n
+        .checkout-option.is-selected {\n
+            border-color: #111;\n
+        }\n
+\n
+        .checkout-option.is-disabled {\n
+            opacity: .62;\n
+            background: #f8fafc;\n
+        }\n
+\n
+        .checkout-fulfillment-description {\n
+            display: grid;\n
+            gap: 3px;\n
+            margin-top: 4px;\n
+        }\n
+\n
+        .checkout-fulfillment-line {\n
+            display: block;\n
+            line-height: 1.45;\n
+        }\n
+\n
+        .checkout-fulfillment-line--shop {\n
+            color: #111827;\n
+            font-weight: 600;\n
+        }\n
+\n
+        .checkout-fulfillment-line--address {\n
+            color: #4b5563;\n
+            font-size: 14px;\n
+        }\n
+\n
+        .checkout-fulfillment-line--instructions {\n
+            color: #6b7280;\n
+            font-size: 13px;\n
+            font-style: italic;\n
+        }\n
+\n
+        .checkout-address-card input,\n
+        .checkout-option input {\n
+            margin-top: 5px;\n
+        }\n
+\n
+        .checkout-address-actions {\n
+            display: flex;\n
+            flex-wrap: wrap;\n
+            gap: 10px;\n
+            margin-top: 12px;\n
+        }\n
+\n
+        .checkout-address-form {\n
+            display: grid;\n
+            grid-template-columns: repeat(2, minmax(0, 1fr));\n
+            gap: 14px;\n
+            margin-top: 16px;\n
+        }\n
+\n
+        .checkout-address-form .full {\n
+            grid-column: 1 / -1;\n
+        }\n
+\n
+        .checkout-address-form input {\n
+            width: 100%;\n
+        }\n
+\n
+        .checkout-summary {\n
+            position: sticky;\n
+            top: 24px;\n
+        }\n
+\n
+        .checkout-summary-items {\n
+            display: grid;\n
+            gap: 14px;\n
+            margin-bottom: 18px;\n
+        }\n
+\n
+        .checkout-summary-item {\n
+            display: grid;\n
+            grid-template-columns: 64px 1fr;\n
+            gap: 12px;\n
+            align-items: start;\n
+        }\n
+\n
+        .checkout-summary-item img {\n
+            width: 64px;\n
+            height: 64px;\n
+            object-fit: cover;\n
+            border-radius: 6px;\n
+            border: 1px solid #edf0f3;\n
+        }\n
+\n
+        .checkout-total-row {\n
+            display: flex;\n
+            justify-content: space-between;\n
+            gap: 16px;\n
+            padding: 8px 0;\n
+            border-bottom: 1px solid #f0f2f4;\n
+        }\n
+\n
+        .checkout-total-row.grand {\n
+            border-bottom: 0;\n
+            margin-top: 8px;\n
+            font-size: 18px;\n
+            font-weight: 700;\n
+        }\n
+\n
+        .checkout-muted-action {\n
+            border: 0;\n
+            background: transparent;\n
+            padding: 0;\n
+            text-decoration: underline;\n
+        }\n
+\n
+        .checkout-empty-panel {\n
+            padding: 18px;\n
+            border: 1px dashed #d8dee6;\n
+            border-radius: 6px;\n
+            color: #64748b;\n
+            background: #f8fafc;\n
+        }\n
+\n
+        @media (max-width: 991px) {\n
+            .checkout-grid {\n
+                grid-template-columns: 1fr;\n
+            }\n
+\n
+            .checkout-summary {\n
+                position: static;\n
+            }\n
+        }\n
+\n
+        @media (max-width: 575px) {\n
+            .checkout-section {\n
+                padding: 18px;\n
+            }\n
+\n
+            .checkout-address-form {\n
+                grid-template-columns: 1fr;\n
+            }\n
+        }\n
+    &lt;/style&gt;\n
+&lt;/head&gt;\n
+\n
+&lt;body&gt;\n
+    &lt;button id="goTop"&gt;\n
+        &lt;span class="border-progress"&gt;&lt;/span&gt;\n
+        &lt;span class="ic-wrap"&gt;\n
+            &lt;span class="icon icon-CaretTopThin"&gt;&lt;/span&gt;\n
+        &lt;/span&gt;\n
+    &lt;/button&gt;\n
+\n
+    &lt;div class="preload preload-container" id="preload"&gt;\n
+        &lt;div class="preload-logo"&gt;\n
+            &lt;div class="spinner"&gt;&lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+\n
+    &lt;main id="wrapper"&gt;\n
+        &lt;div class="tf-topbar bg-dark tf-btn-swiper-main"&gt;\n
+    &lt;div class="container"&gt;\n
+        &lt;div class="row align-items-center"&gt;\n
+            &lt;div class="col-sm-1 ms-auto d-none d-sm-block"&gt;\n
+                &lt;div class="nav-prev-swiper d-flex text-white link justify-content-end"&gt;\n
+                    &lt;i class="icon icon-CaretLeft fs-20"&gt;&lt;/i&gt;\n
+                &lt;/div&gt;\n
+            &lt;/div&gt;\n
+            &lt;div class="col-sm-10 col-md-8 col-lg-6"&gt;\n
+                &lt;div class="text-center"&gt;\n
+                    &lt;div dir="ltr" class="swiper tf-swiper" data-auto="true" data-loop="true" data-speed="1500" data-delay="1500"&gt;\n
+                        &lt;div class="swiper-wrapper"&gt;\n
+                            &lt;div class="swiper-slide"&gt;\n
+                                &lt;div class="d-flex align-items-center justify-content-center gap-8"&gt;\n
+                                    &lt;i class="icon icon-SealPercent text-primary fs-20"&gt;&lt;/i&gt;\n
+                                    &lt;p class="text-white text-start text-line-clamp-1"&gt;Check products before visiting the store&lt;/p&gt;\n
+                                &lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/div&gt;\n
+            &lt;/div&gt;\n
+            &lt;div class="col-sm-1 me-auto d-none d-sm-block"&gt;\n
+                &lt;div class="nav-next-swiper d-flex text-white link"&gt;\n
+                    &lt;i class="icon icon-CaretRightThin fs-20"&gt;&lt;/i&gt;\n
+                &lt;/div&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/div&gt;\n
+        &lt;header class="tf-header header-s7 scr-box-shadow"&gt;\n
+    &lt;div class="container-full"&gt;\n
+        &lt;div class="header-inner"&gt;\n
+            &lt;div class="box-open-menu-mobile d-xl-none"&gt;\n
+                &lt;a href="#mobileMenu" data-bs-toggle="offcanvas" class="btn-open-menu"&gt;\n
+                    &lt;i class="icon icon-List"&gt;&lt;/i&gt;\n
+                &lt;/a&gt;\n
+            &lt;/div&gt;\n
+            &lt;div class="header-left d-none d-xl-flex"&gt;\n
+                &lt;a href="http://localhost/storefront" class="logo-site"&gt;\n
+                    &lt;img loading="lazy" width="150" height="30" src="http://localhost/assets/admin/images/logov2.png" alt="WindowShop"&gt;\n
+                &lt;/a&gt;\n
+                &lt;style&gt;\n
+        .storefront-category-mega.is-drilling .storefront-mega-root {\n
+            display: none;\n
+        }\n
+\n
+        .storefront-mega-drill {\n
+            display: none;\n
+        }\n
+\n
+        .storefront-mega-drill.is-active {\n
+            display: block;\n
+            width: 340px;\n
+            max-width: 100%;\n
+        }\n
+\n
+        .mega-menu-drill-trigger,\n
+        .mega-menu-back {\n
+            border: 0;\n
+            background: transparent;\n
+            padding: 0;\n
+            font: inherit;\n
+            color: var(--text-2);\n
+            cursor: pointer;\n
+            text-align: left;\n
+        }\n
+\n
+        .mega-menu-drill-trigger {\n
+            display: inline-flex;\n
+            align-items: center;\n
+            gap: 6px;\n
+            font-weight: 500;\n
+            white-space: nowrap;\n
+        }\n
+\n
+        .mega-menu-drill-trigger:hover,\n
+        .mega-menu-back:hover {\n
+            color: var(--text);\n
+        }\n
+\n
+        .mega-menu-back {\n
+            display: inline-flex;\n
+            align-items: center;\n
+            gap: 8px;\n
+            margin-bottom: 18px;\n
+            color: var(--primary);\n
+            font-weight: 600;\n
+        }\n
+\n
+        .mega-menu-drill-heading {\n
+            margin-bottom: 14px;\n
+            font-weight: 700;\n
+            line-height: 1.3;\n
+        }\n
+\n
+        .mega-menu-subcategory-grid {\n
+            display: grid;\n
+            grid-template-columns: repeat(2, 140px);\n
+            column-gap: 30px;\n
+            width: max-content;\n
+        }\n
+\n
+        .mega-menu-subcategory-column {\n
+            display: flex;\n
+            flex-direction: column;\n
+            gap: 8px;\n
+        }\n
+\n
+        .mega-menu-subcategory-column .sub-menu_link {\n
+            display: inline-flex;\n
+            width: 140px;\n
+            padding: 0;\n
+            line-height: 1.25;\n
+        }\n
+\n
+    &lt;/style&gt;\n
+\n
+&lt;nav class="box-navigation"&gt;\n
+    &lt;ul class="box-nav-menu"&gt;\n
+        &lt;li class="menu-item position-relative"&gt;\n
+            &lt;a href="http://localhost/storefront" class="item-link"&gt;\n
+                &lt;span class="text cus-text"&gt;Home&lt;/span&gt;\n
+            &lt;/a&gt;\n
+        &lt;/li&gt;\n
+        &lt;li class="menu-item"&gt;\n
+            &lt;a href="#;" class="item-link"&gt;\n
+                &lt;span class="text cus-text"&gt;Categories&lt;/span&gt;\n
+                &lt;i class="icon icon-CaretDown"&gt;&lt;/i&gt;\n
+            &lt;/a&gt;\n
+            &lt;div class="sub-menu mega-menu storefront-category-mega"&gt;\n
+                &lt;div class="container-full"&gt;\n
+                    &lt;div class="row storefront-mega-root"&gt;\n
+                        \n
+                                                    &lt;div class="col-2"&gt;\n
+                                &lt;div class="mega-menu-item menu-lv-2"&gt;\n
+                                    &lt;p class="menu-heading"&gt;Checkout Category 50ixi6g3&lt;/p&gt;\n
+                                    &lt;ul class="sub-menu_list"&gt;\n
+                                                                            &lt;/ul&gt;\n
+                                &lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                                                    &lt;div class="col-2"&gt;\n
+                                &lt;div class="mega-menu-item menu-lv-2"&gt;\n
+                                    &lt;p class="menu-heading"&gt;Checkout Category 9bhEHJpV&lt;/p&gt;\n
+                                    &lt;ul class="sub-menu_list"&gt;\n
+                                                                            &lt;/ul&gt;\n
+                                &lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                                            &lt;/div&gt;\n
+\n
+                                                                                                                            &lt;/div&gt;\n
+            &lt;/div&gt;\n
+        &lt;/li&gt;\n
+        &lt;li class="menu-item position-relative"&gt;&lt;a href="http://localhost/stores" class="item-link"&gt;&lt;span class="text cus-text"&gt;Shops&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;\n
+        \n
+        \n
+        &lt;li class="menu-item position-relative"&gt;&lt;a href="#;" class="item-link"&gt;&lt;span class="text cus-text"&gt;Offers&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;\n
+        &lt;li class="menu-item position-relative"&gt;&lt;a href="#new-arrivals" class="item-link"&gt;&lt;span class="text cus-text"&gt;New Arrivals&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;\n
+        &lt;li class="menu-item position-relative"&gt;&lt;a href="http://localhost/contact-us" class="item-link"&gt;&lt;span class="text cus-text"&gt;Contact&lt;/span&gt;&lt;/a&gt;&lt;/li&gt;\n
+         \n
+    &lt;/ul&gt;\n
+&lt;/nav&gt;\n
+\n
+            &lt;/div&gt;\n
+            &lt;div class="header-center d-xl-none"&gt;\n
+                &lt;a href="http://localhost/storefront" class="logo-site"&gt;\n
+                    &lt;img loading="lazy" width="150" height="30" src="http://localhost/assets/admin/images/logov2.png" alt="WindowShop"&gt;\n
+                &lt;/a&gt;\n
+            &lt;/div&gt;\n
+            &lt;div class="header-right"&gt;\n
+                &lt;form action="#;" class="form-search-nav style-3 d-none d-xl-block"&gt;\n
+                    &lt;fieldset&gt;\n
+                        &lt;input type="text" placeholder="Search Products" required&gt;\n
+                    &lt;/fieldset&gt;\n
+                    &lt;button type="submit" class="btn-action"&gt;\n
+                        &lt;i class="icon icon-MagnifyingGlass"&gt;&lt;/i&gt;\n
+                    &lt;/button&gt;\n
+                &lt;/form&gt;\n
+                &lt;ul class="nav-icon-list"&gt;\n
+                    &lt;li class="d-none d-sm-block d-xl-none"&gt;\n
+                        &lt;a href="#search" data-bs-toggle="modal" class="nav-icon-item link"&gt;\n
+                            &lt;i class="icon icon-MagnifyingGlass"&gt;&lt;/i&gt;\n
+                        &lt;/a&gt;\n
+                    &lt;/li&gt;\n
+                    &lt;li&gt;\n
+                        &lt;a href="#customer-location-modal"\n
+                            data-bs-toggle="modal"\n
+                            class="nav-icon-item link customer-location-trigger"\n
+                            aria-label="Choose location"\n
+                            data-location-tooltip="Choose location"&gt;\n
+                            &lt;span class="location-pin-icon" aria-hidden="true"&gt;&lt;/span&gt;\n
+                        &lt;/a&gt;\n
+                    &lt;/li&gt;\n
+                    \n
+                                            &lt;li class="nav-account"&gt;\n
+                            &lt;a href="http://localhost/account" class="nav-icon-item link"&gt;\n
+                                                                    &lt;span class="storefront-account-initials" aria-label="Account"&gt;CC&lt;/span&gt;\n
+                                                            &lt;/a&gt;\n
+                            &lt;div class="dropdown-account"&gt;\n
+                                &lt;ul class="list-menu-item"&gt;\n
+                                    &lt;li&gt;\n
+                                        &lt;a href="http://localhost/account" class="sub-menu_link type-pri"&gt;\n
+                                            &lt;span class="cus-text"&gt;My Account&lt;/span&gt;\n
+                                        &lt;/a&gt;\n
+                                    &lt;/li&gt;\n
+                                    &lt;li&gt;\n
+                                        &lt;a href="http://localhost/account/profile" class="sub-menu_link type-pri"&gt;\n
+                                            &lt;span class="cus-text"&gt;Profile&lt;/span&gt;\n
+                                        &lt;/a&gt;\n
+                                    &lt;/li&gt;\n
+                                    &lt;li&gt;\n
+                                        &lt;a href="http://localhost/account/addresses" class="sub-menu_link type-pri"&gt;\n
+                                            &lt;span class="cus-text"&gt;Addresses&lt;/span&gt;\n
+                                        &lt;/a&gt;\n
+                                    &lt;/li&gt;\n
+                                    &lt;li&gt;\n
+                                        &lt;a href="http://localhost/account/orders" class="sub-menu_link type-pri"&gt;\n
+                                            &lt;span class="cus-text"&gt;My Orders&lt;/span&gt;\n
+                                        &lt;/a&gt;\n
+                                    &lt;/li&gt;\n
+                                    &lt;li&gt;\n
+                                        &lt;form method="POST" action="http://localhost/logout"&gt;\n
+                                            &lt;input type="hidden" name="_token" value="rt5Pz0RbZQ8uXiq10fb7Z0W35s4aDKw3arWZVkBr" autocomplete="off"&gt;                                            &lt;button type="submit" class="sub-menu_link type-pri storefront-account-logout"&gt;\n
+                                                &lt;span class="cus-text"&gt;Logout&lt;/span&gt;\n
+                                            &lt;/button&gt;\n
+                                        &lt;/form&gt;\n
+                                    &lt;/li&gt;\n
+                                &lt;/ul&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/li&gt;\n
+                                        &lt;li class="d-none d-sm-block"&gt;\n
+                        &lt;a href="http://localhost/account/wishlist" class="nav-icon-item link"&gt;\n
+                            &lt;i class="icon icon-HeartStraight"&gt;&lt;/i&gt;\n
+                        &lt;/a&gt;\n
+                    &lt;/li&gt;\n
+                    &lt;li&gt;\n
+                        &lt;a href="#shoppingCart" data-bs-toggle="offcanvas" class="nav-icon-item link shop-cart"&gt;\n
+                            &lt;i class="icon icon-Handbag"&gt;&lt;/i&gt;\n
+                            &lt;span class="count" data-storefront-cart-count&gt;2&lt;/span&gt;\n
+                        &lt;/a&gt;\n
+                    &lt;/li&gt;\n
+                &lt;/ul&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/header&gt;\n
+\n
+            &lt;section class="section-page-title text-center storefront-page-title"&gt;\n
+        &lt;div class="container"&gt;\n
+            &lt;div class="main-page-title"&gt;\n
+                &lt;div class="breadcrumbs"&gt;\n
+                    &lt;a href="http://localhost/storefront" class="text-caption-01 cl-text-3 link"&gt;Home&lt;/a&gt;\n
+                    &lt;i class="icon icon-CaretRightThin cl-text-3"&gt;&lt;/i&gt;\n
+                    &lt;a href="http://localhost/view-cart" class="text-caption-01 cl-text-3 link"&gt;Shopping Cart&lt;/a&gt;\n
+                    &lt;i class="icon icon-CaretRightThin cl-text-3"&gt;&lt;/i&gt;\n
+                    &lt;p class="text-caption-01"&gt;Checkout&lt;/p&gt;\n
+                &lt;/div&gt;\n
+                &lt;h3&gt;Checkout&lt;/h3&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/section&gt;\n
+\n
+    &lt;section class="flat-spacing"&gt;\n
+        &lt;div class="container" data-checkout-content&gt;\n
+            &lt;div data-checkout-messages&gt;\n
+                                                            &lt;/div&gt;\n
+\n
+            &lt;div class="checkout-grid"&gt;\n
+                &lt;div&gt;\n
+                                            &lt;div class="checkout-section"&gt;\n
+                            &lt;div class="checkout-section-title mb-0"&gt;\n
+                                &lt;div&gt;\n
+                                    &lt;p class="text-caption-01 cl-text-3 mb-4"&gt;Fast Checkout&lt;/p&gt;\n
+                                    &lt;h5 class="mb-4"&gt;Ready from your defaults&lt;/h5&gt;\n
+                                    &lt;p class="cl-text-2 mb-0"&gt;\n
+                                        Deliver to Home, PIN 422009 with Cash on Delivery.\n
+                                    &lt;/p&gt;\n
+                                &lt;/div&gt;\n
+                                &lt;button type="button" class="tf-btn animate-btn small" disabled&gt;Place Order Now&lt;/button&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                    \n
+                    &lt;div class="checkout-section"&gt;\n
+                        &lt;div class="checkout-section-title"&gt;\n
+                            &lt;h5 class="mb-0"&gt;Delivery Address&lt;/h5&gt;\n
+                            &lt;button class="tf-btn animate-btn small" type="button" data-bs-toggle="collapse" data-bs-target="#checkout-add-address"&gt;\n
+                                + Add New Address\n
+                            &lt;/button&gt;\n
+                        &lt;/div&gt;\n
+\n
+                        \n
+                                                    &lt;div class="checkout-address-list"&gt;\n
+                                                                                                        &lt;div class="checkout-address-card is-selected"&gt;\n
+                                        &lt;form method="POST" action="http://localhost/checkout/address/select"&gt;\n
+                                            &lt;input type="hidden" name="_token" value="rt5Pz0RbZQ8uXiq10fb7Z0W35s4aDKw3arWZVkBr" autocomplete="off"&gt;                                            &lt;input type="hidden" name="address_id" value="1"&gt;\n
+                                            &lt;input type="radio" name="selected_address_visual" value="1" checked onchange="this.form.submit()"&gt;\n
+                                        &lt;/form&gt;\n
+                                        &lt;div&gt;\n
+                                            &lt;div class="d-flex justify-content-between gap-3"&gt;\n
+                                                &lt;h6 class="mb-4"&gt;Home&lt;/h6&gt;\n
+                                                                                                    &lt;span class="text-caption-01 cl-text-3"&gt;Default&lt;/span&gt;\n
+                                                                                            &lt;/div&gt;\n
+                                            &lt;p class="mb-4"&gt;Checkout Customer&lt;/p&gt;\n
+                                            &lt;p class="cl-text-2 mb-4"&gt;\n
+                                                Main Road\n
+                                                                                                                                            &lt;/p&gt;\n
+                                            &lt;p class="cl-text-2 mb-4"&gt;\n
+                                                Location details pending\n
+                                                 - 422009                                             &lt;/p&gt;\n
+                                            &lt;p class="cl-text-2 mb-0"&gt;Phone: 9876543210&lt;/p&gt;\n
+                                            &lt;div class="checkout-address-actions"&gt;\n
+                                                                                                &lt;button class="checkout-muted-action" type="button" data-bs-toggle="collapse" data-bs-target="#checkout-edit-address-1"&gt;Edit&lt;/button&gt;\n
+                                            &lt;/div&gt;\n
+\n
+                                            &lt;div class="collapse" id="checkout-edit-address-1"&gt;\n
+                                                &lt;form\n
+    method="POST"\n
+    action="http://localhost/checkout/addresses/4f43dafd-90f1-4795-8fb9-cdbb1012af24"\n
+    class="checkout-address-form"\n
+    data-checkout-address-form\n
+    data-checkout-ajax-form\n
+    data-default-country-iso2="IN"\n
+    data-postal-code-url-template="http://localhost/checkout/postal-code/__PIN__"\n
+&gt;\n
+    &lt;input type="hidden" name="_token" value="rt5Pz0RbZQ8uXiq10fb7Z0W35s4aDKw3arWZVkBr" autocomplete="off"&gt;            &lt;input type="hidden" name="_method" value="PATCH"&gt;                &lt;input type="hidden" name="address_context" value="delivery"&gt;\n
+        &lt;input type="hidden" name="label" value="Home" data-address-label-value&gt;\n
+    &lt;input type="hidden" name="recipient_mobile_country_code" value="+91"&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;label class="tf-lable fw-medium d-block mb-8"&gt;Address Type &lt;span class="text-primary"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+        &lt;div class="d-flex flex-wrap gap-3" data-address-type-group&gt;\n
+                            &lt;label class="checkbox-wrap"&gt;\n
+                    &lt;input type="radio" name="address_type" value="Home" class="tf-check-rounded style-2" checked&gt;\n
+                    &lt;span class="fw-medium lh-24"&gt;Home&lt;/span&gt;\n
+                &lt;/label&gt;\n
+                            &lt;label class="checkbox-wrap"&gt;\n
+                    &lt;input type="radio" name="address_type" value="Work" class="tf-check-rounded style-2" &gt;\n
+                    &lt;span class="fw-medium lh-24"&gt;Work&lt;/span&gt;\n
+                &lt;/label&gt;\n
+                            &lt;label class="checkbox-wrap"&gt;\n
+                    &lt;input type="radio" name="address_type" value="Other" class="tf-check-rounded style-2" &gt;\n
+                    &lt;span class="fw-medium lh-24"&gt;Other&lt;/span&gt;\n
+                &lt;/label&gt;\n
+                    &lt;/div&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full" data-address-other-label-wrap  hidden &gt;\n
+        &lt;input type="text" name="address_label" value="" placeholder="Address Label"&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="recipient_name" value="Checkout Customer" placeholder="Full Name*" required&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="tel" name="recipient_mobile" value="9876543210" placeholder="Phone Number*" required&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="postal_code" value="422009" placeholder="PIN / Postal Code*" inputmode="numeric" data-address-postal-code&gt;\n
+                &lt;p class="text-caption-01 cl-text-3 mt-4 mb-0" data-address-pin-feedback&gt;&lt;/p&gt;\n
+    &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;input type="text" name="address_line_1" value="Main Road" placeholder="Address Line 1*" required&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;input type="text" name="address_line_2" value="" placeholder="Address Line 2"&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;input type="text" name="landmark" value="" placeholder="Landmark"&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="city_name" value="" placeholder="City*" data-address-city-display&gt;\n
+        &lt;input type="hidden" name="city_id" value="" data-address-city-id&gt;\n
+                    &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="state_name" value="" placeholder="State*" data-address-state-display readonly&gt;\n
+        &lt;input type="hidden" name="state_id" value="" data-address-state-id&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;div class="checkbox-wrap full"&gt;\n
+        &lt;input id="default-address-04d5630d472ed1d55a7cc405008df7f0" type="checkbox" name="is_default_shipping" value="1" class="tf-check style-2" checked&gt;\n
+        &lt;label for="default-address-04d5630d472ed1d55a7cc405008df7f0" class="fw-medium lh-24"&gt;Use as default delivery address&lt;/label&gt;\n
+    &lt;/div&gt;\n
+\n
+    &lt;div class="full"&gt;\n
+        &lt;button type="submit" class="tf-btn animate-btn small"&gt;Save Address&lt;/button&gt;\n
+    &lt;/div&gt;\n
+&lt;/form&gt;\n
+\n
+                                                &lt;/div&gt;\n
+                                        &lt;/div&gt;\n
+                                    &lt;/div&gt;\n
+                                                            &lt;/div&gt;\n
+                        \n
+                        &lt;div class="collapse " id="checkout-add-address"&gt;\n
+                            &lt;form\n
+    method="POST"\n
+    action="http://localhost/checkout/addresses"\n
+    class="checkout-address-form"\n
+    data-checkout-address-form\n
+    data-checkout-ajax-form\n
+    data-default-country-iso2="IN"\n
+    data-postal-code-url-template="http://localhost/checkout/postal-code/__PIN__"\n
+&gt;\n
+    &lt;input type="hidden" name="_token" value="rt5Pz0RbZQ8uXiq10fb7Z0W35s4aDKw3arWZVkBr" autocomplete="off"&gt;                &lt;input type="hidden" name="address_context" value="delivery"&gt;\n
+        &lt;input type="hidden" name="label" value="Home" data-address-label-value&gt;\n
+    &lt;input type="hidden" name="recipient_mobile_country_code" value="+91"&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;label class="tf-lable fw-medium d-block mb-8"&gt;Address Type &lt;span class="text-primary"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+        &lt;div class="d-flex flex-wrap gap-3" data-address-type-group&gt;\n
+                            &lt;label class="checkbox-wrap"&gt;\n
+                    &lt;input type="radio" name="address_type" value="Home" class="tf-check-rounded style-2" checked&gt;\n
+                    &lt;span class="fw-medium lh-24"&gt;Home&lt;/span&gt;\n
+                &lt;/label&gt;\n
+                            &lt;label class="checkbox-wrap"&gt;\n
+                    &lt;input type="radio" name="address_type" value="Work" class="tf-check-rounded style-2" &gt;\n
+                    &lt;span class="fw-medium lh-24"&gt;Work&lt;/span&gt;\n
+                &lt;/label&gt;\n
+                            &lt;label class="checkbox-wrap"&gt;\n
+                    &lt;input type="radio" name="address_type" value="Other" class="tf-check-rounded style-2" &gt;\n
+                    &lt;span class="fw-medium lh-24"&gt;Other&lt;/span&gt;\n
+                &lt;/label&gt;\n
+                    &lt;/div&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full" data-address-other-label-wrap  hidden &gt;\n
+        &lt;input type="text" name="address_label" value="" placeholder="Address Label"&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="recipient_name" value="Checkout Customer" placeholder="Full Name*" required&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="tel" name="recipient_mobile" value="8378437202" placeholder="Phone Number*" required&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="postal_code" value="" placeholder="PIN / Postal Code*" inputmode="numeric" data-address-postal-code&gt;\n
+                &lt;p class="text-caption-01 cl-text-3 mt-4 mb-0" data-address-pin-feedback&gt;&lt;/p&gt;\n
+    &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;input type="text" name="address_line_1" value="" placeholder="Address Line 1*" required&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;input type="text" name="address_line_2" value="" placeholder="Address Line 2"&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;input type="text" name="landmark" value="" placeholder="Landmark"&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="city_name" value="" placeholder="City*" data-address-city-display&gt;\n
+        &lt;input type="hidden" name="city_id" value="" data-address-city-id&gt;\n
+                    &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="state_name" value="" placeholder="State*" data-address-state-display readonly&gt;\n
+        &lt;input type="hidden" name="state_id" value="" data-address-state-id&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;div class="checkbox-wrap full"&gt;\n
+        &lt;input id="default-address-c951bd510abc01dcb900f180319ac1d2" type="checkbox" name="is_default_shipping" value="1" class="tf-check style-2" &gt;\n
+        &lt;label for="default-address-c951bd510abc01dcb900f180319ac1d2" class="fw-medium lh-24"&gt;Use as default delivery address&lt;/label&gt;\n
+    &lt;/div&gt;\n
+\n
+    &lt;div class="full"&gt;\n
+        &lt;button type="submit" class="tf-btn animate-btn small"&gt;Add Address&lt;/button&gt;\n
+    &lt;/div&gt;\n
+&lt;/form&gt;\n
+\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+\n
+                    &lt;div class="checkout-section"&gt;\n
+                        &lt;div class="checkout-section-title"&gt;\n
+                            &lt;h5 class="mb-0"&gt;Billing Address&lt;/h5&gt;\n
+                        &lt;/div&gt;\n
+\n
+                        &lt;form method="POST" action="http://localhost/checkout/billing/same" class="mb-0" data-billing-same-form&gt;\n
+                            &lt;input type="hidden" name="_token" value="rt5Pz0RbZQ8uXiq10fb7Z0W35s4aDKw3arWZVkBr" autocomplete="off"&gt;                            &lt;input type="hidden" name="billing_same_as_delivery" value="0"&gt;\n
+                            &lt;div class="checkbox-wrap"&gt;\n
+                                &lt;input\n
+                                    id="billing-same-as-delivery"\n
+                                    type="checkbox"\n
+                                    name="billing_same_as_delivery"\n
+                                    value="1"\n
+                                    class="tf-check style-2"\n
+                                    data-billing-same-toggle\n
+                                    checked\n
+                                &gt;\n
+                                &lt;label for="billing-same-as-delivery" class="fw-medium lh-24"&gt;Same as delivery address&lt;/label&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/form&gt;\n
+\n
+                        &lt;div class="mt-18" data-billing-address-panel hidden&gt;\n
+                            &lt;div class="checkout-section-title"&gt;\n
+                                &lt;p class="fw-medium mb-0"&gt;Saved Billing Addresses&lt;/p&gt;\n
+                                &lt;button class="tf-btn animate-btn small" type="button" data-bs-toggle="collapse" data-bs-target="#checkout-add-billing-address"&gt;\n
+                                    + Add New Billing Address\n
+                                &lt;/button&gt;\n
+                            &lt;/div&gt;\n
+\n
+                                                            &lt;div class="checkout-address-list"&gt;\n
+                                                                                                                    &lt;div class="checkout-address-card is-selected"&gt;\n
+                                            &lt;form method="POST" action="http://localhost/checkout/billing-address/select"&gt;\n
+                                                &lt;input type="hidden" name="_token" value="rt5Pz0RbZQ8uXiq10fb7Z0W35s4aDKw3arWZVkBr" autocomplete="off"&gt;                                                &lt;input type="hidden" name="billing_address_id" value="1"&gt;\n
+                                                &lt;input type="radio" name="selected_billing_address_visual" value="1" checked onchange="this.form.submit()"&gt;\n
+                                            &lt;/form&gt;\n
+                                            &lt;div&gt;\n
+                                                &lt;div class="d-flex justify-content-between gap-3"&gt;\n
+                                                    &lt;h6 class="mb-4"&gt;Home&lt;/h6&gt;\n
+                                                                                                            &lt;span class="text-caption-01 cl-text-3"&gt;Default Billing&lt;/span&gt;\n
+                                                                                                    &lt;/div&gt;\n
+                                                &lt;p class="mb-4"&gt;Checkout Customer&lt;/p&gt;\n
+                                                &lt;p class="cl-text-2 mb-4"&gt;\n
+                                                    Main Road\n
+                                                                                                                                                        &lt;/p&gt;\n
+                                                &lt;p class="cl-text-2 mb-4"&gt;\n
+                                                    Location details pending\n
+                                                     - 422009                                                 &lt;/p&gt;\n
+                                                &lt;p class="cl-text-2 mb-0"&gt;Phone: 9876543210&lt;/p&gt;\n
+                                            &lt;/div&gt;\n
+                                        &lt;/div&gt;\n
+                                                                    &lt;/div&gt;\n
+                            \n
+                            &lt;div class="collapse " id="checkout-add-billing-address"&gt;\n
+                                &lt;form\n
+    method="POST"\n
+    action="http://localhost/checkout/billing-addresses"\n
+    class="checkout-address-form"\n
+    data-checkout-address-form\n
+    data-checkout-ajax-form\n
+    data-default-country-iso2="IN"\n
+    data-postal-code-url-template="http://localhost/checkout/postal-code/__PIN__"\n
+&gt;\n
+    &lt;input type="hidden" name="_token" value="rt5Pz0RbZQ8uXiq10fb7Z0W35s4aDKw3arWZVkBr" autocomplete="off"&gt;                &lt;input type="hidden" name="address_context" value="billing"&gt;\n
+        &lt;input type="hidden" name="label" value="Home" data-address-label-value&gt;\n
+    &lt;input type="hidden" name="recipient_mobile_country_code" value="+91"&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;label class="tf-lable fw-medium d-block mb-8"&gt;Address Type &lt;span class="text-primary"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+        &lt;div class="d-flex flex-wrap gap-3" data-address-type-group&gt;\n
+                            &lt;label class="checkbox-wrap"&gt;\n
+                    &lt;input type="radio" name="address_type" value="Home" class="tf-check-rounded style-2" checked&gt;\n
+                    &lt;span class="fw-medium lh-24"&gt;Home&lt;/span&gt;\n
+                &lt;/label&gt;\n
+                            &lt;label class="checkbox-wrap"&gt;\n
+                    &lt;input type="radio" name="address_type" value="Work" class="tf-check-rounded style-2" &gt;\n
+                    &lt;span class="fw-medium lh-24"&gt;Work&lt;/span&gt;\n
+                &lt;/label&gt;\n
+                            &lt;label class="checkbox-wrap"&gt;\n
+                    &lt;input type="radio" name="address_type" value="Other" class="tf-check-rounded style-2" &gt;\n
+                    &lt;span class="fw-medium lh-24"&gt;Other&lt;/span&gt;\n
+                &lt;/label&gt;\n
+                    &lt;/div&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full" data-address-other-label-wrap  hidden &gt;\n
+        &lt;input type="text" name="address_label" value="" placeholder="Address Label"&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="recipient_name" value="Checkout Customer" placeholder="Full Name*" required&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="tel" name="recipient_mobile" value="8378437202" placeholder="Phone Number*" required&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="postal_code" value="" placeholder="PIN / Postal Code*" inputmode="numeric" data-address-postal-code&gt;\n
+                &lt;p class="text-caption-01 cl-text-3 mt-4 mb-0" data-address-pin-feedback&gt;&lt;/p&gt;\n
+    &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;input type="text" name="address_line_1" value="" placeholder="Address Line 1*" required&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;input type="text" name="address_line_2" value="" placeholder="Address Line 2"&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset class="full"&gt;\n
+        &lt;input type="text" name="landmark" value="" placeholder="Landmark"&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="city_name" value="" placeholder="City*" data-address-city-display&gt;\n
+        &lt;input type="hidden" name="city_id" value="" data-address-city-id&gt;\n
+                    &lt;/fieldset&gt;\n
+\n
+    &lt;fieldset&gt;\n
+        &lt;input type="text" name="state_name" value="" placeholder="State*" data-address-state-display readonly&gt;\n
+        &lt;input type="hidden" name="state_id" value="" data-address-state-id&gt;\n
+            &lt;/fieldset&gt;\n
+\n
+    &lt;div class="checkbox-wrap full"&gt;\n
+        &lt;input id="default-address-5803b8c8728b410397c8aee65fa1ebdb" type="checkbox" name="is_default_billing" value="1" class="tf-check style-2" &gt;\n
+        &lt;label for="default-address-5803b8c8728b410397c8aee65fa1ebdb" class="fw-medium lh-24"&gt;Use as default billing address&lt;/label&gt;\n
+    &lt;/div&gt;\n
+\n
+    &lt;div class="full"&gt;\n
+        &lt;button type="submit" class="tf-btn animate-btn small"&gt;Add Billing Address&lt;/button&gt;\n
+    &lt;/div&gt;\n
+&lt;/form&gt;\n
+\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+\n
+                    &lt;div class="checkout-section" data-fulfillment-url="http://localhost/checkout/fulfillment"&gt;\n
+                        &lt;div class="checkout-section-title"&gt;\n
+                            &lt;h5 class="mb-0"&gt;Delivery Options&lt;/h5&gt;\n
+                                                            &lt;span class="text-caption-01 cl-text-3"&gt;PIN 422009&lt;/span&gt;\n
+                                                    &lt;/div&gt;\n
+\n
+                                                    &lt;div class="checkout-options"&gt;\n
+                                                                    &lt;label\n
+                                        class="checkout-option is-selected "\n
+                                        data-fulfillment-option="delivery"\n
+                                    &gt;\n
+                                        &lt;input\n
+                                            type="radio"\n
+                                            name="shipping_method_visual"\n
+                                            value="delivery"\n
+                                            data-fulfillment-radio\n
+                                            checked                                                                                    &gt;\n
+                                        &lt;span&gt;\n
+                                            &lt;span class="d-flex justify-content-between gap-3"&gt;\n
+                                                &lt;strong&gt;Standard Delivery&lt;/strong&gt;\n
+                                                &lt;strong data-fulfillment-amount&gt;₹50.00&lt;/strong&gt;\n
+                                            &lt;/span&gt;\n
+                                            &lt;span class="checkout-fulfillment-description" data-fulfillment-description&gt;\n
+                                                                                                                                                                                                                    &lt;span class="checkout-fulfillment-line checkout-fulfillment-line--summary"&gt;Deliver to Home, 422009&lt;/span&gt;\n
+                                                                                                                                                &lt;/span&gt;\n
+                                                                                            &lt;span class="d-none cl-text-2" data-fulfillment-estimate&gt;&lt;/span&gt;\n
+                                                                                                                                        &lt;span class="d-none text-danger text-caption-01" data-fulfillment-reason&gt;&lt;/span&gt;\n
+                                                                                    &lt;/span&gt;\n
+                                    &lt;/label&gt;\n
+                                                                    &lt;label\n
+                                        class="checkout-option  "\n
+                                        data-fulfillment-option="pickup"\n
+                                    &gt;\n
+                                        &lt;input\n
+                                            type="radio"\n
+                                            name="shipping_method_visual"\n
+                                            value="pickup"\n
+                                            data-fulfillment-radio\n
+                                                                                                                                &gt;\n
+                                        &lt;span&gt;\n
+                                            &lt;span class="d-flex justify-content-between gap-3"&gt;\n
+                                                &lt;strong&gt;Pickup from Shop&lt;/strong&gt;\n
+                                                &lt;strong data-fulfillment-amount&gt;FREE&lt;/strong&gt;\n
+                                            &lt;/span&gt;\n
+                                            &lt;span class="checkout-fulfillment-description" data-fulfillment-description&gt;\n
+                                                                                                                                                                                                                    &lt;span class="checkout-fulfillment-line checkout-fulfillment-line--shop"&gt;Collect from Checkout Shop M609P0Az&lt;/span&gt;\n
+                                                                                                                                                                                                                                                                        &lt;span class="checkout-fulfillment-line checkout-fulfillment-line--address"&gt;Fixture Street, 422009&lt;/span&gt;\n
+                                                                                                                                                                                                                                                                        &lt;span class="checkout-fulfillment-line checkout-fulfillment-line--instructions"&gt;Collect directly from the shop.&lt;/span&gt;\n
+                                                                                                                                                &lt;/span&gt;\n
+                                                                                            &lt;span class="d-none cl-text-2" data-fulfillment-estimate&gt;&lt;/span&gt;\n
+                                                                                                                                        &lt;span class="d-none text-danger text-caption-01" data-fulfillment-reason&gt;&lt;/span&gt;\n
+                                                                                    &lt;/span&gt;\n
+                                    &lt;/label&gt;\n
+                                                            &lt;/div&gt;\n
+                                            &lt;/div&gt;\n
+\n
+                    &lt;div class="checkout-section"&gt;\n
+                        &lt;div class="checkout-section-title"&gt;\n
+                            &lt;h5 class="mb-0"&gt;Payment Method&lt;/h5&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="checkout-options" data-payment-options&gt;\n
+                                                            &lt;label\n
+                                    class="checkout-option is-selected "\n
+                                    data-payment-option="cash_on_delivery"\n
+                                &gt;\n
+                                    &lt;input\n
+                                        type="radio"\n
+                                        name="payment_method_visual"\n
+                                        value="cash_on_delivery"\n
+                                        data-payment-radio\n
+                                        checked                                                                            &gt;\n
+                                    &lt;span&gt;\n
+                                        &lt;span class="d-flex justify-content-between gap-3"&gt;\n
+                                            &lt;strong&gt;Cash on Delivery&lt;/strong&gt;\n
+                                                                                    &lt;/span&gt;\n
+                                        &lt;span class="d-block cl-text-2" data-payment-description&gt;Pay when your order is delivered.&lt;/span&gt;\n
+                                                                                    &lt;span class="d-none text-danger text-caption-01" data-payment-reason&gt;&lt;/span&gt;\n
+                                                                            &lt;/span&gt;\n
+                                &lt;/label&gt;\n
+                                                    &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/div&gt;\n
+\n
+                &lt;aside class="checkout-section checkout-summary"&gt;\n
+                    &lt;h5 class="mb-18"&gt;Order Summary&lt;/h5&gt;\n
+                    &lt;div class="checkout-summary-items"&gt;\n
+                                                                                    &lt;div class="checkout-summary-item"&gt;\n
+                                    &lt;img src="http://localhost/assets/storefront/images/no-image-icon.png" alt="Selected Shop Product"&gt;\n
+                                     &lt;div&gt;\n
+                                         &lt;p class="mb-4"&gt;Selected Shop Product&lt;/p&gt;\n
+                                                                                                                           &lt;div class="d-flex justify-content-between gap-3"&gt;\n
+                                             &lt;span class="cl-text-2"&gt;Qty 1&lt;/span&gt;\n
+                                             &lt;strong&gt;₹600.00&lt;/strong&gt;\n
+                                         &lt;/div&gt;\n
+                                                                                                                      &lt;/div&gt;\n
+                                &lt;/div&gt;\n
+                                                                        &lt;/div&gt;\n
+\n
+                    &lt;div class="checkout-total-row"&gt;\n
+                        &lt;span&gt;Subtotal&lt;/span&gt;\n
+                        &lt;strong&gt;₹600.00&lt;/strong&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="checkout-total-row"&gt;\n
+                        &lt;span&gt;Discount&lt;/span&gt;\n
+                        &lt;strong&gt;None&lt;/strong&gt;\n
+                    &lt;/div&gt;\n
+                                                                                &lt;div class="checkout-total-row"&gt;\n
+                        &lt;span&gt;Shipping&lt;/span&gt;\n
+                        &lt;strong data-checkout-shipping-total&gt;₹50.00&lt;/strong&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="checkout-total-row"&gt;\n
+                        &lt;span&gt;Tax&lt;/span&gt;\n
+                        &lt;strong&gt;Calculated later&lt;/strong&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="checkout-total-row grand"&gt;\n
+                        &lt;span&gt;Grand Total&lt;/span&gt;\n
+                        &lt;strong data-checkout-grand-total&gt;₹650.00&lt;/strong&gt;\n
+                    &lt;/div&gt;\n
+\n
+                    &lt;form method="POST" action="http://localhost/checkout/place-order" class="mt-20" data-place-order-form&gt;\n
+                        &lt;input type="hidden" name="_token" value="rt5Pz0RbZQ8uXiq10fb7Z0W35s4aDKw3arWZVkBr" autocomplete="off"&gt;                        &lt;input type="hidden" name="address_id" value="1"&gt;\n
+                        &lt;input type="hidden" name="billing_same_as_delivery" value="1" data-billing-same-order-field&gt;\n
+                        &lt;input type="hidden" name="billing_address_id" value="1"&gt;\n
+                        &lt;input type="hidden" name="shipping_method" value="delivery" data-selected-fulfillment-field&gt;\n
+                        &lt;input type="hidden" name="payment_method" value="cash_on_delivery" data-selected-payment-field&gt;\n
+                        &lt;div class="mb-3"&gt;\n
+                            &lt;label for="customer_order_note" class="form-label"&gt;Order Note &lt;span class="text-muted"&gt;(Optional)&lt;/span&gt;&lt;/label&gt;\n
+                            &lt;textarea id="customer_order_note" name="customer_order_note" rows="3" maxlength="1000" class="form-control " placeholder="Add delivery or order instructions"&gt;&lt;/textarea&gt;\n
+                                                    &lt;/div&gt;\n
+                        &lt;button type="submit" class="tf-btn animate-btn w-100" data-place-order-button &gt;\n
+                            Place Order\n
+                        &lt;/button&gt;\n
+                    &lt;/form&gt;\n
+                &lt;/aside&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/section&gt;\n
+\n
+        &lt;footer class="tf-footer footer-s5 bg-dark"&gt;\n
+\n
+    &lt;div class="position-relative"&gt;\n
+\n
+        &lt;div class="fake-class bottom-0 bg-white_10 d-none d-sm-flex"&gt;&lt;/div&gt;\n
+        &lt;div class="container-full"&gt;\n
+            &lt;div class="footer-inner flat-spacing"&gt;\n
+                &lt;div class="col-left"&gt;\n
+                    &lt;div class="footer-col-block type-white footer-wrap-start"&gt;\n
+                        &lt;p class="footer-heading footer-heading-mobile text-white"&gt;OUR STORE&lt;/p&gt;\n
+                        &lt;div class="tf-collapse-content"&gt;\n
+                            &lt;p class="cl-text-3 mb-4"&gt;\n
+                                24/7 Support Center:\n
+                            &lt;/p&gt;\n
+                            &lt;a href="tel:0112348888" class="text-white link h4 fw-medium mb-12"&gt;\n
+                                (+01) 1234 8888\n
+                            &lt;/a&gt;\n
+                            &lt;a href="ml.html?q=600+N+Michigan+Ave+Chicago,+IL+60611+USA" target="_blank"\n
+                                class="cl-text-3 link mb-4"&gt;\n
+                                600 N Michigan Ave, Chicago, IL 60611, USA\n
+                            &lt;/a&gt;\n
+                            &lt;a href="mailto:hi.amere@gmail.com" class="cl-text-3 link"&gt;\n
+                                hi.amere@gmail.com\n
+                            &lt;/a&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/div&gt;\n
+                \n
+                &lt;div class="col-center"&gt;\n
+                    &lt;div class="footer-link-list"&gt;\n
+                        &lt;div class="footer-col-block type-white footer-wrap-2"&gt;\n
+                            &lt;p class="footer-heading footer-heading-mobile text-white"&gt;COMPANY&lt;/p&gt;\n
+                            &lt;div class="tf-collapse-content"&gt;\n
+                                &lt;ul class="footer-menu-list"&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/about-us" class="cl-text-3 link"&gt;About Us&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/stores" class="cl-text-3 link"&gt;Our Stores&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/testimonials" class="cl-text-3 link"&gt;Testimonials&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/contact-us" class="cl-text-3 link"&gt;Contact us&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="blog.html" class="cl-text-3 link"&gt;Latest New&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/account" class="cl-text-3 link"&gt;My Account&lt;/a&gt;&lt;/li&gt;\n
+                                &lt;/ul&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="footer-col-block type-white footer-wrap-3"&gt;\n
+                            &lt;p class="footer-heading footer-heading-mobile text-white"&gt;CUSTOMER&lt;/p&gt;\n
+                            &lt;div class="tf-collapse-content"&gt;\n
+                                &lt;ul class="footer-menu-list"&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/shipping" class="cl-text-3 link"&gt;Shipping&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/return-and-refund" class="cl-text-3 link"&gt;Return &amp;amp; Refund&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/privacy-policy" class="cl-text-3 link"&gt;Privacy Policy&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/terms-and-conditions" class="cl-text-3 link"&gt;Terms &amp;amp; Conditions&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/faq" class="cl-text-3 link"&gt;Orders FAQs&lt;/a&gt;&lt;/li&gt;\n
+                                &lt;/ul&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="footer-col-block type-white footer-wrap-4"&gt;\n
+                            &lt;p class="footer-heading footer-heading-mobile text-white"&gt;MY ACCOUNT&lt;/p&gt;\n
+                            &lt;div class="tf-collapse-content"&gt;\n
+                                &lt;ul class="footer-menu-list"&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/login" class="cl-text-3 link"&gt;Login&lt;/a&gt;\n
+                                    &lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/register" class="cl-text-3 link"&gt;Sign\n
+                                            up&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/account" class="cl-text-3 link"&gt;My Account&lt;/a&gt;&lt;/li&gt;\n
+                                    &lt;li&gt;&lt;a href="http://localhost/account/wishlist" class="cl-text-3 link"&gt;Wish List&lt;/a&gt;&lt;/li&gt;\n
+                                &lt;/ul&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/div&gt;\n
+                 \n
+                &lt;div class="col-right"&gt;\n
+                    &lt;div class="footer-col-block type-white footer-wrap-end"&gt;\n
+                        &lt;p class="footer-heading footer-heading-mobile text-white"&gt;NEWSLETTER&lt;/p&gt;\n
+                        &lt;div class="tf-collapse-content"&gt;\n
+                            &lt;p class="footer-desc cl-text-3 mb-16"&gt;\n
+                                Subscribe for store updates and discounts.\n
+                            &lt;/p&gt;\n
+                            &lt;form class="form-sub mb-16"&gt;\n
+                                &lt;fieldset&gt;\n
+                                    &lt;input type="email" placeholder="Enter your e-mail" required=""&gt;\n
+                                &lt;/fieldset&gt;\n
+                                &lt;button type="submit" class="btn-action"&gt;\n
+                                    &lt;i class="icon icon-ArrowUpRight"&gt;&lt;/i&gt;\n
+                                &lt;/button&gt;\n
+                            &lt;/form&gt;\n
+                            &lt;p class="text-remember cl-text-3"&gt;\n
+                                By clicking subcribe, you agree to the\n
+                                &lt;a href="http://localhost/terms-and-conditions" class="text-white link link-underline"&gt;\n
+                                    Terms of Service\n
+                                &lt;/a&gt;\n
+                                and\n
+                                &lt;a href="http://localhost/privacy-policy" class="text-white link link-underline"&gt;\n
+                                    Privacy Policy\n
+                                &lt;/a&gt;.\n
+                            &lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/div&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+    &lt;div class="footer-bottom"&gt;\n
+        &lt;div class="container-full"&gt;\n
+            &lt;div class="inner-bottom"&gt;\n
+                &lt;div class="tf-list list-currenci"&gt;\n
+\n
+\n
+                &lt;/div&gt;\n
+                &lt;p class="text-nocopy cl-text-3"&gt;\n
+                    ©2026 Amerce. All Rights Reserved.\n
+                &lt;/p&gt;\n
+                &lt;ul class="tf-list payment-list"&gt;\n
+                    &lt;li&gt;&lt;img loading="lazy" width="38" height="24"\n
+                            src="http://localhost/assets/storefront/images/payment/visa.svg" alt="Image"&gt;&lt;/li&gt;\n
+                    &lt;li&gt;&lt;img loading="lazy" width="38" height="24"\n
+                            src="http://localhost/assets/storefront/images/payment/master-card.svg" alt="Image"&gt;&lt;/li&gt;\n
+                    &lt;li&gt;&lt;img loading="lazy" width="38" height="24"\n
+                            src="http://localhost/assets/storefront/images/payment/amex.svg" alt="Image"&gt;&lt;/li&gt;\n
+                    &lt;li&gt;&lt;img loading="lazy" width="38" height="24"\n
+                            src="http://localhost/assets/storefront/images/payment/paypal.svg" alt="Image"&gt;&lt;/li&gt;\n
+                    &lt;li&gt;&lt;img loading="lazy" width="38" height="24"\n
+                            src="http://localhost/assets/storefront/images/payment/water.svg" alt="Image"&gt;&lt;/li&gt;\n
+                    &lt;li&gt;&lt;img loading="lazy" width="38" height="24"\n
+                            src="http://localhost/assets/storefront/images/payment/paypal.svg" alt="Image"&gt;&lt;/li&gt;\n
+                &lt;/ul&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/footer&gt;\n
+    &lt;/main&gt;\n
+    &lt;!-- Toolbar --&gt;\n
+    &lt;div class="tf-toolbar-bottom"&gt;\n
+        &lt;div class="toolbar-item"&gt;\n
+            &lt;a href="http://localhost/products"&gt;\n
+                &lt;span class="toolbar-icon"&gt;\n
+                    &lt;i class="icon icon-storefront"&gt;&lt;/i&gt;\n
+                &lt;/span&gt;\n
+                &lt;span class="toolbar-label"&gt;Shop&lt;/span&gt;\n
+            &lt;/a&gt;\n
+        &lt;/div&gt;\n
+        &lt;div class="toolbar-item"&gt;\n
+            &lt;a href="#search" data-bs-toggle="modal"&gt;\n
+                &lt;span class="toolbar-icon"&gt;\n
+                    &lt;i class="icon icon-MagnifyingGlass"&gt;&lt;/i&gt;\n
+                &lt;/span&gt;\n
+                &lt;span class="toolbar-label"&gt;Search&lt;/span&gt;\n
+            &lt;/a&gt;\n
+        &lt;/div&gt;\n
+        &lt;div class="toolbar-item"&gt;\n
+            &lt;a href="http://localhost/account"&gt;\n
+                &lt;span class="toolbar-icon"&gt;\n
+                    &lt;i class="icon icon-User"&gt;&lt;/i&gt;\n
+                &lt;/span&gt;\n
+                &lt;span class="toolbar-label"&gt;Account&lt;/span&gt;\n
+            &lt;/a&gt;\n
+        &lt;/div&gt;\n
+        &lt;div class="toolbar-item"&gt;\n
+            &lt;a href="http://localhost/account/wishlist"&gt;\n
+                &lt;span class="toolbar-icon"&gt;\n
+                    &lt;i class="icon icon-HeartStraight"&gt;&lt;/i&gt;\n
+                &lt;/span&gt;\n
+                &lt;span class="toolbar-label"&gt;Wishlist&lt;/span&gt;\n
+            &lt;/a&gt;\n
+        &lt;/div&gt;\n
+        &lt;div class="toolbar-item"&gt;\n
+            &lt;a href="http://localhost/view-cart"&gt;\n
+                &lt;span class="toolbar-icon"&gt;\n
+                    &lt;i class="icon icon-Handbag"&gt;&lt;/i&gt;\n
+                    &lt;span class="toolbar-count" data-storefront-cart-count&gt;2&lt;/span&gt;\n
+                &lt;/span&gt;\n
+                &lt;span class="toolbar-label"&gt;Cart&lt;/span&gt;\n
+            &lt;/a&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+    &lt;!-- /Toolbar --&gt;\n
+    &lt;div class="offcanvas offcanvas-start canvas-mb" id="mobileMenu"&gt;\n
+    &lt;div class="canvas-header"&gt;\n
+        &lt;span class="icon-close-popup" data-bs-dismiss="offcanvas"&gt;\n
+            &lt;i class="icon icon-X2"&gt;&lt;/i&gt;\n
+        &lt;/span&gt;\n
+        &lt;form class="form-search-nav"&gt;\n
+            &lt;fieldset&gt;\n
+                &lt;input type="text" placeholder="What are you looking for?" required&gt;\n
+            &lt;/fieldset&gt;\n
+            &lt;button type="submit" class="btn-action"&gt;\n
+                &lt;i class="icon icon-MagnifyingGlass"&gt;&lt;/i&gt;\n
+            &lt;/button&gt;\n
+        &lt;/form&gt;\n
+    &lt;/div&gt;\n
+    &lt;div class="canvas-body"&gt;\n
+        &lt;div class="mb-content-top"&gt;\n
+            &lt;ul class="nav-ul-mb" id="wrapper-menu-navigation"&gt;\n
+                &lt;li class="nav-mb-item"&gt;\n
+                    &lt;a href="http://localhost/storefront" class="mb-menu-link" data-bs-dismiss="offcanvas"&gt;Home&lt;/a&gt;\n
+                &lt;/li&gt;\n
+                &lt;li class="nav-mb-item"&gt;\n
+                    &lt;a href="#mobile_categories" class="mb-menu-link collapsed" data-bs-toggle="collapse" aria-expanded="false" aria-controls="mobile_categories"&gt;\n
+                        &lt;span&gt;Categories&lt;/span&gt;\n
+                        &lt;span class="ic-custom"&gt;&lt;/span&gt;\n
+                    &lt;/a&gt;\n
+                    &lt;div id="mobile_categories" class="collapse"&gt;\n
+                        &lt;ul class="sub-nav-menu"&gt;\n
+                                                            &lt;li&gt;\n
+                                    &lt;p class="menu-heading mb-8 mt-12"&gt;Checkout Category 50ixi6g3&lt;/p&gt;\n
+                                    &lt;ul class="sub-menu_list"&gt;\n
+                                                                            &lt;/ul&gt;\n
+                                &lt;/li&gt;\n
+                                                            &lt;li&gt;\n
+                                    &lt;p class="menu-heading mb-8 mt-12"&gt;Checkout Category 9bhEHJpV&lt;/p&gt;\n
+                                    &lt;ul class="sub-menu_list"&gt;\n
+                                                                            &lt;/ul&gt;\n
+                                &lt;/li&gt;\n
+                                                    &lt;/ul&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/li&gt;\n
+                &lt;li class="nav-mb-item"&gt;\n
+                    &lt;a href="http://localhost/stores" class="mb-menu-link" data-bs-dismiss="offcanvas"&gt;Shops&lt;/a&gt;\n
+                &lt;/li&gt;\n
+                &lt;li class="nav-mb-item"&gt;\n
+                    &lt;a href="http://localhost/products" class="mb-menu-link" data-bs-dismiss="offcanvas"&gt;Products&lt;/a&gt;\n
+                &lt;/li&gt;\n
+                &lt;li class="nav-mb-item"&gt;\n
+                    &lt;a href="#;" class="mb-menu-link" data-bs-dismiss="offcanvas"&gt;Brands&lt;/a&gt;\n
+                &lt;/li&gt;\n
+                &lt;li class="nav-mb-item"&gt;\n
+                    &lt;a href="#;" class="mb-menu-link" data-bs-dismiss="offcanvas"&gt;Offers&lt;/a&gt;\n
+                &lt;/li&gt;\n
+                &lt;li class="nav-mb-item"&gt;\n
+                    &lt;a href="#new-arrivals" class="mb-menu-link" data-bs-dismiss="offcanvas"&gt;New Arrivals&lt;/a&gt;\n
+                &lt;/li&gt;\n
+                &lt;li class="nav-mb-item"&gt;\n
+                    &lt;a href="http://localhost/about-us" class="mb-menu-link" data-bs-dismiss="offcanvas"&gt;About&lt;/a&gt;\n
+                &lt;/li&gt;\n
+                &lt;li class="nav-mb-item"&gt;\n
+                    &lt;a href="http://localhost/testimonials" class="mb-menu-link" data-bs-dismiss="offcanvas"&gt;Testimonials&lt;/a&gt;\n
+                &lt;/li&gt;\n
+                &lt;li class="nav-mb-item"&gt;\n
+                    &lt;a href="http://localhost/contact-us" class="mb-menu-link" data-bs-dismiss="offcanvas"&gt;Contact&lt;/a&gt;\n
+                &lt;/li&gt;\n
+            &lt;/ul&gt;\n
+        &lt;/div&gt;\n
+        &lt;div class="need-help-wrap"&gt;\n
+            &lt;p class="nd-title h6 fw-medium mb-16"&gt;Need Help?&lt;/p&gt;\n
+            &lt;p class="lh-26 cl-text-2 mb-4"&gt;\n
+                600 N Michigan Ave, Chicago, IL 60611, USA\n
+            &lt;/p&gt;\n
+            &lt;a href="#;" class="text-decoration-underline text-primary lh-26 mb-16"&gt;\n
+                Open in Maps\n
+            &lt;/a&gt;\n
+            &lt;a href="mailto:hi.amere@gmail.com" class="cl-text-2 link mb-8"&gt;\n
+                hi.amere@gmail.com\n
+            &lt;/a&gt;\n
+            &lt;a href="tel:3156666688" class="cl-text-2 link"&gt;\n
+                315-666-6688\n
+            &lt;/a&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/div&gt;\n
+    &lt;div class="modal modalCentered fade modal-search" id="search"&gt;\n
+        &lt;div class="modal-dialog modal-dialog-centered"&gt;\n
+        &lt;div class="modal-content"&gt;\n
+            &lt;div class="modal-heading"&gt;\n
+                &lt;form class="form-search"&gt;\n
+                    &lt;fieldset&gt;\n
+                        &lt;input type="text" placeholder="Search products" required&gt;\n
+                    &lt;/fieldset&gt;\n
+                    &lt;button type="submit" class="btn-search"&gt;&lt;i class="icon icon-MagnifyingGlass"&gt;&lt;/i&gt;&lt;/button&gt;\n
+                &lt;/form&gt;\n
+                &lt;span class="icon-close-popup flex-shrink-0" data-bs-dismiss="modal"&gt;\n
+                    &lt;i class="icon-X2"&gt;&lt;/i&gt;\n
+                &lt;/span&gt;\n
+            &lt;/div&gt;\n
+            &lt;div class="modal-main"&gt;\n
+                &lt;h5 class="mb-24"&gt;You May Also Like&lt;/h5&gt;\n
+                &lt;div dir="ltr" class="swiper tf-swiper mb-24" data-preview="4" data-tablet="3" data-mobile-sm="2" data-mobile="1" data-space-lg="30" data-space-md="20" data-space="15"&gt;\n
+                    &lt;div class="swiper-wrapper"&gt;\n
+                                                    &lt;div class="swiper-slide wow fadeInUp"&gt;\n
+    &lt;div class="card-product "&gt;\n
+        &lt;div class="card-product_wrapper"&gt;\n
+            &lt;a href="#;" class="product-img"&gt;\n
+                &lt;img class="img-product" loading="lazy" width="330" height="440" src="http://localhost/assets/storefront/images/product/product-1.jpg" alt="V-neck cotton T-shirt"&gt;\n
+                &lt;img class="img-hover" loading="lazy" width="330" height="440" src="http://localhost/assets/storefront/images/product/product-1_2.jpg" alt="V-neck cotton T-shirt"&gt;\n
+            &lt;/a&gt;\n
+            &lt;ul class="product-action_list"&gt;\n
+                &lt;li class="wishlist"&gt;\n
+                    &lt;a href="#;" class="hover-tooltip tooltip-left box-icon " title="Add to Wishlist" aria-label="Add to Wishlist"&gt;\n
+        &lt;span class="icon icon-heart"&gt;&lt;/span&gt;\n
+                    &lt;span class="tooltip"&gt;Add to Wishlist&lt;/span&gt;\n
+            &lt;/a&gt;\n
+                &lt;/li&gt;\n
+                                    &lt;li class="compare"&gt;\n
+                        &lt;a href="#compare" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon"&gt;\n
+                            &lt;span class="icon icon-ArrowsLeftRight"&gt;&lt;/span&gt;\n
+                            &lt;span class="tooltip"&gt;Compare&lt;/span&gt;\n
+                        &lt;/a&gt;\n
+                    &lt;/li&gt;\n
+                                &lt;li&gt;\n
+                    &lt;a href="#;" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon"&gt;\n
+                        &lt;span class="icon icon-Eye"&gt;&lt;/span&gt;\n
+                        &lt;span class="tooltip"&gt;View&lt;/span&gt;\n
+                    &lt;/a&gt;\n
+                &lt;/li&gt;\n
+            &lt;/ul&gt;\n
+                                                    &lt;div class="product-action_bot"&gt;\n
+                    &lt;a href="#quickAdd" data-bs-toggle="modal" class="tf-btn btn-white small w-100"&gt;Quick Add&lt;/a&gt;\n
+                &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+        &lt;div class="card-product_info"&gt;\n
+            &lt;a href="#;" class="name-product lh-24 fw-medium link-underline-text"&gt;V-neck cotton T-shirt&lt;/a&gt;\n
+                        &lt;div class="star-wrap d-flex align-items-center"&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                            &lt;/div&gt;\n
+            &lt;div class="price-wrap"&gt;\n
+                &lt;span class="price-new text-primary fw-semibold"&gt;$59,99&lt;/span&gt;\n
+                                    &lt;span class="price-old text-caption-01 cl-text-3"&gt;$79,99&lt;/span&gt;\n
+                            &lt;/div&gt;\n
+                                &lt;/div&gt;\n
+    &lt;/div&gt;\n
+    &lt;/div&gt;\n
+                                                    &lt;div class="swiper-slide wow fadeInUp"&gt;\n
+    &lt;div class="card-product "&gt;\n
+        &lt;div class="card-product_wrapper"&gt;\n
+            &lt;a href="#;" class="product-img"&gt;\n
+                &lt;img class="img-product" loading="lazy" width="330" height="440" src="http://localhost/assets/storefront/images/product/product-2.jpg" alt="Ribbed knit top"&gt;\n
+                &lt;img class="img-hover" loading="lazy" width="330" height="440" src="http://localhost/assets/storefront/images/product/product-2_2.jpg" alt="Ribbed knit top"&gt;\n
+            &lt;/a&gt;\n
+            &lt;ul class="product-action_list"&gt;\n
+                &lt;li class="wishlist"&gt;\n
+                    &lt;a href="#;" class="hover-tooltip tooltip-left box-icon " title="Add to Wishlist" aria-label="Add to Wishlist"&gt;\n
+        &lt;span class="icon icon-heart"&gt;&lt;/span&gt;\n
+                    &lt;span class="tooltip"&gt;Add to Wishlist&lt;/span&gt;\n
+            &lt;/a&gt;\n
+                &lt;/li&gt;\n
+                                    &lt;li class="compare"&gt;\n
+                        &lt;a href="#compare" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon"&gt;\n
+                            &lt;span class="icon icon-ArrowsLeftRight"&gt;&lt;/span&gt;\n
+                            &lt;span class="tooltip"&gt;Compare&lt;/span&gt;\n
+                        &lt;/a&gt;\n
+                    &lt;/li&gt;\n
+                                &lt;li&gt;\n
+                    &lt;a href="#;" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon"&gt;\n
+                        &lt;span class="icon icon-Eye"&gt;&lt;/span&gt;\n
+                        &lt;span class="tooltip"&gt;View&lt;/span&gt;\n
+                    &lt;/a&gt;\n
+                &lt;/li&gt;\n
+            &lt;/ul&gt;\n
+                                                    &lt;div class="product-action_bot"&gt;\n
+                    &lt;a href="#quickAdd" data-bs-toggle="modal" class="tf-btn btn-white small w-100"&gt;Quick Add&lt;/a&gt;\n
+                &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+        &lt;div class="card-product_info"&gt;\n
+            &lt;a href="#;" class="name-product lh-24 fw-medium link-underline-text"&gt;Ribbed knit top&lt;/a&gt;\n
+                        &lt;div class="star-wrap d-flex align-items-center"&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                            &lt;/div&gt;\n
+            &lt;div class="price-wrap"&gt;\n
+                &lt;span class="price-new text-primary fw-semibold"&gt;$45,99&lt;/span&gt;\n
+                                    &lt;span class="price-old text-caption-01 cl-text-3"&gt;$69,99&lt;/span&gt;\n
+                            &lt;/div&gt;\n
+                                &lt;/div&gt;\n
+    &lt;/div&gt;\n
+    &lt;/div&gt;\n
+                                                    &lt;div class="swiper-slide wow fadeInUp"&gt;\n
+    &lt;div class="card-product "&gt;\n
+        &lt;div class="card-product_wrapper"&gt;\n
+            &lt;a href="#;" class="product-img"&gt;\n
+                &lt;img class="img-product" loading="lazy" width="330" height="440" src="http://localhost/assets/storefront/images/product/product-3.jpg" alt="Oversized denim jacket"&gt;\n
+                &lt;img class="img-hover" loading="lazy" width="330" height="440" src="http://localhost/assets/storefront/images/product/product-3_2.jpg" alt="Oversized denim jacket"&gt;\n
+            &lt;/a&gt;\n
+            &lt;ul class="product-action_list"&gt;\n
+                &lt;li class="wishlist"&gt;\n
+                    &lt;a href="#;" class="hover-tooltip tooltip-left box-icon " title="Add to Wishlist" aria-label="Add to Wishlist"&gt;\n
+        &lt;span class="icon icon-heart"&gt;&lt;/span&gt;\n
+                    &lt;span class="tooltip"&gt;Add to Wishlist&lt;/span&gt;\n
+            &lt;/a&gt;\n
+                &lt;/li&gt;\n
+                                    &lt;li class="compare"&gt;\n
+                        &lt;a href="#compare" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon"&gt;\n
+                            &lt;span class="icon icon-ArrowsLeftRight"&gt;&lt;/span&gt;\n
+                            &lt;span class="tooltip"&gt;Compare&lt;/span&gt;\n
+                        &lt;/a&gt;\n
+                    &lt;/li&gt;\n
+                                &lt;li&gt;\n
+                    &lt;a href="#;" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon"&gt;\n
+                        &lt;span class="icon icon-Eye"&gt;&lt;/span&gt;\n
+                        &lt;span class="tooltip"&gt;View&lt;/span&gt;\n
+                    &lt;/a&gt;\n
+                &lt;/li&gt;\n
+            &lt;/ul&gt;\n
+                                                    &lt;div class="product-action_bot"&gt;\n
+                    &lt;a href="#quickAdd" data-bs-toggle="modal" class="tf-btn btn-white small w-100"&gt;Quick Add&lt;/a&gt;\n
+                &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+        &lt;div class="card-product_info"&gt;\n
+            &lt;a href="#;" class="name-product lh-24 fw-medium link-underline-text"&gt;Oversized denim jacket&lt;/a&gt;\n
+                        &lt;div class="star-wrap d-flex align-items-center"&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                            &lt;/div&gt;\n
+            &lt;div class="price-wrap"&gt;\n
+                &lt;span class="price-new text-primary fw-semibold"&gt;$89,99&lt;/span&gt;\n
+                                    &lt;span class="price-old text-caption-01 cl-text-3"&gt;$119,99&lt;/span&gt;\n
+                            &lt;/div&gt;\n
+                                &lt;/div&gt;\n
+    &lt;/div&gt;\n
+    &lt;/div&gt;\n
+                                                    &lt;div class="swiper-slide wow fadeInUp"&gt;\n
+    &lt;div class="card-product "&gt;\n
+        &lt;div class="card-product_wrapper"&gt;\n
+            &lt;a href="#;" class="product-img"&gt;\n
+                &lt;img class="img-product" loading="lazy" width="330" height="440" src="http://localhost/assets/storefront/images/product/product-4.jpg" alt="Linen slim-fit shirt"&gt;\n
+                &lt;img class="img-hover" loading="lazy" width="330" height="440" src="http://localhost/assets/storefront/images/product/product-4_2.jpg" alt="Linen slim-fit shirt"&gt;\n
+            &lt;/a&gt;\n
+            &lt;ul class="product-action_list"&gt;\n
+                &lt;li class="wishlist"&gt;\n
+                    &lt;a href="#;" class="hover-tooltip tooltip-left box-icon " title="Add to Wishlist" aria-label="Add to Wishlist"&gt;\n
+        &lt;span class="icon icon-heart"&gt;&lt;/span&gt;\n
+                    &lt;span class="tooltip"&gt;Add to Wishlist&lt;/span&gt;\n
+            &lt;/a&gt;\n
+                &lt;/li&gt;\n
+                                    &lt;li class="compare"&gt;\n
+                        &lt;a href="#compare" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon"&gt;\n
+                            &lt;span class="icon icon-ArrowsLeftRight"&gt;&lt;/span&gt;\n
+                            &lt;span class="tooltip"&gt;Compare&lt;/span&gt;\n
+                        &lt;/a&gt;\n
+                    &lt;/li&gt;\n
+                                &lt;li&gt;\n
+                    &lt;a href="#;" data-bs-toggle="offcanvas" class="hover-tooltip tooltip-left box-icon"&gt;\n
+                        &lt;span class="icon icon-Eye"&gt;&lt;/span&gt;\n
+                        &lt;span class="tooltip"&gt;View&lt;/span&gt;\n
+                    &lt;/a&gt;\n
+                &lt;/li&gt;\n
+            &lt;/ul&gt;\n
+                                                    &lt;div class="product-action_bot"&gt;\n
+                    &lt;a href="#quickAdd" data-bs-toggle="modal" class="tf-btn btn-white small w-100"&gt;Quick Add&lt;/a&gt;\n
+                &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+        &lt;div class="card-product_info"&gt;\n
+            &lt;a href="#;" class="name-product lh-24 fw-medium link-underline-text"&gt;Linen slim-fit shirt&lt;/a&gt;\n
+                        &lt;div class="star-wrap d-flex align-items-center"&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                                    &lt;i class="icon icon-Star"&gt;&lt;/i&gt;\n
+                            &lt;/div&gt;\n
+            &lt;div class="price-wrap"&gt;\n
+                &lt;span class="price-new text-primary fw-semibold"&gt;$45,99&lt;/span&gt;\n
+                                    &lt;span class="price-old text-caption-01 cl-text-3"&gt;$79,99&lt;/span&gt;\n
+                            &lt;/div&gt;\n
+                                &lt;/div&gt;\n
+    &lt;/div&gt;\n
+    &lt;/div&gt;\n
+                                            &lt;/div&gt;\n
+                    &lt;div class="sw-dot-default tf-sw-pagination"&gt;&lt;/div&gt;\n
+                &lt;/div&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/div&gt;\n
+\n
+&lt;div class="modal modalCentered fade modal-log" id="sign"&gt;\n
+    &lt;div class="modal-dialog modal-dialog-centered"&gt;\n
+        &lt;div class="modal-content"&gt;\n
+            &lt;span class="icon-close-popup" data-bs-dismiss="modal"&gt;&lt;i class="icon-X2"&gt;&lt;/i&gt;&lt;/span&gt;\n
+            &lt;div class="modal-heading text-center"&gt;\n
+                &lt;h3 class="title-pop mb-8"&gt;Sign In&lt;/h3&gt;\n
+                &lt;p class="desc-pop cl-text-2"&gt;Sign in to access your personalized experience.&lt;/p&gt;\n
+            &lt;/div&gt;\n
+            &lt;div class="modal-main"&gt;\n
+                &lt;form class="form-log"&gt;\n
+                    &lt;div class="form-content"&gt;\n
+                        &lt;fieldset class="tf-field"&gt;\n
+                            &lt;label for="user-name-log" class="tf-lable fw-medium"&gt;Username or email address &lt;span class="text-primary"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                            &lt;input type="text" id="user-name-log" placeholder="Username or email address*" required&gt;\n
+                        &lt;/fieldset&gt;\n
+                        &lt;fieldset class="tf-field password-wrapper"&gt;\n
+                            &lt;label for="password" class="tf-lable fw-medium"&gt;Password &lt;span class="text-primary"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                            &lt;div class="password-wrapper w-100"&gt;\n
+                                &lt;span class="toggle-pass icon-EyeSlash fs-20 cl-text-3"&gt;&lt;/span&gt;\n
+                                &lt;input class="password-field" type="password" id="password" placeholder="Password" required&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/fieldset&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="group-action"&gt;\n
+                        &lt;button type="submit" class="tf-btn animate-btn w-100"&gt;Login&lt;/button&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/form&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/div&gt;\n
+\n
+&lt;div class="offcanvas offcanvas-bottom canvas-compare" id="compare"&gt;\n
+    &lt;div class="canvas-wrapper"&gt;\n
+        &lt;div class="canvas-header"&gt;\n
+            &lt;h5 class="title"&gt;Compare&lt;/h5&gt;\n
+            &lt;span class="icon-close-popup" data-bs-dismiss="offcanvas"&gt;&lt;i class="icon-X2"&gt;&lt;/i&gt;&lt;/span&gt;\n
+        &lt;/div&gt;\n
+        &lt;div class="canvas-body"&gt;&lt;p class="text-center cl-text-2 mb-0"&gt;Static compare preview.&lt;/p&gt;&lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/div&gt;\n
+\n
+&lt;div class="offcanvas offcanvas-end canvas-quickview" id="quickView"&gt;\n
+    &lt;div class="canvas-wrapper"&gt;\n
+        &lt;div class="canvas-header"&gt;\n
+            &lt;h5 class="title"&gt;Quick View&lt;/h5&gt;\n
+            &lt;span class="icon-close-popup" data-bs-dismiss="offcanvas"&gt;&lt;i class="icon-X2"&gt;&lt;/i&gt;&lt;/span&gt;\n
+        &lt;/div&gt;\n
+        &lt;div class="canvas-body"&gt;&lt;p class="cl-text-2 mb-0"&gt;Static product preview shell.&lt;/p&gt;&lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/div&gt;\n
+\n
+&lt;div class="modal modalCentered fade modal-quickadd" id="quickAdd"&gt;\n
+    &lt;div class="modal-dialog modal-dialog-centered"&gt;\n
+        &lt;div class="modal-content"&gt;\n
+            &lt;span class="d-flex cs-pointer link" data-bs-dismiss="modal"&gt;&lt;i class="icon-X2"&gt;&lt;/i&gt;&lt;/span&gt;\n
+            &lt;div class="modal-heading"&gt;&lt;h5 class="title"&gt;Quick Add&lt;/h5&gt;&lt;/div&gt;\n
+            &lt;div class="modal-main"&gt;\n
+                &lt;button type="button" class="tf-btn animate-btn w-100" data-bs-dismiss="modal"&gt;Add To Cart&lt;/button&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/div&gt;\n
+\n
+&lt;style&gt;\n
+    .ws-drawer-ui .offcanvas-body,\n
+    .ws-drawer-ui .wrap {\n
+        background: #F4F4F5;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-cart-title {\n
+        font-size: 16px;\n
+        color: #111;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-cart-title-meta {\n
+        font-size: 13px;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-cart-close {\n
+        width: 36px;\n
+        height: 36px;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-promo-title {\n
+        color: #111;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-card-side {\n
+        border: 1px solid #E5E7EB;\n
+        border-radius: 14px;\n
+        overflow: hidden;\n
+        background: #fff;\n
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .05);\n
+        flex: 0 0 auto;\n
+    }\n
+\n
+    .ws-drawer-ui .tf-mini-cart-items {\n
+        height: auto;\n
+        min-height: 100%;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-progress {\n
+        height: 6px;\n
+        background: #E5E7EB;\n
+        border-radius: 99px;\n
+        overflow: hidden;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-progress span {\n
+        display: block;\n
+        height: 100%;\n
+        background: #111;\n
+        border-radius: 99px;\n
+        transition: width .4s;\n
+    }\n
+\n
+    .ws-drawer-ui .text-xxs {\n
+        font-size: 11px;\n
+    }\n
+\n
+    .ws-drawer-ui .btn-ws-dark {\n
+        height: 46px;\n
+        background: #111;\n
+        color: #fff;\n
+        border-radius: 99px;\n
+        font-weight: 700;\n
+        font-size: 15px;\n
+    }\n
+\n
+    .ws-drawer-ui .btn-ws-dark:hover {\n
+        background: #000;\n
+        color: #fff;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-shop-head {\n
+        min-height: 42px;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-shop-avatar {\n
+        width: 28px;\n
+        height: 28px;\n
+        font-size: 11px;\n
+        flex: 0 0 28px;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-shop-avatar.is-violet {\n
+        background: #F3EBFF;\n
+        border: 1px solid #E8D9FF;\n
+        color: #7C3AED;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-shop-avatar.is-rose {\n
+        background: #FFF1F2;\n
+        border: 1px solid #FFE4E6;\n
+        color: #E11D48;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-shop-name {\n
+        color: #111;\n
+        min-width: 0;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-count-badge,\n
+    .ws-drawer-ui .ws-saved-badge,\n
+    .ws-drawer-ui .ws-tip-badge {\n
+        font-size: 10px;\n
+        white-space: nowrap;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-saved-badge {\n
+        background: #ECFDF5;\n
+        color: #065F46;\n
+        border-color: #A7F3D0 !important;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-tip-badge {\n
+        background: #FFFBEB;\n
+        color: #92400E;\n
+        border-color: #FDE68A !important;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-mini-item {\n
+        min-height: 68px;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-mini-thumb {\n
+        width: 52px;\n
+        height: 52px;\n
+        flex: 0 0 52px;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-mini-thumb img,\n
+    .ws-drawer-ui img.ws-item-img {\n
+        width: 52px !important;\n
+        height: 52px !important;\n
+        max-width: 52px !important;\n
+        min-width: 52px !important;\n
+        max-height: 52px !important;\n
+        min-height: 52px !important;\n
+        aspect-ratio: 1 / 1 !important;\n
+        border-radius: 10px;\n
+        object-fit: cover;\n
+        border: 1px solid #F3F4F6;\n
+        background: #F3F4F6;\n
+        display: block;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-thumb-fallback {\n
+        background: #E5E7EB;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-mini-info {\n
+        min-width: 0;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-mini-title {\n
+        color: #111;\n
+        font-size: 13px;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-mini-meta,\n
+    .ws-drawer-ui .ws-trust-row {\n
+        font-size: 11px;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-mini-saving {\n
+        color: #047857;\n
+        font-size: 11px;\n
+        line-height: 1.15;\n
+        text-align: right;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-mini-saving-label {\n
+        display: block;\n
+        color: #059669;\n
+        font-size: 10px;\n
+        font-weight: 600;\n
+        text-transform: lowercase;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-summary-row {\n
+        font-size: 13px;\n
+    }\n
+\n
+    .ws-drawer-ui .ws-total-row {\n
+        font-size: 17px;\n
+        color: #111;\n
+    }\n
+&lt;/style&gt;\n
+&lt;div class="offcanvas offcanvas-end popup-shopping-cart ws-drawer-ui" id="shoppingCart"&gt;\n
+        &lt;div class="canvas-wrapper d-flex flex-column h-100" data-mini-cart&gt;\n
+        &lt;div class="popup-header p-3 d-flex align-items-center justify-content-between border-bottom"&gt;\n
+            &lt;div&gt;\n
+                &lt;div class="fw-bold" style="font-size:16px;color:#111;"&gt;Your Cart &lt;span class="fw-normal text-secondary" style="font-size:13px;"&gt;· &lt;span data-mini-cart-count&gt;2 items&lt;/span&gt; · 2 shops&lt;/span&gt;&lt;/div&gt;\n
+                &lt;div class="text-xxs text-secondary"&gt;Checkout is per shop — pick a shop to continue&lt;/div&gt;\n
+            &lt;/div&gt;\n
+            &lt;span class="icon-X2 icon-close-popup btn btn-light rounded-circle p-0 d-flex align-items-center justify-content-center ws-cart-close" data-bs-dismiss="offcanvas"&gt;&lt;/span&gt;\n
+        &lt;/div&gt;\n
+         \n
+        &lt;div class="wrap flex-grow-1 overflow-auto"&gt;\n
+            &lt;div class="tf-mini-cart-wrap list-file-delete wrap-empty_text"&gt;\n
+                &lt;div class="tf-mini-cart-main"&gt;\n
+                    &lt;div class="tf-mini-cart-sroll"&gt;\n
+                        &lt;div class="tf-mini-cart-items list-empty p-3 d-flex flex-column gap-3" data-mini-cart-items&gt;\n
+                            &lt;div class="box-text_empty type-shop_cart" data-mini-cart-empty hidden&gt;\n
+                                &lt;div class="shop-empty_top text-center"&gt;\n
+                                    &lt;span class="icon"&gt;&lt;i class="icon-Handbag"&gt;&lt;/i&gt;&lt;/span&gt;\n
+                                    &lt;h4 class="text-emp"&gt;Your cart is empty&lt;/h4&gt;\n
+                                    &lt;p class="cl-text-2"&gt;Your cart is currently empty. Let us assist you in finding the right product&lt;/p&gt;\n
+                                &lt;/div&gt;\n
+                                &lt;div class="shop-empty_bot d-flex gap-2 justify-content-center"&gt;\n
+                                    &lt;a href="http://localhost/products" class="tf-btn animate-btn"&gt;Shopping&lt;/a&gt;\n
+                                    &lt;a href="http://localhost/storefront" class="tf-btn btn-stroke"&gt;Back to home&lt;/a&gt;\n
+                                &lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                                                                                &lt;div class="ws-card-side" data-mini-cart-shop="1"&gt;\n
+                                &lt;div class="px-3 py-2 d-flex align-items-center justify-content-between bg-white border-bottom"&gt;\n
+                                    &lt;div class="d-flex align-items-center gap-2"&gt;&lt;span class="rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width:28px;height:28px;font-size:11px;background:#F3EBFF;border:1px solid border-color:#E8D9FF;color:color:#7C3AED;"&gt;CS&lt;/span&gt;&lt;span class="small fw-bold" style="color:#111;"&gt;Checkout Shop M609P0Az&lt;/span&gt;&lt;span class="badge bg-light text-secondary border fw-normal" style="font-size:10px;"&gt;1 item&lt;/span&gt;&lt;/div&gt;\n
+                                                                    &lt;/div&gt;\n
+                                                                    &lt;div class="p-2 px-3 d-flex gap-2 align-items-center bg-white ws-mini-item " data-mini-cart-item="1" data-mini-cart-shop-id="1"&gt;\n
+                                        &lt;a href="http://localhost/category/checkout-category-ILyoIP87/products/checkout-product-DeZF2gTW" class="ws-mini-thumb"&gt;&lt;img loading="lazy" src="http://localhost/assets/storefront/images/no-image-icon.png" alt="Selected Shop Product" class="ws-item-img "&gt;&lt;/a&gt;\n
+                                        &lt;div class="flex-grow-1 ws-mini-info"&gt;\n
+                                            &lt;a href="http://localhost/category/checkout-category-ILyoIP87/products/checkout-product-DeZF2gTW" class="fw-bold text-truncate d-block link" style="color:#111;font-size:13px;"&gt;Selected Shop Product&lt;/a&gt;\n
+                                            &lt;div class="text-secondary" style="font-size:11px;"&gt;Qty &lt;span data-mini-cart-item-quantity&gt;1&lt;/span&gt; · &lt;span data-mini-cart-item-price&gt;₹600.00&lt;/span&gt; &lt;/div&gt;\n
+                                                                                    &lt;/div&gt;\n
+                                                                            &lt;/div&gt;\n
+                                                            &lt;/div&gt;\n
+                                                                                &lt;div class="ws-card-side" data-mini-cart-shop="2"&gt;\n
+                                &lt;div class="px-3 py-2 d-flex align-items-center justify-content-between bg-white border-bottom"&gt;\n
+                                    &lt;div class="d-flex align-items-center gap-2"&gt;&lt;span class="rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width:28px;height:28px;font-size:11px;background:#FFF1F2;border:1px solid border-color:#FFE4E6;color:color:#E11D48;"&gt;CS&lt;/span&gt;&lt;span class="small fw-bold" style="color:#111;"&gt;Checkout Shop kEKnBw61&lt;/span&gt;&lt;span class="badge bg-light text-secondary border fw-normal" style="font-size:10px;"&gt;1 item&lt;/span&gt;&lt;/div&gt;\n
+                                                                    &lt;/div&gt;\n
+                                                                    &lt;div class="p-2 px-3 d-flex gap-2 align-items-center bg-white ws-mini-item " data-mini-cart-item="2" data-mini-cart-shop-id="2"&gt;\n
+                                        &lt;a href="http://localhost/category/checkout-category-sDDL44oW/products/checkout-product-hQ0DQ9dz" class="ws-mini-thumb"&gt;&lt;img loading="lazy" src="http://localhost/assets/storefront/images/no-image-icon.png" alt="Other Shop Product" class="ws-item-img "&gt;&lt;/a&gt;\n
+                                        &lt;div class="flex-grow-1 ws-mini-info"&gt;\n
+                                            &lt;a href="http://localhost/category/checkout-category-sDDL44oW/products/checkout-product-hQ0DQ9dz" class="fw-bold text-truncate d-block link" style="color:#111;font-size:13px;"&gt;Other Shop Product&lt;/a&gt;\n
+                                            &lt;div class="text-secondary" style="font-size:11px;"&gt;Qty &lt;span data-mini-cart-item-quantity&gt;1&lt;/span&gt; · &lt;span data-mini-cart-item-price&gt;₹700.00&lt;/span&gt; &lt;/div&gt;\n
+                                                                                    &lt;/div&gt;\n
+                                                                            &lt;/div&gt;\n
+                                                            &lt;/div&gt;\n
+                                                &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/div&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+        &lt;div class="p-3 bg-white border-top" data-mini-cart-filled &gt;\n
+            &lt;div class="d-flex justify-content-between ws-summary-row"&gt;&lt;span class="text-secondary"&gt;Subtotal (&lt;span data-mini-cart-count&gt;2 items&lt;/span&gt;)&lt;/span&gt;&lt;span class="fw-semibold" data-mini-cart-base&gt;₹1,300.00&lt;/span&gt;&lt;/div&gt;\n
+            &lt;div class="d-flex justify-content-between text-success ws-summary-row"  hidden &gt;&lt;span&gt;Offer savings&lt;/span&gt;&lt;span data-mini-cart-savings&gt;₹0.00&lt;/span&gt;&lt;/div&gt;\n
+            &lt;div class="d-flex justify-content-between fw-bold mt-1 ws-total-row"&gt;&lt;span&gt;Total&lt;/span&gt;&lt;span data-mini-cart-subtotal&gt;₹1,300.00&lt;/span&gt;&lt;/div&gt;\n
+            &lt;a href="http://localhost/view-cart" class="btn btn-ws-dark w-100 mt-3 d-flex align-items-center justify-content-center"&gt;View full cart&lt;/a&gt;\n
+            &lt;div class="d-flex align-items-center justify-content-center gap-2 text-secondary mt-2" style="font-size:11px;"&gt;&lt;span&gt;🔒 Secure&lt;/span&gt;·&lt;span&gt;↺ Easy exchanges&lt;/span&gt;·&lt;span&gt;💳 Cards &amp; UPI&lt;/span&gt;&lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/div&gt;\n
+\n
+    &lt;div class="modal modalCentered fade customer-location-modal"\n
+    id="customer-location-modal"\n
+    tabindex="-1"\n
+    aria-labelledby="customer-location-modal-title"\n
+    data-auto-open="1"\n
+    data-current-postal-code=""\n
+    data-detect-endpoint="http://localhost/location/detect"\n
+    data-endpoint="http://localhost/location/postal-code"&gt;\n
+    &lt;div class="modal-dialog modal-dialog-centered"&gt;\n
+        &lt;div class="modal-content"&gt;\n
+            &lt;span class="icon-close-popup" data-bs-dismiss="modal"&gt;&lt;i class="icon-X2"&gt;&lt;/i&gt;&lt;/span&gt;\n
+            &lt;div class="modal-heading text-center"&gt;\n
+                &lt;span class="customer-location-badge"&gt;PIN&lt;/span&gt;\n
+                &lt;h3 class="title-pop mb-8" id="customer-location-modal-title"&gt;Choose your location&lt;/h3&gt;\n
+                &lt;p class="desc-pop cl-text-2"&gt;Enter your PIN code to see shops and products near you.&lt;/p&gt;\n
+                &lt;p class="customer-location-current mb-0" hidden&gt;\n
+                    Current PIN: &lt;span&gt;&lt;/span&gt;\n
+                &lt;/p&gt;\n
+            &lt;/div&gt;\n
+            &lt;div class="modal-main"&gt;\n
+                &lt;button type="button" class="tf-btn btn-white customer-location-detect-btn"&gt;\n
+                    &lt;span class="customer-location-detect-text"&gt;Use my current location&lt;/span&gt;\n
+                &lt;/button&gt;\n
+\n
+                &lt;div class="customer-location-detected" aria-live="polite"&gt;\n
+                    &lt;p class="customer-location-detected-title"&gt;Location detected&lt;/p&gt;\n
+                    &lt;p class="customer-location-detected-pin"&gt;&lt;/p&gt;\n
+                    &lt;p class="customer-location-detected-meta"&gt;&lt;/p&gt;\n
+                    &lt;div class="customer-location-detected-actions"&gt;\n
+                        &lt;button type="button" class="tf-btn animate-btn customer-location-confirm-detected"&gt;Use this location&lt;/button&gt;\n
+                        &lt;button type="button" class="tf-btn btn-white customer-location-enter-manually"&gt;Enter PIN manually&lt;/button&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/div&gt;\n
+\n
+                &lt;div class="customer-location-or"&gt;or&lt;/div&gt;\n
+\n
+                &lt;form method="POST"\n
+                    action="http://localhost/location/postal-code"\n
+                    class="customer-location-form"\n
+                    novalidate&gt;\n
+                    &lt;input type="hidden" name="_token" value="rt5Pz0RbZQ8uXiq10fb7Z0W35s4aDKw3arWZVkBr" autocomplete="off"&gt;                    &lt;fieldset class="tf-field"&gt;\n
+                        &lt;label for="customer-location-postal-code" class="tf-lable fw-medium"&gt;PIN Code&lt;/label&gt;\n
+                        &lt;input type="text"\n
+                            id="customer-location-postal-code"\n
+                            name="postal_code"\n
+                            value=""\n
+                            inputmode="numeric"\n
+                            pattern="\d{6}"\n
+                            maxlength="6"\n
+                            autocomplete="postal-code"\n
+                            placeholder="Enter PIN code"\n
+                            required&gt;\n
+                    &lt;/fieldset&gt;\n
+                    &lt;button type="submit" class="tf-btn animate-btn"&gt;\n
+                        &lt;span class="customer-location-button-text"&gt;Apply&lt;/span&gt;\n
+                    &lt;/button&gt;\n
+                &lt;/form&gt;\n
+                &lt;p class="customer-location-error " role="alert"&gt;\n
+                    \n
+                &lt;/p&gt;\n
+                &lt;p class="desc-pop cl-text-2 customer-location-helper mb-0"&gt;We'll show nearby shops first. You can change your location anytime.&lt;/p&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/div&gt;\n
+&lt;/div&gt;\n
+    &lt;script src="http://localhost/assets/storefront/js/plugin/bootstrap.min.js"&gt;&lt;/script&gt;\n
+&lt;script src="http://localhost/assets/storefront/js/plugin/jquery.min.js"&gt;&lt;/script&gt;\n
+&lt;script src="http://localhost/assets/storefront/js/plugin/swiper-bundle.min.js"&gt;&lt;/script&gt;\n
+&lt;script src="http://localhost/assets/storefront/js/plugin/bootstrap-select.min.js"&gt;&lt;/script&gt;\n
+&lt;script src="http://localhost/assets/storefront/js/plugin/count-down.js"&gt;&lt;/script&gt;\n
+&lt;script src="http://localhost/assets/storefront/js/plugin/infinityslide.js"&gt;&lt;/script&gt;\n
+&lt;script src="http://localhost/assets/storefront/js/plugin/wow.min.js"&gt;&lt;/script&gt;\n
+&lt;script src="http://localhost/assets/storefront/js/carousel.js"&gt;&lt;/script&gt;\n
+&lt;script src="http://localhost/assets/storefront/js/main.js?v=1786643233"&gt;&lt;/script&gt;\n
+&lt;script src="http://localhost/assets/storefront/js/customer-location.js?v=1786613754"&gt;&lt;/script&gt;\n
+            &lt;script&gt;\n
+            (function () {\n
+                const checkout = window.WindowShopCheckout = window.WindowShopCheckout || {};\n
+\n
+                const checkoutContent = function () {\n
+                    return document.querySelector('[data-checkout-content]');\n
+                };\n
+\n
+                const checkoutMessages = function () {\n
+                    return document.querySelector('[data-checkout-messages]');\n
+                };\n
+\n
+                const alertNode = function (message, type) {\n
+                    const div = document.createElement('div');\n
+                    div.className = 'alert alert-' + type;\n
+                    div.textContent = message;\n
+\n
+                    return div;\n
+                };\n
+\n
+                const clearFormErrors = function (form) {\n
+                    form.querySelectorAll('[data-checkout-error]').forEach(function (node) {\n
+                        node.remove();\n
+                    });\n
+                    form.querySelectorAll('.is-invalid').forEach(function (node) {\n
+                        node.classList.remove('is-invalid');\n
+                    });\n
+                };\n
+\n
+                const showFormErrors = function (form, errors) {\n
+                    clearFormErrors(form);\n
+\n
+                    Object.keys(errors || {}).forEach(function (field) {\n
+                        const input = form.querySelector('[name="' + field + '"]');\n
+\n
+                        if (!input) {\n
+                            return;\n
+                        }\n
+\n
+                        input.classList.add('is-invalid');\n
+                        const holder = input.closest('fieldset') || input.closest('.checkbox-wrap') || input.parentElement;\n
+                        const error = document.createElement('p');\n
+                        error.className = 'text-danger text-caption-01 mt-4 mb-0';\n
+                        error.setAttribute('data-checkout-error', '');\n
+                        error.textContent = errors[field][0] || 'Please check this field.';\n
+                        holder.appendChild(error);\n
+                    });\n
+                };\n
+\n
+                const refreshCheckoutContent = function (message) {\n
+                    return fetch(window.location.href, {\n
+                        headers: {\n
+                            'Accept': 'text/html',\n
+                            'X-Requested-With': 'XMLHttpRequest'\n
+                        }\n
+                    })\n
+                        .then(function (response) { return response.text(); })\n
+                        .then(function (html) {\n
+                            const doc = new DOMParser().parseFromString(html, 'text/html');\n
+                            const fresh = doc.querySelector('[data-checkout-content]');\n
+                            const current = checkoutContent();\n
+\n
+                            if (!fresh || !current) {\n
+                                window.location.reload();\n
+                                return;\n
+                            }\n
+\n
+                            current.innerHTML = fresh.innerHTML;\n
+\n
+                            if (message) {\n
+                                const messages = checkoutMessages();\n
+\n
+                                if (messages) {\n
+                                    messages.innerHTML = '';\n
+                                    messages.appendChild(alertNode(message, 'success'));\n
+                                }\n
+                            }\n
+\n
+                            checkout.init();\n
+                        });\n
+                };\n
+\n
+                const initAddressForm = function (form) {\n
+                    if (form.dataset.checkoutFormReady === '1') {\n
+                        return;\n
+                    }\n
+\n
+                    form.dataset.checkoutFormReady = '1';\n
+\n
+                    const postal = form.querySelector('[data-address-postal-code]');\n
+                    const cityDisplay = form.querySelector('[data-address-city-display]');\n
+                    const stateDisplay = form.querySelector('[data-address-state-display]');\n
+                    const cityId = form.querySelector('[data-address-city-id]');\n
+                    const stateId = form.querySelector('[data-address-state-id]');\n
+                    const feedback = form.querySelector('[data-address-pin-feedback]');\n
+                    const labelValue = form.querySelector('[data-address-label-value]');\n
+                    const otherWrap = form.querySelector('[data-address-other-label-wrap]');\n
+                    const otherInput = form.querySelector('[name="address_label"]');\n
+                    const defaultCountryIso2 = (form.dataset.defaultCountryIso2 || '').toUpperCase();\n
+\n
+                    const isIndia = function () {\n
+                        return defaultCountryIso2 === 'IN';\n
+                    };\n
+\n
+                    const clearLocation = function () {\n
+                        if (cityDisplay) cityDisplay.value = '';\n
+                        if (stateDisplay) stateDisplay.value = '';\n
+                        if (cityId) cityId.value = '';\n
+                        if (stateId) stateId.value = '';\n
+                        if (feedback) {\n
+                            feedback.textContent = '';\n
+                            feedback.classList.remove('text-success', 'text-danger');\n
+                        }\n
+                    };\n
+\n
+                    const syncLabel = function () {\n
+                        const checked = form.querySelector('[name="address_type"]:checked');\n
+                        const type = checked ? checked.value : 'Home';\n
+                        const isOther = type === 'Other';\n
+\n
+                        if (otherWrap) {\n
+                            otherWrap.hidden = !isOther;\n
+                        }\n
+\n
+                        if (labelValue) {\n
+                            labelValue.value = isOther ? (otherInput ? otherInput.value : '') : type;\n
+                        }\n
+                    };\n
+\n
+                    const lookupPin = function () {\n
+                        if (!isIndia() || !postal || postal.value.trim() === '') {\n
+                            return;\n
+                        }\n
+\n
+                        if (!/^\d{6}$/.test(postal.value.trim())) {\n
+                            clearLocation();\n
+                            if (feedback) {\n
+                                feedback.textContent = 'Please enter a valid Indian PIN code.';\n
+                                feedback.classList.add('text-danger');\n
+                            }\n
+                            return;\n
+                        }\n
+\n
+                        if (feedback) {\n
+                            feedback.textContent = 'Checking PIN...';\n
+                            feedback.classList.remove('text-danger', 'text-success');\n
+                        }\n
+\n
+                        fetch(form.dataset.postalCodeUrlTemplate.replace('__PIN__', encodeURIComponent(postal.value.trim())), {\n
+                            headers: { 'Accept': 'application/json' }\n
+                        })\n
+                            .then(function (response) { return response.json(); })\n
+                            .then(function (payload) {\n
+                                clearLocation();\n
+\n
+                                if (!payload.valid) {\n
+                                    if (feedback) {\n
+                                        feedback.textContent = payload.message || 'Please enter a valid Indian PIN code.';\n
+                                        feedback.classList.add('text-danger');\n
+                                    }\n
+                                    return;\n
+                                }\n
+\n
+                                if (cityDisplay) cityDisplay.value = payload.city || '';\n
+                                if (stateDisplay) stateDisplay.value = payload.state || '';\n
+                                if (feedback) {\n
+                                    feedback.textContent = payload.shipping_enabled\n
+                                        ? 'PIN verified.'\n
+                                        : 'PIN verified, but shipping is currently unavailable.';\n
+                                    feedback.classList.add(payload.shipping_enabled ? 'text-success' : 'text-danger');\n
+                                }\n
+\n
+                                const restricted = (payload.shop_availability || []).some(function (shop) {\n
+                                    return shop.available === false;\n
+                                });\n
+\n
+                                if (restricted &amp;&amp; feedback) {\n
+                                    feedback.textContent += ' Some items cannot currently be delivered to this PIN code.';\n
+                                }\n
+                            })\n
+                            .catch(function () {\n
+                                if (feedback) {\n
+                                    feedback.textContent = 'Unable to verify PIN right now.';\n
+                                    feedback.classList.add('text-danger');\n
+                                }\n
+                            });\n
+                    };\n
+\n
+                    if (postal &amp;&amp; isIndia()) {\n
+                        postal.setAttribute('pattern', '[0-9]{6}');\n
+                    }\n
+\n
+                    if (postal) {\n
+                        postal.addEventListener('blur', lookupPin);\n
+                    }\n
+\n
+                    form.querySelectorAll('[name="address_type"]').forEach(function (radio) {\n
+                        radio.addEventListener('change', syncLabel);\n
+                    });\n
+\n
+                    if (otherInput) {\n
+                        otherInput.addEventListener('input', syncLabel);\n
+                    }\n
+\n
+                    form.addEventListener('submit', function (event) {\n
+                        syncLabel();\n
+\n
+                        if (!form.hasAttribute('data-checkout-ajax-form')) {\n
+                            return;\n
+                        }\n
+\n
+                        event.preventDefault();\n
+                        clearFormErrors(form);\n
+\n
+                        const button = form.querySelector('[type="submit"]');\n
+                        const originalText = button ? button.textContent : '';\n
+\n
+                        if (button) {\n
+                            button.disabled = true;\n
+                            button.textContent = 'Saving...';\n
+                        }\n
+\n
+                        fetch(form.action, {\n
+                            method: form.method || 'POST',\n
+                            body: new FormData(form),\n
+                            headers: {\n
+                                'Accept': 'application/json',\n
+                                'X-Requested-With': 'XMLHttpRequest'\n
+                            }\n
+                        })\n
+                            .then(function (response) {\n
+                                if (response.status === 422) {\n
+                                    return response.json().then(function (payload) {\n
+                                        showFormErrors(form, payload.errors || {});\n
+                                        throw new Error('validation');\n
+                                    });\n
+                                }\n
+\n
+                                if (!response.ok) {\n
+                                    throw new Error('request');\n
+                                }\n
+\n
+                                return response.json();\n
+                            })\n
+                            .then(function (payload) {\n
+                                return refreshCheckoutContent(payload.message || 'Address saved.');\n
+                            })\n
+                            .catch(function (error) {\n
+                                if (error.message === 'validation') {\n
+                                    return;\n
+                                }\n
+\n
+                                const messages = checkoutMessages();\n
+\n
+                                if (messages) {\n
+                                    messages.innerHTML = '';\n
+                                    messages.appendChild(alertNode('Unable to save address right now.', 'danger'));\n
+                                }\n
+                            })\n
+                            .finally(function () {\n
+                                if (button) {\n
+                                    button.disabled = false;\n
+                                    button.textContent = originalText;\n
+                                }\n
+                            });\n
+                    });\n
+\n
+                    syncLabel();\n
+                };\n
+\n
+                checkout.init = function () {\n
+                    document.querySelectorAll('[data-checkout-address-form]').forEach(initAddressForm);\n
+                };\n
+\n
+                document.addEventListener('DOMContentLoaded', checkout.init);\n
+            })();\n
+        &lt;/script&gt;\n
+        &lt;script&gt;\n
+        document.addEventListener('DOMContentLoaded', () =&gt; {\n
+            const form = document.querySelector('[data-billing-same-form]');\n
+            const toggle = document.querySelector('[data-billing-same-toggle]');\n
+            const panel = document.querySelector('[data-billing-address-panel]');\n
+            const orderField = document.querySelector('[data-billing-same-order-field]');\n
+            const billingAddressCollapse = document.getElementById('checkout-add-billing-address');\n
+            const fulfillmentSection = document.querySelector('[data-fulfillment-url]');\n
+            const selectedFulfillmentField = document.querySelector('[data-selected-fulfillment-field]');\n
+            const shippingTotal = document.querySelector('[data-checkout-shipping-total]');\n
+            const grandTotal = document.querySelector('[data-checkout-grand-total]');\n
+            const placeOrderButton = document.querySelector('[data-place-order-button]');\n
+            const placeOrderForm = document.querySelector('[data-place-order-form]');\n
+            const paymentOptions = document.querySelector('[data-payment-options]');\n
+            const selectedPaymentField = document.querySelector('[data-selected-payment-field]');\n
+\n
+            if (!form || !toggle || !panel || !orderField) {\n
+                return;\n
+            }\n
+\n
+            const csrfToken = () =&gt; {\n
+                const metaToken = document.querySelector('meta[name="csrf-token"]');\n
+\n
+                return metaToken ? metaToken.getAttribute('content') : '';\n
+            };\n
+\n
+            const applyBillingSameState = () =&gt; {\n
+                const sameAsDelivery = toggle.checked;\n
+\n
+                panel.hidden = sameAsDelivery;\n
+                orderField.value = sameAsDelivery ? '1' : '0';\n
+\n
+                if (!sameAsDelivery &amp;&amp; billingAddressCollapse &amp;&amp; window.bootstrap?.Collapse) {\n
+                    window.bootstrap.Collapse.getOrCreateInstance(billingAddressCollapse, { toggle: false }).show();\n
+                }\n
+\n
+                return sameAsDelivery;\n
+            };\n
+\n
+            const syncBillingSameState = async (sameAsDelivery) =&gt; {\n
+                if (!window.fetch) {\n
+                    return;\n
+                }\n
+\n
+                const body = new URLSearchParams();\n
+                body.set('billing_same_as_delivery', sameAsDelivery ? '1' : '0');\n
+\n
+                try {\n
+                    const response = await fetch(form.action, {\n
+                        method: 'POST',\n
+                        headers: {\n
+                            'Accept': 'application/json',\n
+                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',\n
+                            'X-Requested-With': 'XMLHttpRequest',\n
+                            'X-CSRF-TOKEN': csrfToken(),\n
+                        },\n
+                        body,\n
+                        credentials: 'same-origin',\n
+                    });\n
+\n
+                    if (!response.ok) {\n
+                        throw new Error('Billing preference sync failed.');\n
+                    }\n
+                } catch (error) {\n
+                    console.warn(error.message);\n
+                }\n
+            };\n
+\n
+            form.addEventListener('submit', (event) =&gt; {\n
+                event.preventDefault();\n
+                syncBillingSameState(applyBillingSameState());\n
+            });\n
+\n
+            toggle.addEventListener('change', () =&gt; {\n
+                syncBillingSameState(applyBillingSameState());\n
+            });\n
+\n
+            const optionNode = (id) =&gt; Array.from(document.querySelectorAll('[data-fulfillment-option]'))\n
+                .find((node) =&gt; node.dataset.fulfillmentOption === id);\n
+            const renderFulfillmentOptions = (options, selected) =&gt; {\n
+                if (!Array.isArray(options)) {\n
+                    return;\n
+                }\n
+\n
+                options.forEach((option) =&gt; {\n
+                    const node = optionNode(option.id);\n
+                    if (!node) {\n
+                        return;\n
+                    }\n
+\n
+                    const radio = node.querySelector('[data-fulfillment-radio]');\n
+                    const amount = node.querySelector('[data-fulfillment-amount]');\n
+                    const description = node.querySelector('[data-fulfillment-description]');\n
+                    const estimate = node.querySelector('[data-fulfillment-estimate]');\n
+                    const reason = node.querySelector('[data-fulfillment-reason]');\n
+                    const isSelected = option.id === selected;\n
+                    const isAvailable = Boolean(option.available);\n
+\n
+                    node.classList.toggle('is-selected', isSelected);\n
+                    node.classList.toggle('is-disabled', !isAvailable);\n
+\n
+                    if (radio) {\n
+                        radio.checked = isSelected;\n
+                        radio.disabled = !isAvailable;\n
+                    }\n
+\n
+                    if (amount) {\n
+                        amount.textContent = option.amount || '';\n
+                    }\n
+\n
+                    if (description) {\n
+                        description.innerHTML = '';\n
+                        (option.description_lines || [option.description || '']).filter(Boolean).forEach((line) =&gt; {\n
+                            const lineText = typeof line === 'object' ? (line.text || '') : line;\n
+                            const lineType = typeof line === 'object' ? (line.type || 'summary') : 'summary';\n
+\n
+                            if (!lineText) {\n
+                                return;\n
+                            }\n
+\n
+                            const lineNode = document.createElement('span');\n
+                            lineNode.className = `checkout-fulfillment-line checkout-fulfillment-line--${lineType}`;\n
+                            lineNode.textContent = lineText;\n
+                            description.appendChild(lineNode);\n
+                        });\n
+                    }\n
+\n
+                    if (estimate) {\n
+                        estimate.textContent = option.estimate || '';\n
+                        estimate.classList.toggle('d-none', !option.estimate);\n
+                    }\n
+\n
+                    if (reason) {\n
+                        reason.textContent = option.reason || '';\n
+                        reason.classList.toggle('d-none', isAvailable || !option.reason);\n
+                    }\n
+                });\n
+            };\n
+\n
+            const paymentOptionTemplate = (method) =&gt; {\n
+                const label = document.createElement('label');\n
+                label.className = `checkout-option ${method.selected ? 'is-selected' : ''} ${method.available ? '' : 'is-disabled'}`;\n
+                label.dataset.paymentOption = method.id;\n
+\n
+                const radio = document.createElement('input');\n
+                radio.type = 'radio';\n
+                radio.name = 'payment_method_visual';\n
+                radio.value = method.id;\n
+                radio.dataset.paymentRadio = '';\n
+                radio.checked = Boolean(method.selected);\n
+                radio.disabled = !method.available;\n
+                radio.addEventListener('change', () =&gt; {\n
+                    if (radio.checked &amp;&amp; !radio.disabled &amp;&amp; selectedPaymentField) {\n
+                        selectedPaymentField.value = radio.value;\n
+                    }\n
+                });\n
+\n
+                const content = document.createElement('span');\n
+                const header = document.createElement('span');\n
+                header.className = 'd-flex justify-content-between gap-3';\n
+                const title = document.createElement('strong');\n
+                title.textContent = method.label || '';\n
+                header.appendChild(title);\n
+\n
+                if (!method.available) {\n
+                    const status = document.createElement('strong');\n
+                    status.className = 'text-danger';\n
+                    status.dataset.paymentStatus = '';\n
+                    status.textContent = 'Unavailable';\n
+                    header.appendChild(status);\n
+                }\n
+\n
+                const description = document.createElement('span');\n
+                description.className = 'd-block cl-text-2';\n
+                description.dataset.paymentDescription = '';\n
+                description.textContent = method.description || '';\n
+                const reason = document.createElement('span');\n
+                reason.className = `text-danger text-caption-01 ${method.available || !method.reason ? 'd-none' : 'd-block'}`;\n
+                reason.dataset.paymentReason = '';\n
+                reason.textContent = method.reason || '';\n
+\n
+                content.append(header, description, reason);\n
+                label.append(radio, content);\n
+\n
+                return label;\n
+            };\n
+\n
+            const renderPaymentMethods = (methods, selected, message) =&gt; {\n
+                if (!paymentOptions || !Array.isArray(methods)) {\n
+                    return;\n
+                }\n
+\n
+                paymentOptions.innerHTML = '';\n
+\n
+                if (methods.length === 0) {\n
+                    const empty = document.createElement('div');\n
+                    empty.className = 'checkout-empty-panel';\n
+                    empty.dataset.paymentEmpty = '';\n
+                    empty.textContent = message || 'No payment method is currently available.';\n
+                    paymentOptions.appendChild(empty);\n
+                } else {\n
+                    methods.forEach((method) =&gt; {\n
+                        method.selected = method.id === selected;\n
+                        paymentOptions.appendChild(paymentOptionTemplate(method));\n
+                    });\n
+                }\n
+\n
+                if (selectedPaymentField) {\n
+                    selectedPaymentField.value = selected || '';\n
+                }\n
+            };\n
+\n
+            const syncFulfillment = async (fulfillment) =&gt; {\n
+                if (!fulfillmentSection || !window.fetch) {\n
+                    return;\n
+                }\n
+\n
+                const body = new URLSearchParams();\n
+                body.set('fulfillment', fulfillment);\n
+\n
+                try {\n
+                    const response = await fetch(fulfillmentSection.dataset.fulfillmentUrl, {\n
+                        method: 'POST',\n
+                        headers: {\n
+                            'Accept': 'application/json',\n
+                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',\n
+                            'X-Requested-With': 'XMLHttpRequest',\n
+                            'X-CSRF-TOKEN': csrfToken(),\n
+                        },\n
+                        body,\n
+                        credentials: 'same-origin',\n
+                    });\n
+\n
+                    if (!response.ok) {\n
+                        throw new Error('Fulfillment preference sync failed.');\n
+                    }\n
+\n
+                    const payload = await response.json();\n
+                    const selected = payload.selected_fulfillment || fulfillment;\n
+\n
+                    renderFulfillmentOptions(payload.shipping_options, selected);\n
+                    renderPaymentMethods(\n
+                        payload.payment_methods || [],\n
+                        payload.selected_payment_method || '',\n
+                        payload.payment_unavailable_message || '',\n
+                    );\n
+\n
+                    if (selectedFulfillmentField) {\n
+                        selectedFulfillmentField.value = selected;\n
+                    }\n
+\n
+                    if (shippingTotal &amp;&amp; payload.shipping) {\n
+                        shippingTotal.textContent = payload.shipping;\n
+                    }\n
+\n
+                    if (grandTotal &amp;&amp; payload.total) {\n
+                        grandTotal.textContent = payload.total;\n
+                    }\n
+\n
+                    if (placeOrderButton) {\n
+                        placeOrderButton.disabled = !payload.can_place_order;\n
+                    }\n
+                } catch (error) {\n
+                    console.warn(error.message);\n
+                }\n
+            };\n
+\n
+            document.querySelectorAll('[data-fulfillment-radio]').forEach((radio) =&gt; {\n
+                radio.addEventListener('change', () =&gt; {\n
+                    if (radio.checked &amp;&amp; !radio.disabled) {\n
+                        syncFulfillment(radio.value);\n
+                    }\n
+                });\n
+            });\n
+\n
+            document.querySelectorAll('[data-payment-radio]').forEach((radio) =&gt; {\n
+                radio.addEventListener('change', () =&gt; {\n
+                    if (radio.checked &amp;&amp; !radio.disabled &amp;&amp; selectedPaymentField) {\n
+                        selectedPaymentField.value = radio.value;\n
+                    }\n
+                });\n
+            });\n
+\n
+            if (placeOrderForm &amp;&amp; placeOrderButton) {\n
+                placeOrderForm.addEventListener('submit', () =&gt; {\n
+                    if (placeOrderButton.disabled) {\n
+                        return;\n
+                    }\n
+\n
+                    placeOrderButton.disabled = true;\n
+                    placeOrderButton.textContent = 'Placing Order...';\n
+                });\n
+            }\n
+\n
+            applyBillingSameState();\n
+        });\n
+    &lt;/script&gt;\n
+    &lt;script&gt;\n
+        document.addEventListener('DOMContentLoaded', () =&gt; {\n
+            document.querySelectorAll('.storefront-category-mega').forEach((megaMenu) =&gt; {\n
+                megaMenu.querySelectorAll('.mega-menu-drill-trigger').forEach((trigger) =&gt; {\n
+                    trigger.addEventListener('click', (event) =&gt; {\n
+                        event.preventDefault();\n
+                        const targetId = trigger.getAttribute('data-drill-target');\n
+                        const target = targetId ? megaMenu.querySelector(`#${targetId}`) : null;\n
+\n
+                        if (!target) {\n
+                            return;\n
+                        }\n
+\n
+                        megaMenu.classList.add('is-drilling');\n
+                        megaMenu.querySelectorAll('.storefront-mega-drill').forEach((panel) =&gt; {\n
+                            panel.classList.toggle('is-active', panel === target);\n
+                        });\n
+                    });\n
+                });\n
+\n
+                megaMenu.querySelectorAll('.mega-menu-back').forEach((backButton) =&gt; {\n
+                    backButton.addEventListener('click', () =&gt; {\n
+                        megaMenu.classList.remove('is-drilling');\n
+                        megaMenu.querySelectorAll('.storefront-mega-drill').forEach((panel) =&gt; {\n
+                            panel.classList.remove('is-active');\n
+                        });\n
+                    });\n
+                });\n
+            });\n
+        });\n
+    &lt;/script&gt;\n
+    &lt;script&gt;\n
+        window.WindowShopMiniCart = window.WindowShopMiniCart || {};\n
+        window.WindowShopMiniCart.sync = (payload) =&gt; {\n
+            const miniCart = document.querySelector('[data-mini-cart]');\n
+\n
+            if (!miniCart || !payload) {\n
+                return;\n
+            }\n
+\n
+            const productsUrl = "http:\/\/localhost\/products";\n
+            const homeUrl = "http:\/\/localhost\/storefront";\n
+            document.querySelectorAll('[data-storefront-cart-count]').forEach((count) =&gt; {\n
+                count.textContent = payload.cart_count || '0';\n
+            });\n
+\n
+            let empty = miniCart.querySelector('[data-mini-cart-empty]');\n
+            const filledEls = miniCart.querySelectorAll('[data-mini-cart-filled],[data-mini-cart-filled-promo]');\n
+            const subtotal = miniCart.querySelector('[data-mini-cart-subtotal]');\n
+            const baseEl = miniCart.querySelector('[data-mini-cart-base]');\n
+            const savingsEl = miniCart.querySelector('[data-mini-cart-savings]');\n
+            const itemsWrap = miniCart.querySelector('[data-mini-cart-items]');\n
+            const checkoutUrl = "http:\/\/localhost\/checkout";\n
+            const cartUrl = "http:\/\/localhost\/view-cart";\n
+\n
+            if (subtotal &amp;&amp; (payload.total || payload.subtotal)) subtotal.textContent = payload.total || payload.subtotal;\n
+            if (baseEl &amp;&amp; payload.base_subtotal) baseEl.textContent = payload.base_subtotal;\n
+            if (savingsEl &amp;&amp; payload.promotion_discount) savingsEl.textContent = payload.promotion_discount;\n
+            miniCart.querySelectorAll('[data-mini-cart-count]').forEach((el) =&gt; { el.textContent = (payload.cart_count || '0') + ' items'; });\n
+\n
+            if (payload.is_empty) {\n
+                filledEls.forEach((f) =&gt; { f.setAttribute('hidden', ''); f.style.display = 'none'; });\n
+                if (itemsWrap) {\n
+                    itemsWrap.innerHTML = `\n
+                        &lt;div class="box-text_empty type-shop_cart" data-mini-cart-empty&gt;\n
+                            &lt;div class="shop-empty_top"&gt;\n
+                                &lt;span class="icon"&gt;\n
+                                    &lt;i class="icon-Handbag"&gt;&lt;/i&gt;\n
+                                &lt;/span&gt;\n
+                                &lt;h4 class="text-emp"&gt;Your cart is empty&lt;/h4&gt;\n
+                                &lt;p class="cl-text-2"&gt;Your cart is currently empty. Let us assist you in finding the right product&lt;/p&gt;\n
+                            &lt;/div&gt;\n
+                            &lt;div class="shop-empty_bot"&gt;\n
+                                &lt;a class="tf-btn animate-btn"&gt;Shopping&lt;/a&gt;\n
+                                &lt;a class="tf-btn btn-stroke"&gt;Back to home&lt;/a&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                    `;\n
+                    itemsWrap.querySelector('.shop-empty_bot .tf-btn.animate-btn').href = productsUrl;\n
+                    itemsWrap.querySelector('.shop-empty_bot .tf-btn.btn-stroke').href = homeUrl;\n
+                    empty = itemsWrap.querySelector('[data-mini-cart-empty]');\n
+                }\n
+                if (empty) {\n
+                    empty.removeAttribute('hidden');\n
+                    empty.style.display = '';\n
+                }\n
+                return;\n
+            }\n
+\n
+            if (empty) {\n
+                empty.setAttribute('hidden', '');\n
+                empty.style.display = 'none';\n
+            }\n
+\n
+            filledEls.forEach((f) =&gt; { f.removeAttribute('hidden'); f.style.display = ''; });\n
+\n
+            if (itemsWrap) itemsWrap.replaceChildren();\n
+\n
+            const esc = (s) =&gt; String(s ?? '').replace(/[&amp;&lt;&gt;"']/g, (c) =&gt; ({'&amp;':'&amp;amp;','&lt;':'&amp;lt;','&gt;':'&amp;gt;','"':'&amp;quot;',"'":'&amp;#39;'}[c]));\n
+            (payload.shop_groups || []).forEach((shop) =&gt; {\n
+                if (!itemsWrap) return;\n
+                const initials = String(shop.shop_name || 'S').trim().split(/\s+/).slice(0,2).map((w) =&gt; w.charAt(0)).join('').toUpperCase();\n
+                const shopWrap = document.createElement('div');\n
+                shopWrap.className = 'ws-card-side';\n
+                shopWrap.dataset.miniCartShop = shop.shop_id;\n
+                const savedBadge = (shop.promotion_discount_cents &gt; 0) ? `&lt;span class="badge rounded-pill border" style="background:#ECFDF5;color:#065F46;border-color:#A7F3D0 !important;font-size:10px;"&gt;${esc(String(shop.promotion_discount || '').replace(/^-/, ''))} saved&lt;/span&gt;` : ((shop.coupon &amp;&amp; shop.coupon.code) ? `&lt;span class="badge rounded-pill border" style="background:#FFFBEB;color:#92400E;border-color:#FDE68A !important;font-size:10px;"&gt;Tip: ${esc(shop.coupon.code)}&lt;/span&gt;` : '');\n
+                shopWrap.innerHTML = `&lt;div class="px-3 py-2 d-flex align-items-center justify-content-between bg-white border-bottom"&gt;&lt;div class="d-flex align-items-center gap-2"&gt;&lt;span class="rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width:28px;height:28px;background:#F3EBFF;border:1px solid #E8D9FF;color:#7C3AED;font-size:11px;"&gt;${esc(initials)}&lt;/span&gt;&lt;span class="small fw-bold" style="color:#111;"&gt;${esc(shop.shop_name || 'Shop')}&lt;/span&gt;&lt;span class="badge bg-light text-secondary border fw-normal" style="font-size:10px;"&gt;${(shop.items || []).length} items&lt;/span&gt;&lt;/div&gt;${savedBadge}&lt;/div&gt;&lt;div data-shop-items&gt;&lt;/div&gt;`;\n
+                const list = shopWrap.querySelector('[data-shop-items]');\n
+                (shop.items || []).forEach((item) =&gt; {\n
+                    const row = document.createElement('div');\n
+                    row.className = 'p-2 px-3 d-flex gap-2 align-items-center bg-white border-bottom ws-mini-item';\n
+                    row.dataset.miniCartItem = item.id; row.dataset.miniCartShopId = shop.shop_id;\n
+                    const strike = (item.promotion_discount_cents &gt; 0 &amp;&amp; item.base_line_subtotal) ? `&lt;span class="text-decoration-line-through ms-1"&gt;${esc(item.base_line_subtotal)}&lt;/span&gt;` : '';\n
+                    const itemSavings = esc(String(item.promotion_discount || '').replace(/^-/, ''));\n
+                    row.innerHTML = `&lt;a href="${esc(item.product_url || '#')}" class="ws-mini-thumb"&gt;&lt;img loading="lazy" src="${esc(item.image || '')}" alt="${esc(item.product_name || 'Product')}" class="ws-item-img"&gt;&lt;/a&gt;&lt;div class="flex-grow-1 ws-mini-info"&gt;&lt;a href="${esc(item.product_url || '#')}" class="fw-bold text-truncate d-block link ws-mini-title"&gt;${esc(item.product_name || 'Product')}&lt;/a&gt;&lt;div class="text-secondary ws-mini-meta"&gt;Qty ${esc(item.quantity || '0')} · ${esc(item.line_subtotal || '')} ${strike}${item.is_generated_gift ? ' · &lt;span class="text-success fw-bold"&gt;FREE&lt;/span&gt;' : ''}&lt;/div&gt;&lt;/div&gt;${(item.promotion_discount_cents &gt; 0) ? `&lt;span class="flex-shrink-0 ws-mini-saving"&gt;${itemSavings}&lt;span class="ws-mini-saving-label"&gt;saved&lt;/span&gt;&lt;/span&gt;` : ''}`;\n
+                    list.append(row);\n
+                });\n
+                itemsWrap.append(shopWrap);\n
+            });\n
+        };\n
+    &lt;/script&gt;\n
+&lt;/body&gt;\n
+\n
+&lt;/html&gt;\n
+' [UTF-8](length: 128233) does not contain "Other Shop Product" [ASCII](length: 18).
+&#13;
+D:\xampp82\htdocs\unwanted\localhyper\windowshop\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+D:\xampp82\htdocs\unwanted\localhyper\windowshop\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:806
+D:\xampp82\htdocs\unwanted\localhyper\windowshop\tests\Feature\StorefrontCheckoutGateTest.php:1066</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

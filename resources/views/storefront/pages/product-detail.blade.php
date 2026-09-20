@@ -122,15 +122,17 @@
 
                                 <div class="product-infor-meta mb-16">
                                     <div class="meta_rate">
-                                        @if ($product['reviews'] !== '0 reviews')
-                                            <div class="star-wrap normal d-flex align-items-center">
-                                                @for ($i = 0; $i < 5; $i++)
-                                                    <i class="icon icon-Star"></i>
-                                                @endfor
-                                            </div>
-                                            <span class="text-caption-01 cl-text-2">({{ $product['reviews'] }})</span>
+                                        @if ($product['review_count'] > 0)
+                                            <a href="#customer-reviews" class="d-inline-flex align-items-center gap-2 link-underline-text" data-review-summary-link aria-controls="customer-reviews" aria-expanded="false">
+                                                <span class="star-wrap normal d-flex align-items-center">
+                                                    @for ($i = 0; $i < 5; $i++)
+                                                        <i class="icon icon-Star {{ $i < round($product['average_rating']) ? 'cl-text-yellow' : 'cl-text-3' }}"></i>
+                                                    @endfor
+                                                </span>
+                                                <span class="text-caption-01 cl-text-2">{{ number_format($product['average_rating'], 1) }} ({{ $product['review_count'] }} {{ Str::plural('Review', $product['review_count']) }})</span>
+                                            </a>
                                         @else
-                                            <span class="text-caption-01 cl-text-2">Reviews coming soon</span>
+                                            <span class="text-caption-01 cl-text-2">No reviews yet</span>
                                         @endif
                                     </div>
                                 </div>
@@ -605,47 +607,42 @@
                     </div>
                     <div id="customer-reviews" class="collapse" data-bs-parent="#prdDes">
                         <div class="accordion-content product-desc_review write-cancel-review-wrap">
-                            <div class="box-rating mb-0">
+                            @if ($product['review_count'] > 0)
+                            <div class="box-rating mb-24">
                                 <div class="rating-ratio">
-                                    <p class="text-display fw-medium">4.8</p>
+                                    <p class="text-display fw-medium">{{ number_format($product['average_rating'], 1) }}</p>
                                     <div class="star-wrap normal d-flex align-items-center">
                                         @for ($i = 0; $i < 5; $i++)
-                                            <i class="icon icon-Star fs-24"></i>
+                                            <i class="icon icon-Star fs-24 {{ $i < round($product['average_rating']) ? 'cl-text-yellow' : 'cl-text-3' }}"></i>
                                         @endfor
                                     </div>
-                                    <p class="rate-number">Sample review layout</p>
-                                </div>
-                                <div class="rating-progress-list">
-                                    @foreach ([60, 24, 10, 4, 2] as $index => $percent)
-                                        <div class="rate-progress-star fw-medium">
-                                            <span class="number-star">{{ 5 - $index }}</span>
-                                            <i class="icon icon-Star fs-20 cl-text-yellow"></i>
-                                            <div class="progress" role="progressbar" aria-valuenow="{{ $percent }}"
-                                                aria-valuemin="0" aria-valuemax="100">
-                                                <div class="progress-bar" style="width: {{ $percent }}%;"></div>
-                                            </div>
-                                            <span class="number-percent">{{ $percent }}%</span>
-                                        </div>
-                                    @endforeach
+                                    <p class="rate-number">Based on {{ $product['review_count'] }} {{ Str::plural('review', $product['review_count']) }}</p>
                                 </div>
                             </div>
+                            @foreach ($product['reviews'] as $review)
                             <div class="box-comment">
                                 <div class="comment_info">
-                                    <div class="info_image">
-                                        <img loading="lazy" width="60" height="60"
-                                            src="{{ asset('assets/storefront/images/avatar/avatar-2.jpg') }}"
-                                            alt="Customer">
-                                    </div>
                                     <div class="info_author">
-                                        <p class="h6 author__name">Useful product details before visiting</p>
-                                        <p class="author_date text-caption-01 cl-text-3">Sample placeholder</p>
+                                        @if($review['title'])<p class="h6 author__name">{{ $review['title'] }}</p>@endif
+                                        <div class="star-wrap normal d-flex align-items-center mb-4">@for($i=0;$i<5;$i++)<i class="icon icon-Star {{ $i < $review['rating'] ? 'cl-text-yellow' : 'cl-text-3' }}"></i>@endfor</div>
+                                        <p class="author_date text-caption-01 cl-text-3">{{ $review['customer_name'] }} &middot; Verified Purchase &middot; {{ $review['date'] }}</p>
                                     </div>
                                 </div>
-                                <p class="comment_text text-body-1">
-                                    This review area is a storefront placeholder so we can finalise the UI before real
-                                    customer reviews are connected.
-                                </p>
+                                <p class="comment_text text-body-1">{{ $review['text'] }}</p>
+                                @if($review['images']->isNotEmpty())
+                                    <div class="d-flex flex-wrap gap-2 mt-12">
+                                        @foreach($review['images'] as $image)
+                                            <a href="{{ $image['url'] }}" target="_blank" rel="noopener" aria-label="View customer review image {{ $loop->iteration }}">
+                                                <img src="{{ $image['thumbnail_url'] }}" alt="Customer review image {{ $loop->iteration }}" loading="lazy" width="88" height="88" style="width:88px;height:88px;object-fit:cover;border-radius:6px;">
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </div>
+                            @endforeach
+                            @else
+                                <p class="cl-text-2 mb-0">No customer reviews yet. Purchased this product? Review it from your completed order.</p>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -818,6 +815,26 @@
     <script src="{{ asset('assets/storefront/js/plugin/photoswipe-lightbox.umd.min.js') }}"></script>
     <script src="{{ asset('assets/storefront/js/plugin/photoswipe.umd.min.js') }}"></script>
     <script src="{{ asset('assets/storefront/js/zoom.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const reviewLink = document.querySelector('[data-review-summary-link]');
+            const reviewPanel = document.getElementById('customer-reviews');
+
+            if (!reviewLink || !reviewPanel || typeof bootstrap === 'undefined') {
+                return;
+            }
+
+            reviewLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                const collapse = bootstrap.Collapse.getOrCreateInstance(reviewPanel, { toggle: false });
+                collapse.show();
+                reviewLink.setAttribute('aria-expanded', 'true');
+                reviewPanel.addEventListener('shown.bs.collapse', () => {
+                    reviewPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, { once: true });
+            });
+        });
+    </script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('[data-product-description]').forEach((wrap) => {
