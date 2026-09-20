@@ -242,34 +242,61 @@
     margin-bottom: 28px;
 }
 
-.home-offers__carousel {
-    margin-top: 0;
+.home-offers__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
 }
 
-.home-offers .shop-offers-heading-actions {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 8px 18px;
+.home-offer {
+    min-width: 0;
 }
 
-.home-offers .shop-featured-offer-artwork {
+.home-offer__artwork {
     display: block;
-    width: 100%;
-    margin-bottom: 24px;
     overflow: hidden;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     background: #f7f8fa;
+    transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
 }
 
-.home-offers .shop-featured-offer-artwork img {
+.home-offer__artwork img {
     display: block;
     width: 100%;
     height: auto;
     aspect-ratio: 3 / 1;
     object-fit: contain;
+}
+
+.home-offer__details {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-top: 12px;
+}
+
+.home-offer__shop {
+    overflow: hidden;
+    color: #111827;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.home-offer__shop:hover {
+    color: var(--primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .home-offer__artwork:hover {
+        border-color: #d1d5db;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, .1);
+        transform: translateY(-2px);
+    }
 }
 
 .home-new-arrivals__header {
@@ -324,16 +351,20 @@
         padding: 46px 0 52px;
     }
 
-    .home-offers .shop-profile-section-head {
-        align-items: flex-start;
+    .home-offers__grid {
+        display: flex;
+        gap: 14px;
+        margin-right: calc(var(--bs-gutter-x) * -.5);
+        padding-right: 34px;
+        padding-bottom: 10px;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-width: thin;
     }
 
-    .home-offers .shop-offers-heading-actions {
-        justify-content: flex-start;
-    }
-
-    .home-offers .shop-featured-offer-artwork {
-        margin-bottom: 18px;
+    .home-offer {
+        flex: 0 0 min(82vw, 360px);
+        scroll-snap-align: start;
     }
 
     .home-stores__header {
@@ -422,6 +453,14 @@
     }
 
     .home-store-card:hover {
+        transform: none;
+    }
+
+    .home-offer__artwork {
+        transition: none;
+    }
+
+    .home-offer__artwork:hover {
         transform: none;
     }
 }

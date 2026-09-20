@@ -104,18 +104,26 @@ class StorefrontHomeStoresTest extends TestCase
         $this->assertStringNotContainsString('Limit Store 1', $section);
     }
 
-    public function test_homepage_offers_uses_a_nearby_shop_and_only_current_promotions(): void
+    public function test_homepage_offers_shows_one_current_artwork_per_shop_for_at_most_three_nearby_shops(): void
     {
         $this->seed(PromotionTemplateSeeder::class);
         $this->postalCode('111111', 'Alpha');
         $this->postalCode('222222', 'Beta');
-        $nearbyShop = $this->shop('Nearby Offer Shop', pincode: '111111');
+        $oldestShop = $this->shop('Oldest Artwork Shop', pincode: '111111', createdAt: now()->subDays(4));
+        $secondShop = $this->shop('Second Artwork Shop', pincode: '111111', createdAt: now()->subDays(3));
+        $thirdShop = $this->shop('Third Artwork Shop', pincode: '111111', createdAt: now()->subDays(2));
+        $newestShop = $this->shop('Newest Artwork Shop', pincode: '111111', createdAt: now()->subDay());
         $otherShop = $this->shop('Other Offer Shop', pincode: '222222');
-        $active = $this->promotion($nearbyShop, 'Nearby Active Offer', imagePath: 'promotions/nearby/active/web.webp');
-        $this->promotion($nearbyShop, 'Nearby Inactive Offer', status: Promotion::STATUS_INACTIVE, imagePath: 'promotions/nearby/inactive/web.webp');
-        $this->promotion($nearbyShop, 'Nearby Future Offer', startsAt: now()->addDay(), imagePath: 'promotions/nearby/future/web.webp');
-        $this->promotion($nearbyShop, 'Nearby Expired Offer', endsAt: now()->subDay(), imagePath: 'promotions/nearby/expired/web.webp');
-        $this->promotion($otherShop, 'Other District Active Offer');
+        $this->promotion($oldestShop, 'Oldest Artwork Offer', imagePath: 'promotions/oldest/web.webp');
+        $second = $this->promotion($secondShop, 'Second Artwork Offer', imagePath: 'promotions/second/web.webp');
+        $third = $this->promotion($thirdShop, 'Third Artwork Offer', imagePath: 'promotions/third/web.webp');
+        $newest = $this->promotion($newestShop, 'Newest Artwork Offer', imagePath: 'promotions/newest/web.webp');
+        $newest->forceFill(['priority' => 10])->save();
+        $this->promotion($newestShop, 'Second Newest Shop Offer', imagePath: 'promotions/newest/second.webp');
+        $this->promotion($newestShop, 'Inactive Artwork', status: Promotion::STATUS_INACTIVE, imagePath: 'promotions/invalid/inactive.webp');
+        $this->promotion($newestShop, 'Future Artwork', startsAt: now()->addDay(), imagePath: 'promotions/invalid/future.webp');
+        $this->promotion($newestShop, 'Expired Artwork', endsAt: now()->subDay(), imagePath: 'promotions/invalid/expired.webp');
+        $this->promotion($otherShop, 'Other District Artwork', imagePath: 'promotions/other/web.webp');
 
         $response = $this->withSession([CustomerLocationService::SESSION_KEY => '111111'])
             ->get(route('storefront.home'))
@@ -123,27 +131,26 @@ class StorefrontHomeStoresTest extends TestCase
         $section = $this->offersSection($response->getContent());
 
         $this->assertStringContainsString('Offers Near You', $section);
-        $this->assertStringContainsString('Offers from '.$nearbyShop->name, $section);
-        $this->assertStringContainsString('Nearby Active Offer', $section);
-        $this->assertStringNotContainsString('Nearby Inactive Offer', $section);
-        $this->assertStringNotContainsString('Nearby Future Offer', $section);
-        $this->assertStringNotContainsString('Nearby Expired Offer', $section);
-        $this->assertStringNotContainsString('Other District Active Offer', $section);
-        $this->assertStringContainsString(route('storefront.stores.show', $nearbyShop->slug), $section);
-        $this->assertStringContainsString(route('storefront.stores.offers', $nearbyShop->slug), $section);
-        $this->assertStringContainsString(route('storefront.stores.offers', [
-            'slug' => $nearbyShop->slug,
-            'promotion' => $active->uuid,
-        ]), str_replace('&amp;', '&', $section));
-        $this->assertStringContainsString('shop-featured-offer-artwork', $section);
-        $this->assertStringContainsString(
-            'href="'.e(route('storefront.stores.offers', ['slug' => $nearbyShop->slug, 'promotion' => $active->uuid])).'" class="shop-featured-offer-artwork"',
-            $section,
-        );
-        $this->assertStringContainsString('storage/promotions/nearby/active/web.webp', $section);
-        $this->assertStringNotContainsString('storage/promotions/nearby/inactive/web.webp', $section);
-        $this->assertStringNotContainsString('storage/promotions/nearby/future/web.webp', $section);
-        $this->assertStringNotContainsString('storage/promotions/nearby/expired/web.webp', $section);
+        $this->assertStringContainsString('Discover offers from local stores near you.', $section);
+        $this->assertSame(3, substr_count($section, 'class="home-offer"'));
+        $this->assertSame(3, substr_count($section, 'class="home-offer__artwork"'));
+        $this->assertStringContainsString('storage/promotions/newest/web.webp', $section);
+        $this->assertStringNotContainsString('storage/promotions/newest/second.webp', $section);
+        $this->assertStringContainsString('storage/promotions/third/web.webp', $section);
+        $this->assertStringContainsString('storage/promotions/second/web.webp', $section);
+        $this->assertStringNotContainsString('storage/promotions/oldest/web.webp', $section);
+        $this->assertStringNotContainsString('storage/promotions/invalid/inactive.webp', $section);
+        $this->assertStringNotContainsString('storage/promotions/invalid/future.webp', $section);
+        $this->assertStringNotContainsString('storage/promotions/invalid/expired.webp', $section);
+        $this->assertStringNotContainsString('storage/promotions/other/web.webp', $section);
+        $this->assertStringContainsString(route('storefront.stores.show', $newestShop->slug), $section);
+        $this->assertStringContainsString(route('storefront.stores.offers', ['slug' => $newestShop->slug, 'promotion' => $newest->uuid]), str_replace('&amp;', '&', $section));
+        $this->assertStringContainsString(route('storefront.stores.offers', ['slug' => $thirdShop->slug, 'promotion' => $third->uuid]), str_replace('&amp;', '&', $section));
+        $this->assertStringContainsString(route('storefront.stores.offers', ['slug' => $secondShop->slug, 'promotion' => $second->uuid]), str_replace('&amp;', '&', $section));
+        $this->assertLessThan(strpos($section, $thirdShop->name), strpos($section, $newestShop->name));
+        $this->assertLessThan(strpos($section, $secondShop->name), strpos($section, $thirdShop->name));
+        $this->assertStringNotContainsString('shop-profile-offer-card', $section);
+        $this->assertStringNotContainsString('shop-profile-offer-carousel', $section);
 
         $content = $response->getContent();
         $this->assertStringNotContainsString('Elevate Your', $content);
@@ -158,6 +165,7 @@ class StorefrontHomeStoresTest extends TestCase
         $this->seed(PromotionTemplateSeeder::class);
         $shop = $this->shop('No Current Offers Shop');
         $this->promotion($shop, 'Old Expired Offer', endsAt: now()->subDay());
+        $this->promotion($shop, 'Current Offer Without Artwork');
 
         $content = $this->get(route('storefront.home'))->assertOk()->getContent();
 
@@ -166,17 +174,23 @@ class StorefrontHomeStoresTest extends TestCase
         $this->assertStringContainsString('Shop By Categories', $content);
     }
 
-    public function test_homepage_offer_cards_remain_without_a_banner_when_current_offers_have_no_artwork(): void
+    public function test_homepage_offers_renders_only_qualifying_artwork_without_placeholders(): void
     {
         $this->seed(PromotionTemplateSeeder::class);
-        $shop = $this->shop('Card Only Offer Shop');
-        $this->promotion($shop, 'Card Only Active Offer');
+        $firstShop = $this->shop('First Artwork Shop');
+        $secondShop = $this->shop('Second Artwork Shop');
+        $noArtworkShop = $this->shop('Card Only Offer Shop');
+        $this->promotion($firstShop, 'First Artwork Offer', imagePath: 'promotions/first/web.webp');
+        $this->promotion($secondShop, 'Second Artwork Offer', imagePath: 'promotions/second/web.webp');
+        $this->promotion($noArtworkShop, 'Card Only Active Offer');
 
         $section = $this->offersSection($this->get(route('storefront.home'))->assertOk()->getContent());
 
-        $this->assertStringContainsString('Card Only Active Offer', $section);
-        $this->assertStringContainsString('shop-profile-offer-card', $section);
-        $this->assertStringNotContainsString('shop-featured-offer-artwork', $section);
+        $this->assertSame(2, substr_count($section, 'class="home-offer"'));
+        $this->assertStringContainsString($firstShop->name, $section);
+        $this->assertStringContainsString($secondShop->name, $section);
+        $this->assertStringNotContainsString($noArtworkShop->name, $section);
+        $this->assertStringNotContainsString('placeholder', $section);
     }
 
     public function test_store_page_keeps_the_shared_offer_carousel_and_links(): void

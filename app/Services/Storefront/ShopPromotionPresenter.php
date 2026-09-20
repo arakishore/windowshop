@@ -55,6 +55,49 @@ class ShopPromotionPresenter
 
     /**
      * @param iterable<int, int|string> $shopIds
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function currentArtworkForShopIds(iterable $shopIds, int $limit = 3): Collection
+    {
+        $shopIds = collect($shopIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($shopIds->isEmpty() || $limit < 1) {
+            return collect();
+        }
+
+        return $this->currentPromotionQuery()
+            ->with('shop:id,name,slug,created_at')
+            ->whereIn('shop_id', $shopIds->all())
+            ->whereNotNull('promotional_image_path')
+            ->where('promotional_image_path', '!=', '')
+            ->orderByDesc(Shop::query()
+                ->select('created_at')
+                ->whereColumn('shops.id', 'promotions.shop_id')
+                ->limit(1))
+            ->orderByDesc('priority')
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn (Promotion $promotion): bool => $promotion->isSetupComplete() && $promotion->shop instanceof Shop)
+            ->unique(fn (Promotion $promotion): int => (int) $promotion->shop_id)
+            ->take($limit)
+            ->map(function (Promotion $promotion): array {
+                $shop = $promotion->shop;
+
+                return [
+                    ...$this->card($promotion, $shop),
+                    'shop_name' => $shop->name,
+                    'shop_url' => route('storefront.stores.show', $shop->slug),
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * @param iterable<int, int|string> $shopIds
      * @return array<int, int>
      */
     public function currentOfferShopIds(iterable $shopIds): array

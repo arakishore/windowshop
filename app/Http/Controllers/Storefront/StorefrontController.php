@@ -69,12 +69,9 @@ class StorefrontController extends Controller
             ->orderByDesc('shops.id')
             ->limit(6)
             ->get();
-        $nearbyOfferShop = $nearbyStoreModels->first(fn (Shop $shop): bool => isset($offerCounts[(int) $shop->getKey()]));
         $nearbyStores = $nearbyStoreModels
             ->map(fn (Shop $shop): array => $this->storeCardData($shop, $offerShopIds, $offerCounts));
-        $nearbyOffers = $nearbyOfferShop instanceof Shop
-            ? $this->shopPromotions->currentForShop($nearbyOfferShop, 6)
-            : collect();
+        $nearbyOfferArtwork = $this->shopPromotions->currentArtworkForShopIds($eligibleShopIds);
         $newArrivalProducts = $this->productListings->newestProductsForShopIds($eligibleShopIds);
 
         return view('storefront.pages.home', [
@@ -83,9 +80,7 @@ class StorefrontController extends Controller
             'homepageCategories' => $this->homepageCategoryCards(),
             'nearbyStores' => $nearbyStores,
             'nearbyStoresLocationLabel' => $district !== '' ? $district : $postalCode,
-            'nearbyOfferShop' => $nearbyOfferShop,
-            'nearbyOffers' => $nearbyOffers,
-            'nearbyFeaturedOffer' => $nearbyOffers->first(fn (array $offer): bool => ! empty($offer['promotional_image_url'])),
+            'nearbyOfferArtwork' => $nearbyOfferArtwork,
             'newArrivalProducts' => $newArrivalProducts,
             'newArrivalWishlistedProductIds' => $this->wishlistedProductIds($request, $newArrivalProducts),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),

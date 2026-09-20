@@ -177,26 +177,26 @@
             @endif
         </div>
     </section>
-    @if(($nearbyOffers ?? collect())->isNotEmpty() && $nearbyOfferShop)
+    @if(($nearbyOfferArtwork ?? collect())->isNotEmpty())
         <section id="offers-near-you" class="home-offers">
             <div class="container">
                 <div class="sect-heading type-2 home-offers__heading">
                     <h3 class="s-title">Offers Near You</h3>
-                    <p class="s-desc text-body-1 cl-text-2">Current offers from a local store near you.</p>
+                    <p class="s-desc text-body-1 cl-text-2">Discover offers from local stores near you.</p>
                 </div>
-
-                @include('storefront.partials.shop-offers-carousel', [
-                    'offers' => $nearbyOffers,
-                    'sectionId' => 'home-nearby-offers-carousel',
-                    'sectionClass' => 'home-offers__carousel',
-                    'title' => 'Offers from '.$nearbyOfferShop->name,
-                    'primaryActionLabel' => 'Visit Store',
-                    'primaryActionUrl' => route('storefront.stores.show', $nearbyOfferShop->slug),
-                    'secondaryActionLabel' => 'View All Offers',
-                    'secondaryActionUrl' => route('storefront.stores.offers', $nearbyOfferShop->slug),
-                    'featuredOffer' => $nearbyFeaturedOffer,
-                    'actionLinkClass' => 'home-stores__all',
-                ])
+                <div class="home-offers__grid" role="list" aria-label="Offers from nearby stores">
+                    @foreach($nearbyOfferArtwork as $offer)
+                        <article class="home-offer" role="listitem">
+                            <a href="{{ $offer['products_url'] }}" class="home-offer__artwork" aria-label="View offer from {{ $offer['shop_name'] }}">
+                                <img src="{{ $offer['promotional_image_url'] }}" alt="{{ $offer['shop_name'] }} promotional offer">
+                            </a>
+                            <div class="home-offer__details">
+                                <a href="{{ $offer['shop_url'] }}" class="home-offer__shop">{{ $offer['shop_name'] }}</a>
+                                <a href="{{ $offer['products_url'] }}" class="home-stores__all">View Offer <i class="icon icon-ArrowRight" aria-hidden="true"></i></a>
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
             </div>
         </section>
     @endif
