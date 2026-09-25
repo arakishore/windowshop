@@ -19,6 +19,12 @@ class DirectMerchantUpiPaymentService
             $locked = Order::query()->lockForUpdate()->findOrFail($order->getKey());
             $this->assertDirectUpi($locked);
 
+            if (in_array($locked->order_status, [Order::STATUS_CANCELLED, Order::STATUS_COMPLETED], true)) {
+                throw ValidationException::withMessages([
+                    'order_status' => 'Payment cannot be confirmed for a cancelled or completed order.',
+                ]);
+            }
+
             if ($locked->payment_status === Order::PAYMENT_PAID) {
                 throw ValidationException::withMessages([
                     'upi_txn' => 'This payment has already been confirmed.',

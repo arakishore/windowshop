@@ -34,6 +34,14 @@ class OrderActivityPresenter
             return 'upi_payment_rejected';
         }
 
+        if ($action === OrderStatusHistory::ACTION_UPI_PAYMENT_EXPIRED) {
+            return 'upi_payment_expired';
+        }
+
+        if ($action === OrderStatusHistory::ACTION_PICKUP_COLLECTION_EXPIRED) {
+            return 'pickup_collection_expired';
+        }
+
         return 'status';
     }
 
@@ -44,6 +52,8 @@ class OrderActivityPresenter
             'exchange' => 'Exchange Processed',
             'upi_payment_confirmed' => 'UPI Payment Confirmed',
             'upi_payment_rejected' => 'UPI Payment Could Not Be Verified',
+            'upi_payment_expired' => 'UPI Payment Expired',
+            'pickup_collection_expired' => 'Pickup Collection Window Expired',
             default => null,
         };
     }
@@ -56,6 +66,8 @@ class OrderActivityPresenter
             'upi_payment_confirmed' => 'Confirmed '.$this->money($history->metadata['amount'] ?? $order->grand_total)
                 .' with UPI reference '.($history->metadata['confirmed_reference'] ?? $order->upi_txn).'.',
             'upi_payment_rejected' => 'Payment could not be verified. Reason: '.($history->metadata['reason'] ?? 'Not provided').'.',
+            'upi_payment_expired' => 'Direct UPI payment was not verified within '.((int) ($history->metadata['expiry_minutes'] ?? 0)).' minutes. The order was automatically cancelled.',
+            'pickup_collection_expired' => 'The customer did not collect the order within the '.((int) ($history->metadata['expiry_hours'] ?? 0)).'-hour pickup collection window. The order was automatically cancelled.',
             default => $history->notes,
         };
     }
@@ -67,6 +79,8 @@ class OrderActivityPresenter
             'exchange' => $this->exchangeDescription($order, $history),
             'upi_payment_confirmed' => 'The merchant confirmed receipt of '.$this->money($history->metadata['amount'] ?? $order->grand_total).'.',
             'upi_payment_rejected' => 'The merchant could not verify the submitted payment reference. The order remains open while payment is resolved.',
+            'upi_payment_expired' => 'The order was cancelled because the UPI payment was not verified within the allowed payment time.',
+            'pickup_collection_expired' => 'The pickup collection window expired before the order was collected.',
             default => null,
         };
     }

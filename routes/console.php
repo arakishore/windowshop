@@ -32,3 +32,11 @@ Artisan::command('products:purge-trash', function (): int {
 Schedule::command('products:purge-trash')
     ->dailyAt('02:00')
     ->withoutOverlapping();
+
+Schedule::command('orders:expire-unverified-upi')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+Schedule::command('orders:expire-uncollected-pickups')
+    ->everyMinute()
+    ->withoutOverlapping();

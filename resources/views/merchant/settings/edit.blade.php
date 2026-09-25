@@ -817,6 +817,7 @@
                                             name="{{ $cashAtShopPickupExpiry['name'] }}"
                                             class="form-select {{ $errors->has($cashAtShopPickupExpiry['errorKey']) ? 'is-invalid' : '' }}"
                                         >
+                                            <option value="0" @selected(blank($cashAtShopPickupExpiry['value']) || (int) $cashAtShopPickupExpiry['value'] === 0)>Never auto-cancel</option>
                                             @foreach ([12, 24, 48, 72] as $hours)
                                                 <option value="{{ $hours }}" @selected((int) $cashAtShopPickupExpiry['value'] === $hours)>{{ $hours }} hours</option>
                                             @endforeach
@@ -886,11 +887,12 @@
                                                 name="{{ $merchantUpiExpiry['name'] }}"
                                                 class="form-select {{ $errors->has($merchantUpiExpiry['errorKey']) ? 'is-invalid' : '' }}"
                                             >
+                                                <option value="0" @selected(blank($merchantUpiExpiry['value']) || (int) $merchantUpiExpiry['value'] === 0)>Never auto-cancel</option>
                                                 @foreach ([5, 10, 15, 30] as $minutes)
                                                     <option value="{{ $minutes }}" @selected((int) $merchantUpiExpiry['value'] === $minutes)>{{ $minutes }} minutes</option>
                                                 @endforeach
                                             </select>
-                                            <div class="form-text">Sets how long an unverified UPI payment may remain pending.</div>
+                                            <div class="form-text">Choose how long an unverified UPI order may remain pending. Select Never auto-cancel to manage these orders manually.</div>
                                             @if ($errors->has($merchantUpiExpiry['errorKey']))
                                                 <div class="invalid-feedback d-block">{{ $errors->first($merchantUpiExpiry['errorKey']) }}</div>
                                             @endif

@@ -87,12 +87,12 @@ class ShopSettingsService
             throw new InvalidArgumentException('Return and exchange window days must be zero or greater.');
         }
 
-        if ($group === 'payment' && $key === 'merchant_upi_expiry_minutes' && ! in_array((int) $value, [5, 10, 15, 30], true)) {
-            throw new InvalidArgumentException('UPI expiry minutes must be 5, 10, 15, or 30.');
+        if ($group === 'payment' && $key === 'merchant_upi_expiry_minutes' && $value !== null && ! in_array((int) $value, [0, 5, 10, 15, 30], true)) {
+            throw new InvalidArgumentException('UPI expiry minutes must be 0, 5, 10, 15, or 30.');
         }
 
-        if ($group === 'payment' && $key === 'cash_at_shop_pickup_expiry_hours' && ! in_array((int) $value, [12, 24, 48, 72], true)) {
-            throw new InvalidArgumentException('Cash at Shop pickup expiry hours must be 12, 24, 48, or 72.');
+        if ($group === 'payment' && $key === 'cash_at_shop_pickup_expiry_hours' && ! in_array((int) $value, [0, 12, 24, 48, 72], true)) {
+            throw new InvalidArgumentException('Cash at Shop pickup expiry hours must be 0, 12, 24, 48, or 72.');
         }
     }
 

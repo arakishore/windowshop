@@ -306,6 +306,10 @@ class CustomerOrderPresenter
 
     private function activityStatusLabel($history): string
     {
+        if (in_array($this->orderActivityPresenter->type($history), ['upi_payment_expired', 'pickup_collection_expired'], true)) {
+            return 'Order Cancelled';
+        }
+
         if ($title = $this->orderActivityPresenter->title($history)) {
             return $title;
         }
@@ -363,7 +367,12 @@ class CustomerOrderPresenter
     private function activityStatusTone($history): string
     {
         if ($this->orderActivityPresenter->type($history) !== 'status') {
-            return $this->orderActivityPresenter->type($history) === 'upi_payment_rejected' ? 'warning' : 'success';
+            return match ($this->orderActivityPresenter->type($history)) {
+                'upi_payment_rejected' => 'warning',
+                'upi_payment_expired' => 'danger',
+                'pickup_collection_expired' => 'danger',
+                default => 'success',
+            };
         }
 
         if ($this->isCodPaymentActivity($history)) {
