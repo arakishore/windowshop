@@ -5,6 +5,8 @@ namespace App\Services\Order;
 use App\Models\Order;
 use App\Models\OrderExchange;
 use App\Models\OrderItem;
+use App\Models\OrderRefund;
+use App\Models\OrderStatusHistory;
 use App\Models\ProductVariant;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -73,7 +75,7 @@ class OrderExchangeService
                 $order,
                 $data['returned_items'] ?? [],
                 $exchangeable,
-                $this->exchangedLineValueTotals($order),
+                $this->returnedLineValueTotals($order),
             );
             $replacementRows = $this->selectedReplacementRows($data['replacement_items'] ?? []);
 
@@ -170,6 +172,8 @@ class OrderExchangeService
                 'notes' => 'Exchange processed',
                 'changed_by' => $actor->getKey(),
                 'metadata' => [
+                    'action' => OrderStatusHistory::ACTION_EXCHANGE_PROCESSED,
+                    'exchange_id' => $exchange->getKey(),
                     'exchange_number' => $exchange->exchange_number,
                     'replacement_order_number' => $replacementOrder->order_number,
                     'returned_total' => $returnedTotal,
@@ -388,9 +392,9 @@ class OrderExchangeService
     /**
      * @return array<int, array{line_total: string, line_tax: string}>
      */
-    private function exchangedLineValueTotals(Order $order): array
+    private function returnedLineValueTotals(Order $order): array
     {
-        return DB::table('order_exchange_return_items')
+        $exchanged = DB::table('order_exchange_return_items')
             ->join('order_exchanges', 'order_exchanges.id', '=', 'order_exchange_return_items.order_exchange_id')
             ->where('order_exchanges.original_order_id', $order->getKey())
             ->where('order_exchanges.status', OrderExchange::STATUS_COMPLETED)
@@ -403,11 +407,36 @@ class OrderExchangeService
             ->get()
             ->mapWithKeys(fn ($row): array => [
                 (int) $row->order_item_id => [
-                    'line_total' => $this->money($row->line_total ?? 0),
-                    'line_tax' => $this->money($row->line_tax ?? 0),
+                    'line_total' => (float) ($row->line_total ?? 0),
+                    'line_tax' => (float) ($row->line_tax ?? 0),
                 ],
             ])
             ->all();
+
+        $refunded = DB::table('order_refund_items')
+            ->join('order_refunds', 'order_refunds.id', '=', 'order_refund_items.order_refund_id')
+            ->where('order_refunds.order_id', $order->getKey())
+            ->where('order_refunds.status', OrderRefund::STATUS_COMPLETED)
+            ->select(
+                'order_refund_items.order_item_id',
+                DB::raw('SUM(order_refund_items.line_total) as line_total'),
+                DB::raw('SUM(order_refund_items.line_tax) as line_tax'),
+            )
+            ->groupBy('order_refund_items.order_item_id')
+            ->get();
+
+        foreach ($refunded as $row) {
+            $itemId = (int) $row->order_item_id;
+            $exchanged[$itemId] = [
+                'line_total' => $this->money(($exchanged[$itemId]['line_total'] ?? 0) + (float) ($row->line_total ?? 0)),
+                'line_tax' => $this->money(($exchanged[$itemId]['line_tax'] ?? 0) + (float) ($row->line_tax ?? 0)),
+            ];
+        }
+
+        return array_map(fn (array $values): array => [
+            'line_total' => $this->money($values['line_total']),
+            'line_tax' => $this->money($values['line_tax']),
+        ], $exchanged);
     }
 
     private function remainingMoney(float|string|int $original, float|string|int $alreadyReturned): string

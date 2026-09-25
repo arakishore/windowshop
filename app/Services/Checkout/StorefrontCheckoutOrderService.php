@@ -42,9 +42,10 @@ class StorefrontCheckoutOrderService
         string $paymentMethod,
         CustomerAddress $billingAddress,
         ?string $customerOrderNote = null,
+        ?string $upiReference = null,
     ): Order
     {
-        return DB::transaction(function () use ($request, $actor, $customer, $fulfillment, $paymentMethod, $billingAddress, $customerOrderNote): Order {
+        return DB::transaction(function () use ($request, $actor, $customer, $fulfillment, $paymentMethod, $billingAddress, $customerOrderNote, $upiReference): Order {
             $cart = $this->lockedCart($request);
             $selectedShopId = $this->checkout->selectedShopId($request);
 
@@ -128,6 +129,9 @@ class StorefrontCheckoutOrderService
                 'fulfilment_type' => $fulfillment,
                 'order_status' => Order::STATUS_PENDING,
                 'payment_method' => $paymentMethod,
+                'payment_reference' => $paymentMethod === StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
+                    ? $this->nullableString($upiReference)
+                    : null,
                 'payment_status' => Order::PAYMENT_PENDING,
                 'currency_code' => $this->adminSettings->currencyConfig()['currency'] ?? 'INR',
                 'cash_rounding' => ['method' => 'none', 'applyTo' => []],

@@ -232,6 +232,12 @@
                     <div class="account-info-list">
                         <div><span>Method</span><strong>{{ $paymentMethodLabel }}</strong></div>
                         <div><span>Status</span><strong>{{ $presenter->paymentStatusLabel($order->payment_status) }}</strong></div>
+                        @if ($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI)
+                            <div><span>Verification</span><strong>{{ $order->payment_status === \App\Models\Order::PAYMENT_PAID ? 'Payment Confirmed' : 'Payment Verification Pending' }}</strong></div>
+                            @if ($order->payment_reference)
+                                <div><span>Submitted Reference</span><strong>{{ $order->payment_reference }}</strong></div>
+                            @endif
+                        @endif
                         <div><span>Amount Paid</span><strong>{{ $presenter->money($order->amount_paid) }}</strong></div>
                         <div><span>Balance</span><strong>{{ $presenter->money($presenter->balance($order)) }}</strong></div>
                     </div>

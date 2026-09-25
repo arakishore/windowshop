@@ -9,7 +9,9 @@ use App\Models\MerchantCancellationReason;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderComment;
+use App\Models\OrderExchange;
 use App\Models\OrderItem;
+use App\Models\OrderRefund;
 use App\Models\OrderStatus;
 use App\Models\OrderStatusHistory;
 use App\Models\OrderTotal;
@@ -345,6 +347,100 @@ class StorefrontCustomerOrdersTest extends TestCase
 
         $activity = $this->orderActivitySection($response->getContent());
         $this->assertSame(1, substr_count($activity, '<p class="fw-semibold mb-4">Delivered</p>'));
+    }
+
+    public function test_customer_activity_renders_refund_and_exchange_as_post_completion_events(): void
+    {
+        $customerUser = $this->customerUser('orders-returns@example.test', 'Returns Customer', '9422945199');
+        $roleId = $this->assignRole($customerUser, 'customer');
+        $customer = $this->globalCustomer($customerUser);
+        $fixture = $this->fixture('Returns Timeline Shop');
+        $originalProduct = $this->product($fixture, 'Timeline Original Product');
+        $replacementProduct = $this->product($fixture, 'Timeline Replacement Product');
+        $order = $this->order($customer, $fixture, [
+            'order_status' => Order::STATUS_COMPLETED,
+            'payment_status' => PaymentStatus::CODE_REFUNDED,
+            'grand_total' => 100,
+        ]);
+        $originalItem = $this->item($order, $originalProduct, ['quantity' => 2, 'line_total' => 100]);
+        $this->history($order, Order::STATUS_READY_FOR_PICKUP, Order::STATUS_COMPLETED, now()->subMinutes(30), [
+            'action' => 'merchant_complete_pickup',
+        ]);
+
+        $refund = OrderRefund::query()->create([
+            'refund_number' => 'REFUND-TIMELINE-001',
+            'order_id' => $order->getKey(),
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'reason_name' => 'Customer return',
+            'refund_method' => 'original',
+            'refund_subtotal' => 40,
+            'refund_tax' => 0,
+            'refund_total' => 40,
+            'status' => OrderRefund::STATUS_COMPLETED,
+            'created_by' => $fixture['merchantUser']->getKey(),
+        ]);
+        $refund->items()->create([
+            'order_item_id' => $originalItem->getKey(),
+            'quantity' => 1,
+            'unit_price' => 40,
+            'line_tax' => 0,
+            'line_total' => 40,
+            'restocked' => true,
+        ]);
+        $this->history($order, Order::STATUS_COMPLETED, Order::STATUS_COMPLETED, now()->subMinutes(20), [
+            'refund_number' => $refund->refund_number,
+            'refund_total' => '40.00',
+        ]);
+
+        $replacementOrder = $this->order($customer, $fixture, [
+            'created_source' => Order::SOURCE_EXCHANGE_REPLACEMENT,
+            'order_status' => Order::STATUS_COMPLETED,
+            'order_number' => 'ORD-REPLACEMENT-TIMELINE',
+        ]);
+        $this->item($replacementOrder, $replacementProduct, ['quantity' => 1, 'line_total' => 60]);
+        $exchange = OrderExchange::query()->create([
+            'exchange_number' => 'EXCH-TIMELINE-001',
+            'original_order_id' => $order->getKey(),
+            'replacement_order_id' => $replacementOrder->getKey(),
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'returned_total' => 60,
+            'replacement_total' => 60,
+            'difference_amount' => 0,
+            'settlement_type' => OrderExchange::SETTLEMENT_EVEN,
+            'status' => OrderExchange::STATUS_COMPLETED,
+            'created_by' => $fixture['merchantUser']->getKey(),
+        ]);
+        $exchange->items()->create([
+            'order_item_id' => $originalItem->getKey(),
+            'quantity' => 1,
+            'unit_return_value' => 60,
+            'line_tax' => 0,
+            'line_total' => 60,
+            'restocked' => true,
+        ]);
+        $this->history($order, Order::STATUS_COMPLETED, Order::STATUS_COMPLETED, now()->subMinutes(10), [
+            'action' => OrderStatusHistory::ACTION_EXCHANGE_PROCESSED,
+            'exchange_id' => $exchange->getKey(),
+            'exchange_number' => $exchange->exchange_number,
+        ]);
+
+        $response = $this->actingAs($customerUser)
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.orders.show', $order));
+
+        $response->assertOk()
+            ->assertSee('Refund Processed')
+            ->assertSee('Refund of INR 40.00 processed for Timeline Original Product x 1.')
+            ->assertSee('Exchange Processed')
+            ->assertSee('Timeline Original Product x 1 exchanged for Timeline Replacement Product x 1.')
+            ->assertSee('Order Completed')
+            ->assertSee('Thank you for shopping with us.');
+
+        $activity = $this->orderActivitySection($response->getContent());
+        $this->assertSame(1, substr_count($activity, 'Order Completed'));
+        $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->order_status);
     }
 
     public function test_customer_return_exchange_copy_prefers_valid_until_and_cash_at_shop_visit_guidance(): void

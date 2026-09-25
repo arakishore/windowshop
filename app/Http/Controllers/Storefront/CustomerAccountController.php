@@ -165,6 +165,9 @@ class CustomerAccountController extends Controller
             'items.taxComponents',
             'totals',
             'statusHistories',
+            'refunds.items.orderItem',
+            'exchanges.items.orderItem',
+            'exchanges.replacementOrder.items',
             'comments' => fn ($query) => $query->where('visibility', OrderComment::VISIBILITY_CUSTOMER)->orderBy('created_at'),
         ]);
 

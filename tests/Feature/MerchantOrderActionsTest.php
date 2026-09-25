@@ -10,8 +10,8 @@ use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\User;
-use App\Services\Order\OrderStatusService;
 use App\Services\Order\OrderCreationService;
+use App\Services\Order\OrderStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +34,95 @@ class MerchantOrderActionsTest extends TestCase
                 fn (string $left, string $right): int => strcmp($left, $right),
             );
         }
+    }
+
+    public function test_direct_merchant_upi_payment_can_be_corrected_and_confirmed_without_changing_order_status(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId, [
+            'payment_method' => 'merchant_upi',
+            'payment_reference' => 'ABC123',
+            'payment_status' => Order::PAYMENT_PENDING,
+            'grand_total' => 1649,
+            'amount_paid' => 0,
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.upi-payment.confirm', $order), ['upi_txn' => 'XYZ789'])
+            ->assertRedirect(route('merchant.orders.show', $order));
+
+        $order->refresh();
+        $this->assertSame('ABC123', $order->payment_reference);
+        $this->assertSame('XYZ789', $order->upi_txn);
+        $this->assertSame(Order::PAYMENT_PAID, $order->payment_status);
+        $this->assertSame('1649.00', $order->amount_paid);
+        $this->assertSame(Order::STATUS_PENDING, $order->order_status);
+
+        $activity = $order->statusHistories()->latest('id')->firstOrFail();
+        $this->assertSame('upi_payment_confirmed', $activity->metadata['action']);
+        $this->assertSame('ABC123', $activity->metadata['customer_submitted_reference']);
+        $this->assertSame('XYZ789', $activity->metadata['confirmed_reference']);
+        $this->assertSame($activity->from_status, $activity->to_status);
+    }
+
+    public function test_direct_merchant_upi_confirmation_is_not_repeatable_and_reject_keeps_order_open(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId, [
+            'payment_method' => 'merchant_upi',
+            'payment_reference' => 'CLAIM123',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.upi-payment.reject', $order), [
+                'upi_rejection_reason' => 'Reference not found in merchant UPI app.',
+            ])
+            ->assertRedirect(route('merchant.orders.show', $order));
+
+        $order->refresh();
+        $this->assertSame(Order::PAYMENT_PENDING, $order->payment_status);
+        $this->assertSame(Order::STATUS_PENDING, $order->order_status);
+        $this->assertSame(0.0, (float) $order->amount_paid);
+        $this->assertSame('upi_payment_rejected', $order->statusHistories()->latest('id')->firstOrFail()->metadata['action']);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.upi-payment.confirm', $order), ['upi_txn' => 'FOUND123'])
+            ->assertSessionHas('success');
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.upi-payment.confirm', $order), ['upi_txn' => 'FOUND123'])
+            ->assertSessionHasErrors('upi_txn');
+    }
+
+    public function test_direct_merchant_upi_confirmation_rejects_cross_shop_and_duplicate_confirmed_reference(): void
+    {
+        [$user, $merchantId, $shopId] = $this->merchantShopFixture();
+        $otherShopId = $this->shopForMerchant($merchantId, 'Other Action Shop');
+        $otherOrder = $this->operationalOrder($otherShopId, ['payment_method' => 'merchant_upi']);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.upi-payment.confirm', $otherOrder), ['upi_txn' => 'CROSS123'])
+            ->assertNotFound();
+
+        $confirmed = $this->operationalOrder($shopId, [
+            'payment_method' => 'merchant_upi',
+            'payment_status' => Order::PAYMENT_PAID,
+            'upi_txn' => 'DUPLICATE123',
+            'amount_paid' => 1998,
+        ]);
+        $pending = $this->operationalOrder($shopId, ['payment_method' => 'merchant_upi']);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.upi-payment.confirm', $pending), ['upi_txn' => $confirmed->upi_txn])
+            ->assertSessionHasErrors('upi_txn');
+
+        $this->assertSame(Order::PAYMENT_PENDING, $pending->fresh()->payment_status);
     }
 
     public function test_pending_storefront_pickup_order_can_be_accepted(): void
@@ -1787,6 +1876,35 @@ class MerchantOrderActionsTest extends TestCase
             ->assertSee('Added by '.$user->name);
     }
 
+    public function test_order_detail_header_displays_order_and_payment_statuses_independently(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $statuses = [
+            PaymentStatus::CODE_PENDING => ['Payment Pending', 'bg-warning'],
+            PaymentStatus::CODE_PAID => ['Paid', 'bg-success'],
+            PaymentStatus::CODE_PARTIALLY_PAID => ['Partially Paid', 'bg-warning'],
+            PaymentStatus::CODE_PARTIALLY_REFUNDED => ['Partially Refunded', 'bg-warning'],
+            PaymentStatus::CODE_REFUNDED => ['Refunded', 'bg-danger'],
+        ];
+
+        foreach ($statuses as $paymentStatus => [$expectedLabel, $expectedClass]) {
+            $order = $this->operationalOrder($shopId, [
+                'order_number' => 'ORD-PAYMENT-'.strtoupper($paymentStatus),
+                'order_status' => Order::STATUS_PENDING,
+                'payment_status' => $paymentStatus,
+            ]);
+
+            $this
+                ->actingAs($user)
+                ->withSession(['active_shop_id' => $shopId])
+                ->get(route('merchant.orders.show', $order))
+                ->assertOk()
+                ->assertSee($order->order_number)
+                ->assertSee('class="badge bg-secondary bg-opacity-10 text-body">Pending</span>', false)
+                ->assertSee('class="badge '.$expectedClass.' bg-opacity-10 text-body" data-payment-status-badge>'.$expectedLabel.'</span>', false);
+        }
+    }
+
     public function test_backorder_stock_shortage_is_visible_on_merchant_order_list_and_detail(): void
     {
         [$user, , $shopId] = $this->merchantShopFixture();
@@ -2061,7 +2179,7 @@ class MerchantOrderActionsTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $overrides
+     * @param  array<string, mixed>  $overrides
      */
     private function operationalOrder(int $shopId, array $overrides = []): Order
     {
@@ -2090,7 +2208,7 @@ class MerchantOrderActionsTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $overrides
+     * @param  array<string, mixed>  $overrides
      */
     private function cancellationReason(int $merchantId, array $overrides = []): MerchantCancellationReason
     {
@@ -2190,7 +2308,7 @@ class MerchantOrderActionsTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $overrides
+     * @param  array<string, mixed>  $overrides
      */
     private function orderItem(Order $order, int $variantId, int $quantity, array $overrides = []): OrderItem
     {
@@ -2215,7 +2333,7 @@ class MerchantOrderActionsTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $metadata
+     * @param  array<string, mixed>  $metadata
      */
     private function statusHistory(Order $order, ?string $fromStatus, string $toStatus, string $notes, array $metadata = [], mixed $createdAt = null): void
     {

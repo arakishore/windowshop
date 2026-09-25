@@ -41,7 +41,7 @@
 
     <div class="exchange-receipt-page">
         <div class="exchange-receipt-toolbar">
-            <a href="{{ route('merchant.sales.show', $exchange->originalOrder) }}" class="btn btn-light">
+            <a href="{{ $orderBackRoute }}" class="btn btn-light">
                 <i class="ph-arrow-left me-1"></i>
                 Back
             </a>

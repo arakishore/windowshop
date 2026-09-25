@@ -252,7 +252,17 @@
         $statusLabel = static fn (string|null $code): string => $code && isset($orderStatuses[$code]) ? $orderStatuses[$code]->name : Str::headline((string) ($code ?: 'unknown'));
         $statusClass = static fn (string|null $code): string => $code && isset($orderStatuses[$code]) ? $orderStatuses[$code]->safeBadgeClass() : 'bg-secondary';
         $paymentStatusLabel = static fn (string|null $code): string => $code && isset($paymentStatuses[$code]) ? $paymentStatuses[$code]->name : Str::headline((string) ($code ?: 'unknown'));
-        $paymentStatusClass = static fn (string|null $code): string => $code && isset($paymentStatuses[$code]) ? $paymentStatuses[$code]->safeBadgeClass() : 'bg-secondary';
+        $paymentStatusClass = static fn (string|null $code): string => match ($code) {
+            \App\Models\Order::PAYMENT_PENDING,
+            \App\Models\Order::PAYMENT_PARTIALLY_PAID,
+            \App\Models\Order::PAYMENT_PARTIALLY_REFUNDED => 'bg-warning',
+            \App\Models\Order::PAYMENT_PAID => 'bg-success',
+            \App\Models\Order::PAYMENT_REFUNDED => 'bg-danger',
+            default => $code && isset($paymentStatuses[$code]) ? $paymentStatuses[$code]->safeBadgeClass() : 'bg-secondary',
+        };
+        $headerPaymentStatusLabel = static fn (string|null $code): string => $code === \App\Models\Order::PAYMENT_PENDING
+            ? 'Payment Pending'
+            : $paymentStatusLabel($code);
         $balance = max(0, (float) $order->grand_total - (float) $order->amount_paid);
         $formatAddress = static function (array $parts): array {
             return collect($parts)->filter(fn ($value) => filled($value))->values()->all();
@@ -325,6 +335,7 @@
             ->sortBy('created_at')
             ->values()
             ->filter(fn ($history) => in_array($history->to_status, $progressCodes, true))
+            ->filter(fn ($history) => $orderActivityPresenter->type($history) === 'status')
             ->reject(fn ($history) => ($history->metadata['action'] ?? null) === 'merchant_cod_payment_received')
             ->keyBy('to_status');
         $commentVisibilityLabels = (array) config('order_comments.visibilities', []);
@@ -364,6 +375,8 @@
         $cancelOrderLabel = $statusActionLabels[\App\Models\Order::STATUS_CANCELLED] ?? 'Cancel Order';
         $requiresPickupPaymentConfirmation = $canCompletePickup && $order->payment_method === 'cash_at_shop' && $order->payment_status !== \App\Models\Order::PAYMENT_PAID;
         $requiresDeliveryCodPaymentConfirmation = $canMarkDelivered && $order->payment_method === 'cash_on_delivery' && $order->payment_status !== \App\Models\Order::PAYMENT_PAID;
+        $canRefund = $order->order_status === \App\Models\Order::STATUS_COMPLETED && collect($refundableQuantities)->sum() > 0;
+        $canExchange = $order->order_status === \App\Models\Order::STATUS_COMPLETED && collect($exchangeableQuantities)->sum() > 0;
     @endphp
 
     @if($errors->any())
@@ -379,6 +392,7 @@
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                         <h3 class="mb-0">{{ $order->order_number }}</h3>
                         <span class="badge {{ $statusClass($order->order_status) }} bg-opacity-10 text-body">{{ $statusLabel($order->order_status) }}</span>
+                        <span class="badge {{ $paymentStatusClass($order->payment_status) }} bg-opacity-10 text-body" data-payment-status-badge>{{ $headerPaymentStatusLabel($order->payment_status) }}</span>
                     </div>
                     <div class="text-muted mb-2">Placed {{ app_datetime($order->created_at) }}</div>
                     <div class="order-meta-line fw-semibold">
@@ -390,8 +404,20 @@
                     </div>
                 </div>
                 <div class="order-action-slot">
-                    @if($canAcceptOrder || $canStartProcessing || $canMarkReadyForPickup || $canMarkPacked || $canMarkShipped || $canMarkOutForDelivery || $canMarkDelivered || $canCompletePickup || $canCancelOrder)
+                    @if($canRefund || $canExchange || $canAcceptOrder || $canStartProcessing || $canMarkReadyForPickup || $canMarkPacked || $canMarkShipped || $canMarkOutForDelivery || $canMarkDelivered || $canCompletePickup || $canCancelOrder)
                         <div class="d-flex flex-wrap justify-content-end gap-2">
+                            @if($canRefund)
+                                <a href="{{ route('merchant.sales.refund', $order) }}" class="btn btn-primary">
+                                    <i class="ph-arrow-u-down-left me-1"></i>
+                                    Process Refund
+                                </a>
+                            @endif
+                            @if($canExchange)
+                                <a href="{{ route('merchant.sales.exchange', $order) }}" class="btn btn-warning">
+                                    <i class="ph-swap me-1"></i>
+                                    Process Exchange
+                                </a>
+                            @endif
                             @if($canCancelOrder)
                                 <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">
                                     {{ $cancelOrderLabel }}
@@ -868,13 +894,15 @@
                                         <div class="text-muted fs-sm mt-1">{{ $activity->createdBy?->name ? 'Added by '.$activity->createdBy->name : 'Added by system' }}</div>
                                     @else
                                         @php
-                                            $activityLabel = ($activity->metadata['action'] ?? null) === 'merchant_cod_payment_received'
-                                                ? 'Payment Received'
-                                                : ($activity->from_status ? $statusLabel($activity->to_status) : 'Order Placed');
+                                            $activityLabel = $orderActivityPresenter->title($activity)
+                                                ?? (($activity->metadata['action'] ?? null) === 'merchant_cod_payment_received'
+                                                    ? 'Payment Received'
+                                                    : ($activity->from_status ? $statusLabel($activity->to_status) : 'Order Placed'));
+                                            $activityDescription = $orderActivityPresenter->merchantDescription($order, $activity);
                                         @endphp
                                         <div class="fw-semibold mb-1">{{ $activityLabel }}</div>
-                                        @if($activity->notes)
-                                            <div class="mt-1">{{ $activity->notes }}</div>
+                                        @if($activityDescription)
+                                            <div class="mt-1">{{ $activityDescription }}</div>
                                         @endif
                                         <div class="text-muted fs-sm mt-1">{{ $activity->changedBy?->name ? 'Updated by '.$activity->changedBy->name : 'System' }}</div>
                                     @endif
@@ -1020,6 +1048,39 @@
                     <div class="order-money-row"><span>Order Total</span><span class="fw-semibold">{{ $money($order->grand_total) }}</span></div>
                     <div class="order-money-row"><span>Amount Paid</span><span>{{ $money($order->amount_paid) }}</span></div>
                     <div class="order-money-row mb-0"><span>Balance</span><span class="fw-semibold">{{ $money($balance) }}</span></div>
+                    @if($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI)
+                        <hr>
+                        <h6>UPI Payment Verification</h6>
+                        <div class="text-muted fs-sm mb-1">Customer Submitted Reference</div>
+                        <div class="fw-semibold mb-3">{{ $order->payment_reference ?: 'Not provided' }}</div>
+                        @if($order->payment_status === \App\Models\Order::PAYMENT_PAID)
+                            <div class="text-muted fs-sm mb-1">Confirmed UPI Reference</div>
+                            <div class="fw-semibold">{{ $order->upi_txn }}</div>
+                        @else
+                            <form method="POST" action="{{ route('merchant.orders.upi-payment.confirm', $order) }}" class="mb-3">
+                                @csrf
+                                <label for="upi_txn" class="form-label fw-semibold">Actual UPI Reference</label>
+                                <input
+                                    id="upi_txn"
+                                    name="upi_txn"
+                                    type="text"
+                                    maxlength="100"
+                                    required
+                                    value="{{ old('upi_txn', $order->upi_txn ?: $order->payment_reference) }}"
+                                    class="form-control @error('upi_txn') is-invalid @enderror"
+                                >
+                                @error('upi_txn')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <button type="submit" class="btn btn-success mt-3">Confirm Payment</button>
+                            </form>
+                            <form method="POST" action="{{ route('merchant.orders.upi-payment.reject', $order) }}">
+                                @csrf
+                                <label for="upi_rejection_reason" class="form-label fw-semibold">Payment Not Found / Rejection Reason</label>
+                                <textarea id="upi_rejection_reason" name="upi_rejection_reason" rows="2" maxlength="500" required class="form-control @error('upi_rejection_reason') is-invalid @enderror">{{ old('upi_rejection_reason') }}</textarea>
+                                @error('upi_rejection_reason')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <button type="submit" class="btn btn-outline-danger mt-3">Payment Not Found</button>
+                            </form>
+                        @endif
+                    @endif
                 </div>
             </div>
 

@@ -30,19 +30,20 @@ use App\Services\Checkout\CheckoutPageService;
 use App\Services\Checkout\StorefrontDeliveryService;
 use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\Order\OrderStatusService;
+use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Promotion\Coupons\CouponSessionStore;
 use App\Services\Promotion\Engine\Data\AppliedPromotion;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
 use App\Services\Promotion\Engine\Data\PromotionLineAdjustment;
 use App\Services\Promotion\Engine\Data\PromotionLineInput;
 use App\Services\Promotion\Redemptions\CouponRedemptionService;
-use App\Services\Order\OrderStatusService;
-use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Storefront\StorefrontCountryResolver;
 use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PDO;
 use Tests\TestCase;
@@ -1135,6 +1136,124 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertDontSee('Cash on Delivery')
             ->assertSee('No payment method is currently available for this delivery option.')
             ->assertSee('data-place-order-button disabled', false);
+    }
+
+    public function test_complete_direct_merchant_upi_is_available_for_delivery_and_pickup(): void
+    {
+        Storage::fake('public');
+        $customer = $this->customerUser('payment-upi-available@example.test');
+        $fixture = $this->productFixture(price: 1649);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->configureDirectUpi($fixture['shop']);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Direct Merchant UPI')
+            ->assertSee('Vana Women Studio')
+            ->assertSee('9422945125@ybl');
+
+        $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            ])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Direct Merchant UPI');
+    }
+
+    public function test_direct_merchant_upi_order_stores_customer_claim_pending_with_server_total(): void
+    {
+        Storage::fake('public');
+        $customer = $this->customerUser('payment-upi-order@example.test');
+        $fixture = $this->productFixture(price: 1649);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+        $this->configureDirectUpi($fixture['shop']);
+
+        $response = $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
+                'upi_reference' => '123456678',
+                'browser_total' => '1.00',
+            ]);
+
+        $order = Order::query()->firstOrFail();
+        $response->assertRedirect(route('storefront.checkout.success', $order));
+        $this->assertSame('123456678', $order->payment_reference);
+        $this->assertNull($order->upi_txn);
+        $this->assertSame(Order::PAYMENT_PENDING, $order->payment_status);
+        $this->assertSame('0.00', $order->amount_paid);
+        $this->assertSame('1649.00', $order->grand_total);
+        $this->assertSame(19, (int) $fixture['variant']->refresh()->stock_quantity);
+    }
+
+    public function test_disabled_or_incomplete_direct_upi_cannot_be_submitted_manually(): void
+    {
+        Storage::fake('public');
+        $customer = $this->customerUser('payment-upi-disabled@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'merchant_upi_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($fixture['shop'], 'payment', 'merchant_upi_id', '9422945125@ybl', ShopSetting::TYPE_STRING);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
+                'upi_reference' => 'CUSTOMER123',
+            ])
+            ->assertSessionHasErrors('payment_method');
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_direct_upi_uses_only_the_selected_checkout_shops_settings(): void
+    {
+        Storage::fake('public');
+        $customer = $this->customerUser('payment-upi-shop-scope@example.test');
+        $selected = $this->productFixture(price: 700);
+        $other = $this->productFixture(price: 900);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $this->cartItem($cart, $selected['variant']);
+        $this->cartItem($cart, $other['variant']);
+        $this->customerAddress($customer, $selected['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+        $this->configureDirectUpi($other['shop']);
+
+        $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            ])
+            ->get(route('storefront.checkout', ['shop' => $selected['shop']->getKey()]))
+            ->assertOk()
+            ->assertDontSee('Direct Merchant UPI')
+            ->assertDontSee('9422945125@ybl');
     }
 
     public function test_checkout_delivery_cod_minimum_can_make_cod_unavailable(): void
@@ -2591,8 +2710,7 @@ class StorefrontCheckoutGateTest extends TestCase
         bool $shippingEnabled = true,
         string $district = 'Nashik',
         string $state = 'Maharashtra',
-    ): PostalCode
-    {
+    ): PostalCode {
         return PostalCode::query()->create([
             'source_key' => sha1($postalCode.'|checkout test h.o|ho|'.strtolower($district).'|'.strtolower($state)),
             'circle_name' => $state,
@@ -2726,6 +2844,16 @@ class StorefrontCheckoutGateTest extends TestCase
     private function shopSetting(Shop $shop, string $group, string $key, mixed $value, string $type): void
     {
         app(ShopSettingsService::class)->setTyped((int) $shop->getKey(), $group, $key, $value, $type);
+    }
+
+    private function configureDirectUpi(Shop $shop): void
+    {
+        $path = 'shops/'.$shop->getKey().'/settings/upi-qr/test-qr.png';
+        Storage::disk('public')->put($path, 'test-qr');
+        $this->shopSetting($shop, 'payment', 'merchant_upi_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($shop, 'payment', 'merchant_upi_id', '9422945125@ybl', ShopSetting::TYPE_STRING);
+        $this->shopSetting($shop, 'payment', 'merchant_upi_payee_name', 'Vana Women Studio', ShopSetting::TYPE_STRING);
+        $this->shopSetting($shop, 'payment', 'merchant_upi_qr_path', $path, ShopSetting::TYPE_STRING);
     }
 
     private function guestCart(string $token): Cart

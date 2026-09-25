@@ -38,11 +38,13 @@
         $paymentLabel = match ($order->payment_method) {
             \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP => 'Cash at Shop',
             \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY => 'Cash on Delivery',
+            \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI => 'Direct Merchant UPI',
             default => \Illuminate\Support\Str::headline($order->payment_method),
         };
         $paymentText = match ($order->payment_method) {
             \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP => 'Pay when you collect your order.',
             \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY => 'Pay when your order is delivered.',
+            \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI => 'Your payment reference was submitted and is awaiting merchant verification.',
             default => 'Payment is pending.',
         };
         $shopAddress = collect([

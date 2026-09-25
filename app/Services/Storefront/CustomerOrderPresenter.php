@@ -8,6 +8,7 @@ use App\Models\OrderItem;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Services\Admin\AdminSettingsService;
+use App\Services\Order\OrderActivityPresenter;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -19,6 +20,7 @@ class CustomerOrderPresenter
     public function __construct(
         private readonly AdminSettingsService $settings,
         private readonly StorefrontUrlService $urls,
+        private readonly OrderActivityPresenter $orderActivityPresenter,
     ) {
     }
 
@@ -117,6 +119,7 @@ class CustomerOrderPresenter
         $historyByStatus = $order->statusHistories
             ->sortBy('created_at')
             ->filter(fn ($history): bool => in_array($history->to_status, $codes, true))
+            ->filter(fn ($history): bool => $this->orderActivityPresenter->type($history) === 'status')
             ->reject(fn ($history): bool => ($history->metadata['action'] ?? null) === 'merchant_cod_payment_received')
             ->keyBy('to_status');
 
@@ -252,7 +255,7 @@ class CustomerOrderPresenter
                 'timestamp' => $history->created_at,
                 'display_time' => app_datetime($history->created_at),
                 'title' => $this->activityStatusLabel($history),
-                'description' => $this->activityStatusDescription($history),
+                'description' => $this->activityStatusDescription($order, $history),
             ]);
 
         $commentItems = $this->customerVisibleComments($order)
@@ -303,6 +306,10 @@ class CustomerOrderPresenter
 
     private function activityStatusLabel($history): string
     {
+        if ($title = $this->orderActivityPresenter->title($history)) {
+            return $title;
+        }
+
         if ($this->isCodPaymentActivity($history)) {
             return 'Payment Received';
         }
@@ -314,8 +321,12 @@ class CustomerOrderPresenter
             : $this->statusLabel($code);
     }
 
-    private function activityStatusDescription($history): ?string
+    private function activityStatusDescription(Order $order, $history): ?string
     {
+        if ($this->orderActivityPresenter->type($history) !== 'status') {
+            return $this->orderActivityPresenter->customerDescription($order, $history);
+        }
+
         if (($history->metadata['action'] ?? null) === 'merchant_cod_payment_received') {
             return 'Payment received for this order.';
         }
@@ -351,6 +362,10 @@ class CustomerOrderPresenter
 
     private function activityStatusTone($history): string
     {
+        if ($this->orderActivityPresenter->type($history) !== 'status') {
+            return $this->orderActivityPresenter->type($history) === 'upi_payment_rejected' ? 'warning' : 'success';
+        }
+
         if ($this->isCodPaymentActivity($history)) {
             return 'success';
         }

@@ -7,8 +7,8 @@ use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Services\Checkout\CheckoutFlowService;
-use App\Services\Checkout\StorefrontCheckoutOrderService;
 use App\Services\Checkout\CheckoutPageService;
+use App\Services\Checkout\StorefrontCheckoutOrderService;
 use App\Services\Checkout\StorefrontDeliveryService;
 use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Storefront\NavigationService;
@@ -32,8 +32,7 @@ class CheckoutController extends Controller
         private readonly StorefrontPaymentMethodService $payments,
         private readonly NavigationService $navigation,
         private readonly StorefrontCustomerContext $customerContext,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): RedirectResponse|View
     {
@@ -163,7 +162,15 @@ class CheckoutController extends Controller
             'payment_method' => ['required', Rule::in([
                 StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
                 StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+                StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
             ])],
+            'upi_reference' => [
+                Rule::requiredIf(fn (): bool => $request->input('payment_method') === StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI),
+                'nullable',
+                'string',
+                'max:100',
+                'regex:/^[A-Za-z0-9][A-Za-z0-9._-]{3,99}$/',
+            ],
             'customer_order_note' => ['nullable', 'string', 'max:1000'],
             'browser_total' => ['nullable'],
         ]);
@@ -207,6 +214,7 @@ class CheckoutController extends Controller
                 $data['payment_method'],
                 $billingAddress,
                 $data['customer_order_note'] ?? null,
+                $data['upi_reference'] ?? null,
             );
         } catch (ValidationException $exception) {
             throw $exception;

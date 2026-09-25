@@ -20,8 +20,8 @@ use App\Http\Controllers\Merchant\MerchantTaxSettingController;
 use App\Http\Controllers\Merchant\OrderController;
 use App\Http\Controllers\Merchant\PosController;
 use App\Http\Controllers\Merchant\PostalCodeRestrictionController;
-use App\Http\Controllers\Merchant\PromotionController;
 use App\Http\Controllers\Merchant\ProductController;
+use App\Http\Controllers\Merchant\PromotionController;
 use App\Http\Controllers\Merchant\ReturnReasonController;
 use App\Http\Controllers\Merchant\SalesHistoryController;
 use App\Http\Controllers\Merchant\ShopPageController;
@@ -86,6 +86,8 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::post('/orders/{order}/ship', [OrderController::class, 'markShipped'])->name('orders.ship');
         Route::post('/orders/{order}/out-for-delivery', [OrderController::class, 'markOutForDelivery'])->name('orders.out-for-delivery');
         Route::post('/orders/{order}/deliver', [OrderController::class, 'markDelivered'])->name('orders.deliver');
+        Route::post('/orders/{order}/upi-payment/confirm', [OrderController::class, 'confirmUpiPayment'])->name('orders.upi-payment.confirm');
+        Route::post('/orders/{order}/upi-payment/reject', [OrderController::class, 'rejectUpiPayment'])->name('orders.upi-payment.reject');
         Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
         Route::post('/orders/{order}/comments', [OrderController::class, 'storeComment'])->name('orders.comments.store');
         Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');

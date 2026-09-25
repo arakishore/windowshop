@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderExchange;
 use App\Models\OrderItem;
 use App\Models\OrderRefund;
+use App\Models\OrderStatusHistory;
 use App\Models\ProductVariant;
 use App\Models\ReturnReason;
 use App\Models\User;
@@ -127,6 +128,8 @@ class OrderRefundService
                 'notes' => 'Refund processed',
                 'changed_by' => $actor->getKey(),
                 'metadata' => [
+                    'action' => OrderStatusHistory::ACTION_REFUND_PROCESSED,
+                    'refund_id' => $refund->getKey(),
                     'refund_number' => $refund->refund_number,
                     'refund_total' => $refundTotal,
                     'notes' => $this->nullableString($data['notes'] ?? null),

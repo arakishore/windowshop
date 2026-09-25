@@ -2850,7 +2850,7 @@ class MerchantPosTest extends TestCase
                     $item->getKey() => ['quantity' => 1, 'restock' => 1],
                 ],
             ])
-            ->assertRedirect(route('merchant.sales.show', $order));
+            ->assertRedirect(route('merchant.orders.show', $order));
 
         $notes = (string) DB::table('order_refunds')
             ->where('order_id', $order->getKey())
@@ -2858,6 +2858,168 @@ class MerchantPosTest extends TestCase
 
         $this->assertStringContainsString('Customer exception approved.', $notes);
         $this->assertStringContainsString('Policy override: Manager approved exception. Regular customer, accepted as goodwill.', $notes);
+    }
+
+    public function test_storefront_order_reuses_refund_and_exchange_workflow_with_discounted_partial_quantities(): void
+    {
+        [$userId, $shopId] = $this->merchantShopFixture();
+        $original = $this->createPosProduct($shopId, 'Storefront Discounted Item', 'Default', 'SF-PART', 'SF-PART-BAR');
+        $replacement = $this->createPosProduct($shopId, 'Storefront Replacement Item', 'Default', 'SF-NEW', 'SF-NEW-BAR');
+        DB::table('product_variants')->where('id', $replacement['variant_id'])->update(['selling_price' => 1200]);
+        $merchantId = $this->merchantIdForShop($shopId);
+
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 1800,
+                'fulfilment_type' => 'pickup',
+                'payment_method' => 'cash',
+                'items' => [
+                    ['product_variant_id' => $original['variant_id'], 'quantity' => 2, 'discount_type' => 'amount', 'discount_value' => 198],
+                ],
+            ]);
+
+        $checkout->assertOk();
+        $order = Order::query()->with('items')->findOrFail($checkout->json('order.id'));
+        $order->forceFill(['created_source' => Order::SOURCE_STOREFRONT])->save();
+        $item = $order->items->first();
+        $item->forceFill([
+            'refund_allowed' => true,
+            'refund_window_days' => 30,
+            'exchange_allowed' => true,
+            'exchange_window_days' => 30,
+        ])->save();
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Process Refund')
+            ->assertSee('Process Exchange')
+            ->assertSee('href="'.route('merchant.sales.refund', $order).'"', false)
+            ->assertSee('href="'.route('merchant.sales.exchange', $order).'"', false);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.refund', $order))
+            ->assertOk()
+            ->assertSee('href="'.route('merchant.orders.show', $order).'"', false)
+            ->assertSee('Orders');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.refund.process', $order), [
+                'return_reason_id' => $this->returnReasonId($merchantId),
+                'refund_method' => 'cash',
+                'items' => [
+                    $item->getKey() => ['quantity' => 1, 'restock' => 1],
+                ],
+            ])
+            ->assertRedirect(route('merchant.orders.show', $order));
+
+        $this->assertDatabaseHas('order_refunds', [
+            'order_id' => $order->getKey(),
+            'refund_total' => '900.00',
+        ]);
+        $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->order_status);
+        $refundHistory = $order->statusHistories()->latest('id')->firstOrFail();
+        $this->assertSame(\App\Models\OrderStatusHistory::ACTION_REFUND_PROCESSED, $refundHistory->metadata['action'] ?? null);
+        $this->assertSame(11, (int) DB::table('product_variants')->where('id', $original['variant_id'])->value('stock_quantity'));
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Refund Processed')
+            ->assertSee('Refund processed for Storefront Discounted Item x 1')
+            ->assertDontSee('<div class="fw-semibold mb-1">Completed</div>\n                                        <div class="mt-1">Refund processed</div>', false);
+
+        $exchangeResponse = $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.exchange.process', $order), [
+                'settlement_method' => 'cash',
+                'returned_items' => [
+                    $item->getKey() => ['quantity' => 1, 'restock' => 1],
+                ],
+                'replacement_items' => [
+                    ['product_variant_id' => $replacement['variant_id'], 'quantity' => 1],
+                ],
+            ]);
+
+        $exchange = \App\Models\OrderExchange::query()->where('original_order_id', $order->getKey())->firstOrFail();
+        $exchangeResponse->assertRedirect(route('merchant.sales.exchange.receipt', $exchange));
+        $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->order_status);
+        $exchangeHistory = $order->statusHistories()->latest('id')->firstOrFail();
+        $this->assertSame(\App\Models\OrderStatusHistory::ACTION_EXCHANGE_PROCESSED, $exchangeHistory->metadata['action'] ?? null);
+        $this->assertSame('900.00', $exchange->returned_total);
+        $this->assertSame('1200.00', $exchange->replacement_total);
+        $this->assertSame(12, (int) DB::table('product_variants')->where('id', $original['variant_id'])->value('stock_quantity'));
+        $this->assertSame(11, (int) DB::table('product_variants')->where('id', $replacement['variant_id'])->value('stock_quantity'));
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.sales.exchange.receipt', $exchange))
+            ->assertOk()
+            ->assertSee('href="'.route('merchant.orders.show', $order).'"', false);
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Exchange Processed')
+            ->assertSee('Storefront Discounted Item x 1 exchanged for Storefront Replacement Item x 1.')
+            ->assertDontSee('Process Refund')
+            ->assertDontSee('Process Exchange');
+
+        $this
+            ->actingAs(User::query()->findOrFail($userId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.sales.refund.process', $order), [
+                'return_reason_id' => $this->returnReasonId($merchantId),
+                'refund_method' => 'cash',
+                'items' => [
+                    $item->getKey() => ['quantity' => 1, 'restock' => 1],
+                ],
+            ])
+            ->assertSessionHasErrors('items.'.$item->getKey().'.quantity');
+    }
+
+    public function test_other_shop_merchant_cannot_open_storefront_refund_or_exchange(): void
+    {
+        [$ownerId, $shopId] = $this->merchantShopFixture();
+        $product = $this->createPosProduct($shopId, 'Protected Storefront Item', 'Default', 'SF-PROT', 'SF-PROT-BAR');
+        $checkout = $this
+            ->actingAs(User::query()->findOrFail($ownerId))
+            ->withSession(['active_shop_id' => $shopId])
+            ->postJson(route('merchant.pos.checkout'), [
+                'amount_paid' => 999,
+                'fulfilment_type' => 'pickup',
+                'payment_method' => 'cash',
+                'items' => [['product_variant_id' => $product['variant_id'], 'quantity' => 1]],
+            ]);
+        $checkout->assertOk();
+        $order = Order::query()->findOrFail($checkout->json('order.id'));
+        $order->forceFill(['created_source' => Order::SOURCE_STOREFRONT])->save();
+
+        [$otherUserId, $otherShopId] = $this->merchantShopFixture();
+
+        $this->actingAs(User::query()->findOrFail($otherUserId))
+            ->withSession(['active_shop_id' => $otherShopId])
+            ->get(route('merchant.sales.refund', $order))
+            ->assertNotFound();
+
+        $this->actingAs(User::query()->findOrFail($otherUserId))
+            ->withSession(['active_shop_id' => $otherShopId])
+            ->get(route('merchant.sales.exchange', $order))
+            ->assertNotFound();
     }
 
     public function test_merchant_can_exchange_sale_using_original_discounted_return_value(): void
