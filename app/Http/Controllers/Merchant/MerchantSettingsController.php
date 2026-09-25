@@ -146,6 +146,11 @@ class MerchantSettingsController extends Controller
             foreach ($definitions as $key => $definition) {
                 if ($group === 'payment' && $key === 'merchant_upi_qr_path') {
                     $rawValue = $newQrPath ?: $existingQrPath;
+                } elseif ($group === 'payment'
+                    && in_array($key, ['merchant_upi_expiry_minutes', 'cash_at_shop_pickup_expiry_hours'], true)
+                    && ! array_key_exists($key, $shopPayload[$group] ?? [])
+                ) {
+                    $rawValue = $this->shopSettings->get($shopId, $group, $key, $definition['value']);
                 } elseif ($group === 'payment' && $key === 'online_payment_enabled') {
                     $rawValue = false;
                 } else {
@@ -186,7 +191,9 @@ class MerchantSettingsController extends Controller
             'shop_settings.payment.cod_min_order_amount' => ['nullable', 'numeric', 'gte:0'],
             'shop_settings.payment.cod_max_order_amount' => ['nullable', 'numeric', 'gte:0'],
             'shop_settings.payment.cash_at_shop_enabled' => ['nullable', 'boolean'],
+            'shop_settings.payment.cash_at_shop_pickup_expiry_hours' => ['sometimes', 'required', 'integer', Rule::in([12, 24, 48, 72])],
             'shop_settings.payment.merchant_upi_enabled' => ['nullable', 'boolean'],
+            'shop_settings.payment.merchant_upi_expiry_minutes' => ['sometimes', 'required', 'integer', Rule::in([5, 10, 15, 30])],
             'shop_settings.payment.merchant_upi_id' => ['nullable', 'string', 'max:191'],
             'shop_settings.payment.merchant_upi_payee_name' => ['nullable', 'string', 'max:191'],
             'shop_settings.returns.refund_allowed' => ['nullable', 'boolean'],

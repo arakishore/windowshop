@@ -505,6 +505,93 @@ class MerchantSettingsFoundationTest extends TestCase
         $this->assertTrue($this->shopSettings()->get($shop->getKey(), 'returns', 'exchange_allowed'));
         $this->assertSame(7, $this->shopSettings()->get($shop->getKey(), 'returns', 'exchange_window_days'));
         $this->assertSame('local_only', $this->shopSettings()->get($shop->getKey(), 'fulfillment', 'delivery_scope'));
+        $this->assertSame(10, $this->shopSettings()->get($shop->getKey(), 'payment', 'merchant_upi_expiry_minutes'));
+        $this->assertSame(24, $this->shopSettings()->get($shop->getKey(), 'payment', 'cash_at_shop_pickup_expiry_hours'));
+    }
+
+    public function test_missing_payment_expiry_settings_are_restored_to_defaults(): void
+    {
+        $merchant = $this->merchantFixture('Missing Payment Expiry Merchant');
+        $shop = $this->shopFixture($merchant);
+
+        ShopSetting::query()
+            ->where('shop_id', $shop->getKey())
+            ->where('group', 'payment')
+            ->whereIn('setting_key', ['merchant_upi_expiry_minutes', 'cash_at_shop_pickup_expiry_hours'])
+            ->delete();
+
+        $this->shopInitializer()->initialize($shop->getKey());
+
+        $this->assertSame(10, $this->shopSettings()->get($shop->getKey(), 'payment', 'merchant_upi_expiry_minutes'));
+        $this->assertSame(24, $this->shopSettings()->get($shop->getKey(), 'payment', 'cash_at_shop_pickup_expiry_hours'));
+    }
+
+    public function test_payment_expiry_values_are_shop_scoped_and_preserved_when_methods_are_disabled(): void
+    {
+        $merchant = $this->merchantFixture('Payment Expiry Scope Merchant');
+        $shopA = $this->shopFixture($merchant);
+        $shopB = $this->shopFixture($merchant);
+        $this->assignMerchantRole($merchant->user);
+
+        foreach ([[5, 12], [10, 24], [15, 48], [30, 72]] as [$upiMinutes, $pickupHours]) {
+            $this->actingAs($merchant->user)
+                ->withSession([
+                    'merchant_id' => $merchant->getKey(),
+                    'active_shop_id' => $shopA->getKey(),
+                ])
+                ->put(route('merchant.settings.update'), [
+                    'settings' => $this->defaultMerchantSettingsPayload(),
+                    'shop_settings' => [
+                        'payment' => [
+                            'merchant_upi_enabled' => '0',
+                            'merchant_upi_expiry_minutes' => (string) $upiMinutes,
+                            'cash_at_shop_enabled' => '0',
+                            'cash_at_shop_pickup_expiry_hours' => (string) $pickupHours,
+                        ],
+                    ],
+                ])
+                ->assertRedirect();
+
+            $this->assertSame($upiMinutes, $this->shopSettings()->get($shopA->getKey(), 'payment', 'merchant_upi_expiry_minutes'));
+            $this->assertSame($pickupHours, $this->shopSettings()->get($shopA->getKey(), 'payment', 'cash_at_shop_pickup_expiry_hours'));
+        }
+
+        $this->assertFalse($this->shopSettings()->get($shopA->getKey(), 'payment', 'merchant_upi_enabled'));
+        $this->assertFalse($this->shopSettings()->get($shopA->getKey(), 'payment', 'cash_at_shop_enabled'));
+        $this->assertSame(30, $this->shopSettings()->get($shopA->getKey(), 'payment', 'merchant_upi_expiry_minutes'));
+        $this->assertSame(72, $this->shopSettings()->get($shopA->getKey(), 'payment', 'cash_at_shop_pickup_expiry_hours'));
+        $this->assertSame(10, $this->shopSettings()->get($shopB->getKey(), 'payment', 'merchant_upi_expiry_minutes'));
+        $this->assertSame(24, $this->shopSettings()->get($shopB->getKey(), 'payment', 'cash_at_shop_pickup_expiry_hours'));
+    }
+
+    public function test_arbitrary_payment_expiry_values_are_rejected(): void
+    {
+        $merchant = $this->merchantFixture('Invalid Payment Expiry Merchant');
+        $shop = $this->shopFixture($merchant);
+        $this->assignMerchantRole($merchant->user);
+
+        $this->actingAs($merchant->user)
+            ->withSession([
+                'merchant_id' => $merchant->getKey(),
+                'active_shop_id' => $shop->getKey(),
+            ])
+            ->from(route('merchant.settings.edit'))
+            ->put(route('merchant.settings.update'), [
+                'shop_settings' => [
+                    'payment' => [
+                        'merchant_upi_expiry_minutes' => '20',
+                        'cash_at_shop_pickup_expiry_hours' => '36',
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('merchant.settings.edit'))
+            ->assertSessionHasErrors([
+                'shop_settings.payment.merchant_upi_expiry_minutes',
+                'shop_settings.payment.cash_at_shop_pickup_expiry_hours',
+            ]);
+
+        $this->assertSame(10, $this->shopSettings()->get($shop->getKey(), 'payment', 'merchant_upi_expiry_minutes'));
+        $this->assertSame(24, $this->shopSettings()->get($shop->getKey(), 'payment', 'cash_at_shop_pickup_expiry_hours'));
     }
 
     public function test_shop_settings_seeder_initializes_existing_shops_idempotently(): void
