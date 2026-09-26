@@ -27,6 +27,7 @@ return new class extends Migration
             $table->foreignId('moderated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('moderated_at')->nullable();
             $table->timestamps();
+            $table->softDeletes();
 
             $table->index(['product_id', 'status'], 'product_reviews_product_status_idx');
             $table->index(['customer_id', 'status'], 'product_reviews_customer_status_idx');

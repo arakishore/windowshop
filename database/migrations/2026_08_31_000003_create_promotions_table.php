@@ -21,6 +21,7 @@ return new class extends Migration
             $table->string('name', 180);
             $table->string('slug');
             $table->text('description')->nullable();
+            $table->string('promotional_image_path', 500)->nullable();
             $table->string('status', 30)->default('draft')->index();
             $table->string('activation_type', 30)->default('automatic')->index();
             $table->string('origin', 30)->default('merchant')->index();

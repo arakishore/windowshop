@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('notification_delivery_logs', function (Blueprint $table): void {
             $table->id();
             $table->uuid('uuid')->unique();
+            $table->string('delivery_key', 64)->nullable()->unique();
             $table->string('notification_key', 150);
             $table->string('recipient_type', 50);
             $table->unsignedBigInteger('recipient_id')->nullable();
