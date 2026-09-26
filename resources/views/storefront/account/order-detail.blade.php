@@ -30,6 +30,7 @@
                 <p class="fw-medium mb-0">{{ $order->shop?->name ?? $marketplaceName.' Store' }}</p>
             </div>
             <div class="account-order-actions">
+                <a href="{{ route('storefront.account.orders.receipt', ['order' => $order, 'print' => 1]) }}" target="_blank" rel="noopener" class="tf-btn btn-line small">Print Receipt</a>
                 @if ($canCancelOrder)
                     <button type="button" class="account-cancel-order-btn" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">Cancel Order</button>
                 @endif

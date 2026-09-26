@@ -12,6 +12,7 @@ use App\Models\WishlistItem;
 use App\Services\Checkout\CheckoutPageService;
 use App\Services\Order\CustomerOrderCancellationService;
 use App\Services\Order\OrderReturnExchangeEligibilityService;
+use App\Services\Order\OrderReceiptPresenter;
 use App\Services\Storefront\CustomerOrderPresenter;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductListingService;
@@ -34,6 +35,7 @@ class CustomerAccountController extends Controller
         private readonly CustomerOrderPresenter $ordersPresenter,
         private readonly CustomerOrderCancellationService $customerCancellation,
         private readonly OrderReturnExchangeEligibilityService $returnExchangeEligibility,
+        private readonly OrderReceiptPresenter $receiptPresenter,
     ) {
     }
 
@@ -177,6 +179,24 @@ class CustomerAccountController extends Controller
             'canCancelOrder' => $this->customerCancellation->canCancel($order),
             'cancellationReasons' => $this->customerCancellation->reasonOptions(),
             'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
+        ]));
+    }
+
+    public function orderReceipt(Request $request, Order $order): View|RedirectResponse
+    {
+        $customer = $this->customerOrRedirect($request);
+        if (! $customer instanceof User) {
+            return $customer;
+        }
+
+        $globalCustomer = $this->customerContext->customer($request);
+        abort_unless($globalCustomer instanceof Customer, 403);
+        abort_unless((int) $order->customer_id === (int) $globalCustomer->getKey(), 404);
+
+        return view('storefront.account.order-receipt', $this->accountViewData($customer, [
+            'order' => $order,
+            'receipt' => $this->receiptPresenter->present($order),
+            'autoPrint' => $request->boolean('print'),
         ]));
     }
 

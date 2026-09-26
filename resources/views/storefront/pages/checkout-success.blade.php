@@ -112,6 +112,7 @@
         @endif
         <div class="order-success-footer">
             <a href="{{ route('storefront.account.orders.show', $order) }}" class="tf-btn animate-btn">View Order</a>
+            <a href="{{ route('storefront.account.orders.receipt', ['order' => $order, 'print' => 1]) }}" target="_blank" rel="noopener" class="tf-btn btn-stroke">Print Receipt</a>
             <a href="{{ route('storefront.home') }}" class="tf-btn btn-stroke">Continue Shopping</a>
             <div class="order-success-reassurance"><span><i class="icon-CheckCircle"></i> Order updates available</span><span><i class="icon-Truck2"></i> Status notifications</span><span><i class="icon-ShieldCheck"></i> Safe &amp; Secure Shopping</span></div>
         </div>

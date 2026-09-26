@@ -81,6 +81,7 @@ Route::post('/account/addresses/{address}/default-delivery', [AccountAddressCont
 Route::post('/account/addresses/{address}/default-billing', [AccountAddressController::class, 'defaultBilling'])->name('storefront.account.addresses.default-billing');
 Route::get('/account/orders', [CustomerAccountController::class, 'orders'])->name('storefront.account.orders');
 Route::get('/account/orders/{order}', [CustomerAccountController::class, 'orderDetail'])->name('storefront.account.orders.show');
+Route::get('/account/orders/{order}/receipt', [CustomerAccountController::class, 'orderReceipt'])->name('storefront.account.orders.receipt');
 Route::post('/account/orders/{order}/cancel', [CustomerAccountController::class, 'cancelOrder'])->name('storefront.account.orders.cancel');
 Route::get('/account/order-items/{orderItem}/review', [ProductReviewController::class, 'create'])->name('storefront.account.reviews.create');
 Route::post('/account/order-items/{orderItem}/review', [ProductReviewController::class, 'store'])->name('storefront.account.reviews.store');

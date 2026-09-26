@@ -1172,6 +1172,65 @@ class StorefrontCustomerOrdersTest extends TestCase
         Storage::disk('public')->assertMissing($image->thumbnail_path);
     }
 
+    public function test_customer_receipt_uses_stored_snapshots_labels_and_owner_authorization(): void
+    {
+        $customer = $this->customerUser('receipt-owner@example.test', 'Receipt Owner', '9422945191');
+        $other = $this->customerUser('receipt-other@example.test', 'Other Customer', '9422945192');
+        $roleId = $this->assignRole($customer, 'customer');
+        $this->assignRole($other, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $this->globalCustomer($other);
+        $fixture = $this->fixture('Receipt Shop');
+        $product = $this->product($fixture, 'Current Product');
+        $order = $this->order($globalCustomer, $fixture, [
+            'order_number' => 'ORD-RECEIPT-001',
+            'subtotal' => 500,
+            'discount_total' => 50,
+            'shipping_total' => 40,
+            'tax_total' => 45,
+            'grand_total' => 535,
+            'shipping_address_line_1' => 'Stored Delivery Road',
+            'shipping_city' => 'Nashik',
+            'shipping_postal_code' => '422009',
+        ]);
+        $this->item($order, $product, [
+            'product_name' => 'Historical Snapshot Product', 'variant_name' => 'Blue / M', 'sku' => 'SNAP-001',
+            'unit_price' => 500, 'line_subtotal' => 500, 'line_discount' => 50, 'line_tax' => 45, 'line_total' => 495,
+            'metadata' => ['promotion' => ['name' => 'Stored Offer', 'coupon_code' => 'SAVE50', 'details' => ['generated_by_promotion' => false]]],
+        ]);
+        $product->forceFill(['product_name' => 'Changed Live Product'])->save();
+
+        $url = route('storefront.account.orders.receipt', $order);
+        $this->get($url)->assertRedirect(route('storefront.login'));
+        $this->actingAs($other)->withSession(['active_role_id' => $roleId])->get($url)->assertNotFound();
+
+        $response = $this->actingAs($customer)->withSession(['active_role_id' => $roleId])->get($url);
+        $response
+            ->assertOk()->assertSee('ORDER RECEIPT')->assertSee('ORD-RECEIPT-001')
+            ->assertSee('Historical Snapshot Product')->assertDontSee('Changed Live Product')
+            ->assertSee('Blue / M')->assertSee('SNAP-001')->assertSee('Stored Offer')->assertSee('SAVE50')
+            ->assertSee('Cash on Delivery')->assertSee('Stored Delivery Road')->assertSee('INR 535.00')
+            ->assertSee('Print Receipt')->assertSee('onclick="window.print()"', false)
+            ->assertSee('@page { size: A4 portrait;', false)
+            ->assertSee('#wrapper > :not(.customer-receipt-page)', false)
+            ->assertSee('.customer-receipt-table { display: table !important;', false)
+            ->assertSee('.customer-receipt-settlement { display: grid !important;', false);
+
+        $this->get(route('storefront.account.orders.receipt', ['order' => $order, 'print' => 1]))
+            ->assertOk()
+            ->assertSee('document.fonts?.ready', false)
+            ->assertSee('requestAnimationFrame', false)
+            ->assertSee('printStarted', false)
+            ->assertSee("document.querySelectorAll('.customer-receipt-paper img')", false)
+            ->assertDontSee('Array.from(document.images)', false);
+
+        $order->forceFill(['payment_method' => 'cash_at_shop', 'fulfilment_type' => Order::FULFILMENT_PICKUP])->save();
+        $this->get($url)->assertOk()->assertSee('Cash at Shop')->assertSee('Pickup Address')->assertSee('Shop Road');
+
+        $order->forceFill(['payment_method' => 'merchant_upi', 'payment_reference' => 'UPI-SAFE-123'])->save();
+        $this->get($url)->assertOk()->assertSee('Direct Merchant UPI')->assertSee('UPI-SAFE-123');
+    }
+
     /**
      * @return array{merchantUser: User, merchant: MerchantProfile, shop: Shop, root: ProductCategory, category: ProductCategory}
      */
