@@ -1201,6 +1201,18 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertSame('0.00', $order->amount_paid);
         $this->assertSame('1649.00', $order->grand_total);
         $this->assertSame(19, (int) $fixture['variant']->refresh()->stock_quantity);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout.success', $order))
+            ->assertOk()
+            ->assertSee('Your payment reference was submitted and is awaiting merchant verification.')
+            ->assertSee('Payment verification pending')
+            ->assertSee('Your payment is awaiting merchant verification. We’ll notify you once it has been verified.')
+            ->assertDontSee('Your order is confirmed!')
+            ->assertSee('View Order')
+            ->assertSee(route('storefront.account.orders.show', $order), false)
+            ->assertSee('Continue Shopping');
     }
 
     public function test_disabled_or_incomplete_direct_upi_cannot_be_submitted_manually(): void
@@ -1504,7 +1516,23 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Order placed successfully')
             ->assertSee($order->order_number)
             ->assertSee('Cash on Delivery')
-            ->assertSee('Pay when your order is delivered.');
+            ->assertSee('Pay when your order is delivered.')
+            ->assertSee('Order pending')
+            ->assertSee('Your order has been placed successfully. We’ll notify you when the shop confirms your order.')
+            ->assertDontSee('Your order is confirmed!')
+            ->assertSee('View Order')
+            ->assertSee(route('storefront.account.orders.show', $order), false)
+            ->assertSee('Continue Shopping');
+
+        $order->forceFill(['order_status' => Order::STATUS_CONFIRMED])->save();
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout.success', $order))
+            ->assertOk()
+            ->assertSee('Order confirmed')
+            ->assertSee('The shop has confirmed your order. We’ll notify you as it progresses.')
+            ->assertDontSee('Order pending');
     }
 
     public function test_checkout_places_pickup_cash_at_shop_order(): void
@@ -1543,8 +1571,14 @@ class StorefrontCheckoutGateTest extends TestCase
             ->get(route('storefront.checkout.success', $order))
             ->assertOk()
             ->assertSee('Cash at Shop')
-            ->assertSee('Pay when you collect your order.')
-            ->assertSee($fixture['shop']->name);
+            ->assertSee('Pay at the shop when you collect your order.')
+            ->assertSee('Order pending')
+            ->assertSee('Your order has been placed successfully. We’ll notify you when the shop confirms your order.')
+            ->assertDontSee('Your order is confirmed!')
+            ->assertSee($fixture['shop']->name)
+            ->assertSee('View Order')
+            ->assertSee(route('storefront.account.orders.show', $order), false)
+            ->assertSee('Continue Shopping');
     }
 
     public function test_multishop_order_creates_and_cleans_up_only_the_selected_shop(): void
