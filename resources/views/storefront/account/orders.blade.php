@@ -52,7 +52,7 @@
 
                         <div class="account-order-total">
                             <span>{{ $presenter->money($order->grand_total) }}</span>
-                            <a href="{{ route('storefront.account.orders.show', $order) }}" class="tf-btn btn-line small">View Order</a>
+                            <a href="{{ route('storefront.account.orders.show', $order) }}" class="tf-btn btn-line animate-btn small">View Order</a>
                         </div>
                     </div>
                 </article>

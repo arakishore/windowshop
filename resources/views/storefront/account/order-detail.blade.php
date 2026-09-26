@@ -539,7 +539,7 @@
         .account-info-list,
         .account-address-snapshot {
             display: grid;
-            gap: 12px;
+            gap: 2px;
         }
 
         .account-order-item {

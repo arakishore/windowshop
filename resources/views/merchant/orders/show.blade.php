@@ -391,7 +391,7 @@
                 <div>
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                         <h3 class="mb-0">{{ $order->order_number }}</h3>
-                        <span class="badge {{ $statusClass($order->order_status) }} bg-opacity-10 text-body">{{ $statusLabel($order->order_status) }}</span>
+                        <span class="badge {{ $statusClass($order->order_status) }} bg-opacity-10 text-body"><span>Order</span> {{ $statusLabel($order->order_status) }}</span>
                         <span class="badge {{ $paymentStatusClass($order->payment_status) }} bg-opacity-10 text-body" data-payment-status-badge>{{ $headerPaymentStatusLabel($order->payment_status) }}</span>
                     </div>
                     <div class="text-muted mb-2">Placed {{ app_datetime($order->created_at) }}</div>
