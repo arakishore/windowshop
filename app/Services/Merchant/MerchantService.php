@@ -6,6 +6,8 @@ use App\Enums\MerchantBusinessType;
 use App\Enums\MerchantStatus;
 use App\Enums\MerchantVerificationStatus;
 use App\Enums\UserRegistrationSource;
+use App\Events\MerchantAccountCreated;
+use App\Events\MerchantLifecycleChanged;
 use App\Models\MerchantAddress;
 use App\Models\MerchantProfile;
 use App\Models\User;
@@ -19,7 +21,7 @@ use Illuminate\Validation\ValidationException;
 class MerchantService
 {
     /**
-     * @param array{q: string, status: mixed, verification_status: mixed} $filters
+     * @param  array{q: string, status: mixed, verification_status: mixed}  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
@@ -89,7 +91,7 @@ class MerchantService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function upsertBusinessAddress(MerchantProfile $merchant, array $data, ?int $actorId): MerchantAddress
     {
@@ -199,7 +201,8 @@ class MerchantService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
+     *
      * @throws ValidationException
      */
     public function create(array $data, ?int $actorId): MerchantProfile
@@ -207,7 +210,7 @@ class MerchantService
         $merchantRoleId = $this->merchantRoleId();
 
         return DB::transaction(function () use ($data, $actorId, $merchantRoleId): MerchantProfile {
-            $user = new User();
+            $user = new User;
             $user->forceFill([
                 'name' => $data['name'],
                 'email' => Str::lower($data['email']),
@@ -236,17 +239,21 @@ class MerchantService
                 ],
             );
 
+            MerchantAccountCreated::dispatch($merchant->load('user'), "merchant.account_created:{$merchant->uuid}");
+
             return $merchant;
         });
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function update(MerchantProfile $merchant, array $data, ?int $actorId): void
     {
         DB::transaction(function () use ($merchant, $data, $actorId): void {
             $merchant->load('user');
+            $oldVerificationStatus = (string) $merchant->verification_status;
+            $oldAccountStatus = (string) $merchant->status;
 
             $userAttributes = [
                 'name' => $data['name'],
@@ -266,6 +273,24 @@ class MerchantService
                 ...$this->verificationAttributes($data, $actorId),
                 'updated_by' => $actorId,
             ])->save();
+
+            $transitions = [];
+            if ($oldVerificationStatus !== MerchantVerificationStatus::APPROVED->value && $merchant->verification_status === MerchantVerificationStatus::APPROVED->value) {
+                $transitions[] = 'merchant.approved';
+            }
+            if ($oldVerificationStatus !== MerchantVerificationStatus::REJECTED->value && $merchant->verification_status === MerchantVerificationStatus::REJECTED->value) {
+                $transitions[] = 'merchant.rejected';
+            }
+            if ($oldAccountStatus === MerchantStatus::ACTIVE->value && $merchant->status === MerchantStatus::SUSPENDED->value) {
+                $transitions[] = 'merchant.suspended';
+            }
+            if ($oldAccountStatus === MerchantStatus::SUSPENDED->value && $merchant->status === MerchantStatus::ACTIVE->value) {
+                $transitions[] = 'merchant.reactivated';
+            }
+
+            foreach ($transitions as $key) {
+                MerchantLifecycleChanged::dispatch($merchant->fresh('user'), $key, (string) Str::uuid());
+            }
 
             // Future: generic audit/activity logging will be implemented application-wide.
         });
@@ -363,7 +388,7 @@ class MerchantService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function merchantAttributes(array $data): array
@@ -390,7 +415,7 @@ class MerchantService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function verificationAttributes(array $data, ?int $actorId): array

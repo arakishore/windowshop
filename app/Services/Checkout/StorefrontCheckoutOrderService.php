@@ -2,6 +2,7 @@
 
 namespace App\Services\Checkout;
 
+use App\Events\StorefrontOrderPlaced;
 use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
@@ -31,8 +32,7 @@ class StorefrontCheckoutOrderService
         private readonly AdminSettingsService $adminSettings,
         private readonly CouponSessionStore $couponStore,
         private readonly CheckoutFlowService $checkout,
-    ) {
-    }
+    ) {}
 
     public function place(
         Request $request,
@@ -43,8 +43,7 @@ class StorefrontCheckoutOrderService
         CustomerAddress $billingAddress,
         ?string $customerOrderNote = null,
         ?string $upiReference = null,
-    ): Order
-    {
+    ): Order {
         return DB::transaction(function () use ($request, $actor, $customer, $fulfillment, $paymentMethod, $billingAddress, $customerOrderNote, $upiReference): Order {
             $cart = $this->lockedCart($request);
             $selectedShopId = $this->checkout->selectedShopId($request);
@@ -156,6 +155,8 @@ class StorefrontCheckoutOrderService
             $this->couponStore->forget($request, (int) $shop->getKey());
             $this->clearCheckoutState($request);
 
+            StorefrontOrderPlaced::dispatch($order, "storefront.order.placed:{$order->uuid}");
+
             return $order;
         });
     }
@@ -250,7 +251,7 @@ class StorefrontCheckoutOrderService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $items
+     * @param  array<int, array<string, mixed>>  $items
      * @return array<int, array{product_variant_id: int, quantity: int}>
      */
     private function orderItems(array $items): array
@@ -275,7 +276,7 @@ class StorefrontCheckoutOrderService
     }
 
     /**
-     * @param array<string, mixed> $deliveryData
+     * @param  array<string, mixed>  $deliveryData
      * @return array<int, array<string, mixed>>
      */
     private function totalsRows(int $shippingCents, array $deliveryData): array

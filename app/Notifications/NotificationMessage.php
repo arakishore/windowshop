@@ -18,6 +18,7 @@ final readonly class NotificationMessage
         public ?int $merchantId = null,
         public ?string $relatedType = null,
         public ?string $relatedId = null,
+        public ?string $occurrenceId = null,
         public array $context = [],
         public array $metadata = [],
     ) {}

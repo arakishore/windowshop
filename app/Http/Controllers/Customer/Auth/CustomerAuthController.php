@@ -3,14 +3,15 @@
 namespace App\Http\Controllers\Customer\Auth;
 
 use App\Enums\UserRegistrationSource;
+use App\Events\CustomerRegistered;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Cart\CartMergeService;
 use App\Services\Cart\CartResolver;
 use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Customer\CustomerIdentityResolver;
-use App\Services\Storefront\StorefrontCustomerContext;
 use App\Services\Storefront\StorefrontCountryResolver;
+use App\Services\Storefront\StorefrontCustomerContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,8 +27,7 @@ class CustomerAuthController extends Controller
         private readonly CheckoutFlowService $checkout,
         private readonly CustomerIdentityResolver $customers,
         private readonly StorefrontCountryResolver $countries,
-    ) {
-    }
+    ) {}
 
     public function login(Request $request): RedirectResponse
     {
@@ -109,6 +109,8 @@ class CustomerAuthController extends Controller
             ])->save();
             $this->assignCustomerRole($user);
             $this->customers->resolveOrCreateForUser($user);
+
+            CustomerRegistered::dispatch($user->refresh(), "customer.registered:{$user->uuid}");
 
             return $user->refresh();
         });

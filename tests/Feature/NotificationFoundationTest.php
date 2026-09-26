@@ -47,6 +47,7 @@ class NotificationFoundationTest extends TestCase
         Schema::create('notification_delivery_logs', function (Blueprint $table): void {
             $table->id();
             $table->uuid('uuid')->unique();
+            $table->string('delivery_key')->nullable()->unique();
             $table->string('notification_key');
             $table->string('recipient_type');
             $table->unsignedBigInteger('recipient_id')->nullable();
@@ -249,6 +250,35 @@ class NotificationFoundationTest extends TestCase
             'related_type' => 'order',
             'related_id' => $relatedId,
         ]);
+    }
+
+    public function test_same_occurrence_is_idempotent_while_different_occurrence_is_delivered(): void
+    {
+        $calls = 0;
+        $channel = new class($calls) implements NotificationChannel
+        {
+            public function __construct(private int &$calls) {}
+
+            public function name(): string
+            {
+                return NotificationChannelName::EMAIL;
+            }
+
+            public function send(NotificationMessage $message): DeliveryResult
+            {
+                $this->calls++;
+
+                return DeliveryResult::notConfigured();
+            }
+        };
+        $manager = new NotificationManager(new NotificationChannelRegistry([$channel]), app(NotificationPreferenceResolver::class), app(NotificationDeliveryLogger::class));
+
+        foreach (['occurrence-a', 'occurrence-a', 'occurrence-b'] as $occurrence) {
+            $manager->send(new NotificationMessage('order.placed.customer', 'customer', 'email', 'customer@example.test', occurrenceId: $occurrence));
+        }
+
+        $this->assertSame(2, $calls);
+        $this->assertDatabaseCount('notification_delivery_logs', 2);
     }
 
     private function message(string $channel, ?int $merchantId = null): NotificationMessage

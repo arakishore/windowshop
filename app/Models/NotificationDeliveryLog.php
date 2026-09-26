@@ -10,6 +10,7 @@ class NotificationDeliveryLog extends Model
     use HasUuid;
 
     protected $fillable = [
+        'delivery_key',
         'notification_key',
         'recipient_type',
         'recipient_id',

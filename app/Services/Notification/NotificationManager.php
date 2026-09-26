@@ -26,9 +26,14 @@ class NotificationManager
             throw new LogicException('Notifications must be delivered only after the database transaction commits.');
         }
 
+        $claim = $message->occurrenceId === null ? null : $this->logger->claim($message);
+        if ($message->occurrenceId !== null && $claim === null) {
+            return DeliveryResult::skipped();
+        }
+
         if (! $this->preferences->enabled($message)) {
             $result = DeliveryResult::skipped();
-            $this->logger->record($message, $result);
+            $claim ? $this->logger->complete($claim, $message, $result) : $this->logger->record($message, $result);
 
             return $result;
         }
@@ -39,7 +44,7 @@ class NotificationManager
             $result = DeliveryResult::failed($exception->getMessage());
         }
 
-        $this->logger->record($message, $result);
+        $claim ? $this->logger->complete($claim, $message, $result) : $this->logger->record($message, $result);
 
         return $result;
     }
