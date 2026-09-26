@@ -309,7 +309,9 @@
                 \App\Models\Order::STATUS_CONFIRMED => 'Confirmed',
                 \App\Models\Order::STATUS_PROCESSING => 'Processing',
                 \App\Models\OrderStatus::CODE_PACKED => 'Packed',
+                \App\Models\OrderStatus::CODE_READY_FOR_DISPATCH => 'Ready for Dispatch',
                 \App\Models\OrderStatus::CODE_SHIPPED => 'Shipped',
+                \App\Models\OrderStatus::CODE_IN_TRANSIT => 'In Transit',
                 \App\Models\OrderStatus::CODE_OUT_FOR_DELIVERY => 'Out for Delivery',
                 \App\Models\OrderStatus::CODE_DELIVERED => 'Delivered',
                 \App\Models\Order::STATUS_COMPLETED => 'Completed',
@@ -359,7 +361,9 @@
         $canStartProcessing = in_array(\App\Models\Order::STATUS_PROCESSING, $allowedNextStatuses, true);
         $canMarkReadyForPickup = in_array(\App\Models\Order::STATUS_READY_FOR_PICKUP, $allowedNextStatuses, true);
         $canMarkPacked = in_array(\App\Models\OrderStatus::CODE_PACKED, $allowedNextStatuses, true);
+        $canMarkReadyForDispatch = in_array(\App\Models\OrderStatus::CODE_READY_FOR_DISPATCH, $allowedNextStatuses, true);
         $canMarkShipped = in_array(\App\Models\OrderStatus::CODE_SHIPPED, $allowedNextStatuses, true);
+        $canMarkInTransit = in_array(\App\Models\OrderStatus::CODE_IN_TRANSIT, $allowedNextStatuses, true);
         $canMarkOutForDelivery = in_array(\App\Models\OrderStatus::CODE_OUT_FOR_DELIVERY, $allowedNextStatuses, true);
         $canMarkDelivered = in_array(\App\Models\OrderStatus::CODE_DELIVERED, $allowedNextStatuses, true);
         $canCompletePickup = $order->fulfilment_type === \App\Models\Order::FULFILMENT_PICKUP && in_array(\App\Models\Order::STATUS_COMPLETED, $allowedNextStatuses, true);
@@ -368,7 +372,9 @@
         $startProcessingLabel = $statusActionLabels[\App\Models\Order::STATUS_PROCESSING] ?? 'Start Processing';
         $markReadyForPickupLabel = $statusActionLabels[\App\Models\Order::STATUS_READY_FOR_PICKUP] ?? 'Mark Ready for Pickup';
         $markPackedLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_PACKED] ?? 'Mark Packed';
+        $markReadyForDispatchLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_READY_FOR_DISPATCH] ?? 'Mark Ready for Dispatch';
         $markShippedLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_SHIPPED] ?? 'Mark Shipped';
+        $markInTransitLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_IN_TRANSIT] ?? 'Mark In Transit';
         $markOutForDeliveryLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_OUT_FOR_DELIVERY] ?? 'Mark Out for Delivery';
         $markDeliveredLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_DELIVERED] ?? 'Mark Delivered';
         $completePickupLabel = $statusActionLabels[\App\Models\Order::STATUS_COMPLETED] ?? 'Complete Pickup';
@@ -404,7 +410,7 @@
                     </div>
                 </div>
                 <div class="order-action-slot">
-                    @if($canRefund || $canExchange || $canAcceptOrder || $canStartProcessing || $canMarkReadyForPickup || $canMarkPacked || $canMarkShipped || $canMarkOutForDelivery || $canMarkDelivered || $canCompletePickup || $canCancelOrder)
+                    @if($canRefund || $canExchange || $canAcceptOrder || $canStartProcessing || $canMarkReadyForPickup || $canMarkPacked || $canMarkReadyForDispatch || $canMarkShipped || $canMarkInTransit || $canMarkOutForDelivery || $canMarkDelivered || $canCompletePickup || $canCancelOrder)
                         <div class="d-flex flex-wrap justify-content-end gap-2">
                             @if($canRefund)
                                 <a href="{{ route('merchant.sales.refund', $order) }}" class="btn btn-primary">
@@ -448,10 +454,22 @@
                                     <button type="submit" class="btn btn-primary">{{ $markPackedLabel }}</button>
                                 </form>
                             @endif
+                            @if($canMarkReadyForDispatch)
+                                <form method="POST" action="{{ route('merchant.orders.ready-for-dispatch', $order) }}" data-submit-once>
+                                    @csrf
+                                    <button type="submit" class="btn btn-primary">{{ $markReadyForDispatchLabel }}</button>
+                                </form>
+                            @endif
                             @if($canMarkShipped)
                                 <form method="POST" action="{{ route('merchant.orders.ship', $order) }}" data-submit-once>
                                     @csrf
                                     <button type="submit" class="btn btn-primary">{{ $markShippedLabel }}</button>
+                                </form>
+                            @endif
+                            @if($canMarkInTransit)
+                                <form method="POST" action="{{ route('merchant.orders.in-transit', $order) }}" data-submit-once>
+                                    @csrf
+                                    <button type="submit" class="btn btn-primary">{{ $markInTransitLabel }}</button>
                                 </form>
                             @endif
                             @if($canMarkOutForDelivery)

@@ -52,9 +52,15 @@ return [
                 Order::STATUS_CANCELLED,
             ],
             OrderStatus::CODE_PACKED => [
+                OrderStatus::CODE_READY_FOR_DISPATCH,
+            ],
+            OrderStatus::CODE_READY_FOR_DISPATCH => [
                 OrderStatus::CODE_SHIPPED,
             ],
             OrderStatus::CODE_SHIPPED => [
+                OrderStatus::CODE_IN_TRANSIT,
+            ],
+            OrderStatus::CODE_IN_TRANSIT => [
                 OrderStatus::CODE_OUT_FOR_DELIVERY,
             ],
             OrderStatus::CODE_OUT_FOR_DELIVERY => [
@@ -104,7 +110,9 @@ return [
         Order::STATUS_PROCESSING => 'Start Processing',
         Order::STATUS_READY_FOR_PICKUP => 'Mark Ready for Pickup',
         OrderStatus::CODE_PACKED => 'Mark Packed',
+        OrderStatus::CODE_READY_FOR_DISPATCH => 'Mark Ready for Dispatch',
         OrderStatus::CODE_SHIPPED => 'Mark Shipped',
+        OrderStatus::CODE_IN_TRANSIT => 'Mark In Transit',
         OrderStatus::CODE_OUT_FOR_DELIVERY => 'Mark Out for Delivery',
         OrderStatus::CODE_DELIVERED => 'Mark Delivered',
         Order::STATUS_COMPLETED => 'Complete Pickup',

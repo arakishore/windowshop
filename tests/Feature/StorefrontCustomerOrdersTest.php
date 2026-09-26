@@ -177,14 +177,18 @@ class StorefrontCustomerOrdersTest extends TestCase
         $processingAt = now()->subHours(3);
         $commentAt = now()->subHours(2)->subMinutes(30);
         $packedAt = now()->subHours(2);
-        $shippedAt = now()->subHour();
+        $readyForDispatchAt = now()->subHour()->subMinutes(45);
+        $shippedAt = now()->subHour()->subMinutes(30);
+        $inTransitAt = now()->subHour();
         $outForDeliveryAt = now()->subMinutes(30);
         $this->history($order, null, Order::STATUS_PENDING, $placedAt);
         $this->history($order, Order::STATUS_PENDING, Order::STATUS_CONFIRMED, $confirmedAt);
         $this->history($order, Order::STATUS_CONFIRMED, Order::STATUS_PROCESSING, $processingAt);
         $this->history($order, Order::STATUS_PROCESSING, OrderStatus::CODE_PACKED, $packedAt);
-        $this->history($order, OrderStatus::CODE_PACKED, OrderStatus::CODE_SHIPPED, $shippedAt);
-        $this->history($order, OrderStatus::CODE_SHIPPED, OrderStatus::CODE_OUT_FOR_DELIVERY, $outForDeliveryAt);
+        $this->history($order, OrderStatus::CODE_PACKED, OrderStatus::CODE_READY_FOR_DISPATCH, $readyForDispatchAt);
+        $this->history($order, OrderStatus::CODE_READY_FOR_DISPATCH, OrderStatus::CODE_SHIPPED, $shippedAt);
+        $this->history($order, OrderStatus::CODE_SHIPPED, OrderStatus::CODE_IN_TRANSIT, $inTransitAt);
+        $this->history($order, OrderStatus::CODE_IN_TRANSIT, OrderStatus::CODE_OUT_FOR_DELIVERY, $outForDeliveryAt);
         $this->comment($order, 'Customer visible update', OrderComment::VISIBILITY_CUSTOMER, $commentAt);
         $this->comment($order, 'Merchant only internal note', OrderComment::VISIBILITY_MERCHANT_ONLY, $commentAt);
         $otherOrder = $this->order($globalCustomer, $fixture, ['order_number' => 'ORD-OTHER-COMMENTS']);
@@ -201,9 +205,23 @@ class StorefrontCustomerOrdersTest extends TestCase
             ->assertSee($fixture['shop']->name)
             ->assertSee('Order Progress')
             ->assertSee('Packed')
+            ->assertSee('Ready for Dispatch')
             ->assertSee('Shipped')
+            ->assertSee('In Transit')
             ->assertSee('Out for Delivery')
             ->assertSee('Delivered')
+            ->assertSeeInOrder([
+                'Order Placed',
+                'Confirmed',
+                'Processing',
+                'Packed',
+                'Ready for Dispatch',
+                'Shipped',
+                'In Transit',
+                'Out for Delivery',
+                'Delivered',
+                'Completed',
+            ])
             ->assertSee('Historical Product Name')
             ->assertDontSee('Changed Current Product Name')
             ->assertSee('Large / Grey')

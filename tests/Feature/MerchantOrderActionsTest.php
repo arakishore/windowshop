@@ -450,7 +450,7 @@ class MerchantOrderActionsTest extends TestCase
         ]);
     }
 
-    public function test_delivery_order_can_advance_from_packed_to_completed_with_cod_payment_confirmation(): void
+    public function test_delivery_order_can_advance_through_dispatch_and_transit_to_completed_with_cod_payment_confirmation(): void
     {
         [$user, , $shopId] = $this->merchantShopFixture();
         $order = $this->operationalOrder($shopId, [
@@ -467,6 +467,23 @@ class MerchantOrderActionsTest extends TestCase
         $this
             ->actingAs($user)
             ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.ready-for-dispatch', $order))
+            ->assertRedirect(route('merchant.orders.show', $order))
+            ->assertSessionHas('success', 'Order marked ready for dispatch successfully.');
+
+        $order->refresh();
+        $this->assertSame(OrderStatus::CODE_READY_FOR_DISPATCH, $order->order_status);
+        $this->assertDatabaseHas('order_status_histories', [
+            'order_id' => $order->getKey(),
+            'from_status' => OrderStatus::CODE_PACKED,
+            'to_status' => OrderStatus::CODE_READY_FOR_DISPATCH,
+            'changed_by' => $user->getKey(),
+            'notes' => 'Order is ready for dispatch.',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
             ->post(route('merchant.orders.ship', $order))
             ->assertRedirect(route('merchant.orders.show', $order))
             ->assertSessionHas('success', 'Order marked shipped successfully.');
@@ -478,10 +495,27 @@ class MerchantOrderActionsTest extends TestCase
         $this->assertSame(8, (int) DB::table('product_variants')->where('id', $variantId)->value('stock_quantity'));
         $this->assertDatabaseHas('order_status_histories', [
             'order_id' => $order->getKey(),
-            'from_status' => OrderStatus::CODE_PACKED,
+            'from_status' => OrderStatus::CODE_READY_FOR_DISPATCH,
             'to_status' => OrderStatus::CODE_SHIPPED,
             'changed_by' => $user->getKey(),
             'notes' => 'Order handed over for delivery.',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.in-transit', $order))
+            ->assertRedirect(route('merchant.orders.show', $order))
+            ->assertSessionHas('success', 'Order marked in transit successfully.');
+
+        $order->refresh();
+        $this->assertSame(OrderStatus::CODE_IN_TRANSIT, $order->order_status);
+        $this->assertDatabaseHas('order_status_histories', [
+            'order_id' => $order->getKey(),
+            'from_status' => OrderStatus::CODE_SHIPPED,
+            'to_status' => OrderStatus::CODE_IN_TRANSIT,
+            'changed_by' => $user->getKey(),
+            'notes' => 'Order is in transit.',
         ]);
 
         $this
@@ -498,7 +532,7 @@ class MerchantOrderActionsTest extends TestCase
         $this->assertSame(8, (int) DB::table('product_variants')->where('id', $variantId)->value('stock_quantity'));
         $this->assertDatabaseHas('order_status_histories', [
             'order_id' => $order->getKey(),
-            'from_status' => OrderStatus::CODE_SHIPPED,
+            'from_status' => OrderStatus::CODE_IN_TRANSIT,
             'to_status' => OrderStatus::CODE_OUT_FOR_DELIVERY,
             'changed_by' => $user->getKey(),
             'notes' => 'Order is out for delivery.',
@@ -1556,9 +1590,19 @@ class MerchantOrderActionsTest extends TestCase
             'order_status' => OrderStatus::CODE_PACKED,
             'fulfilment_type' => Order::FULFILMENT_DELIVERY,
         ]);
+        $readyForDispatch = $this->operationalOrder($shopId, [
+            'order_number' => 'ORD-DISPATCH-DETAIL',
+            'order_status' => OrderStatus::CODE_READY_FOR_DISPATCH,
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+        ]);
         $shipped = $this->operationalOrder($shopId, [
             'order_number' => 'ORD-SHIPPED-DETAIL',
             'order_status' => OrderStatus::CODE_SHIPPED,
+            'fulfilment_type' => Order::FULFILMENT_DELIVERY,
+        ]);
+        $inTransit = $this->operationalOrder($shopId, [
+            'order_number' => 'ORD-TRANSIT-DETAIL',
+            'order_status' => OrderStatus::CODE_IN_TRANSIT,
             'fulfilment_type' => Order::FULFILMENT_DELIVERY,
         ]);
         $outForDelivery = $this->operationalOrder($shopId, [
@@ -1638,10 +1682,20 @@ class MerchantOrderActionsTest extends TestCase
             ->assertDontSee('Complete Order')
             ->assertDontSee('Mark Ready for Pickup')
             ->assertDontSee('Mark Packed')
-            ->assertSee('Mark Shipped')
+            ->assertSee('Mark Ready for Dispatch')
+            ->assertDontSee('Mark Shipped')
             ->assertSee('Out for Delivery')
             ->assertSee('Delivered')
             ->assertSee('Completed');
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $readyForDispatch))
+            ->assertOk()
+            ->assertDontSee('Mark Ready for Dispatch')
+            ->assertSee('Mark Shipped')
+            ->assertDontSee('Mark In Transit');
 
         $this
             ->actingAs($user)
@@ -1650,9 +1704,19 @@ class MerchantOrderActionsTest extends TestCase
             ->assertOk()
             ->assertDontSee('Cancel Order')
             ->assertDontSee('Mark Shipped')
-            ->assertSee('Mark Out for Delivery')
+            ->assertSee('Mark In Transit')
+            ->assertDontSee('Mark Out for Delivery')
             ->assertDontSee('Mark Delivered')
             ->assertDontSee('Complete Order');
+
+        $this
+            ->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $inTransit))
+            ->assertOk()
+            ->assertDontSee('Mark In Transit')
+            ->assertSee('Mark Out for Delivery')
+            ->assertDontSee('Mark Delivered');
 
         $this
             ->actingAs($user)

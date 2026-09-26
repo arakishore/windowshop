@@ -279,6 +279,48 @@ class OrderController extends Controller
             ->with('success', 'Order marked shipped successfully.');
     }
 
+    public function markReadyForDispatch(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->orderStatusService->transition(
+                $order,
+                OrderStatus::CODE_READY_FOR_DISPATCH,
+                $request->user(),
+                'Order is ready for dispatch.',
+                ['action' => 'merchant_mark_ready_for_dispatch'],
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order marked ready for dispatch successfully.');
+    }
+
+    public function markInTransit(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->orderStatusService->transition(
+                $order,
+                OrderStatus::CODE_IN_TRANSIT,
+                $request->user(),
+                'Order is in transit.',
+                ['action' => 'merchant_mark_in_transit'],
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order marked in transit successfully.');
+    }
+
     public function markOutForDelivery(Request $request, Order $order): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
@@ -549,8 +591,10 @@ class OrderController extends Controller
             Order::STATUS_CONFIRMED => 'Confirmed',
             Order::STATUS_PROCESSING => 'Processing',
             OrderStatus::CODE_PACKED => 'Packed',
+            OrderStatus::CODE_READY_FOR_DISPATCH => 'Ready for Dispatch',
             Order::STATUS_READY_FOR_PICKUP => 'Ready for Pickup',
             OrderStatus::CODE_SHIPPED => 'Shipped',
+            OrderStatus::CODE_IN_TRANSIT => 'In Transit',
             OrderStatus::CODE_OUT_FOR_DELIVERY => 'Out for Delivery',
             OrderStatus::CODE_DELIVERED => 'Delivered',
             Order::STATUS_COMPLETED => 'Completed',

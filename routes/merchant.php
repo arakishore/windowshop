@@ -83,7 +83,9 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::post('/orders/{order}/ready-for-pickup', [OrderController::class, 'markReadyForPickup'])->name('orders.ready-for-pickup');
         Route::post('/orders/{order}/complete-pickup', [OrderController::class, 'completePickup'])->name('orders.complete-pickup');
         Route::post('/orders/{order}/packed', [OrderController::class, 'markPacked'])->name('orders.packed');
+        Route::post('/orders/{order}/ready-for-dispatch', [OrderController::class, 'markReadyForDispatch'])->name('orders.ready-for-dispatch');
         Route::post('/orders/{order}/ship', [OrderController::class, 'markShipped'])->name('orders.ship');
+        Route::post('/orders/{order}/in-transit', [OrderController::class, 'markInTransit'])->name('orders.in-transit');
         Route::post('/orders/{order}/out-for-delivery', [OrderController::class, 'markOutForDelivery'])->name('orders.out-for-delivery');
         Route::post('/orders/{order}/deliver', [OrderController::class, 'markDelivered'])->name('orders.deliver');
         Route::post('/orders/{order}/upi-payment/confirm', [OrderController::class, 'confirmUpiPayment'])->name('orders.upi-payment.confirm');

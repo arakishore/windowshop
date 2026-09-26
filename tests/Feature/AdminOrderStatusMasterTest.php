@@ -36,7 +36,17 @@ class AdminOrderStatusMasterTest extends TestCase
     {
         $this->seed(OrderStatusSeeder::class);
 
-        $this->assertSame(24, OrderStatus::query()->count());
+        $this->assertSame(26, OrderStatus::query()->count());
+        $this->assertDatabaseHas('order_statuses', [
+            'code' => OrderStatus::CODE_READY_FOR_DISPATCH,
+            'name' => 'Ready for Dispatch',
+            'sort_order' => 45,
+        ]);
+        $this->assertDatabaseHas('order_statuses', [
+            'code' => OrderStatus::CODE_IN_TRANSIT,
+            'name' => 'In Transit',
+            'sort_order' => 65,
+        ]);
         $this->assertDatabaseHas('order_statuses', [
             'code' => OrderStatus::CODE_PENDING,
             'name' => 'Pending',
@@ -69,7 +79,7 @@ class AdminOrderStatusMasterTest extends TestCase
 
         $this->seed(OrderStatusSeeder::class);
 
-        $this->assertSame(24, OrderStatus::query()->count());
+        $this->assertSame(26, OrderStatus::query()->count());
         $pending->refresh();
         $this->assertSame('Awaiting Review', $pending->name);
         $this->assertSame('We received your order', $pending->customer_label);
