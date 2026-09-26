@@ -7,19 +7,24 @@ use App\Enums\MerchantVerificationStatus;
 use App\Events\CustomerRegistered;
 use App\Events\MerchantAccountCreated;
 use App\Events\MerchantLifecycleChanged;
+use App\Events\OrderStatusChanged;
 use App\Events\StorefrontOrderPlaced;
 use App\Listeners\DispatchBusinessNotifications;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\Merchant\MerchantService;
+use App\Services\Merchant\ShopSettingsService;
 use App\Services\Notification\AdditionalMerchantRecipientService;
+use App\Services\Order\OrderStatusService;
+use App\Services\Promotion\Redemptions\CouponRedemptionService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class NotificationBusinessEventWiringTest extends TestCase
@@ -28,7 +33,7 @@ class NotificationBusinessEventWiringTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['notification_delivery_logs', 'shop_settings', 'merchant_settings', 'admin_settings', 'orders', 'shops', 'merchant_profiles', 'auth_user_roles', 'auth_roles', 'users'] as $table) {
+        foreach (['notification_delivery_logs', 'order_status_histories', 'shop_settings', 'merchant_settings', 'admin_settings', 'orders', 'shops', 'merchant_profiles', 'auth_user_roles', 'auth_roles', 'users'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -98,8 +103,23 @@ class NotificationBusinessEventWiringTest extends TestCase
             $table->string('customer_name')->nullable();
             $table->string('customer_email')->nullable();
             $table->string('customer_mobile')->nullable();
+            $table->string('fulfilment_type')->default('pickup');
+            $table->string('order_status')->default('pending');
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamp('cancelled_at')->nullable();
             $table->timestamps();
             $table->softDeletes();
+        });
+        Schema::create('order_status_histories', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('order_id');
+            $table->string('from_status')->nullable();
+            $table->string('to_status');
+            $table->text('notes')->nullable();
+            $table->unsignedBigInteger('changed_by')->nullable();
+            $table->json('metadata')->nullable();
+            $table->timestamp('created_at');
         });
         foreach (['merchant_settings' => 'merchant_id', 'shop_settings' => 'shop_id'] as $tableName => $owner) {
             Schema::create($tableName, function (Blueprint $table) use ($owner): void {
@@ -277,6 +297,117 @@ class NotificationBusinessEventWiringTest extends TestCase
         }
     }
 
+    public function test_every_supported_order_status_maps_to_its_catalogue_event_and_default_email_policy(): void
+    {
+        $order = $this->notificationOrder();
+        $cases = [
+            'confirmed' => ['order.confirmed.customer', 'not_configured'],
+            'processing' => ['order.processing.customer', 'skipped'],
+            'ready_for_pickup' => ['order.ready_for_pickup.customer', 'not_configured'],
+            'packed' => ['order.packed.customer', 'skipped'],
+            'ready_for_dispatch' => ['order.ready_for_dispatch.customer', 'skipped'],
+            'shipped' => ['order.shipped.customer', 'not_configured'],
+            'in_transit' => ['order.in_transit.customer', 'skipped'],
+            'out_for_delivery' => ['order.out_for_delivery.customer', 'not_configured'],
+            'delivered' => ['order.delivered.customer', 'not_configured'],
+            'completed' => ['order.completed.customer', 'skipped'],
+            'cancelled' => ['order.cancelled.customer', 'not_configured'],
+        ];
+
+        foreach ($cases as $status => [$key, $expected]) {
+            app(DispatchBusinessNotifications::class)->orderStatusChanged(new OrderStatusChanged($order, 'previous', $status, "status-{$status}"));
+            $this->assertDatabaseHas('notification_delivery_logs', [
+                'notification_key' => $key,
+                'channel' => 'email',
+                'destination' => 'snapshot@example.test',
+                'status' => $expected,
+            ]);
+        }
+    }
+
+    public function test_automatic_completed_after_delivered_is_suppressed_but_independent_completed_remains_configurable(): void
+    {
+        $order = $this->notificationOrder();
+        $listener = app(DispatchBusinessNotifications::class);
+
+        $listener->orderStatusChanged(new OrderStatusChanged($order, 'out_for_delivery', 'delivered', 'delivered-occurrence'));
+        $listener->orderStatusChanged(new OrderStatusChanged($order, 'delivered', 'completed', 'automatic-completed-occurrence', ['automatic_after_delivered' => true]));
+
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.delivered.customer', 'channel' => 'email', 'status' => 'not_configured']);
+        $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'order.completed.customer']);
+
+        $listener->orderStatusChanged(new OrderStatusChanged($order, 'ready_for_pickup', 'completed', 'manual-completed-default'));
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.completed.customer', 'channel' => 'email', 'status' => 'skipped']);
+
+        app(ShopSettingsService::class)->set($order->shop_id, 'notifications', 'events.order.completed.customer.email.enabled', true);
+        $listener->orderStatusChanged(new OrderStatusChanged($order, 'ready_for_pickup', 'completed', 'manual-completed-enabled'));
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.completed.customer', 'channel' => 'email', 'status' => 'not_configured']);
+    }
+
+    public function test_status_notification_keeps_order_snapshot_after_account_contact_changes(): void
+    {
+        $order = $this->notificationOrder();
+        DB::table('users')->where('id', $order->customer_id)->update(['email' => 'changed@example.test', 'mobile' => '9999999999']);
+
+        $event = new OrderStatusChanged($order, 'pending', 'confirmed', 'snapshot-status-occurrence');
+        app(DispatchBusinessNotifications::class)->orderStatusChanged($event);
+        app(DispatchBusinessNotifications::class)->orderStatusChanged($event);
+
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.confirmed.customer', 'channel' => 'email', 'destination' => 'snapshot@example.test']);
+        $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'order.confirmed.customer', 'destination' => 'changed@example.test']);
+        $this->assertSame(1, DB::table('notification_delivery_logs')->where('notification_key', 'order.confirmed.customer')->where('channel', 'email')->count());
+    }
+
+    public function test_authoritative_transition_commits_after_commit_and_invalid_or_rolled_back_changes_do_not_notify(): void
+    {
+        $order = $this->notificationOrder();
+        $service = new OrderStatusService(app(CouponRedemptionService::class));
+
+        $service->transition($order, 'confirmed');
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.confirmed.customer', 'channel' => 'email']);
+
+        $before = DB::table('notification_delivery_logs')->count();
+        try {
+            $service->transition($order->fresh(), 'confirmed');
+        } catch (ValidationException) {
+            // Expected invalid no-op transition.
+        }
+        $this->assertSame($before, DB::table('notification_delivery_logs')->count());
+
+        $rollingBack = $this->notificationOrder();
+        try {
+            DB::transaction(function () use ($service, $rollingBack): void {
+                $service->transition($rollingBack, 'confirmed');
+                $this->assertDatabaseMissing('notification_delivery_logs', ['related_id' => $rollingBack->uuid, 'notification_key' => 'order.confirmed.customer']);
+                throw new \RuntimeException('Force rollback');
+            });
+        } catch (\RuntimeException) {
+            // Expected rollback.
+        }
+
+        $this->assertSame('pending', $rollingBack->fresh()->order_status);
+        $this->assertDatabaseMissing('notification_delivery_logs', ['related_id' => $rollingBack->uuid, 'notification_key' => 'order.confirmed.customer']);
+    }
+
+    public function test_committed_cancellation_uses_the_mandatory_customer_notification(): void
+    {
+        $order = $this->notificationOrder();
+        app(ShopSettingsService::class)->set($order->shop_id, 'notifications', 'events.order.cancelled.customer.email.enabled', false);
+
+        $couponRedemptions = \Mockery::mock(CouponRedemptionService::class);
+        $couponRedemptions->shouldReceive('cancelForOrder')->once()->with($order)->andReturn(0);
+
+        (new OrderStatusService($couponRedemptions))->transition($order, 'cancelled');
+
+        $this->assertSame('cancelled', $order->fresh()->order_status);
+        $this->assertDatabaseHas('notification_delivery_logs', [
+            'notification_key' => 'order.cancelled.customer',
+            'channel' => 'email',
+            'destination' => 'snapshot@example.test',
+            'status' => 'not_configured',
+        ]);
+    }
+
     private function merchant(): MerchantProfile
     {
         $userId = $this->user('Primary Merchant', 'user@example.test', '9000000001');
@@ -286,6 +417,19 @@ class NotificationBusinessEventWiringTest extends TestCase
         ]);
 
         return MerchantProfile::query()->findOrFail($id);
+    }
+
+    private function notificationOrder(): Order
+    {
+        $merchant = $this->merchant();
+        $shopId = DB::table('shops')->insertGetId(['uuid' => (string) Str::uuid(), 'merchant_id' => $merchant->getKey(), 'name' => 'Status Shop', 'status' => 'active']);
+        $customerId = $this->user('Snapshot Customer', 'current@example.test', '9000000011');
+
+        return Order::query()->create([
+            'uuid' => (string) Str::uuid(), 'order_number' => 'ORD-STATUS', 'merchant_id' => $merchant->getKey(), 'shop_id' => $shopId,
+            'customer_id' => $customerId, 'customer_name' => 'Snapshot Customer', 'customer_email' => 'snapshot@example.test', 'customer_mobile' => '9876543210',
+            'fulfilment_type' => 'pickup', 'order_status' => 'pending',
+        ]);
     }
 
     private function user(string $name, string $email, string $mobile): int

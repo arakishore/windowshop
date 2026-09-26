@@ -13,8 +13,7 @@ class DeliveryCompletionService
     public function __construct(
         private readonly OrderStatusService $orderStatusService,
         private readonly OrderCompletionEligibilityService $completionEligibility,
-    ) {
-    }
+    ) {}
 
     public function markDelivered(Order $order, User $actor, bool $paymentReceived): Order
     {
@@ -67,6 +66,7 @@ class DeliveryCompletionService
                     'Order completed successfully.',
                     [
                         'action' => 'merchant_complete_delivery',
+                        'automatic_after_delivered' => true,
                         'fulfilment_type' => Order::FULFILMENT_DELIVERY,
                         'payment_status' => $order->payment_status,
                     ],

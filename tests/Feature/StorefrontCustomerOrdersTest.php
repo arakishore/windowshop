@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\OrderStatusChanged;
 use App\Models\AdminSetting;
 use App\Models\Customer;
 use App\Models\CustomerCancellationReason;
@@ -30,6 +31,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -56,6 +58,7 @@ class StorefrontCustomerOrdersTest extends TestCase
     {
         parent::setUp();
 
+        Event::fake([OrderStatusChanged::class]);
         Storage::fake('public');
         $this->seed(OrderStatusSeeder::class);
         $this->seed(PaymentStatusSeeder::class);

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\OrderStatusChanged;
 use App\Models\MerchantCancellationReason;
 use App\Models\Order;
 use App\Models\OrderComment;
@@ -15,6 +16,7 @@ use App\Services\Order\OrderStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use PDO;
@@ -23,6 +25,13 @@ use Tests\TestCase;
 class MerchantOrderActionsTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Event::fake([OrderStatusChanged::class]);
+    }
 
     protected function beforeRefreshingDatabase()
     {

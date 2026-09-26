@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Events\CustomerRegistered;
 use App\Events\MerchantAccountCreated;
 use App\Events\MerchantLifecycleChanged;
+use App\Events\OrderStatusChanged;
 use App\Events\StorefrontOrderPlaced;
 use App\Listeners\DispatchBusinessNotifications;
 use App\Notifications\Channels\EmailChannel;
@@ -47,6 +48,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(CustomerRegistered::class, [DispatchBusinessNotifications::class, 'customerRegistered']);
         Event::listen(MerchantAccountCreated::class, [DispatchBusinessNotifications::class, 'merchantAccountCreated']);
         Event::listen(MerchantLifecycleChanged::class, [DispatchBusinessNotifications::class, 'merchantLifecycleChanged']);
+        Event::listen(OrderStatusChanged::class, [DispatchBusinessNotifications::class, 'orderStatusChanged']);
         Event::listen(StorefrontOrderPlaced::class, [DispatchBusinessNotifications::class, 'storefrontOrderPlaced']);
 
         Paginator::useBootstrapFive();

@@ -2,18 +2,19 @@
 
 namespace App\Services\Order;
 
+use App\Events\OrderStatusChanged;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\Promotion\Redemptions\CouponRedemptionService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class OrderStatusService
 {
     public function __construct(
         private readonly ?CouponRedemptionService $couponRedemptions = null,
-    ) {
-    }
+    ) {}
 
     public function recordInitial(Order $order, string $status, ?User $actor = null, ?string $notes = null, ?array $metadata = null): void
     {
@@ -58,11 +59,13 @@ class OrderStatusService
     }
 
     /**
-     * @param callable(): void $assertAllowed
+     * @param  callable(): void  $assertAllowed
      */
     private function transitionUsing(Order $order, string $toStatus, ?User $actor, ?string $notes, ?array $metadata, callable $assertAllowed): Order
     {
-        return DB::transaction(function () use ($order, $toStatus, $actor, $notes, $metadata, $assertAllowed): Order {
+        $event = null;
+
+        $transitionedOrder = DB::transaction(function () use ($order, $toStatus, $actor, $notes, $metadata, $assertAllowed, &$event): Order {
             $fromStatus = $order->order_status;
             $assertAllowed();
 
@@ -94,8 +97,21 @@ class OrderStatusService
                 'created_at' => now(),
             ]);
 
-            return $order->refresh();
+            $transitionedOrder = $order->refresh();
+            $event = new OrderStatusChanged(
+                $transitionedOrder,
+                $fromStatus,
+                $toStatus,
+                (string) Str::uuid(),
+                $metadata ?? [],
+            );
+
+            return $transitionedOrder;
         });
+
+        event($event);
+
+        return $transitionedOrder;
     }
 
     /**
