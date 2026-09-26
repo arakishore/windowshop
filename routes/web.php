@@ -12,8 +12,8 @@ use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
 use App\Http\Controllers\Admin\MasterData\CustomerCancellationReasonController;
 use App\Http\Controllers\Admin\MasterData\OrderStatusController;
 use App\Http\Controllers\Admin\MasterData\PaymentStatusController;
-use App\Http\Controllers\Admin\MasterData\PostalCodeRestrictionController;
 use App\Http\Controllers\Admin\MasterData\PostalCodeController;
+use App\Http\Controllers\Admin\MasterData\PostalCodeRestrictionController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupValueController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryAttributeGroupController;
@@ -83,6 +83,7 @@ Route::get('/account/orders', [CustomerAccountController::class, 'orders'])->nam
 Route::get('/account/orders/{order}', [CustomerAccountController::class, 'orderDetail'])->name('storefront.account.orders.show');
 Route::get('/account/orders/{order}/receipt', [CustomerAccountController::class, 'orderReceipt'])->name('storefront.account.orders.receipt');
 Route::post('/account/orders/{order}/cancel', [CustomerAccountController::class, 'cancelOrder'])->name('storefront.account.orders.cancel');
+Route::post('/account/orders/{order}/upi-reference', [CustomerAccountController::class, 'resubmitUpiReference'])->name('storefront.account.orders.upi-reference');
 Route::get('/account/order-items/{orderItem}/review', [ProductReviewController::class, 'create'])->name('storefront.account.reviews.create');
 Route::post('/account/order-items/{orderItem}/review', [ProductReviewController::class, 'store'])->name('storefront.account.reviews.store');
 Route::get('/account/reviews/{review}/edit', [ProductReviewController::class, 'edit'])->name('storefront.account.reviews.edit');

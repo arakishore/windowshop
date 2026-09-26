@@ -6,6 +6,7 @@ use App\Events\OrderStatusChanged;
 use App\Models\AdminSetting;
 use App\Models\Customer;
 use App\Models\CustomerCancellationReason;
+use App\Models\DirectMerchantUpiAttempt;
 use App\Models\MerchantCancellationReason;
 use App\Models\MerchantProfile;
 use App\Models\Order;
@@ -683,6 +684,85 @@ class StorefrontCustomerOrdersTest extends TestCase
             ->assertSee('Order Activity')
             ->assertSee('Customer requested cancellation. Reason: Ordered by mistake. Note: Please do not show this note to customer activity.')
             ->assertSee('Updated by '.$customer->name);
+    }
+
+    public function test_customer_can_resubmit_a_rejected_upi_attempt_without_resetting_order_expiry_baseline(): void
+    {
+        $customer = $this->customerUser('upi-resubmit@example.test', 'UPI Customer', '9422945191');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $other = $this->customerUser('upi-other@example.test', 'Other Customer', '9422945192');
+        $otherRoleId = $this->assignRole($other, 'customer');
+        $fixture = $this->fixture('UPI Resubmit Shop');
+        $createdAt = now()->subMinutes(12)->startOfSecond();
+        $order = $this->order($globalCustomer, $fixture, [
+            'payment_method' => 'merchant_upi',
+            'payment_reference' => 'ORIGINAL123',
+            'payment_status' => PaymentStatus::CODE_PENDING,
+            'amount_paid' => 0,
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ]);
+        $rejected = $order->directMerchantUpiAttempts()->create([
+            'sequence' => 1,
+            'submitted_reference' => 'ORIGINAL123',
+            'status' => DirectMerchantUpiAttempt::STATUS_REJECTED,
+            'active_slot' => null,
+            'submitted_at' => $createdAt,
+            'submitted_by' => $customer->getKey(),
+            'rejected_at' => now()->subMinutes(5),
+            'rejected_by' => $fixture['merchantUser']->getKey(),
+            'rejection_reason' => 'Reference was not found.',
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Payment verification rejected')
+            ->assertSee('Reference was not found.')
+            ->assertSee('Submit Corrected UPI Reference');
+
+        $this->actingAs($other)
+            ->withSession(['active_role_id' => $otherRoleId])
+            ->post(route('storefront.account.orders.upi-reference', $order), ['upi_reference' => 'FORGED123'])
+            ->assertNotFound();
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.orders.upi-reference', $order), ['upi_reference' => 'CORRECTED456'])
+            ->assertRedirect(route('storefront.account.orders.show', $order))
+            ->assertSessionHas('success');
+
+        $attempts = $order->directMerchantUpiAttempts()->get();
+        $this->assertCount(2, $attempts);
+        $this->assertSame(DirectMerchantUpiAttempt::STATUS_REJECTED, $rejected->fresh()->status);
+        $this->assertSame('ORIGINAL123', $rejected->fresh()->submitted_reference);
+        $this->assertSame(DirectMerchantUpiAttempt::STATUS_SUBMITTED, $attempts->last()->status);
+        $this->assertSame('CORRECTED456', $attempts->last()->submitted_reference);
+        $this->assertSame('CORRECTED456', $order->fresh()->payment_reference);
+        $this->assertTrue($order->fresh()->created_at->equalTo($createdAt));
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.orders.upi-reference', $order), ['upi_reference' => 'THIRD789'])
+            ->assertSessionHasErrors('upi_reference');
+
+        $this->assertSame(2, $order->directMerchantUpiAttempts()->count());
+
+        foreach ([
+            ['payment_status' => PaymentStatus::CODE_PAID, 'order_status' => Order::STATUS_PENDING],
+            ['payment_status' => PaymentStatus::CODE_PENDING, 'order_status' => Order::STATUS_CANCELLED],
+            ['payment_status' => PaymentStatus::CODE_PENDING, 'order_status' => Order::STATUS_COMPLETED],
+        ] as $state) {
+            $order->forceFill($state)->save();
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->post(route('storefront.account.orders.upi-reference', $order), ['upi_reference' => 'BLOCKED789'])
+                ->assertSessionHasErrors('upi_reference');
+        }
+
+        $this->assertSame(2, $order->directMerchantUpiAttempts()->count());
     }
 
     public function test_customer_can_cancel_unpaid_cod_delivery_order_until_packed_and_inventory_is_restored(): void

@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Events\StorefrontOrderPlaced;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
+use App\Models\DirectMerchantUpiAttempt;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderTotal;
@@ -42,6 +44,7 @@ use App\Services\Storefront\StorefrontCountryResolver;
 use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -51,6 +54,13 @@ use Tests\TestCase;
 class StorefrontCheckoutGateTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Event::fake([StorefrontOrderPlaced::class]);
+    }
 
     protected function beforeRefreshingDatabase()
     {
@@ -1201,6 +1211,11 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertSame('0.00', $order->amount_paid);
         $this->assertSame('1649.00', $order->grand_total);
         $this->assertSame(19, (int) $fixture['variant']->refresh()->stock_quantity);
+        $attempt = $order->directMerchantUpiAttempts()->sole();
+        $this->assertSame(1, $attempt->sequence);
+        $this->assertSame('123456678', $attempt->submitted_reference);
+        $this->assertSame(DirectMerchantUpiAttempt::STATUS_SUBMITTED, $attempt->status);
+        $this->assertSame($customer->getKey(), $attempt->submitted_by);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
@@ -1565,6 +1580,7 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertSame('Main Road', $order->billing_address_line_1);
         $this->assertSame($fixture['shop']->getKey(), $order->shop_id);
         $this->assertDatabaseMissing('cart_items', ['id' => $item->getKey()]);
+        $this->assertDatabaseCount('direct_merchant_upi_attempts', 0);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])

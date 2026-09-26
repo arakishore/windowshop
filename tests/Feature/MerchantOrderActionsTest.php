@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\OrderStatusChanged;
+use App\Models\DirectMerchantUpiAttempt;
 use App\Models\MerchantCancellationReason;
 use App\Models\Order;
 use App\Models\OrderComment;
@@ -11,6 +12,7 @@ use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\User;
+use App\Services\Order\DirectMerchantUpiAttemptService;
 use App\Services\Order\OrderCreationService;
 use App\Services\Order\OrderStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use PDO;
 use Tests\TestCase;
 
@@ -73,6 +76,22 @@ class MerchantOrderActionsTest extends TestCase
         $this->assertSame('ABC123', $activity->metadata['customer_submitted_reference']);
         $this->assertSame('XYZ789', $activity->metadata['confirmed_reference']);
         $this->assertSame($activity->from_status, $activity->to_status);
+        $attempt = $order->directMerchantUpiAttempts()->sole();
+        $this->assertSame(DirectMerchantUpiAttempt::STATUS_VERIFIED, $attempt->status);
+        $this->assertSame('ABC123', $attempt->submitted_reference);
+        $this->assertSame('XYZ789', $attempt->confirmed_reference);
+        $this->assertNull($attempt->active_slot);
+
+        $historyCount = $order->statusHistories()->count();
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.upi-payment.confirm', $order), ['upi_txn' => 'XYZ789'])
+            ->assertSessionHasErrors('upi_txn');
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.upi-payment.reject', $order), ['upi_rejection_reason' => 'Too late.'])
+            ->assertSessionHasErrors('upi_rejection_reason');
+        $this->assertSame($historyCount, $order->statusHistories()->count());
     }
 
     public function test_direct_merchant_upi_confirmation_is_not_repeatable_and_reject_keeps_order_open(): void
@@ -96,15 +115,24 @@ class MerchantOrderActionsTest extends TestCase
         $this->assertSame(0.0, (float) $order->amount_paid);
         $this->assertSame('upi_payment_rejected', $order->statusHistories()->latest('id')->firstOrFail()->metadata['action']);
 
+        $historyCount = $order->statusHistories()->count();
+        $attempt = $order->directMerchantUpiAttempts()->sole();
+        $this->assertSame(DirectMerchantUpiAttempt::STATUS_REJECTED, $attempt->status);
+        $this->assertSame('Reference not found in merchant UPI app.', $attempt->rejection_reason);
+
         $this->actingAs($user)
             ->withSession(['active_shop_id' => $shopId])
-            ->post(route('merchant.orders.upi-payment.confirm', $order), ['upi_txn' => 'FOUND123'])
-            ->assertSessionHas('success');
+            ->post(route('merchant.orders.upi-payment.reject', $order), [
+                'upi_rejection_reason' => 'Repeated rejection.',
+            ])
+            ->assertSessionHasErrors('payment_status');
+
+        $this->assertSame($historyCount, $order->statusHistories()->count());
 
         $this->actingAs($user)
             ->withSession(['active_shop_id' => $shopId])
             ->post(route('merchant.orders.upi-payment.confirm', $order), ['upi_txn' => 'FOUND123'])
-            ->assertSessionHasErrors('upi_txn');
+            ->assertSessionHasErrors('payment_status');
     }
 
     public function test_direct_merchant_upi_confirmation_rejects_cross_shop_and_duplicate_confirmed_reference(): void
@@ -132,6 +160,45 @@ class MerchantOrderActionsTest extends TestCase
             ->assertSessionHasErrors('upi_txn');
 
         $this->assertSame(Order::PAYMENT_PENDING, $pending->fresh()->payment_status);
+    }
+
+    public function test_upi_attempt_submission_is_transactional_and_only_one_can_remain_submitted(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $attempts = app(DirectMerchantUpiAttemptService::class);
+        $rolledBackOrderId = null;
+
+        try {
+            DB::transaction(function () use ($attempts, &$rolledBackOrderId, $shopId, $user): void {
+                $rolledBackOrder = $this->operationalOrder($shopId, [
+                    'payment_method' => 'merchant_upi',
+                    'payment_reference' => 'ROLLBACK123',
+                ]);
+                $rolledBackOrderId = $rolledBackOrder->getKey();
+                $attempts->createInitial($rolledBackOrder, $user, 'ROLLBACK123');
+                throw new \RuntimeException('Force rollback');
+            });
+        } catch (\RuntimeException) {
+            // Expected rollback.
+        }
+
+        $this->assertDatabaseMissing('orders', ['id' => $rolledBackOrderId]);
+        $this->assertDatabaseCount('direct_merchant_upi_attempts', 0);
+
+        $order = $this->operationalOrder($shopId, [
+            'payment_method' => 'merchant_upi',
+            'payment_reference' => 'FIRST123',
+        ]);
+        $attempts->createInitial($order, $user, 'FIRST123');
+
+        try {
+            $attempts->createInitial($order, $user, 'SECOND456');
+            $this->fail('A second submitted attempt should be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('upi_reference', $exception->errors());
+        }
+
+        $this->assertSame(1, $order->directMerchantUpiAttempts()->count());
     }
 
     public function test_pending_storefront_pickup_order_can_be_accepted(): void

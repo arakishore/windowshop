@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\DirectMerchantUpiAttempt;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\PaymentStatus;
@@ -130,6 +131,13 @@ class ExpireUnverifiedUpiOrdersTest extends TestCase
             $this->expiry($shop, 5);
             [$productId, $variantId] = $this->productVariant($shop, 8);
             $order = $this->order($shop, ['created_at' => now()->subMinutes(5)]);
+            $attempt = $order->directMerchantUpiAttempts()->create([
+                'sequence' => 1,
+                'submitted_reference' => 'EXPIRY123',
+                'status' => DirectMerchantUpiAttempt::STATUS_SUBMITTED,
+                'active_slot' => 1,
+                'submitted_at' => $order->created_at,
+            ]);
             $order->items()->create([
                 'product_id' => $productId,
                 'product_variant_id' => $variantId,
@@ -151,6 +159,8 @@ class ExpireUnverifiedUpiOrdersTest extends TestCase
             $this->assertTrue($history->metadata['automatic']);
             $this->assertSame(5, $history->metadata['expiry_minutes']);
             $this->assertSame(PaymentStatus::CODE_PENDING, $order->fresh()->payment_status);
+            $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->order_status);
+            $this->assertSame(DirectMerchantUpiAttempt::STATUS_SUBMITTED, $attempt->fresh()->status);
             $presenter = app(OrderActivityPresenter::class);
             $this->assertSame('UPI Payment Expired', $presenter->title($history));
             $this->assertStringContainsString('automatically cancelled', $presenter->merchantDescription($order->fresh(), $history));

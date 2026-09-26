@@ -13,6 +13,7 @@
             $pickupLines = $presenter->pickupLines($order);
             $showBilling = $billingLines !== [] && ! $presenter->billingSameAsShipping($order);
             $activityItems = $presenter->activity($order);
+            $latestUpiAttempt = $order->directMerchantUpiAttempts->sortByDesc('sequence')->first();
             $cancelledHistory = $order->statusHistories
                 ->where('to_status', \App\Models\Order::STATUS_CANCELLED)
                 ->sortByDesc('created_at')
@@ -234,9 +235,26 @@
                         <div><span>Method</span><strong>{{ $paymentMethodLabel }}</strong></div>
                         <div><span>Status</span><strong>{{ $presenter->paymentStatusLabel($order->payment_status) }}</strong></div>
                         @if ($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI)
-                            <div><span>Verification</span><strong>{{ $order->payment_status === \App\Models\Order::PAYMENT_PAID ? 'Payment Confirmed' : 'Payment Verification Pending' }}</strong></div>
+                            <div><span>Verification</span><strong>{{ $order->payment_status === \App\Models\Order::PAYMENT_PAID ? 'Payment Confirmed' : ($latestUpiAttempt?->status === \App\Models\DirectMerchantUpiAttempt::STATUS_REJECTED ? 'Payment Verification Rejected' : 'Payment Verification Pending') }}</strong></div>
                             @if ($order->payment_reference)
                                 <div><span>Submitted Reference</span><strong>{{ $order->payment_reference }}</strong></div>
+                            @endif
+                            @if ($latestUpiAttempt?->status === \App\Models\DirectMerchantUpiAttempt::STATUS_REJECTED)
+                                <div class="account-order-alert mt-16">
+                                    <h6 class="mb-6">Payment verification rejected</h6>
+                                    @if (filled($latestUpiAttempt->rejection_reason))
+                                        <p class="mb-12">{{ $latestUpiAttempt->rejection_reason }}</p>
+                                    @endif
+                                    @if ($canResubmitUpi)
+                                        <form method="POST" action="{{ route('storefront.account.orders.upi-reference', $order) }}">
+                                            @csrf
+                                            <label for="upi_reference" class="form-label">Submit Corrected UPI Reference</label>
+                                            <input id="upi_reference" name="upi_reference" type="text" maxlength="100" required value="{{ old('upi_reference') }}" class="form-control @error('upi_reference') is-invalid @enderror">
+                                            @error('upi_reference')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                            <button type="submit" class="tf-btn animate-btn small mt-12">Submit for Verification</button>
+                                        </form>
+                                    @endif
+                                </div>
                             @endif
                         @endif
                         <div><span>Amount Paid</span><strong>{{ $presenter->money($order->amount_paid) }}</strong></div>

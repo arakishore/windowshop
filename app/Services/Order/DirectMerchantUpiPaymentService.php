@@ -2,6 +2,7 @@
 
 namespace App\Services\Order;
 
+use App\Models\DirectMerchantUpiAttempt;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\User;
@@ -11,9 +12,11 @@ use Illuminate\Validation\ValidationException;
 
 class DirectMerchantUpiPaymentService
 {
+    public function __construct(private readonly DirectMerchantUpiAttemptService $attempts) {}
+
     public function confirm(Order $order, User $actor, string $confirmedReference): Order
     {
-        $confirmedReference = $this->validatedReference($confirmedReference);
+        $confirmedReference = $this->attempts->validatedReference($confirmedReference, 'upi_txn');
 
         return DB::transaction(function () use ($order, $actor, $confirmedReference): Order {
             $locked = Order::query()->lockForUpdate()->findOrFail($order->getKey());
@@ -50,7 +53,16 @@ class DirectMerchantUpiPaymentService
                 ]);
             }
 
+            $attempt = $this->attempts->currentSubmittedForUpdate($locked);
+
             $confirmedAt = now();
+            $attempt->forceFill([
+                'status' => DirectMerchantUpiAttempt::STATUS_VERIFIED,
+                'active_slot' => null,
+                'confirmed_reference' => $confirmedReference,
+                'verified_at' => $confirmedAt,
+                'verified_by' => $actor->getKey(),
+            ])->save();
             $locked->forceFill([
                 'upi_txn' => $confirmedReference,
                 'payment_status' => Order::PAYMENT_PAID,
@@ -59,7 +71,9 @@ class DirectMerchantUpiPaymentService
             ])->save();
 
             $this->recordActivity($locked, $actor, OrderStatusHistory::ACTION_UPI_PAYMENT_CONFIRMED, [
-                'customer_submitted_reference' => $locked->payment_reference,
+                'attempt_uuid' => $attempt->uuid,
+                'attempt_sequence' => $attempt->sequence,
+                'customer_submitted_reference' => $attempt->submitted_reference,
                 'confirmed_reference' => $confirmedReference,
                 'amount' => (string) $locked->grand_total,
                 'actor_id' => $actor->getKey(),
@@ -95,9 +109,19 @@ class DirectMerchantUpiPaymentService
                 ]);
             }
 
+            $attempt = $this->attempts->currentSubmittedForUpdate($locked);
             $rejectedAt = now();
+            $attempt->forceFill([
+                'status' => DirectMerchantUpiAttempt::STATUS_REJECTED,
+                'active_slot' => null,
+                'rejected_at' => $rejectedAt,
+                'rejected_by' => $actor->getKey(),
+                'rejection_reason' => $reason,
+            ])->save();
             $this->recordActivity($locked, $actor, OrderStatusHistory::ACTION_UPI_PAYMENT_REJECTED, [
-                'customer_submitted_reference' => $locked->payment_reference,
+                'attempt_uuid' => $attempt->uuid,
+                'attempt_sequence' => $attempt->sequence,
+                'customer_submitted_reference' => $attempt->submitted_reference,
                 'reason' => $reason,
                 'actor_id' => $actor->getKey(),
                 'rejected_at' => $rejectedAt->toIso8601String(),
@@ -105,19 +129,6 @@ class DirectMerchantUpiPaymentService
 
             return $locked->refresh();
         });
-    }
-
-    public function validatedReference(string $reference): string
-    {
-        $reference = trim($reference);
-
-        if (! preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{3,99}$/', $reference)) {
-            throw ValidationException::withMessages([
-                'upi_txn' => 'Enter a valid UPI transaction reference using 4 to 100 letters, numbers, dots, underscores, or hyphens.',
-            ]);
-        }
-
-        return $reference;
     }
 
     private function assertDirectUpi(Order $order): void

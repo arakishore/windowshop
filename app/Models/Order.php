@@ -13,42 +13,66 @@ class Order extends Model
     use HasUuid, SoftDeletes;
 
     public const SOURCE_POS = 'pos';
+
     public const SOURCE_EXCHANGE_REPLACEMENT = 'exchange_replacement';
+
     public const SOURCE_STOREFRONT = 'storefront';
+
     public const SOURCE_CUSTOMER_APP = 'customer_app';
+
     public const SOURCE_ADMIN = 'admin';
+
     public const SOURCE_API = 'api';
+
     public const MERCHANT_OPERATIONAL_SOURCES = [
         self::SOURCE_STOREFRONT,
         self::SOURCE_CUSTOMER_APP,
     ];
 
     public const FULFILMENT_COUNTER = 'counter';
+
     public const FULFILMENT_PICKUP = 'pickup';
+
     public const FULFILMENT_DELIVERY = 'delivery';
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_CONFIRMED = 'confirmed';
+
     public const STATUS_PROCESSING = 'processing';
+
     public const STATUS_READY_FOR_PICKUP = 'ready_for_pickup';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     public const PAYMENT_METHOD_CASH = 'cash';
+
     public const PAYMENT_METHOD_UPI = 'upi';
+
     public const PAYMENT_METHOD_CARD = 'card';
+
     public const PAYMENT_METHOD_CREDIT = 'credit';
+
     public const PAYMENT_METHOD_WALLET = 'wallet';
+
     public const PAYMENT_METHOD_OTHER = 'other';
 
     public const PAYMENT_PENDING = 'pending';
+
     public const PAYMENT_UNPAID = 'unpaid';
+
     public const PAYMENT_PARTIALLY_PAID = 'partially_paid';
+
     public const PAYMENT_PAID = 'paid';
+
     public const PAYMENT_REFUNDED = 'refunded';
+
     public const PAYMENT_PARTIALLY_REFUNDED = 'partially_refunded';
 
     public const DISCOUNT_TYPE_PERCENT = 'percent';
+
     public const DISCOUNT_TYPE_AMOUNT = 'amount';
 
     protected $fillable = [
@@ -179,6 +203,11 @@ class Order extends Model
     public function statusHistories(): HasMany
     {
         return $this->hasMany(OrderStatusHistory::class);
+    }
+
+    public function directMerchantUpiAttempts(): HasMany
+    {
+        return $this->hasMany(DirectMerchantUpiAttempt::class)->orderBy('sequence');
     }
 
     public function comments(): HasMany

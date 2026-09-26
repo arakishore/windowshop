@@ -381,6 +381,12 @@
         $cancelOrderLabel = $statusActionLabels[\App\Models\Order::STATUS_CANCELLED] ?? 'Cancel Order';
         $requiresPickupPaymentConfirmation = $canCompletePickup && $order->payment_method === 'cash_at_shop' && $order->payment_status !== \App\Models\Order::PAYMENT_PAID;
         $requiresDeliveryCodPaymentConfirmation = $canMarkDelivered && $order->payment_method === 'cash_on_delivery' && $order->payment_status !== \App\Models\Order::PAYMENT_PAID;
+        $latestUpiAttempt = $order->directMerchantUpiAttempts->sortByDesc('sequence')->first();
+        $hasSubmittedUpiAttempt = $latestUpiAttempt?->status === \App\Models\DirectMerchantUpiAttempt::STATUS_SUBMITTED;
+        $hasLegacyUpiRejection = $order->statusHistories->contains(
+            fn ($history) => data_get($history->metadata, 'action') === \App\Models\OrderStatusHistory::ACTION_UPI_PAYMENT_REJECTED
+        );
+        $hasActionableLegacyUpi = ! $latestUpiAttempt && ! $hasLegacyUpiRejection && filled($order->payment_reference) && in_array($order->payment_status, [\App\Models\Order::PAYMENT_PENDING, \App\Models\Order::PAYMENT_UNPAID], true);
         $canRefund = $order->order_status === \App\Models\Order::STATUS_COMPLETED && collect($refundableQuantities)->sum() > 0;
         $canExchange = $order->order_status === \App\Models\Order::STATUS_COMPLETED && collect($exchangeableQuantities)->sum() > 0;
     @endphp
@@ -1070,11 +1076,11 @@
                         <hr>
                         <h6>UPI Payment Verification</h6>
                         <div class="text-muted fs-sm mb-1">Customer Submitted Reference</div>
-                        <div class="fw-semibold mb-3">{{ $order->payment_reference ?: 'Not provided' }}</div>
+                        <div class="fw-semibold mb-3">{{ $latestUpiAttempt?->submitted_reference ?: ($order->payment_reference ?: 'Not provided') }}</div>
                         @if($order->payment_status === \App\Models\Order::PAYMENT_PAID)
                             <div class="text-muted fs-sm mb-1">Confirmed UPI Reference</div>
                             <div class="fw-semibold">{{ $order->upi_txn }}</div>
-                        @else
+                        @elseif($hasSubmittedUpiAttempt || $hasActionableLegacyUpi)
                             <form method="POST" action="{{ route('merchant.orders.upi-payment.confirm', $order) }}" class="mb-3">
                                 @csrf
                                 <label for="upi_txn" class="form-label fw-semibold">Actual UPI Reference</label>
@@ -1097,6 +1103,12 @@
                                 @error('upi_rejection_reason')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 <button type="submit" class="btn btn-outline-danger mt-3">Payment Not Found</button>
                             </form>
+                        @elseif($latestUpiAttempt?->status === \App\Models\DirectMerchantUpiAttempt::STATUS_REJECTED)
+                            <div class="alert alert-warning mb-0">
+                                Payment verification was rejected. Waiting for the customer to submit a corrected UPI reference.
+                            </div>
+                        @else
+                            <div class="text-muted">No UPI reference is currently awaiting verification.</div>
                         @endif
                     @endif
                 </div>

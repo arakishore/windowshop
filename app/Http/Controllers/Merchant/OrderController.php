@@ -114,6 +114,7 @@ class OrderController extends Controller
             'totals',
             'customer',
             'statusHistories.changedBy',
+            'directMerchantUpiAttempts',
             'refunds.items.orderItem',
             'exchanges.items.orderItem',
             'exchanges.replacementOrder.items',

@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Admin\AdminSettingsService;
 use App\Services\Cart\CartPageService;
 use App\Services\Merchant\MerchantCustomerService;
+use App\Services\Order\DirectMerchantUpiAttemptService;
 use App\Services\Order\OrderCreationService;
 use App\Services\Promotion\Coupons\CouponSessionStore;
 use Illuminate\Http\Request;
@@ -28,6 +29,7 @@ class StorefrontCheckoutOrderService
         private readonly StorefrontDeliveryService $delivery,
         private readonly StorefrontPaymentMethodService $payments,
         private readonly OrderCreationService $orders,
+        private readonly DirectMerchantUpiAttemptService $directUpiAttempts,
         private readonly MerchantCustomerService $merchantCustomers,
         private readonly AdminSettingsService $adminSettings,
         private readonly CouponSessionStore $couponStore,
@@ -141,6 +143,10 @@ class StorefrontCheckoutOrderService
                 'items' => $this->orderItems($group['items'] ?? []),
                 'totals' => $this->totalsRows((int) $deliveryData['shipping_cents'], $deliveryData),
             ], $actor);
+
+            if ($paymentMethod === StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI) {
+                $this->directUpiAttempts->createInitial($order, $actor, (string) $upiReference);
+            }
 
             $purchasedItemIds = collect($group['items'] ?? [])
                 ->reject(fn (array $item): bool => (bool) ($item['is_generated_gift'] ?? false))
