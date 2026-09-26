@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
         $this->call(SuperAdminSeeder::class);
         $this->call(AdminSettingsSeeder::class);
         $this->call(BannerTemplateSeeder::class);
+        $this->call(NotificationTemplateSeeder::class);
 
         // Uncomment to seed demo data in development only.
         $this->call(DemoSeeder::class);

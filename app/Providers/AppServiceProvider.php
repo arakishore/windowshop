@@ -8,6 +8,10 @@ use App\Services\Cart\CartResolver;
 use App\Services\Cart\CartPageService;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\System\SystemSettingService;
+use App\Notifications\Channels\EmailChannel;
+use App\Notifications\Channels\SmsChannel;
+use App\Notifications\Channels\WhatsAppChannel;
+use App\Notifications\NotificationChannelRegistry;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
@@ -22,6 +26,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(DateDisplayService::class);
         $this->app->singleton(CustomerLocationService::class);
         $this->app->singleton(SystemSettingService::class);
+        $this->app->singleton(NotificationChannelRegistry::class, fn ($app) => new NotificationChannelRegistry([
+            $app->make(EmailChannel::class),
+            $app->make(SmsChannel::class),
+            $app->make(WhatsAppChannel::class),
+        ]));
     }
 
     /**
