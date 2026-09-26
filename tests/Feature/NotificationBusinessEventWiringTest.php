@@ -198,7 +198,7 @@ class NotificationBusinessEventWiringTest extends TestCase
             'notification_key' => 'customer.registered',
             'channel' => 'email',
             'destination' => 'customer@example.test',
-            'status' => 'not_configured',
+            'status' => 'skipped',
         ]);
         $this->assertSame(3, DB::table('notification_delivery_logs')->where('notification_key', 'customer.registered')->count());
     }
@@ -255,7 +255,7 @@ class NotificationBusinessEventWiringTest extends TestCase
         app(DispatchBusinessNotifications::class)->merchantLifecycleChanged($event);
         app(DispatchBusinessNotifications::class)->merchantLifecycleChanged($event);
 
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'merchant.approved', 'channel' => 'email', 'destination' => 'primary@example.test', 'status' => 'not_configured']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'merchant.approved', 'channel' => 'email', 'destination' => 'primary@example.test', 'status' => 'skipped']);
         $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'merchant.approved', 'destination' => 'operations@example.test']);
         $this->assertSame(3, DB::table('notification_delivery_logs')->where('notification_key', 'merchant.approved')->count());
     }
@@ -277,7 +277,7 @@ class NotificationBusinessEventWiringTest extends TestCase
         app(DispatchBusinessNotifications::class)->storefrontOrderPlaced($event);
         app(DispatchBusinessNotifications::class)->storefrontOrderPlaced($event);
 
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.placed.customer', 'channel' => 'email', 'destination' => 'snapshot@example.test', 'status' => 'not_configured']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.placed.customer', 'channel' => 'email', 'destination' => 'snapshot@example.test', 'status' => 'skipped']);
         $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'primary@example.test']);
         $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'operations@example.test']);
         $this->assertSame(1, DB::table('notification_delivery_logs')->where('notification_key', 'order.new.merchant')->where('channel', 'email')->where('destination', 'primary@example.test')->count());
@@ -301,17 +301,17 @@ class NotificationBusinessEventWiringTest extends TestCase
     {
         $order = $this->notificationOrder();
         $cases = [
-            'confirmed' => ['order.confirmed.customer', 'not_configured'],
+            'confirmed' => ['order.confirmed.customer', 'skipped'],
             'processing' => ['order.processing.customer', 'skipped'],
-            'ready_for_pickup' => ['order.ready_for_pickup.customer', 'not_configured'],
+            'ready_for_pickup' => ['order.ready_for_pickup.customer', 'skipped'],
             'packed' => ['order.packed.customer', 'skipped'],
             'ready_for_dispatch' => ['order.ready_for_dispatch.customer', 'skipped'],
-            'shipped' => ['order.shipped.customer', 'not_configured'],
+            'shipped' => ['order.shipped.customer', 'skipped'],
             'in_transit' => ['order.in_transit.customer', 'skipped'],
-            'out_for_delivery' => ['order.out_for_delivery.customer', 'not_configured'],
-            'delivered' => ['order.delivered.customer', 'not_configured'],
+            'out_for_delivery' => ['order.out_for_delivery.customer', 'skipped'],
+            'delivered' => ['order.delivered.customer', 'skipped'],
             'completed' => ['order.completed.customer', 'skipped'],
-            'cancelled' => ['order.cancelled.customer', 'not_configured'],
+            'cancelled' => ['order.cancelled.customer', 'skipped'],
         ];
 
         foreach ($cases as $status => [$key, $expected]) {
@@ -333,7 +333,7 @@ class NotificationBusinessEventWiringTest extends TestCase
         $listener->orderStatusChanged(new OrderStatusChanged($order, 'out_for_delivery', 'delivered', 'delivered-occurrence'));
         $listener->orderStatusChanged(new OrderStatusChanged($order, 'delivered', 'completed', 'automatic-completed-occurrence', ['automatic_after_delivered' => true]));
 
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.delivered.customer', 'channel' => 'email', 'status' => 'not_configured']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.delivered.customer', 'channel' => 'email', 'status' => 'skipped']);
         $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'order.completed.customer']);
 
         $listener->orderStatusChanged(new OrderStatusChanged($order, 'ready_for_pickup', 'completed', 'manual-completed-default'));
@@ -341,7 +341,7 @@ class NotificationBusinessEventWiringTest extends TestCase
 
         app(ShopSettingsService::class)->set($order->shop_id, 'notifications', 'events.order.completed.customer.email.enabled', true);
         $listener->orderStatusChanged(new OrderStatusChanged($order, 'ready_for_pickup', 'completed', 'manual-completed-enabled'));
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.completed.customer', 'channel' => 'email', 'status' => 'not_configured']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.completed.customer', 'channel' => 'email', 'status' => 'skipped']);
     }
 
     public function test_status_notification_keeps_order_snapshot_after_account_contact_changes(): void
@@ -404,7 +404,7 @@ class NotificationBusinessEventWiringTest extends TestCase
             'notification_key' => 'order.cancelled.customer',
             'channel' => 'email',
             'destination' => 'snapshot@example.test',
-            'status' => 'not_configured',
+            'status' => 'skipped',
         ]);
     }
 

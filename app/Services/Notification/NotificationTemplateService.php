@@ -22,4 +22,19 @@ class NotificationTemplateService
             ->where('is_active', true)
             ->first();
     }
+
+    public function findForDelivery(string $eventKey, string $channel): ?NotificationTemplate
+    {
+        $event = $this->catalogue->find($eventKey);
+
+        if ($event === null || ! $event->supports($channel)) {
+            return null;
+        }
+
+        return NotificationTemplate::query()
+            ->where('event_key', $event->templateKey)
+            ->where('channel', $channel)
+            ->when(! $event->mandatory($channel), fn ($query) => $query->where('is_active', true))
+            ->first();
+    }
 }

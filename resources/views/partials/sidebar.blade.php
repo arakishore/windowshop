@@ -75,6 +75,11 @@
 								</span>
 							</a>
 						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.email-settings.edit') }}" class="nav-link {{ request()->routeIs('admin.email-settings.*') ? 'active' : '' }}">
+								<i class="ph-envelope"></i><span>Email Notifications</span>
+							</a>
+						</li>
 
 						<li class="nav-item nav-item-submenu {{ request()->routeIs('admin.cms-pages.*') ? 'nav-item-expanded nav-item-open' : '' }}">
 							<a href="#" class="nav-link {{ request()->routeIs('admin.cms-pages.*') ? 'active' : '' }}">

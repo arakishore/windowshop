@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\BannerLibraryController;
 use App\Http\Controllers\Admin\BannerTemplateController;
 use App\Http\Controllers\Admin\CmsPageController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\EmailSettingsController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
 use App\Http\Controllers\Admin\MasterData\CustomerCancellationReasonController;
@@ -303,6 +304,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->except(['show']);
         Route::get('settings', [AdminSettingsController::class, 'edit'])->name('settings.edit');
         Route::put('settings', [AdminSettingsController::class, 'update'])->name('settings.update');
+        Route::get('settings/email', [EmailSettingsController::class, 'edit'])->name('email-settings.edit');
+        Route::put('settings/email', [EmailSettingsController::class, 'update'])->name('email-settings.update');
+        Route::post('settings/email/test', [EmailSettingsController::class, 'test'])->name('email-settings.test');
     });
 
 });
