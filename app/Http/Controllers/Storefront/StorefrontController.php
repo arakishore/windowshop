@@ -27,6 +27,7 @@ use App\Services\Storefront\ShopPromotionPresenter;
 use App\Services\Storefront\StorefrontCustomerContext;
 use App\Services\Storefront\StorefrontCountryResolver;
 use App\Services\Storefront\StorefrontUrlService;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,6 +46,7 @@ class StorefrontController extends Controller
         private readonly ShopPageContent $pageContent,
         private readonly StorefrontCustomerContext $customerContext,
         private readonly StorefrontUrlService $urls,
+        private readonly SystemSettingService $systemSettings,
     ) {}
 
     public function home(Request $request, CustomerLocationService $location): View
@@ -447,6 +449,7 @@ class StorefrontController extends Controller
     {
         return view('storefront.pages.contact', [
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
+            'contactDetails' => $this->systemSettings->publicContact(),
         ]);
     }
 
