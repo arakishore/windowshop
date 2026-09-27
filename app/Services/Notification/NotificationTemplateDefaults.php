@@ -71,8 +71,8 @@ class NotificationTemplateDefaults
                 'short' => 'New order {{ order_number }} received for {{ shop_name }}. Please review and process it.',
             ],
             'order.new.admin' => [
-                'subject' => 'New marketplace order — {{ order_number }}',
-                'email' => 'A new marketplace order, {{ order_number }}, has been placed with {{ shop_name }}.',
+                'subject' => 'New order received — {{ order_number }}',
+                'email' => 'A new order has been placed on {{ marketplace_name }} for {{ shop_name }}.',
                 'short' => 'New marketplace order {{ order_number }} placed with {{ shop_name }}.',
             ],
             'order.confirmed.customer' => [

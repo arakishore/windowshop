@@ -121,7 +121,7 @@ class EmailConfigurationService
             && filter_var($values['from_email'], FILTER_VALIDATE_EMAIL) !== false;
     }
 
-    public function send(TransactionalNotificationMail $mail, string $destination): void
+    public function send(TransactionalNotificationMail $mail, string|array $destination): void
     {
         $this->configureMailer();
         Mail::mailer(self::MAILER)->to($destination)->send($mail);

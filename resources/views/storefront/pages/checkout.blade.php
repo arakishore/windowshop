@@ -251,6 +251,32 @@
             line-height: 1.45;
         }
 
+        .checkout-processing-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(15, 23, 42, .58);
+        }
+
+        .checkout-processing-card {
+            width: min(360px, 100%);
+            padding: 28px 24px;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, .24);
+            color: #111827;
+            text-align: center;
+        }
+
+        .checkout-processing-card .spinner-border {
+            width: 2rem;
+            height: 2rem;
+        }
+
         @media (max-width: 991px) {
             .checkout-grid {
                 grid-template-columns: 1fr;
@@ -738,13 +764,23 @@
                             data-checkout-has-billing-address="{{ $selectedBillingAddress ? '1' : '0' }}"
                             data-checkout-cart-has-items="{{ ! ($cartData['is_empty'] ?? true) ? '1' : '0' }}"
                         >
-                            Place Order
+                            <span class="spinner-border spinner-border-sm d-none" aria-hidden="true" data-place-order-spinner></span>
+                            <span data-place-order-label>Place Order</span>
                         </button>
                     </form>
                 </aside>
             </div>
         </div>
     </section>
+
+    <div class="checkout-processing-overlay d-none" role="status" aria-live="polite" aria-busy="true" data-place-order-processing>
+        <div class="checkout-processing-card">
+            <span class="spinner-border mb-3" aria-hidden="true"></span>
+            <strong class="d-block fs-5 mb-2">Processing your order…</strong>
+            <span class="d-block">Please wait while we confirm your order.</span>
+            <span class="d-block mt-2 text-muted">Do not refresh or close this page.</span>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -761,6 +797,9 @@
             const grandTotal = document.querySelector('[data-checkout-grand-total]');
             const placeOrderButton = document.querySelector('[data-place-order-button]');
             const placeOrderForm = document.querySelector('[data-place-order-form]');
+            const placeOrderLabel = document.querySelector('[data-place-order-label]');
+            const placeOrderSpinner = document.querySelector('[data-place-order-spinner]');
+            const placeOrderProcessing = document.querySelector('[data-place-order-processing]');
             const paymentOptions = document.querySelector('[data-payment-options]');
             const selectedPaymentField = document.querySelector('[data-selected-payment-field]');
             const upiPanel = document.querySelector('[data-upi-payment-panel]');
@@ -769,6 +808,7 @@
             const upiCopyButton = document.querySelector('[data-upi-copy]');
             const upiCopyFeedback = document.querySelector('[data-upi-copy-feedback]');
             let currentPaymentMethods = @json($paymentMethods);
+            let orderSubmissionProcessing = false;
 
             if (!form || !toggle || !panel || !orderField) {
                 return;
@@ -971,6 +1011,11 @@
                     return;
                 }
 
+                if (orderSubmissionProcessing) {
+                    placeOrderButton.disabled = true;
+                    return;
+                }
+
                 const fulfillment = selectedFulfillmentField?.value || '';
                 const fulfillmentReady = fulfillment !== ''
                     && (fulfillment !== 'delivery'
@@ -1114,7 +1159,7 @@
                     }
 
                     if (placeOrderButton) {
-                        placeOrderButton.disabled = !payload.can_place_order;
+                        placeOrderButton.disabled = orderSubmissionProcessing || !payload.can_place_order;
                     }
                 } catch (error) {
                     console.warn(error.message);
@@ -1138,13 +1183,41 @@
             });
 
             if (placeOrderForm && placeOrderButton) {
-                placeOrderForm.addEventListener('submit', () => {
+                const resetOrderSubmission = () => {
+                    orderSubmissionProcessing = false;
+                    placeOrderSpinner?.classList.add('d-none');
+                    placeOrderProcessing?.classList.add('d-none');
+                    if (placeOrderLabel) {
+                        placeOrderLabel.textContent = 'Place Order';
+                    }
+                    const selectedMethod = currentPaymentMethods.find((method) => method.id === selectedPaymentField?.value);
+                    updatePlaceOrderState(selectedMethod);
+                };
+
+                placeOrderForm.addEventListener('submit', (event) => {
+                    if (orderSubmissionProcessing) {
+                        event.preventDefault();
+                        return;
+                    }
+
                     if (placeOrderButton.disabled) {
                         return;
                     }
 
+                    orderSubmissionProcessing = true;
                     placeOrderButton.disabled = true;
-                    placeOrderButton.textContent = 'Placing Order...';
+                    placeOrderSpinner?.classList.remove('d-none');
+                    placeOrderProcessing?.classList.remove('d-none');
+                    if (placeOrderLabel) {
+                        placeOrderLabel.textContent = 'Processing...';
+                    }
+                });
+
+                placeOrderForm.addEventListener('invalid', resetOrderSubmission, true);
+                window.addEventListener('pageshow', (event) => {
+                    if (event.persisted) {
+                        resetOrderSubmission();
+                    }
                 });
             }
 

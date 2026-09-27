@@ -12,6 +12,7 @@ use App\Notifications\DeliveryResult;
 use App\Notifications\NotificationMessage;
 use App\Services\Notification\EmailConfigurationService;
 use App\Services\Notification\NotificationEventCatalogue;
+use App\Services\Notification\OrderEmailPresenter;
 use App\Services\Notification\NotificationTemplateRenderer;
 use App\Services\Notification\NotificationTemplateService;
 use App\Services\System\SystemSettingService;
@@ -110,6 +111,7 @@ class RealEmailDeliveryTest extends TestCase
             app(NotificationTemplateRenderer::class),
             app(NotificationEventCatalogue::class),
             app(SystemSettingService::class),
+            app(OrderEmailPresenter::class),
         );
 
         $result = $channel->send($this->message('customer.registered'));

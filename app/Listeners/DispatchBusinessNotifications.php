@@ -14,6 +14,7 @@ use App\Notifications\NotificationChannelName;
 use App\Notifications\NotificationMessage;
 use App\Services\Notification\AdditionalMerchantRecipientService;
 use App\Services\Notification\AdminNotificationRecipientResolver;
+use App\Services\Notification\MerchantOperationalEmailRecipientResolver;
 use App\Services\Notification\NotificationEventCatalogue;
 use App\Services\Notification\NotificationManager;
 
@@ -24,6 +25,7 @@ class DispatchBusinessNotifications
         private readonly AdditionalMerchantRecipientService $additionalRecipients,
         private readonly AdminNotificationRecipientResolver $adminRecipients,
         private readonly NotificationEventCatalogue $catalogue,
+        private readonly MerchantOperationalEmailRecipientResolver $merchantEmailRecipients,
     ) {}
 
     public function customerRegistered(CustomerRegistered $event): void
@@ -55,9 +57,13 @@ class DispatchBusinessNotifications
         $merchant = $order->merchant;
         if ($merchant instanceof MerchantProfile) {
             $destinations = $this->merchantDestinations($merchant, true);
+            $emailRouting = $order->shop ? $this->merchantEmailRecipients->resolve($order->shop) : null;
+            if ($emailRouting !== null) {
+                $destinations[NotificationChannelName::EMAIL] = [$emailRouting['primary']];
+            }
             $this->dispatchToDestinations('order.new.merchant', 'merchant', $event->occurrenceId, $destinations, $merchant->user_id, $order->shop_id, $merchant->getKey(), 'order', $order->uuid, [
                 ...$context, 'merchant_name' => $merchant->contact_person_name ?: $merchant->user?->name,
-            ]);
+            ], $emailRouting ? ['email_routing' => $emailRouting] : []);
         }
 
         foreach (NotificationChannelName::all() as $channel) {
@@ -140,12 +146,12 @@ class DispatchBusinessNotifications
         return $destinations;
     }
 
-    private function dispatchToDestinations(string $key, string $recipientType, string $occurrenceId, array $destinations, ?int $recipientId = null, ?int $shopId = null, ?int $merchantId = null, ?string $relatedType = null, ?string $relatedId = null, array $context = []): void
+    private function dispatchToDestinations(string $key, string $recipientType, string $occurrenceId, array $destinations, ?int $recipientId = null, ?int $shopId = null, ?int $merchantId = null, ?string $relatedType = null, ?string $relatedId = null, array $context = [], array $metadata = []): void
     {
         foreach ($destinations as $channel => $values) {
             $normalized = collect($values)->filter()->map(fn ($value): string => trim((string) $value))->unique(fn (string $value): string => strtolower($value));
             foreach ($normalized as $destination) {
-                $this->notifications->send(new NotificationMessage($key, $recipientType, $channel, $destination, $recipientId, $shopId, $merchantId, $relatedType, $relatedId, $occurrenceId, $context));
+                $this->notifications->send(new NotificationMessage($key, $recipientType, $channel, $destination, $recipientId, $shopId, $merchantId, $relatedType, $relatedId, $occurrenceId, $context, $metadata));
             }
         }
     }

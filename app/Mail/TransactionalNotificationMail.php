@@ -25,6 +25,7 @@ class TransactionalNotificationMail extends Mailable
         public readonly array $ccRecipients = [],
         public readonly array $bccRecipients = [],
         public readonly array $emailPresentation = [],
+        public readonly ?array $orderEmail = null,
     ) {}
 
     public function envelope(): Envelope

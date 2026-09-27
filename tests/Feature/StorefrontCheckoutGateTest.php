@@ -2377,6 +2377,38 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertDatabaseCount('orders', 1);
     }
 
+    public function test_checkout_renders_immediate_order_processing_state_and_repeat_submit_guard(): void
+    {
+        $customer = $this->customerUser('processing-state@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout', ['shop' => $fixture['shop']->getKey()]))
+            ->assertOk()
+            ->assertSee('data-place-order-spinner', false)
+            ->assertSee('data-place-order-processing', false)
+            ->assertSee('checkout-processing-overlay', false)
+            ->assertSee('aria-busy="true"', false)
+            ->assertSee('Processing your order…')
+            ->assertSee('Please wait while we confirm your order.')
+            ->assertSee('Do not refresh or close this page.')
+            ->assertDontSee('alert alert-info', false)
+            ->assertDontSee('click the button again')
+            ->assertSee("placeOrderLabel.textContent = 'Processing...'", false)
+            ->assertSee('if (orderSubmissionProcessing)', false)
+            ->assertSee('event.preventDefault()', false)
+            ->assertSee('resetOrderSubmission', false);
+    }
+
     public function test_checkout_order_failure_keeps_cart_items(): void
     {
         $customer = $this->customerUser('place-failure@example.test');

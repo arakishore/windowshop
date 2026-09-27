@@ -279,7 +279,7 @@ class NotificationBusinessEventWiringTest extends TestCase
 
         $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.placed.customer', 'channel' => 'email', 'destination' => 'snapshot@example.test', 'status' => 'skipped']);
         $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'primary@example.test']);
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'operations@example.test']);
+        $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'operations@example.test']);
         $this->assertSame(1, DB::table('notification_delivery_logs')->where('notification_key', 'order.new.merchant')->where('channel', 'email')->where('destination', 'primary@example.test')->count());
         $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.admin', 'channel' => 'email', 'destination' => 'admin@example.test', 'status' => 'skipped']);
     }

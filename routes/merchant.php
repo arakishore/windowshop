@@ -13,6 +13,7 @@ use App\Http\Controllers\Merchant\CollectionController;
 use App\Http\Controllers\Merchant\CustomerAddressController;
 use App\Http\Controllers\Merchant\CustomerController;
 use App\Http\Controllers\Merchant\MerchantDetailsController;
+use App\Http\Controllers\Merchant\MerchantNotificationSettingsController;
 use App\Http\Controllers\Merchant\MerchantSettingsController;
 use App\Http\Controllers\Merchant\MerchantShopContextController;
 use App\Http\Controllers\Merchant\MerchantShopController;
@@ -60,6 +61,8 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
     });
 
     Route::middleware(['auth', 'merchant.role', 'merchant.active_shop'])->group(function (): void {
+        Route::get('/settings/notifications', [MerchantNotificationSettingsController::class, 'edit'])->name('notification-settings.edit');
+        Route::put('/settings/notifications', [MerchantNotificationSettingsController::class, 'update'])->name('notification-settings.update');
         Route::get('shop-pages/{shopPage}/preview', [ShopPageController::class, 'preview'])->name('shop-pages.preview');
         Route::resource('shop-pages', ShopPageController::class)
             ->except(['show'])

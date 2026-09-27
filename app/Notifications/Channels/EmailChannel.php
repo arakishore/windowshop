@@ -3,6 +3,7 @@
 namespace App\Notifications\Channels;
 
 use App\Mail\TransactionalNotificationMail;
+use App\Models\Order;
 use App\Models\Shop;
 use App\Notifications\Contracts\NotificationChannel;
 use App\Notifications\DeliveryResult;
@@ -10,6 +11,7 @@ use App\Notifications\NotificationChannelName;
 use App\Notifications\NotificationMessage;
 use App\Notifications\ProviderMode;
 use App\Services\Notification\EmailConfigurationService;
+use App\Services\Notification\OrderEmailPresenter;
 use App\Services\Notification\NotificationEventCatalogue;
 use App\Services\Notification\NotificationTemplateRenderer;
 use App\Services\Notification\NotificationTemplateService;
@@ -24,6 +26,7 @@ class EmailChannel implements NotificationChannel
         private readonly NotificationTemplateRenderer $renderer,
         private readonly NotificationEventCatalogue $catalogue,
         private readonly SystemSettingService $systemSettings,
+        private readonly OrderEmailPresenter $orderEmails,
     ) {}
 
     public function name(): string
@@ -58,8 +61,25 @@ class EmailChannel implements NotificationChannel
         $brandName = $shop?->name ?: $marketplaceName;
         $brandLogo = $shop?->logo_path ? asset('storage/'.$shop->logo_path) : $this->configuration->emailLogoUrl();
         $to = mb_strtolower((string) $message->destination);
-        $cc = $this->recipients(data_get($template->metadata, 'email.cc', []), [$to]);
+        $additionalTo = $this->recipients(data_get($message->metadata, 'email_routing.additional_to', []), [$to]);
+        $toRecipients = [$to, ...$additionalTo];
+        $cc = $this->recipients([
+            ...data_get($template->metadata, 'email.cc', []),
+            ...data_get($message->metadata, 'email_routing.cc', []),
+        ], $toRecipients);
         $bcc = $this->recipients(data_get($template->metadata, 'email.bcc', []), [$to, ...$cc]);
+        $bcc = $this->recipients([
+            ...$bcc,
+            ...data_get($message->metadata, 'email_routing.bcc', []),
+        ], [...$toRecipients, ...$cc]);
+        $orderEmail = null;
+        if (in_array($message->key, ['order.placed.customer', 'order.new.merchant', 'order.new.admin'], true) && $message->relatedType === 'order' && $message->relatedId) {
+            $order = Order::query()->where('uuid', $message->relatedId)->first();
+            $orderEmail = $order ? $this->orderEmails->present($order, $message->key, $message->context) : null;
+            if ($orderEmail !== null) {
+                $rendered['subject'] = $orderEmail['subject'];
+            }
+        }
 
         try {
             $this->configuration->send(new TransactionalNotificationMail(
@@ -74,7 +94,8 @@ class EmailChannel implements NotificationChannel
                 $cc,
                 $bcc,
                 $this->configuration->presentation(),
-            ), (string) $message->destination);
+                $orderEmail,
+            ), $toRecipients);
 
             return DeliveryResult::sent(ProviderMode::WINDOWSHOP, 'laravel-mail');
         } catch (Throwable $exception) {

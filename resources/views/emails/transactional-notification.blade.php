@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="margin:0;background:#f5f6f8;color:#20242a;font-family:Arial,sans-serif">
 @php
     $presentation = $emailPresentation ?? [];
@@ -22,8 +23,12 @@
         @elseif($presentation['show_brand_name'] ?? true)
             <div style="font-size:20px;font-weight:700;margin-bottom:20px">{{ $brandName }}</div>
         @endif
-        <h1 style="font-size:24px;line-height:1.3;margin:0 0 18px">{{ $notificationSubject }}</h1>
-        <div style="font-size:15px;line-height:1.65">{!! nl2br(e($displayBody)) !!}</div>
+        @if(! empty($orderEmail))
+            @include('emails.partials.order-details', ['orderEmail' => $orderEmail])
+        @else
+            <h1 style="font-size:24px;line-height:1.3;margin:0 0 18px">{{ $notificationSubject }}</h1>
+            <div style="font-size:15px;line-height:1.65">{!! nl2br(e($displayBody)) !!}</div>
+        @endif
     </div>
     @if($showFooter)
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;font-size:12px;line-height:1.5;color:#68707b;text-align:center">
