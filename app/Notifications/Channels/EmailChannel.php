@@ -9,7 +9,6 @@ use App\Notifications\DeliveryResult;
 use App\Notifications\NotificationChannelName;
 use App\Notifications\NotificationMessage;
 use App\Notifications\ProviderMode;
-use App\Services\Marketplace\MarketplaceLogoService;
 use App\Services\Notification\EmailConfigurationService;
 use App\Services\Notification\NotificationEventCatalogue;
 use App\Services\Notification\NotificationTemplateRenderer;
@@ -25,7 +24,6 @@ class EmailChannel implements NotificationChannel
         private readonly NotificationTemplateRenderer $renderer,
         private readonly NotificationEventCatalogue $catalogue,
         private readonly SystemSettingService $systemSettings,
-        private readonly MarketplaceLogoService $marketplaceLogo,
     ) {}
 
     public function name(): string
@@ -58,7 +56,7 @@ class EmailChannel implements NotificationChannel
             ? Shop::query()->find($message->shopId)
             : null;
         $brandName = $shop?->name ?: $marketplaceName;
-        $brandLogo = $shop?->logo_path ? asset('storage/'.$shop->logo_path) : $this->marketplaceLogo->url();
+        $brandLogo = $shop?->logo_path ? asset('storage/'.$shop->logo_path) : $this->configuration->emailLogoUrl();
         $to = mb_strtolower((string) $message->destination);
         $cc = $this->recipients(data_get($template->metadata, 'email.cc', []), [$to]);
         $bcc = $this->recipients(data_get($template->metadata, 'email.bcc', []), [$to, ...$cc]);
@@ -75,6 +73,7 @@ class EmailChannel implements NotificationChannel
                 $settings['reply_to'] ?: null,
                 $cc,
                 $bcc,
+                $this->configuration->presentation(),
             ), (string) $message->destination);
 
             return DeliveryResult::sent(ProviderMode::WINDOWSHOP, 'laravel-mail');

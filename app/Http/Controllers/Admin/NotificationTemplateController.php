@@ -7,7 +7,7 @@ use App\Models\NotificationTemplate;
 use App\Notifications\NotificationChannelName;
 use App\Notifications\NotificationEventDefinition;
 use App\Notifications\NotificationMessage;
-use App\Services\Marketplace\MarketplaceLogoService;
+use App\Services\Notification\EmailConfigurationService;
 use App\Services\Notification\NotificationEventCatalogue;
 use App\Services\Notification\NotificationPreferenceResolver;
 use App\Services\Notification\NotificationTemplateRenderer;
@@ -25,7 +25,7 @@ class NotificationTemplateController extends Controller
         private readonly NotificationTemplateRenderer $renderer,
         private readonly NotificationPreferenceResolver $preferences,
         private readonly SystemSettingService $systemSettings,
-        private readonly MarketplaceLogoService $marketplaceLogo,
+        private readonly EmailConfigurationService $emailConfiguration,
     ) {}
 
     public function index(Request $request): View
@@ -106,8 +106,9 @@ class NotificationTemplateController extends Controller
             'notificationSubject' => $rendered['subject'] ?: $event->label,
             'notificationBody' => $rendered['body'],
             'brandName' => $brandName,
-            'brandLogoUrl' => $event->branding === 'marketplace' ? $this->marketplaceLogo->url() : null,
+            'brandLogoUrl' => $event->branding === 'marketplace' ? $this->emailConfiguration->emailLogoUrl() : null,
             'marketplaceName' => $marketplaceName,
+            'emailPresentation' => $this->emailConfiguration->presentation(),
         ])->render();
 
         return view('admin.notification-templates.preview', compact('html', 'rendered', 'notificationTemplate'));

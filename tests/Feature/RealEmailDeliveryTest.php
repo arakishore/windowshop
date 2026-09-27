@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Notifications\Channels\EmailChannel;
 use App\Notifications\DeliveryResult;
 use App\Notifications\NotificationMessage;
-use App\Services\Marketplace\MarketplaceLogoService;
 use App\Services\Notification\EmailConfigurationService;
 use App\Services\Notification\NotificationEventCatalogue;
 use App\Services\Notification\NotificationTemplateRenderer;
@@ -101,6 +100,8 @@ class RealEmailDeliveryTest extends TestCase
         $configuration->shouldReceive('values')->once()->andReturn([
             'from_email' => 'sender@example.test', 'from_name' => 'Sender', 'reply_to' => '',
         ]);
+        $configuration->shouldReceive('emailLogoUrl')->once()->andReturn('https://example.test/logo.png');
+        $configuration->shouldReceive('presentation')->once()->andReturn([]);
         $configuration->shouldReceive('send')->once()->andThrow(new \RuntimeException('password=secret-value connection refused'));
         $configuration->shouldReceive('sanitizedError')->once()->andReturn('password=[redacted] connection refused');
         $channel = new EmailChannel(
@@ -109,7 +110,6 @@ class RealEmailDeliveryTest extends TestCase
             app(NotificationTemplateRenderer::class),
             app(NotificationEventCatalogue::class),
             app(SystemSettingService::class),
-            app(MarketplaceLogoService::class),
         );
 
         $result = $channel->send($this->message('customer.registered'));
