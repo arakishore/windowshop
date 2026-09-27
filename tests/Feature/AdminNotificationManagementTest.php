@@ -140,6 +140,22 @@ class AdminNotificationManagementTest extends TestCase
         $this->assertDatabaseCount('notification_delivery_logs', 0);
     }
 
+    public function test_preview_renders_fresh_default_content(): void
+    {
+        Mail::fake();
+        $template = $this->template('customer.registered', 'email');
+
+        $this->actingAs($this->admin())->put(route('admin.notification-templates.preview', $template), [
+            'subject' => $template->subject,
+            'body' => $template->body,
+            'is_active' => 1,
+        ])->assertOk()
+            ->assertSee('Welcome to WindowShop')
+            ->assertSee('Your account has been created successfully.');
+
+        Mail::assertNothingSent();
+    }
+
     public function test_rules_matrix_reflects_catalogue_and_global_admin_preference_can_change(): void
     {
         $admin = $this->admin();

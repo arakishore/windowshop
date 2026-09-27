@@ -179,11 +179,74 @@ class NotificationCatalogueTemplateTest extends TestCase
         $this->assertDatabaseCount('notification_templates', $expected);
 
         $template = NotificationTemplate::query()->where('event_key', 'order.placed.customer')->where('channel', 'email')->firstOrFail();
-        $template->update(['subject' => 'Admin-customized subject']);
+        $template->update([
+            'subject' => 'Admin-customized subject',
+            'body' => 'Admin-customized body',
+            'metadata' => ['branding' => 'shop', 'email' => ['cc' => ['copy@example.test'], 'bcc' => ['hidden@example.test']]],
+            'is_active' => false,
+        ]);
         $this->seed(NotificationTemplateSeeder::class);
 
         $this->assertSame('Admin-customized subject', $template->fresh()->subject);
+        $this->assertSame('Admin-customized body', $template->fresh()->body);
+        $this->assertSame(['copy@example.test'], data_get($template->fresh()->metadata, 'email.cc'));
+        $this->assertSame(['hidden@example.test'], data_get($template->fresh()->metadata, 'email.bcc'));
+        $this->assertFalse($template->fresh()->is_active);
         $this->assertDatabaseCount('notification_templates', $expected);
+    }
+
+    public function test_fresh_defaults_use_only_supported_variables_and_have_safe_transactional_meaning(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+        $catalogue = app(NotificationEventCatalogue::class);
+
+        foreach (NotificationTemplate::query()->get() as $template) {
+            preg_match_all('/{{\s*([A-Za-z0-9_]+)\s*}}/', ($template->subject ?? '').' '.$template->body, $matches);
+            $unsupported = collect($matches[1])->unique()->diff($catalogue->find($template->event_key)->variables);
+            $this->assertEmpty($unsupported->all(), $template->event_key.' uses unsupported variables.');
+        }
+
+        $placed = $this->default('order.placed.customer');
+        $this->assertSame('Order received — {{ order_number }}', $placed->subject);
+        $this->assertStringNotContainsStringIgnoringCase('order is confirmed', $placed->body);
+        $this->assertStringNotContainsStringIgnoringCase('payment successful', $placed->body);
+
+        $submitted = $this->default('payment.upi_submitted.customer');
+        $this->assertStringContainsStringIgnoringCase('awaiting verification', $submitted->body);
+        $this->assertStringNotContainsStringIgnoringCase('payment verified', $submitted->body);
+
+        $rejected = $this->default('payment.upi_rejected.customer');
+        $this->assertStringContainsStringIgnoringCase('submit a corrected or new payment reference', $rejected->body);
+        $this->assertStringNotContainsStringIgnoringCase('cancelled', $rejected->body);
+
+        foreach (['order.packed.customer', 'order.ready_for_dispatch.customer'] as $eventKey) {
+            $this->assertStringNotContainsStringIgnoringCase('shipped', $this->default($eventKey)->body);
+        }
+    }
+
+    public function test_lifecycle_post_purchase_and_short_channel_defaults_are_factual(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+
+        $this->assertStringContainsString('has been suspended', $this->default('merchant.suspended')->body);
+        $this->assertStringNotContainsStringIgnoringCase('verification', $this->default('merchant.suspended')->body);
+        $this->assertStringContainsString('previously suspended merchant account', $this->default('merchant.reactivated')->body);
+        $this->assertStringContainsString('has been reactivated', $this->default('merchant.reactivated')->body);
+        $this->assertStringNotContainsStringIgnoringCase('verification approval', $this->default('merchant.reactivated')->body);
+
+        $refund = $this->default('refund.processed.customer')->body;
+        $this->assertStringNotContainsStringIgnoringCase('days', $refund);
+        $this->assertStringNotContainsStringIgnoringCase('bank', $refund);
+        $exchange = $this->default('exchange.processed.customer')->body;
+        $this->assertStringNotContainsStringIgnoringCase('delivery', $exchange);
+        $this->assertStringNotContainsStringIgnoringCase('timeline', $exchange);
+
+        $email = $this->default('order.new.merchant');
+        $sms = NotificationTemplate::query()->where('event_key', 'order.new.merchant')->where('channel', 'sms')->firstOrFail();
+        $whatsApp = NotificationTemplate::query()->where('event_key', 'order.new.merchant')->where('channel', 'whatsapp')->firstOrFail();
+        $this->assertLessThan(strlen($email->body), strlen($sms->body));
+        $this->assertSame($sms->body, $whatsApp->body);
+        $this->assertNull($sms->subject);
     }
 
     public function test_template_lookup_respects_active_flag_and_catalogue(): void
@@ -218,9 +281,14 @@ class NotificationCatalogueTemplateTest extends TestCase
 
         $shop = NotificationTemplate::query()->where('event_key', 'order.placed.customer')->where('channel', 'email')->firstOrFail();
         $marketplace = NotificationTemplate::query()->where('event_key', 'customer.registered')->where('channel', 'email')->firstOrFail();
-        $this->assertStringContainsString('{{ shop_name }}', $shop->subject);
-        $this->assertStringContainsString('{{ marketplace_name }}', $shop->body);
+        $this->assertStringContainsString('{{ shop_name }}', $shop->body);
+        $this->assertStringNotContainsString('Powered by', $shop->body);
         $this->assertStringContainsString('{{ marketplace_name }}', $marketplace->subject);
+    }
+
+    private function default(string $eventKey): NotificationTemplate
+    {
+        return NotificationTemplate::query()->where('event_key', $eventKey)->where('channel', 'email')->firstOrFail();
     }
 
     public function test_delivery_log_masks_normal_serialization_without_destroying_raw_destination(): void
