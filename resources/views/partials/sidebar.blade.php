@@ -80,6 +80,8 @@
 								<i class="ph-envelope"></i><span>Email Notifications</span>
 							</a>
 						</li>
+						<li class="nav-item"><a href="{{ route('admin.notification-templates.index') }}" class="nav-link {{ request()->routeIs('admin.notification-templates.*') ? 'active' : '' }}"><i class="ph-file-text"></i><span>Notification Templates</span></a></li>
+						<li class="nav-item"><a href="{{ route('admin.notification-rules.index') }}" class="nav-link {{ request()->routeIs('admin.notification-rules.*') ? 'active' : '' }}"><i class="ph-lock-key"></i><span>Notification Rules</span></a></li>
 
 						<li class="nav-item nav-item-submenu {{ request()->routeIs('admin.cms-pages.*') ? 'nav-item-expanded nav-item-open' : '' }}">
 							<a href="#" class="nav-link {{ request()->routeIs('admin.cms-pages.*') ? 'active' : '' }}">

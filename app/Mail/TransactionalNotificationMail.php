@@ -22,6 +22,8 @@ class TransactionalNotificationMail extends Mailable
         public readonly string $fromEmail,
         public readonly string $fromName,
         public readonly ?string $replyToEmail = null,
+        public readonly array $ccRecipients = [],
+        public readonly array $bccRecipients = [],
     ) {}
 
     public function envelope(): Envelope
@@ -29,6 +31,8 @@ class TransactionalNotificationMail extends Mailable
         return new Envelope(
             from: new Address($this->fromEmail, $this->fromName),
             replyTo: $this->replyToEmail ? [new Address($this->replyToEmail)] : [],
+            cc: array_map(fn (string $email) => new Address($email), $this->ccRecipients),
+            bcc: array_map(fn (string $email) => new Address($email), $this->bccRecipients),
             subject: $this->notificationSubject,
         );
     }

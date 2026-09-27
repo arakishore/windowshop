@@ -59,6 +59,9 @@ class EmailChannel implements NotificationChannel
             : null;
         $brandName = $shop?->name ?: $marketplaceName;
         $brandLogo = $shop?->logo_path ? asset('storage/'.$shop->logo_path) : $this->marketplaceLogo->url();
+        $to = mb_strtolower((string) $message->destination);
+        $cc = $this->recipients(data_get($template->metadata, 'email.cc', []), [$to]);
+        $bcc = $this->recipients(data_get($template->metadata, 'email.bcc', []), [$to, ...$cc]);
 
         try {
             $this->configuration->send(new TransactionalNotificationMail(
@@ -70,11 +73,24 @@ class EmailChannel implements NotificationChannel
                 $settings['from_email'],
                 $settings['from_name'] ?: $marketplaceName,
                 $settings['reply_to'] ?: null,
+                $cc,
+                $bcc,
             ), (string) $message->destination);
 
             return DeliveryResult::sent(ProviderMode::WINDOWSHOP, 'laravel-mail');
         } catch (Throwable $exception) {
             return DeliveryResult::failed($this->configuration->sanitizedError($exception), ProviderMode::WINDOWSHOP, 'laravel-mail');
         }
+    }
+
+    /** @param array<int, mixed> $recipients */
+    private function recipients(array $recipients, array $excluded): array
+    {
+        return collect($recipients)
+            ->map(fn ($email) => mb_strtolower(trim((string) $email)))
+            ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL) && ! in_array($email, $excluded, true))
+            ->unique()
+            ->values()
+            ->all();
     }
 }

@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\MasterData\TaxRateComponentController;
 use App\Http\Controllers\Admin\MasterData\TaxRateController;
 use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantShopController;
+use App\Http\Controllers\Admin\NotificationTemplateController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductReviewController as AdminProductReviewController;
 use App\Http\Controllers\Admin\SystemSettingController;
@@ -307,6 +308,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('settings/email', [EmailSettingsController::class, 'edit'])->name('email-settings.edit');
         Route::put('settings/email', [EmailSettingsController::class, 'update'])->name('email-settings.update');
         Route::post('settings/email/test', [EmailSettingsController::class, 'test'])->name('email-settings.test');
+        Route::get('notification-templates', [NotificationTemplateController::class, 'index'])->name('notification-templates.index');
+        Route::get('notification-templates/rules', [NotificationTemplateController::class, 'rules'])->name('notification-rules.index');
+        Route::put('notification-templates/rules/global', [NotificationTemplateController::class, 'updateGlobalRule'])->name('notification-rules.global.update');
+        Route::get('notification-templates/{notificationTemplate}/edit', [NotificationTemplateController::class, 'edit'])->name('notification-templates.edit');
+        Route::put('notification-templates/{notificationTemplate}', [NotificationTemplateController::class, 'update'])->name('notification-templates.update');
+        Route::put('notification-templates/{notificationTemplate}/preview', [NotificationTemplateController::class, 'preview'])->name('notification-templates.preview');
     });
 
 });
