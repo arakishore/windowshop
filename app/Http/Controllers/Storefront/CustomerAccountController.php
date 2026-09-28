@@ -11,6 +11,8 @@ use App\Models\User;
 use App\Models\WishlistItem;
 use App\Services\Checkout\CheckoutPageService;
 use App\Services\Order\CustomerOrderCancellationService;
+use App\Services\Order\DirectMerchantUpiAttemptService;
+use App\Services\Order\OrderReceiptPresenter;
 use App\Services\Order\OrderReturnExchangeEligibilityService;
 use App\Services\Storefront\CustomerOrderPresenter;
 use App\Services\Storefront\NavigationService;
@@ -33,9 +35,10 @@ class CustomerAccountController extends Controller
         private readonly ProductListingService $productListings,
         private readonly CustomerOrderPresenter $ordersPresenter,
         private readonly CustomerOrderCancellationService $customerCancellation,
+        private readonly DirectMerchantUpiAttemptService $directUpiAttempts,
         private readonly OrderReturnExchangeEligibilityService $returnExchangeEligibility,
-    ) {
-    }
+        private readonly OrderReceiptPresenter $receiptPresenter,
+    ) {}
 
     public function dashboard(Request $request): View|RedirectResponse
     {
@@ -160,9 +163,15 @@ class CustomerAccountController extends Controller
             'shop.city',
             'items.product.primaryImage',
             'items.product.category.parent.parent',
+            'items.review',
+            'items.reviewIncludingDeleted',
             'items.taxComponents',
             'totals',
             'statusHistories',
+            'directMerchantUpiAttempts',
+            'refunds.items.orderItem',
+            'exchanges.items.orderItem',
+            'exchanges.replacementOrder.items',
             'comments' => fn ($query) => $query->where('visibility', OrderComment::VISIBILITY_CUSTOMER)->orderBy('created_at'),
         ]);
 
@@ -172,6 +181,51 @@ class CustomerAccountController extends Controller
             'canCancelOrder' => $this->customerCancellation->canCancel($order),
             'cancellationReasons' => $this->customerCancellation->reasonOptions(),
             'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
+            'canResubmitUpi' => $this->directUpiAttempts->canSubmitCorrection($order),
+        ]));
+    }
+
+    public function resubmitUpiReference(Request $request, Order $order): RedirectResponse
+    {
+        $customer = $this->customerOrRedirect($request);
+        if (! $customer instanceof User) {
+            return $customer;
+        }
+
+        $globalCustomer = $this->customerContext->customer($request);
+        abort_unless($globalCustomer instanceof Customer, 403);
+        abort_unless((int) $order->customer_id === (int) $globalCustomer->getKey(), 404);
+
+        $data = $request->validate([
+            'upi_reference' => ['required', 'string', 'max:100', 'regex:/^[A-Za-z0-9][A-Za-z0-9._-]{3,99}$/'],
+        ]);
+
+        try {
+            $this->directUpiAttempts->submitCorrection($order, $globalCustomer, $customer, (string) $data['upi_reference']);
+        } catch (ValidationException $exception) {
+            return back()->withInput()->withErrors($exception->errors());
+        }
+
+        return redirect()
+            ->route('storefront.account.orders.show', $order)
+            ->with('success', 'Your corrected UPI reference was submitted for merchant verification.');
+    }
+
+    public function orderReceipt(Request $request, Order $order): View|RedirectResponse
+    {
+        $customer = $this->customerOrRedirect($request);
+        if (! $customer instanceof User) {
+            return $customer;
+        }
+
+        $globalCustomer = $this->customerContext->customer($request);
+        abort_unless($globalCustomer instanceof Customer, 403);
+        abort_unless((int) $order->customer_id === (int) $globalCustomer->getKey(), 404);
+
+        return view('storefront.account.order-receipt', $this->accountViewData($customer, [
+            'order' => $order,
+            'receipt' => $this->receiptPresenter->present($order),
+            'autoPrint' => $request->boolean('print'),
         ]));
     }
 
@@ -241,7 +295,7 @@ class CustomerAccountController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function accountViewData(User $customer, array $data = []): array

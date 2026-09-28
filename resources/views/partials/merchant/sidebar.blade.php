@@ -71,14 +71,17 @@
                     </ul>
                 </li>
 
-                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'nav-item-expanded nav-item-open' : '' }}">
-                    <a href="#" class="nav-link {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'active' : '' }}">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.shop-pages.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.shop-pages.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'active' : '' }}">
                         <i class="ph-storefront"></i>
                         <span>Shop Management</span>
                     </a>
-                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'show' : '' }}">
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.shops.*') || request()->routeIs('merchant.shop-pages.*') || request()->routeIs('merchant.postal-code-restrictions.*') ? 'show' : '' }}">
                         <li class="nav-item">
                             <a href="{{ route('merchant.shops.index') }}" class="nav-link {{ request()->routeIs('merchant.shops.*') ? 'active' : '' }}">My Shops</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.shop-pages.index') }}" class="nav-link {{ request()->routeIs('merchant.shop-pages.*') ? 'active' : '' }}">Shop Pages</a>
                         </li>
                         <li class="nav-item">
                             <a href="{{ route('merchant.postal-code-restrictions.index') }}" class="nav-link {{ request()->routeIs('merchant.postal-code-restrictions.*') ? 'active' : '' }}">Postal Code Restrictions</a>
@@ -153,12 +156,12 @@
                     </a>
                 </li>
 
-                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.tax-settings.*') || request()->routeIs('merchant.tax-slabs.*') || request()->routeIs('merchant.password.*') ? 'nav-item-expanded nav-item-open' : '' }}">
-                    <a href="#" class="nav-link {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.tax-settings.*') || request()->routeIs('merchant.tax-slabs.*') || request()->routeIs('merchant.password.*') ? 'active' : '' }}">
+                <li class="nav-item nav-item-submenu {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.notification-settings.*') || request()->routeIs('merchant.tax-settings.*') || request()->routeIs('merchant.tax-slabs.*') || request()->routeIs('merchant.password.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+                    <a href="#" class="nav-link {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.notification-settings.*') || request()->routeIs('merchant.tax-settings.*') || request()->routeIs('merchant.tax-slabs.*') || request()->routeIs('merchant.password.*') ? 'active' : '' }}">
                         <i class="ph-user-gear"></i>
                         <span>Account</span>
                     </a>
-                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.tax-settings.*') || request()->routeIs('merchant.tax-slabs.*') || request()->routeIs('merchant.password.*') ? 'show' : '' }}">
+                    <ul class="nav-group-sub collapse {{ request()->routeIs('merchant.profile.*') || request()->routeIs('merchant.details.*') || request()->routeIs('merchant.settings.*') || request()->routeIs('merchant.notification-settings.*') || request()->routeIs('merchant.tax-settings.*') || request()->routeIs('merchant.tax-slabs.*') || request()->routeIs('merchant.password.*') ? 'show' : '' }}">
                         <li class="nav-item">
                             <a href="{{ route('merchant.profile.edit') }}" class="nav-link {{ request()->routeIs('merchant.profile.*') ? 'active' : '' }}">My Profile</a>
                         </li>
@@ -167,6 +170,9 @@
                         </li>
                         <li class="nav-item">
                             <a href="{{ route('merchant.settings.edit') }}" class="nav-link {{ request()->routeIs('merchant.settings.*') ? 'active' : '' }}">Settings</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('merchant.notification-settings.edit') }}" class="nav-link {{ request()->routeIs('merchant.notification-settings.*') ? 'active' : '' }}">Notification Settings</a>
                         </li>
                         <li class="nav-item">
                             <a href="{{ route('merchant.tax-settings.edit') }}" class="nav-link {{ request()->routeIs('merchant.tax-settings.*') ? 'active' : '' }}">Tax Settings</a>

@@ -252,7 +252,17 @@
         $statusLabel = static fn (string|null $code): string => $code && isset($orderStatuses[$code]) ? $orderStatuses[$code]->name : Str::headline((string) ($code ?: 'unknown'));
         $statusClass = static fn (string|null $code): string => $code && isset($orderStatuses[$code]) ? $orderStatuses[$code]->safeBadgeClass() : 'bg-secondary';
         $paymentStatusLabel = static fn (string|null $code): string => $code && isset($paymentStatuses[$code]) ? $paymentStatuses[$code]->name : Str::headline((string) ($code ?: 'unknown'));
-        $paymentStatusClass = static fn (string|null $code): string => $code && isset($paymentStatuses[$code]) ? $paymentStatuses[$code]->safeBadgeClass() : 'bg-secondary';
+        $paymentStatusClass = static fn (string|null $code): string => match ($code) {
+            \App\Models\Order::PAYMENT_PENDING,
+            \App\Models\Order::PAYMENT_PARTIALLY_PAID,
+            \App\Models\Order::PAYMENT_PARTIALLY_REFUNDED => 'bg-warning',
+            \App\Models\Order::PAYMENT_PAID => 'bg-success',
+            \App\Models\Order::PAYMENT_REFUNDED => 'bg-danger',
+            default => $code && isset($paymentStatuses[$code]) ? $paymentStatuses[$code]->safeBadgeClass() : 'bg-secondary',
+        };
+        $headerPaymentStatusLabel = static fn (string|null $code): string => $code === \App\Models\Order::PAYMENT_PENDING
+            ? 'Payment Pending'
+            : $paymentStatusLabel($code);
         $balance = max(0, (float) $order->grand_total - (float) $order->amount_paid);
         $formatAddress = static function (array $parts): array {
             return collect($parts)->filter(fn ($value) => filled($value))->values()->all();
@@ -299,7 +309,9 @@
                 \App\Models\Order::STATUS_CONFIRMED => 'Confirmed',
                 \App\Models\Order::STATUS_PROCESSING => 'Processing',
                 \App\Models\OrderStatus::CODE_PACKED => 'Packed',
+                \App\Models\OrderStatus::CODE_READY_FOR_DISPATCH => 'Ready for Dispatch',
                 \App\Models\OrderStatus::CODE_SHIPPED => 'Shipped',
+                \App\Models\OrderStatus::CODE_IN_TRANSIT => 'In Transit',
                 \App\Models\OrderStatus::CODE_OUT_FOR_DELIVERY => 'Out for Delivery',
                 \App\Models\OrderStatus::CODE_DELIVERED => 'Delivered',
                 \App\Models\Order::STATUS_COMPLETED => 'Completed',
@@ -325,6 +337,7 @@
             ->sortBy('created_at')
             ->values()
             ->filter(fn ($history) => in_array($history->to_status, $progressCodes, true))
+            ->filter(fn ($history) => $orderActivityPresenter->type($history) === 'status')
             ->reject(fn ($history) => ($history->metadata['action'] ?? null) === 'merchant_cod_payment_received')
             ->keyBy('to_status');
         $commentVisibilityLabels = (array) config('order_comments.visibilities', []);
@@ -348,7 +361,9 @@
         $canStartProcessing = in_array(\App\Models\Order::STATUS_PROCESSING, $allowedNextStatuses, true);
         $canMarkReadyForPickup = in_array(\App\Models\Order::STATUS_READY_FOR_PICKUP, $allowedNextStatuses, true);
         $canMarkPacked = in_array(\App\Models\OrderStatus::CODE_PACKED, $allowedNextStatuses, true);
+        $canMarkReadyForDispatch = in_array(\App\Models\OrderStatus::CODE_READY_FOR_DISPATCH, $allowedNextStatuses, true);
         $canMarkShipped = in_array(\App\Models\OrderStatus::CODE_SHIPPED, $allowedNextStatuses, true);
+        $canMarkInTransit = in_array(\App\Models\OrderStatus::CODE_IN_TRANSIT, $allowedNextStatuses, true);
         $canMarkOutForDelivery = in_array(\App\Models\OrderStatus::CODE_OUT_FOR_DELIVERY, $allowedNextStatuses, true);
         $canMarkDelivered = in_array(\App\Models\OrderStatus::CODE_DELIVERED, $allowedNextStatuses, true);
         $canCompletePickup = $order->fulfilment_type === \App\Models\Order::FULFILMENT_PICKUP && in_array(\App\Models\Order::STATUS_COMPLETED, $allowedNextStatuses, true);
@@ -357,13 +372,23 @@
         $startProcessingLabel = $statusActionLabels[\App\Models\Order::STATUS_PROCESSING] ?? 'Start Processing';
         $markReadyForPickupLabel = $statusActionLabels[\App\Models\Order::STATUS_READY_FOR_PICKUP] ?? 'Mark Ready for Pickup';
         $markPackedLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_PACKED] ?? 'Mark Packed';
+        $markReadyForDispatchLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_READY_FOR_DISPATCH] ?? 'Mark Ready for Dispatch';
         $markShippedLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_SHIPPED] ?? 'Mark Shipped';
+        $markInTransitLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_IN_TRANSIT] ?? 'Mark In Transit';
         $markOutForDeliveryLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_OUT_FOR_DELIVERY] ?? 'Mark Out for Delivery';
         $markDeliveredLabel = $statusActionLabels[\App\Models\OrderStatus::CODE_DELIVERED] ?? 'Mark Delivered';
         $completePickupLabel = $statusActionLabels[\App\Models\Order::STATUS_COMPLETED] ?? 'Complete Pickup';
         $cancelOrderLabel = $statusActionLabels[\App\Models\Order::STATUS_CANCELLED] ?? 'Cancel Order';
         $requiresPickupPaymentConfirmation = $canCompletePickup && $order->payment_method === 'cash_at_shop' && $order->payment_status !== \App\Models\Order::PAYMENT_PAID;
         $requiresDeliveryCodPaymentConfirmation = $canMarkDelivered && $order->payment_method === 'cash_on_delivery' && $order->payment_status !== \App\Models\Order::PAYMENT_PAID;
+        $latestUpiAttempt = $order->directMerchantUpiAttempts->sortByDesc('sequence')->first();
+        $hasSubmittedUpiAttempt = $latestUpiAttempt?->status === \App\Models\DirectMerchantUpiAttempt::STATUS_SUBMITTED;
+        $hasLegacyUpiRejection = $order->statusHistories->contains(
+            fn ($history) => data_get($history->metadata, 'action') === \App\Models\OrderStatusHistory::ACTION_UPI_PAYMENT_REJECTED
+        );
+        $hasActionableLegacyUpi = ! $latestUpiAttempt && ! $hasLegacyUpiRejection && filled($order->payment_reference) && in_array($order->payment_status, [\App\Models\Order::PAYMENT_PENDING, \App\Models\Order::PAYMENT_UNPAID], true);
+        $canRefund = $order->order_status === \App\Models\Order::STATUS_COMPLETED && collect($refundableQuantities)->sum() > 0;
+        $canExchange = $order->order_status === \App\Models\Order::STATUS_COMPLETED && collect($exchangeableQuantities)->sum() > 0;
     @endphp
 
     @if($errors->any())
@@ -378,7 +403,8 @@
                 <div>
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                         <h3 class="mb-0">{{ $order->order_number }}</h3>
-                        <span class="badge {{ $statusClass($order->order_status) }} bg-opacity-10 text-body">{{ $statusLabel($order->order_status) }}</span>
+                        <span class="badge {{ $statusClass($order->order_status) }} bg-opacity-10 text-body"><span>Order</span> {{ $statusLabel($order->order_status) }}</span>
+                        <span class="badge {{ $paymentStatusClass($order->payment_status) }} bg-opacity-10 text-body" data-payment-status-badge>{{ $headerPaymentStatusLabel($order->payment_status) }}</span>
                     </div>
                     <div class="text-muted mb-2">Placed {{ app_datetime($order->created_at) }}</div>
                     <div class="order-meta-line fw-semibold">
@@ -390,8 +416,20 @@
                     </div>
                 </div>
                 <div class="order-action-slot">
-                    @if($canAcceptOrder || $canStartProcessing || $canMarkReadyForPickup || $canMarkPacked || $canMarkShipped || $canMarkOutForDelivery || $canMarkDelivered || $canCompletePickup || $canCancelOrder)
+                    @if($canRefund || $canExchange || $canAcceptOrder || $canStartProcessing || $canMarkReadyForPickup || $canMarkPacked || $canMarkReadyForDispatch || $canMarkShipped || $canMarkInTransit || $canMarkOutForDelivery || $canMarkDelivered || $canCompletePickup || $canCancelOrder)
                         <div class="d-flex flex-wrap justify-content-end gap-2">
+                            @if($canRefund)
+                                <a href="{{ route('merchant.sales.refund', $order) }}" class="btn btn-primary">
+                                    <i class="ph-arrow-u-down-left me-1"></i>
+                                    Process Refund
+                                </a>
+                            @endif
+                            @if($canExchange)
+                                <a href="{{ route('merchant.sales.exchange', $order) }}" class="btn btn-warning">
+                                    <i class="ph-swap me-1"></i>
+                                    Process Exchange
+                                </a>
+                            @endif
                             @if($canCancelOrder)
                                 <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">
                                     {{ $cancelOrderLabel }}
@@ -422,10 +460,22 @@
                                     <button type="submit" class="btn btn-primary">{{ $markPackedLabel }}</button>
                                 </form>
                             @endif
+                            @if($canMarkReadyForDispatch)
+                                <form method="POST" action="{{ route('merchant.orders.ready-for-dispatch', $order) }}" data-submit-once>
+                                    @csrf
+                                    <button type="submit" class="btn btn-primary">{{ $markReadyForDispatchLabel }}</button>
+                                </form>
+                            @endif
                             @if($canMarkShipped)
                                 <form method="POST" action="{{ route('merchant.orders.ship', $order) }}" data-submit-once>
                                     @csrf
                                     <button type="submit" class="btn btn-primary">{{ $markShippedLabel }}</button>
+                                </form>
+                            @endif
+                            @if($canMarkInTransit)
+                                <form method="POST" action="{{ route('merchant.orders.in-transit', $order) }}" data-submit-once>
+                                    @csrf
+                                    <button type="submit" class="btn btn-primary">{{ $markInTransitLabel }}</button>
                                 </form>
                             @endif
                             @if($canMarkOutForDelivery)
@@ -868,13 +918,15 @@
                                         <div class="text-muted fs-sm mt-1">{{ $activity->createdBy?->name ? 'Added by '.$activity->createdBy->name : 'Added by system' }}</div>
                                     @else
                                         @php
-                                            $activityLabel = ($activity->metadata['action'] ?? null) === 'merchant_cod_payment_received'
-                                                ? 'Payment Received'
-                                                : ($activity->from_status ? $statusLabel($activity->to_status) : 'Order Placed');
+                                            $activityLabel = $orderActivityPresenter->title($activity)
+                                                ?? (($activity->metadata['action'] ?? null) === 'merchant_cod_payment_received'
+                                                    ? 'Payment Received'
+                                                    : ($activity->from_status ? $statusLabel($activity->to_status) : 'Order Placed'));
+                                            $activityDescription = $orderActivityPresenter->merchantDescription($order, $activity);
                                         @endphp
                                         <div class="fw-semibold mb-1">{{ $activityLabel }}</div>
-                                        @if($activity->notes)
-                                            <div class="mt-1">{{ $activity->notes }}</div>
+                                        @if($activityDescription)
+                                            <div class="mt-1">{{ $activityDescription }}</div>
                                         @endif
                                         <div class="text-muted fs-sm mt-1">{{ $activity->changedBy?->name ? 'Updated by '.$activity->changedBy->name : 'System' }}</div>
                                     @endif
@@ -1020,6 +1072,45 @@
                     <div class="order-money-row"><span>Order Total</span><span class="fw-semibold">{{ $money($order->grand_total) }}</span></div>
                     <div class="order-money-row"><span>Amount Paid</span><span>{{ $money($order->amount_paid) }}</span></div>
                     <div class="order-money-row mb-0"><span>Balance</span><span class="fw-semibold">{{ $money($balance) }}</span></div>
+                    @if($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI)
+                        <hr>
+                        <h6>UPI Payment Verification</h6>
+                        <div class="text-muted fs-sm mb-1">Customer Submitted Reference</div>
+                        <div class="fw-semibold mb-3">{{ $latestUpiAttempt?->submitted_reference ?: ($order->payment_reference ?: 'Not provided') }}</div>
+                        @if($order->payment_status === \App\Models\Order::PAYMENT_PAID)
+                            <div class="text-muted fs-sm mb-1">Confirmed UPI Reference</div>
+                            <div class="fw-semibold">{{ $order->upi_txn }}</div>
+                        @elseif($hasSubmittedUpiAttempt || $hasActionableLegacyUpi)
+                            <form method="POST" action="{{ route('merchant.orders.upi-payment.confirm', $order) }}" class="mb-3">
+                                @csrf
+                                <label for="upi_txn" class="form-label fw-semibold">Actual UPI Reference</label>
+                                <input
+                                    id="upi_txn"
+                                    name="upi_txn"
+                                    type="text"
+                                    maxlength="100"
+                                    required
+                                    value="{{ old('upi_txn', $order->upi_txn ?: $order->payment_reference) }}"
+                                    class="form-control @error('upi_txn') is-invalid @enderror"
+                                >
+                                @error('upi_txn')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <button type="submit" class="btn btn-success mt-3">Confirm Payment</button>
+                            </form>
+                            <form method="POST" action="{{ route('merchant.orders.upi-payment.reject', $order) }}">
+                                @csrf
+                                <label for="upi_rejection_reason" class="form-label fw-semibold">Payment Not Found / Rejection Reason</label>
+                                <textarea id="upi_rejection_reason" name="upi_rejection_reason" rows="2" maxlength="500" required class="form-control @error('upi_rejection_reason') is-invalid @enderror">{{ old('upi_rejection_reason') }}</textarea>
+                                @error('upi_rejection_reason')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <button type="submit" class="btn btn-outline-danger mt-3">Payment Not Found</button>
+                            </form>
+                        @elseif($latestUpiAttempt?->status === \App\Models\DirectMerchantUpiAttempt::STATUS_REJECTED)
+                            <div class="alert alert-warning mb-0">
+                                Payment verification was rejected. Waiting for the customer to submit a corrected UPI reference.
+                            </div>
+                        @else
+                            <div class="text-muted">No UPI reference is currently awaiting verification.</div>
+                        @endif
+                    @endif
                 </div>
             </div>
 

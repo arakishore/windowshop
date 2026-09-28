@@ -10,7 +10,7 @@
 @section('content')
     <div class="card">
         <div class="card-header">
-            <h5 class="mb-0">Reusable WindowShop Templates</h5>
+            <h5 class="mb-0">Reusable {{ $marketplaceName }} Templates</h5>
         </div>
         <div class="card-body border-bottom">
             <form method="GET" action="{{ route('admin.banner-library.index') }}" class="row g-3 align-items-end">

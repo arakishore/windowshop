@@ -5,14 +5,16 @@ use App\Http\Controllers\Admin\Auth\AdminAuthController;
 use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\BannerLibraryController;
 use App\Http\Controllers\Admin\BannerTemplateController;
+use App\Http\Controllers\Admin\CmsPageController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\EmailSettingsController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
 use App\Http\Controllers\Admin\MasterData\CustomerCancellationReasonController;
 use App\Http\Controllers\Admin\MasterData\OrderStatusController;
 use App\Http\Controllers\Admin\MasterData\PaymentStatusController;
-use App\Http\Controllers\Admin\MasterData\PostalCodeRestrictionController;
 use App\Http\Controllers\Admin\MasterData\PostalCodeController;
+use App\Http\Controllers\Admin\MasterData\PostalCodeRestrictionController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupController;
 use App\Http\Controllers\Admin\MasterData\ProductAttributeGroupValueController;
 use App\Http\Controllers\Admin\MasterData\ProductCategoryAttributeGroupController;
@@ -24,15 +26,19 @@ use App\Http\Controllers\Admin\MasterData\TaxRateComponentController;
 use App\Http\Controllers\Admin\MasterData\TaxRateController;
 use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantShopController;
+use App\Http\Controllers\Admin\NotificationTemplateController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ProductReviewController as AdminProductReviewController;
 use App\Http\Controllers\Admin\SystemSettingController;
 use App\Http\Controllers\Customer\Auth\CustomerAuthController;
 use App\Http\Controllers\Storefront\AccountAddressController;
 use App\Http\Controllers\Storefront\CartItemController;
 use App\Http\Controllers\Storefront\CheckoutAddressController;
 use App\Http\Controllers\Storefront\CheckoutController;
+use App\Http\Controllers\Storefront\CouponController;
 use App\Http\Controllers\Storefront\CustomerAccountController;
 use App\Http\Controllers\Storefront\CustomerLocationController;
+use App\Http\Controllers\Storefront\ProductReviewController;
 use App\Http\Controllers\Storefront\StorefrontController;
 use App\Http\Controllers\Storefront\WishlistController;
 use Illuminate\Support\Facades\Route;
@@ -44,8 +50,12 @@ Route::get('/', function () {
 Route::get('/storefront', [StorefrontController::class, 'home'])->name('storefront.home');
 Route::post('/location/postal-code', [CustomerLocationController::class, 'store'])->name('storefront.location.postal-code.store');
 Route::post('/location/detect', [CustomerLocationController::class, 'detect'])->name('storefront.location.detect');
+Route::get('/about', [StorefrontController::class, 'about'])->name('storefront.about.short');
 Route::get('/about-us', [StorefrontController::class, 'about'])->name('storefront.about');
 Route::get('/stores', [StorefrontController::class, 'stores'])->name('storefront.stores');
+Route::get('/stores/{slug}/offers', [StorefrontController::class, 'storeOfferProducts'])->name('storefront.stores.offers');
+Route::get('/stores/{slug}/pages/{pageSlug}', [StorefrontController::class, 'storeCmsPage'])->name('storefront.stores.pages.show');
+Route::get('/stores/{slug}', [StorefrontController::class, 'storeProfile'])->name('storefront.stores.show');
 Route::get('/testimonials', [StorefrontController::class, 'testimonials'])->name('storefront.testimonials');
 Route::get('/faq', [StorefrontController::class, 'faq'])->name('storefront.faq');
 Route::get('/terms-and-conditions', [StorefrontController::class, 'terms'])->name('storefront.terms');
@@ -73,7 +83,13 @@ Route::post('/account/addresses/{address}/default-delivery', [AccountAddressCont
 Route::post('/account/addresses/{address}/default-billing', [AccountAddressController::class, 'defaultBilling'])->name('storefront.account.addresses.default-billing');
 Route::get('/account/orders', [CustomerAccountController::class, 'orders'])->name('storefront.account.orders');
 Route::get('/account/orders/{order}', [CustomerAccountController::class, 'orderDetail'])->name('storefront.account.orders.show');
+Route::get('/account/orders/{order}/receipt', [CustomerAccountController::class, 'orderReceipt'])->name('storefront.account.orders.receipt');
 Route::post('/account/orders/{order}/cancel', [CustomerAccountController::class, 'cancelOrder'])->name('storefront.account.orders.cancel');
+Route::post('/account/orders/{order}/upi-reference', [CustomerAccountController::class, 'resubmitUpiReference'])->name('storefront.account.orders.upi-reference');
+Route::get('/account/order-items/{orderItem}/review', [ProductReviewController::class, 'create'])->name('storefront.account.reviews.create');
+Route::post('/account/order-items/{orderItem}/review', [ProductReviewController::class, 'store'])->name('storefront.account.reviews.store');
+Route::get('/account/reviews/{review}/edit', [ProductReviewController::class, 'edit'])->name('storefront.account.reviews.edit');
+Route::put('/account/reviews/{review}', [ProductReviewController::class, 'update'])->name('storefront.account.reviews.update');
 Route::get('/account/wishlist', [CustomerAccountController::class, 'wishlist'])->name('storefront.account.wishlist');
 Route::get('/forgot-password', [StorefrontController::class, 'forgotPassword'])->name('storefront.forgot-password');
 Route::view('/demo/shopping-bag-box', 'storefront.pages.demo-shopping-bag-box')->name('storefront.demo.shopping-bag-box');
@@ -83,6 +99,8 @@ Route::delete('/wishlist/products/{product}', [WishlistController::class, 'destr
 Route::post('/cart/items', [CartItemController::class, 'store'])->name('storefront.cart.items.store');
 Route::patch('/cart/items/{cartItem}', [CartItemController::class, 'update'])->name('storefront.cart.items.update');
 Route::delete('/cart/items/{cartItem}', [CartItemController::class, 'destroy'])->name('storefront.cart.items.destroy');
+Route::post('/cart/shops/{shop}/coupon', [CouponController::class, 'store'])->name('storefront.cart.shops.coupon.store');
+Route::delete('/cart/shops/{shop}/coupon', [CouponController::class, 'destroy'])->name('storefront.cart.shops.coupon.destroy');
 Route::post('/products/{slug}/delivery-check', [StorefrontController::class, 'checkProductDelivery'])->name('storefront.product.delivery-check');
 Route::get('/category/{categoryPath}/products/{slug}', [StorefrontController::class, 'productDetailWithCategory'])
     ->where('categoryPath', '.+')
@@ -125,6 +143,18 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware(['auth', 'admin.role'])->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/product-reviews', [AdminProductReviewController::class, 'index'])->name('product-reviews.index');
+        Route::post('/product-reviews/bulk-action', [AdminProductReviewController::class, 'bulkAction'])->name('product-reviews.bulk-action');
+        Route::patch('/product-reviews/{review}/approve', [AdminProductReviewController::class, 'approve'])->name('product-reviews.approve');
+        Route::patch('/product-reviews/{review}/reject', [AdminProductReviewController::class, 'reject'])->name('product-reviews.reject');
+        Route::delete('/product-reviews/{review}', [AdminProductReviewController::class, 'destroy'])->name('product-reviews.destroy');
+        Route::patch('/product-reviews/{review}/restore', [AdminProductReviewController::class, 'restore'])->withTrashed()->name('product-reviews.restore');
+        Route::delete('/product-reviews/{review}/force-delete', [AdminProductReviewController::class, 'forceDelete'])->withTrashed()->name('product-reviews.force-delete');
+        Route::get('cms-pages/{cmsPage}/preview', [CmsPageController::class, 'preview'])->name('cms-pages.preview');
+        Route::post('cms-pages/bulk-action', [CmsPageController::class, 'bulkAction'])->name('cms-pages.bulk-action');
+        Route::resource('cms-pages', CmsPageController::class)
+            ->except(['show'])
+            ->parameters(['cms-pages' => 'cmsPage']);
         Route::resource('master/shop-audiences', ShopAudienceController::class)
             ->except(['show'])
             ->names('master.shop-audiences');
@@ -275,6 +305,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->except(['show']);
         Route::get('settings', [AdminSettingsController::class, 'edit'])->name('settings.edit');
         Route::put('settings', [AdminSettingsController::class, 'update'])->name('settings.update');
+        Route::get('settings/email', [EmailSettingsController::class, 'edit'])->name('email-settings.edit');
+        Route::put('settings/email', [EmailSettingsController::class, 'update'])->name('email-settings.update');
+        Route::post('settings/email/test', [EmailSettingsController::class, 'test'])->name('email-settings.test');
+        Route::get('notification-templates', [NotificationTemplateController::class, 'index'])->name('notification-templates.index');
+        Route::get('notification-templates/rules', [NotificationTemplateController::class, 'rules'])->name('notification-rules.index');
+        Route::put('notification-templates/rules/global', [NotificationTemplateController::class, 'updateGlobalRule'])->name('notification-rules.global.update');
+        Route::get('notification-templates/{notificationTemplate}/edit', [NotificationTemplateController::class, 'edit'])->name('notification-templates.edit');
+        Route::put('notification-templates/{notificationTemplate}', [NotificationTemplateController::class, 'update'])->name('notification-templates.update');
+        Route::put('notification-templates/{notificationTemplate}/preview', [NotificationTemplateController::class, 'preview'])->name('notification-templates.preview');
     });
 
 });

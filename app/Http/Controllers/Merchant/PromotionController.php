@@ -17,20 +17,25 @@ use App\Models\PromotionReward;
 use App\Models\PromotionTarget;
 use App\Models\PromotionTemplate;
 use App\Models\Shop;
+use App\Services\Image\ImageVariantService;
 use App\Services\Merchant\MerchantShopContextService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use RuntimeException;
+use Throwable;
 
 class PromotionController extends Controller
 {
     public function __construct(
         private readonly MerchantShopContextService $shopContextService,
+        private readonly ImageVariantService $imageVariantService,
     ) {
     }
 
@@ -102,12 +107,26 @@ class PromotionController extends Controller
         $this->validateTargets($shop, $data, $template);
         $this->validateCoupon($shop, $data);
 
-        $promotion = DB::transaction(function () use ($shop, $data, $template): Promotion {
-            $promotion = Promotion::query()->create($this->promotionAttributes($shop, $data, $template));
-            $this->replaceConfiguration($promotion, $shop, $data, $template);
+        $newArtworkPath = null;
 
-            return $promotion;
-        });
+        try {
+            $promotion = DB::transaction(function () use ($request, $shop, $data, $template, &$newArtworkPath): Promotion {
+                $promotion = Promotion::query()->create($this->promotionAttributes($shop, $data, $template));
+
+                if ($request->hasFile('promotional_image')) {
+                    $newArtworkPath = $this->storePromotionalArtwork($request, $promotion);
+                    $promotion->forceFill(['promotional_image_path' => $newArtworkPath])->save();
+                }
+
+                $this->replaceConfiguration($promotion, $shop, $data, $template);
+
+                return $promotion;
+            });
+        } catch (Throwable $exception) {
+            $this->deletePromotionalArtwork($newArtworkPath);
+
+            throw $exception;
+        }
 
         return redirect()
             ->route('merchant.promotions.edit', $promotion)
@@ -133,10 +152,32 @@ class PromotionController extends Controller
         $this->validateTargets($shop, $data, $template);
         $this->validateCoupon($shop, $data, $promotion);
 
-        DB::transaction(function () use ($promotion, $shop, $data, $template): void {
-            $promotion->forceFill($this->promotionAttributes($shop, $data, $template, $promotion))->save();
-            $this->replaceConfiguration($promotion, $shop, $data, $template);
-        });
+        $oldArtworkPath = $promotion->promotional_image_path;
+        $newArtworkPath = null;
+
+        try {
+            DB::transaction(function () use ($request, $promotion, $shop, $data, $template, &$newArtworkPath): void {
+                $attributes = $this->promotionAttributes($shop, $data, $template, $promotion);
+
+                if ($request->hasFile('promotional_image')) {
+                    $newArtworkPath = $this->storePromotionalArtwork($request, $promotion);
+                    $attributes['promotional_image_path'] = $newArtworkPath;
+                } elseif ($request->boolean('remove_promotional_image')) {
+                    $attributes['promotional_image_path'] = null;
+                }
+
+                $promotion->forceFill($attributes)->save();
+                $this->replaceConfiguration($promotion, $shop, $data, $template);
+            });
+        } catch (Throwable $exception) {
+            $this->deletePromotionalArtwork($newArtworkPath);
+
+            throw $exception;
+        }
+
+        if ($oldArtworkPath !== $promotion->fresh()->promotional_image_path) {
+            $this->deletePromotionalArtwork($oldArtworkPath, $promotion);
+        }
 
         return redirect()
             ->route('merchant.promotions.edit', $promotion)
@@ -322,12 +363,17 @@ class PromotionController extends Controller
 
         if ($template->reward_type === PromotionReward::TYPE_FREE_GIFT) {
             return [
-                ...$this->targetsForRole(PromotionTarget::ROLE_ELIGIBLE, $data['target_scope'], $data),
-                ...$this->targetsForRole(PromotionTarget::ROLE_GIFT, 'products', $data, 'gift_'),
+                ...$this->targetsForRole(PromotionTarget::ROLE_ELIGIBLE, $data['target_scope'] ?? 'all', $data),
+                [
+                    'target_role' => PromotionTarget::ROLE_GIFT,
+                    'target_type' => PromotionTarget::TYPE_VARIANT,
+                    'target_id' => (int) ($data['gift_variant_id'] ?? 0),
+                    'sort_order' => 10,
+                ],
             ];
         }
 
-        return $this->targetsForRole(PromotionTarget::ROLE_ELIGIBLE, $data['target_scope'], $data);
+        return $this->targetsForRole(PromotionTarget::ROLE_ELIGIBLE, $data['target_scope'] ?? 'all', $data);
     }
 
     private function targetsForRole(string $role, string $scope, array $data, string $prefix = ''): array
@@ -383,6 +429,7 @@ class PromotionController extends Controller
 
     private function validateTargets(Shop $shop, array $data, PromotionTemplate $template): void
     {
+        $errors = [];
         $targetGroups = in_array($template->reward_type, [PromotionReward::TYPE_BUY_X_GET_Y_FREE, PromotionReward::TYPE_BUY_X_GET_Y_DISCOUNT], true)
             ? [
                 ['scope' => $data['buy_target_scope'] ?? 'all', 'prefix' => 'buy_'],
@@ -393,10 +440,8 @@ class PromotionController extends Controller
             ];
 
         if ($template->reward_type === PromotionReward::TYPE_FREE_GIFT) {
-            $targetGroups[] = ['scope' => 'products', 'prefix' => 'gift_'];
+            $this->validateGiftVariantTarget($shop, $data, $errors);
         }
-
-        $errors = [];
 
         foreach ($targetGroups as $group) {
             if (! $group['scope']) {
@@ -427,6 +472,39 @@ class PromotionController extends Controller
 
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function validateGiftVariantTarget(Shop $shop, array $data, array &$errors): void
+    {
+        $productId = (int) ($data['gift_product_id'] ?? 0);
+        $variantId = (int) ($data['gift_variant_id'] ?? 0);
+
+        if ($productId < 1) {
+            $errors['gift_product_id'] = 'Choose a gift product.';
+        }
+
+        if ($variantId < 1) {
+            $errors['gift_variant_id'] = 'Choose a gift variant.';
+        }
+
+        if ($productId < 1 || $variantId < 1) {
+            return;
+        }
+
+        $valid = ProductVariant::query()
+            ->whereKey($variantId)
+            ->where('product_id', $productId)
+            ->where('shop_id', $shop->getKey())
+            ->whereNull('deleted_at')
+            ->whereHas('product', fn ($query) => $query
+                ->where('merchant_id', $shop->merchant_id)
+                ->where('shop_id', $shop->getKey())
+                ->whereNull('deleted_at'))
+            ->exists();
+
+        if (! $valid) {
+            $errors['gift_variant_id'] = 'Selected gift variant must belong to the selected product and active shop.';
         }
     }
 
@@ -536,12 +614,44 @@ class PromotionController extends Controller
             'activationTypes' => $this->activationTypes(),
             'policyModes' => $this->policyModes(),
             'products' => Product::query()
+                ->with([
+                    'primaryImage:id,image_path,thumbnail_path',
+                    'category:id,name',
+                    'brand:id,name',
+                    'variants' => fn ($query) => $query
+                        ->whereNull('deleted_at')
+                        ->where('status', 'active')
+                        ->orderByDesc('is_default')
+                        ->orderBy('sort_order')
+                        ->orderBy('name')
+                        ->select(['id', 'product_id', 'name', 'sku', 'selling_price', 'status', 'is_default', 'sort_order']),
+                ])
                 ->where('merchant_id', $shop->merchant_id)
                 ->where('shop_id', $shop->getKey())
                 ->whereNull('deleted_at')
                 ->where('status', '!=', 'archived')
                 ->orderBy('product_name')
-                ->get(['id', 'product_name', 'slug']),
+                ->get(['id', 'product_name', 'slug', 'product_category_id', 'brand_id', 'primary_image_id', 'status']),
+            'productVariants' => ProductVariant::query()
+                ->with([
+                    'product:id,product_name,primary_image_id,product_category_id,brand_id,status',
+                    'product.primaryImage:id,image_path,thumbnail_path',
+                    'product.category:id,name',
+                    'product.brand:id,name',
+                ])
+                ->where('shop_id', $shop->getKey())
+                ->whereNull('deleted_at')
+                ->where('status', 'active')
+                ->whereHas('product', fn ($query) => $query
+                    ->where('merchant_id', $shop->merchant_id)
+                    ->where('shop_id', $shop->getKey())
+                    ->whereNull('deleted_at')
+                    ->where('status', '!=', 'archived'))
+                ->orderBy('product_id')
+                ->orderByDesc('is_default')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'product_id', 'name', 'sku', 'selling_price']),
             'categories' => $this->categoryOptions($shop),
             'brands' => $this->brandOptions($shop),
             'collections' => ProductCollection::query()
@@ -628,6 +738,44 @@ class PromotionController extends Controller
         }
 
         return $slug;
+    }
+
+    private function storePromotionalArtwork(Request $request, Promotion $promotion): string
+    {
+        $directory = "promotions/{$promotion->uuid}/artwork/".Str::uuid();
+
+        try {
+            $paths = $this->imageVariantService->store(
+                $request->file('promotional_image'),
+                'offer_banner_web',
+                $directory,
+            );
+        } catch (Throwable $exception) {
+            Storage::disk('public')->deleteDirectory($directory);
+
+            if ($exception instanceof RuntimeException) {
+                throw ValidationException::withMessages([
+                    'promotional_image' => $exception->getMessage(),
+                ]);
+            }
+
+            throw $exception;
+        }
+
+        return $paths['web'] ?? array_values($paths)[0];
+    }
+
+    private function deletePromotionalArtwork(?string $path, ?Promotion $promotion = null): void
+    {
+        if (! $path) {
+            return;
+        }
+
+        if ($promotion !== null && ! str_starts_with($path, "promotions/{$promotion->uuid}/artwork/")) {
+            return;
+        }
+
+        Storage::disk('public')->deleteDirectory(dirname($path));
     }
 
     private function statuses(): array

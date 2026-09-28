@@ -9,6 +9,8 @@ class MarketplaceLogoService
 {
     public const SETTING_KEY = 'marketplace.logo';
 
+    public const FOOTER_SETTING_KEY = 'marketplace.footer_logo';
+
     public const DEFAULT_LOGO_PATH = 'assets/admin/images/logov2.png';
 
     public const MANAGED_DIRECTORY = 'marketplace/logo';
@@ -33,6 +35,28 @@ class MarketplaceLogoService
         }
 
         return asset(self::DEFAULT_LOGO_PATH);
+    }
+
+    public function footerPath(): ?string
+    {
+        $path = SystemSetting::query()
+            ->where('key', self::FOOTER_SETTING_KEY)
+            ->where('status', SystemSetting::STATUS_ACTIVE)
+            ->whereNull('deleted_at')
+            ->value('value');
+
+        return is_string($path) && $path !== '' ? $path : null;
+    }
+
+    public function footerUrl(): string
+    {
+        $path = $this->footerPath();
+
+        if ($path !== null && $this->isManagedPath($path) && Storage::disk('public')->exists($path)) {
+            return asset('storage/'.$path);
+        }
+
+        return $this->url();
     }
 
     public function isManagedPath(?string $path): bool

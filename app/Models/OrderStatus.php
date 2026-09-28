@@ -19,8 +19,10 @@ class OrderStatus extends Model
     public const CODE_CONFIRMED = 'confirmed';
     public const CODE_PROCESSING = 'processing';
     public const CODE_PACKED = 'packed';
+    public const CODE_READY_FOR_DISPATCH = 'ready_for_dispatch';
     public const CODE_READY_FOR_PICKUP = 'ready_for_pickup';
     public const CODE_SHIPPED = 'shipped';
+    public const CODE_IN_TRANSIT = 'in_transit';
     public const CODE_OUT_FOR_DELIVERY = 'out_for_delivery';
     public const CODE_DELIVERED = 'delivered';
     public const CODE_COMPLETED = 'completed';
@@ -232,6 +234,17 @@ class OrderStatus extends Model
                 'customer_description' => 'Your order has been packed and is ready for dispatch.',
                 'internal_notes' => 'Waiting for shipping or pickup.',
             ],
+            self::CODE_READY_FOR_DISPATCH => [
+                'name' => 'Ready for Dispatch',
+                'customer_label' => 'Ready for Dispatch',
+                'category' => self::CATEGORY_PROCESSING,
+                'badge_type' => self::BADGE_INFO,
+                'sort_order' => 45,
+                'is_terminal' => false,
+                'admin_description' => 'Order is packed and ready to be handed over for delivery.',
+                'customer_description' => 'Your order is ready for dispatch.',
+                'internal_notes' => 'Delivery workflow status between Packed and Shipped.',
+            ],
             self::CODE_READY_FOR_PICKUP => [
                 'name' => 'Ready for Pickup',
                 'customer_label' => 'Ready for Pickup',
@@ -253,6 +266,17 @@ class OrderStatus extends Model
                 'admin_description' => 'Order has been handed over to the courier.',
                 'customer_description' => 'Your order has been shipped.',
                 'internal_notes' => 'Tracking information may be attached. Next status: Delivered.',
+            ],
+            self::CODE_IN_TRANSIT => [
+                'name' => 'In Transit',
+                'customer_label' => 'In Transit',
+                'category' => self::CATEGORY_SHIPPING,
+                'badge_type' => self::BADGE_PRIMARY,
+                'sort_order' => 65,
+                'is_terminal' => false,
+                'admin_description' => 'Order is moving through the delivery network.',
+                'customer_description' => 'Your order is in transit.',
+                'internal_notes' => 'Delivery workflow status between Shipped and Out for Delivery.',
             ],
             self::CODE_OUT_FOR_DELIVERY => [
                 'name' => 'Out for Delivery',

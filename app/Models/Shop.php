@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Traits\HasUuid;
+use App\Services\Merchant\ShopPageInitializer;
 use App\Services\Merchant\ShopSettingsInitializer;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\Promotion\ShopPromotionStarterService;
@@ -57,6 +58,7 @@ class Shop extends Model
     {
         static::created(function (Shop $shop): void {
             app(ShopSettingsInitializer::class)->initialize((int) $shop->getKey());
+            app(ShopPageInitializer::class)->initialize((int) $shop->getKey());
             app(ShopPromotionStarterService::class)->createMissingSystemStartersForShop($shop);
         });
     }
@@ -105,6 +107,11 @@ class Shop extends Model
     public function settings(): HasMany
     {
         return $this->hasMany(ShopSetting::class, 'shop_id');
+    }
+
+    public function pages(): HasMany
+    {
+        return $this->hasMany(ShopPage::class);
     }
 
     public function createdBy(): BelongsTo

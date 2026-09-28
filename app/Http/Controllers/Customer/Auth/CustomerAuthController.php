@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Customer\Auth;
 
 use App\Enums\UserRegistrationSource;
+use App\Events\CustomerRegistered;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Cart\CartMergeService;
 use App\Services\Cart\CartResolver;
 use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Customer\CustomerIdentityResolver;
+use App\Services\Storefront\StorefrontCountryResolver;
 use App\Services\Storefront\StorefrontCustomerContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,8 +26,8 @@ class CustomerAuthController extends Controller
         private readonly CartMergeService $cartMerge,
         private readonly CheckoutFlowService $checkout,
         private readonly CustomerIdentityResolver $customers,
-    ) {
-    }
+        private readonly StorefrontCountryResolver $countries,
+    ) {}
 
     public function login(Request $request): RedirectResponse
     {
@@ -71,13 +73,25 @@ class CustomerAuthController extends Controller
 
     public function register(Request $request): RedirectResponse
     {
+        $defaultCountry = $this->countries->defaultCountry();
+        $mobileRules = ['required', 'unique:users,mobile'];
+
+        if ($this->countries->isIndia($defaultCountry)) {
+            $mobileRules[] = 'digits:10';
+        } else {
+            $mobileRules[] = 'string';
+            $mobileRules[] = 'max:20';
+        }
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'mobile' => ['nullable', 'string', 'max:20', 'unique:users,mobile'],
+            'mobile' => $mobileRules,
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'terms' => ['accepted'],
+        ], [
+            'mobile.digits' => 'Please enter a 10-digit mobile number without country code.',
         ]);
 
         $guestToken = $request->session()->get(CartResolver::SESSION_TOKEN_KEY);
@@ -95,6 +109,8 @@ class CustomerAuthController extends Controller
             ])->save();
             $this->assignCustomerRole($user);
             $this->customers->resolveOrCreateForUser($user);
+
+            CustomerRegistered::dispatch($user->refresh(), "customer.registered:{$user->uuid}");
 
             return $user->refresh();
         });

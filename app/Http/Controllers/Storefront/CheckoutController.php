@@ -7,8 +7,8 @@ use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Services\Checkout\CheckoutFlowService;
-use App\Services\Checkout\StorefrontCheckoutOrderService;
 use App\Services\Checkout\CheckoutPageService;
+use App\Services\Checkout\StorefrontCheckoutOrderService;
 use App\Services\Checkout\StorefrontDeliveryService;
 use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Storefront\NavigationService;
@@ -32,8 +32,7 @@ class CheckoutController extends Controller
         private readonly StorefrontPaymentMethodService $payments,
         private readonly NavigationService $navigation,
         private readonly StorefrontCustomerContext $customerContext,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): RedirectResponse|View
     {
@@ -41,6 +40,14 @@ class CheckoutController extends Controller
             return redirect()
                 ->route('storefront.cart')
                 ->with('error', 'Your cart is empty.');
+        }
+
+        if ($request->query->has('shop') && ! $this->checkout->selectShop($request, (int) $request->query('shop'))) {
+            return redirect()->route('storefront.cart')->with('error', 'Please choose a valid shop from your cart.');
+        }
+
+        if ($this->checkout->selectedShopId($request) === null) {
+            return redirect()->route('storefront.cart')->with('error', 'Please choose a shop to continue checkout.');
         }
 
         $this->checkout->rememberIntent($request);
@@ -68,6 +75,10 @@ class CheckoutController extends Controller
                 ->with('error', 'Your cart is empty.');
         }
 
+        if ($this->checkout->selectedShopId($request) === null) {
+            return redirect()->route('storefront.cart')->with('error', 'Please choose a shop to continue checkout.');
+        }
+
         $this->checkout->rememberIntent($request);
 
         if ($this->checkout->isCustomer($request)) {
@@ -92,7 +103,7 @@ class CheckoutController extends Controller
         $globalCustomer = $this->customerContext->customer($request);
         abort_unless($globalCustomer instanceof Customer, 403);
 
-        if (! $this->checkout->hasCartItems($request)) {
+        if (! $this->checkout->hasCheckoutItems($request)) {
             return response()->json([
                 'ok' => false,
                 'message' => 'Your cart is empty.',
@@ -133,7 +144,7 @@ class CheckoutController extends Controller
         $globalCustomer = $this->customerContext->customer($request);
         abort_unless($globalCustomer instanceof Customer, 403);
 
-        if (! $this->checkout->hasCartItems($request)) {
+        if (! $this->checkout->hasCheckoutItems($request)) {
             return redirect()
                 ->route('storefront.cart')
                 ->with('error', 'Your cart is empty.');
@@ -151,7 +162,15 @@ class CheckoutController extends Controller
             'payment_method' => ['required', Rule::in([
                 StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
                 StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+                StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
             ])],
+            'upi_reference' => [
+                Rule::requiredIf(fn (): bool => $request->input('payment_method') === StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI),
+                'nullable',
+                'string',
+                'max:100',
+                'regex:/^[A-Za-z0-9][A-Za-z0-9._-]{3,99}$/',
+            ],
             'customer_order_note' => ['nullable', 'string', 'max:1000'],
             'browser_total' => ['nullable'],
         ]);
@@ -195,6 +214,7 @@ class CheckoutController extends Controller
                 $data['payment_method'],
                 $billingAddress,
                 $data['customer_order_note'] ?? null,
+                $data['upi_reference'] ?? null,
             );
         } catch (ValidationException $exception) {
             throw $exception;

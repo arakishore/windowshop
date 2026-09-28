@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant change-password form for the authenticated user's account. --}}
 @extends('layouts.merchant')
 
-@section('title', 'Change Password | WindowShop')
+@section('title', 'Change Password | ' . $marketplaceName)
 
 @section('page_title', 'Change Password')
 

@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant shop creation form. --}}
 @extends('layouts.merchant')
 
-@section('title', 'Add Shop | WindowShop')
+@section('title', 'Add Shop | ' . $marketplaceName)
 
 @section('page_title', 'Add Shop')
 

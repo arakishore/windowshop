@@ -4,7 +4,7 @@
 @section('breadcrumb')
     <x-page-header
         title="Refund sale"
-        :breadcrumbs="['Merchant' => route('merchant.dashboard'), 'Sales History' => route('merchant.sales.index'), $order->order_number => route('merchant.sales.show', $order), 'Refund sale' => null]"
+        :breadcrumbs="['Merchant' => route('merchant.dashboard'), $orderBackSectionLabel => $orderBackIndexRoute, $order->order_number => $orderBackRoute, 'Refund sale' => null]"
     />
 @endsection
 
@@ -22,7 +22,7 @@
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
             <div>
                 <div class="d-flex align-items-center gap-2">
-                    <a href="{{ route('merchant.sales.show', $order) }}" class="text-body"><i class="ph-arrow-left"></i></a>
+                    <a href="{{ $orderBackRoute }}" class="text-body"><i class="ph-arrow-left"></i></a>
                     <h3 class="mb-0">Refund sale</h3>
                 </div>
                 <div class="text-muted">Pick the lines + quantities to refund. Stock follows the selected reason by default, then can be changed per line.</div>

@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant account profile form limited to user-owned editable fields. --}}
 @extends('layouts.merchant')
 
-@section('title', 'My Profile | WindowShop')
+@section('title', 'My Profile | ' . $marketplaceName)
 
 @section('page_title', 'My Profile')
 

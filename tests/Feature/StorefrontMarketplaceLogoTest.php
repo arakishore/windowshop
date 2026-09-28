@@ -58,13 +58,14 @@ class StorefrontMarketplaceLogoTest extends TestCase
             ->assertDontSee('/storage/marketplace/logo/missing-logo.png', false);
     }
 
-    public function test_storefront_routes_do_not_allow_customer_logo_updates(): void
+    public function test_storefront_login_validation_does_not_allow_customer_logo_updates(): void
     {
         $this->systemSetting(MarketplaceLogoService::DEFAULT_LOGO_PATH);
 
         $this->post(route('storefront.login'), [
             'marketplace_logo' => 'marketplace/logo/customer.png',
-        ])->assertMethodNotAllowed();
+        ])->assertRedirect()
+            ->assertSessionHasErrors(['email', 'password']);
 
         $this->assertSame(
             MarketplaceLogoService::DEFAULT_LOGO_PATH,

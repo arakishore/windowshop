@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'About Us - WindowShop')
-@section('meta_description', 'Learn how WindowShop helps local shops reach nearby customers and helps customers discover trusted stores around them.')
+@section('title', 'About Us - ' . $marketplaceName)
+@section('meta_description', 'Learn how '.$marketplaceName.' helps local shops reach nearby customers and helps customers discover trusted stores around them.')
 
 @push('styles')
     <style>
@@ -132,7 +132,7 @@
                 </div>
                 <h3>About Us</h3>
                 <p class="text-body-1 cl-text-2">
-                    WindowShop helps people discover trusted local stores, compare what is available nearby,
+                    {{ $marketplaceName }} helps people discover trusted local stores, compare what is available nearby,
                     and connect with merchants who already serve their city.
                 </p>
             </div>
@@ -157,7 +157,7 @@
                     <p class="text-caption-01 fw-semibold text-primary mb-12 text-uppercase">Who We Are</p>
                     <h3 class="mb-16">Driven by local shop growth, not just online traffic</h3>
                     <p class="text-body-1 cl-text-2 mb-16">
-                        WindowShop is built for merchants who want customers to see their store before they walk in.
+                        {{ $marketplaceName }} is built for merchants who want customers to see their store before they walk in.
                         Products, banners, categories, and shop details come together as a simple digital window for the
                         local market.
                     </p>
@@ -173,7 +173,7 @@
                     <p class="text-caption-01 fw-semibold text-primary mb-12 text-uppercase">Our Promise</p>
                     <h3 class="mb-16">We make local discovery useful before, during, and after every visit</h3>
                     <p class="text-body-1 cl-text-2 mb-16">
-                        Shops should not need a complicated ecommerce setup just to be visible. WindowShop gives them a
+                        Shops should not need a complicated ecommerce setup just to be visible. {{ $marketplaceName }} gives them a
                         practical place to show what they sell, what is new, and why local customers should choose them.
                     </p>
                     <p class="text-body-1 cl-text-2 mb-0">
@@ -246,7 +246,7 @@
             <div class="sect-heading type-2 text-center wow fadeInUp">
                 <h3 class="s-title">Good For Shops And Local Clients</h3>
                 <p class="s-desc text-body-1 cl-text-2">
-                    A simple visual space to explain how WindowShop connects both sides of local buying.
+                    A simple visual space to explain how {{ $marketplaceName }} connects both sides of local buying.
                 </p>
             </div>
             <div class="tf-grid-layout md-col-3 gap-20 about-client-cards">

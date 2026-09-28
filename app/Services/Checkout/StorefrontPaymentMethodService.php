@@ -9,23 +9,26 @@ use App\Services\Merchant\ShopSettingsInitializer;
 use App\Services\Merchant\ShopSettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 class StorefrontPaymentMethodService
 {
     public const SELECTED_PAYMENT_SESSION_KEY = 'storefront.checkout.selected_payment_method';
 
     public const PAYMENT_CASH_ON_DELIVERY = 'cash_on_delivery';
+
     public const PAYMENT_CASH_AT_SHOP = 'cash_at_shop';
+
+    public const PAYMENT_MERCHANT_UPI = 'merchant_upi';
 
     public function __construct(
         private readonly ShopSettingsService $shopSettings,
         private readonly ShopSettingsInitializer $shopSettingsInitializer,
         private readonly AdminSettingsService $adminSettings,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string, mixed> $cartData
+     * @param  array<string, mixed>  $cartData
      * @return array{methods: array<int, array<string, mixed>>, selected: ?string, message: ?string}
      */
     public function resolve(Request $request, ?Cart $cart, array $cartData, ?string $fulfillment): array
@@ -33,8 +36,8 @@ class StorefrontPaymentMethodService
         $groups = collect($cartData['shop_groups'] ?? []);
         $shops = $this->shopsById($cart);
         $methods = match ($fulfillment) {
-            StorefrontDeliveryService::FULFILLMENT_DELIVERY => $this->deliveryMethods($groups, $shops),
-            StorefrontDeliveryService::FULFILLMENT_PICKUP => $this->pickupMethods($groups, $shops),
+            StorefrontDeliveryService::FULFILLMENT_DELIVERY => $this->deliveryMethods($groups, $shops, (string) ($cartData['total'] ?? '')),
+            StorefrontDeliveryService::FULFILLMENT_PICKUP => $this->pickupMethods($groups, $shops, (string) ($cartData['total'] ?? '')),
             default => [],
         };
 
@@ -79,17 +82,18 @@ class StorefrontPaymentMethodService
     }
 
     /**
-     * @param Collection<int, array<string, mixed>> $groups
-     * @param Collection<int, Shop> $shops
+     * @param  Collection<int, array<string, mixed>>  $groups
+     * @param  Collection<int, Shop>  $shops
      * @return array<int, array<string, mixed>>
      */
-    private function deliveryMethods(Collection $groups, Collection $shops): array
+    private function deliveryMethods(Collection $groups, Collection $shops, string $amount): array
     {
         if ($groups->isEmpty()) {
             return [];
         }
 
         $failedReason = null;
+        $codEnabled = true;
 
         foreach ($groups as $group) {
             $shop = $shops->get((int) ($group['shop_id'] ?? 0));
@@ -101,7 +105,9 @@ class StorefrontPaymentMethodService
             $this->shopSettingsInitializer->initialize($shopId);
 
             if (! (bool) $this->shopSettings->get($shopId, 'payment', 'cod_enabled', false)) {
-                return [];
+                $codEnabled = false;
+
+                continue;
             }
 
             $subtotal = ((int) ($group['subtotal_cents'] ?? 0)) / 100;
@@ -112,22 +118,34 @@ class StorefrontPaymentMethodService
             }
         }
 
-        return [[
-            'id' => self::PAYMENT_CASH_ON_DELIVERY,
-            'label' => 'Cash on Delivery',
-            'description' => 'Pay when your order is delivered.',
-            'available' => $failedReason === null,
-            'selected' => false,
-            'reason' => $failedReason,
-        ]];
+        $methods = [];
+        if ($codEnabled) {
+            $methods[] = [
+                'id' => self::PAYMENT_CASH_ON_DELIVERY,
+                'label' => 'Cash on Delivery',
+                'description' => 'Pay when your order is delivered.',
+                'available' => $failedReason === null,
+                'selected' => false,
+                'reason' => $failedReason,
+            ];
+        }
+
+        if ($groups->count() === 1) {
+            $upi = $this->merchantUpiMethod($groups->first(), $shops, $amount);
+            if ($upi !== null) {
+                $methods[] = $upi;
+            }
+        }
+
+        return $methods;
     }
 
     /**
-     * @param Collection<int, array<string, mixed>> $groups
-     * @param Collection<int, Shop> $shops
+     * @param  Collection<int, array<string, mixed>>  $groups
+     * @param  Collection<int, Shop>  $shops
      * @return array<int, array<string, mixed>>
      */
-    private function pickupMethods(Collection $groups, Collection $shops): array
+    private function pickupMethods(Collection $groups, Collection $shops, string $amount): array
     {
         if ($groups->count() !== 1) {
             return [];
@@ -142,18 +160,69 @@ class StorefrontPaymentMethodService
         $shopId = (int) $shop->getKey();
         $this->shopSettingsInitializer->initialize($shopId);
 
-        if (! (bool) $this->shopSettings->get($shopId, 'payment', 'cash_at_shop_enabled', true)) {
-            return [];
+        $methods = [];
+
+        if ((bool) $this->shopSettings->get($shopId, 'payment', 'cash_at_shop_enabled', true)) {
+            $methods[] = [
+                'id' => self::PAYMENT_CASH_AT_SHOP,
+                'label' => 'Cash at Shop',
+                'description' => 'Pay when you collect your order.',
+                'available' => true,
+                'selected' => false,
+                'reason' => null,
+            ];
         }
 
-        return [[
-            'id' => self::PAYMENT_CASH_AT_SHOP,
-            'label' => 'Cash at Shop',
-            'description' => 'Pay when you collect your order.',
+        $upi = $this->merchantUpiMethod($group, $shops, $amount);
+        if ($upi !== null) {
+            $methods[] = $upi;
+        }
+
+        return $methods;
+    }
+
+    /**
+     * @param  array<string, mixed>  $group
+     * @param  Collection<int, Shop>  $shops
+     * @return array<string, mixed>|null
+     */
+    private function merchantUpiMethod(array $group, Collection $shops, string $amount): ?array
+    {
+        $shop = $shops->get((int) ($group['shop_id'] ?? 0));
+        if (! $shop instanceof Shop) {
+            return null;
+        }
+
+        $shopId = (int) $shop->getKey();
+        $this->shopSettingsInitializer->initialize($shopId);
+
+        $upiId = trim((string) $this->shopSettings->get($shopId, 'payment', 'merchant_upi_id', ''));
+        $payeeName = trim((string) $this->shopSettings->get($shopId, 'payment', 'merchant_upi_payee_name', ''));
+        $qrPath = trim((string) $this->shopSettings->get($shopId, 'payment', 'merchant_upi_qr_path', ''));
+
+        if (! (bool) $this->shopSettings->get($shopId, 'payment', 'merchant_upi_enabled', false)
+            || $upiId === ''
+            || $payeeName === ''
+            || $qrPath === ''
+            || ! Storage::disk('public')->exists($qrPath)
+        ) {
+            return null;
+        }
+
+        return [
+            'id' => self::PAYMENT_MERCHANT_UPI,
+            'label' => 'Direct Merchant UPI',
+            'description' => 'Pay this shop directly by UPI, then submit your transaction reference.',
             'available' => true,
             'selected' => false,
             'reason' => null,
-        ]];
+            'details' => [
+                'payee_name' => $payeeName,
+                'upi_id' => $upiId,
+                'qr_url' => Storage::disk('public')->url($qrPath),
+                'amount' => $amount,
+            ],
+        ];
     }
 
     private function codAmountFailureReason(int $shopId, float $subtotal): ?string
@@ -172,7 +241,7 @@ class StorefrontPaymentMethodService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $methods
+     * @param  array<int, array<string, mixed>>  $methods
      */
     private function selectedPayment(Request $request, array $methods): ?string
     {

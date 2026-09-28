@@ -46,6 +46,20 @@
     </div>
 
     <div class="pos-cart-footer">
+        <div class="border rounded p-2 mb-2">
+            <label for="pos_coupon_code" class="form-label fw-semibold mb-1">Coupon</label>
+            <div class="input-group input-group-sm">
+                <input id="pos_coupon_code" type="text" class="form-control pos-compact-control js-pos-coupon-code" maxlength="80" placeholder="Coupon code" autocomplete="off">
+                <button type="button" class="btn btn-light js-pos-coupon-apply" data-bs-popup="tooltip" title="Apply coupon to this sale">
+                    Apply
+                </button>
+                <button type="button" class="btn btn-light js-pos-coupon-remove" data-bs-popup="tooltip" title="Remove coupon from this sale">
+                    <i class="ph-x"></i>
+                </button>
+            </div>
+            <div class="text-muted fs-sm mt-1 js-pos-coupon-message"></div>
+        </div>
+
         <div class="pos-totals border-top pt-2 mt-2">
             <button
                 type="button"

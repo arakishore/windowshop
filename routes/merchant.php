@@ -13,6 +13,7 @@ use App\Http\Controllers\Merchant\CollectionController;
 use App\Http\Controllers\Merchant\CustomerAddressController;
 use App\Http\Controllers\Merchant\CustomerController;
 use App\Http\Controllers\Merchant\MerchantDetailsController;
+use App\Http\Controllers\Merchant\MerchantNotificationSettingsController;
 use App\Http\Controllers\Merchant\MerchantSettingsController;
 use App\Http\Controllers\Merchant\MerchantShopContextController;
 use App\Http\Controllers\Merchant\MerchantShopController;
@@ -20,10 +21,11 @@ use App\Http\Controllers\Merchant\MerchantTaxSettingController;
 use App\Http\Controllers\Merchant\OrderController;
 use App\Http\Controllers\Merchant\PosController;
 use App\Http\Controllers\Merchant\PostalCodeRestrictionController;
-use App\Http\Controllers\Merchant\PromotionController;
 use App\Http\Controllers\Merchant\ProductController;
+use App\Http\Controllers\Merchant\PromotionController;
 use App\Http\Controllers\Merchant\ReturnReasonController;
 use App\Http\Controllers\Merchant\SalesHistoryController;
+use App\Http\Controllers\Merchant\ShopPageController;
 use App\Http\Controllers\Merchant\TaxSlabController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,6 +61,12 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
     });
 
     Route::middleware(['auth', 'merchant.role', 'merchant.active_shop'])->group(function (): void {
+        Route::get('/settings/notifications', [MerchantNotificationSettingsController::class, 'edit'])->name('notification-settings.edit');
+        Route::put('/settings/notifications', [MerchantNotificationSettingsController::class, 'update'])->name('notification-settings.update');
+        Route::get('shop-pages/{shopPage}/preview', [ShopPageController::class, 'preview'])->name('shop-pages.preview');
+        Route::resource('shop-pages', ShopPageController::class)
+            ->except(['show'])
+            ->parameters(['shop-pages' => 'shopPage']);
         Route::get('/dashboard', [MerchantAuthController::class, 'dashboard'])->name('dashboard');
         Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
         Route::get('/pos/search', [PosController::class, 'search'])->name('pos.search');
@@ -78,9 +86,13 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
         Route::post('/orders/{order}/ready-for-pickup', [OrderController::class, 'markReadyForPickup'])->name('orders.ready-for-pickup');
         Route::post('/orders/{order}/complete-pickup', [OrderController::class, 'completePickup'])->name('orders.complete-pickup');
         Route::post('/orders/{order}/packed', [OrderController::class, 'markPacked'])->name('orders.packed');
+        Route::post('/orders/{order}/ready-for-dispatch', [OrderController::class, 'markReadyForDispatch'])->name('orders.ready-for-dispatch');
         Route::post('/orders/{order}/ship', [OrderController::class, 'markShipped'])->name('orders.ship');
+        Route::post('/orders/{order}/in-transit', [OrderController::class, 'markInTransit'])->name('orders.in-transit');
         Route::post('/orders/{order}/out-for-delivery', [OrderController::class, 'markOutForDelivery'])->name('orders.out-for-delivery');
         Route::post('/orders/{order}/deliver', [OrderController::class, 'markDelivered'])->name('orders.deliver');
+        Route::post('/orders/{order}/upi-payment/confirm', [OrderController::class, 'confirmUpiPayment'])->name('orders.upi-payment.confirm');
+        Route::post('/orders/{order}/upi-payment/reject', [OrderController::class, 'rejectUpiPayment'])->name('orders.upi-payment.reject');
         Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
         Route::post('/orders/{order}/comments', [OrderController::class, 'storeComment'])->name('orders.comments.store');
         Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');

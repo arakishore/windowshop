@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Merchant;
 
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\MerchantCustomer;
 use App\Models\Order;
@@ -107,6 +108,7 @@ class PosController extends Controller
             'payment_reference' => ['nullable', 'string', 'max:255'],
             'upi_txn' => ['nullable', 'string', 'max:255'],
             'terminal_id' => ['nullable', 'string', 'max:80'],
+            'coupon_code' => ['nullable', 'string', 'max:80'],
             'order_discount' => ['nullable', 'array'],
             'order_discount.type' => ['nullable', Rule::in([Order::DISCOUNT_TYPE_PERCENT, Order::DISCOUNT_TYPE_AMOUNT])],
             'order_discount.value' => ['nullable', 'numeric', 'min:0'],
@@ -121,7 +123,7 @@ class PosController extends Controller
         $posSettings = $this->posSettings((int) $shop->merchant_id);
 
         $this->ensurePosDiscountsAllowed($data, $posSettings);
-        $this->ensureCustomerBelongsToMerchant($shop, (int) ($data['customer_id'] ?? 0));
+        $this->selectedCustomerForMerchant($shop, (int) ($data['customer_id'] ?? 0));
 
         $currencyConfig = $this->adminSettings->currencyConfig();
 
@@ -136,6 +138,7 @@ class PosController extends Controller
             'payment_reference' => $data['payment_reference'] ?? null,
             'upi_txn' => $data['upi_txn'] ?? null,
             'terminal_id' => $data['terminal_id'] ?? null,
+            'applied_coupon_code' => $data['coupon_code'] ?? null,
             'order_discount' => $data['order_discount'] ?? [],
             'cash_rounding' => $posSettings['cashRounding'],
             'order_status' => 'completed',
@@ -173,6 +176,8 @@ class PosController extends Controller
         $data = $request->validate([
             'amount_paid' => ['nullable', 'numeric', 'min:0'],
             'payment_method' => ['nullable', Rule::in(array_keys($this->availablePaymentMethods((int) $shop->merchant_id)))],
+            'customer_id' => ['nullable', 'integer'],
+            'coupon_code' => ['nullable', 'string', 'max:80'],
             'order_discount' => ['nullable', 'array'],
             'order_discount.type' => ['nullable', Rule::in([Order::DISCOUNT_TYPE_PERCENT, Order::DISCOUNT_TYPE_AMOUNT])],
             'order_discount.value' => ['nullable', 'numeric', 'min:0'],
@@ -187,6 +192,7 @@ class PosController extends Controller
         $posSettings = $this->posSettings((int) $shop->merchant_id);
 
         $this->ensurePosDiscountsAllowed($data, $posSettings);
+        $customer = $this->selectedCustomerForMerchant($shop, (int) ($data['customer_id'] ?? 0));
 
         return response()->json([
             'pricing' => $this->posPricingService->price(
@@ -194,6 +200,7 @@ class PosController extends Controller
                 $data,
                 $posSettings['cashRounding'],
                 now(),
+                $customer,
             ),
         ]);
     }
@@ -525,22 +532,25 @@ class PosController extends Controller
         ];
     }
 
-    private function ensureCustomerBelongsToMerchant(Shop $shop, int $customerId): void
+    private function selectedCustomerForMerchant(Shop $shop, int $customerId): ?Customer
     {
         if ($customerId < 1) {
-            return;
+            return null;
         }
 
-        $exists = MerchantCustomer::query()
+        $merchantCustomer = MerchantCustomer::query()
             ->where('merchant_id', $shop->merchant_id)
             ->where('customer_id', $customerId)
-            ->exists();
+            ->where('status', MerchantCustomer::STATUS_ACTIVE)
+            ->first();
 
-        if (! $exists) {
+        if (! $merchantCustomer instanceof MerchantCustomer) {
             throw ValidationException::withMessages([
                 'customer_id' => 'The selected customer is not available for this merchant.',
             ]);
         }
+
+        return Customer::query()->find($customerId);
     }
 
     private function addressPayload(CustomerAddress $address): array

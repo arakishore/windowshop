@@ -2,6 +2,7 @@
 
 namespace App\Services\Checkout;
 
+use App\Events\StorefrontOrderPlaced;
 use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
@@ -13,7 +14,9 @@ use App\Models\User;
 use App\Services\Admin\AdminSettingsService;
 use App\Services\Cart\CartPageService;
 use App\Services\Merchant\MerchantCustomerService;
+use App\Services\Order\DirectMerchantUpiAttemptService;
 use App\Services\Order\OrderCreationService;
+use App\Services\Promotion\Coupons\CouponSessionStore;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -26,10 +29,12 @@ class StorefrontCheckoutOrderService
         private readonly StorefrontDeliveryService $delivery,
         private readonly StorefrontPaymentMethodService $payments,
         private readonly OrderCreationService $orders,
+        private readonly DirectMerchantUpiAttemptService $directUpiAttempts,
         private readonly MerchantCustomerService $merchantCustomers,
         private readonly AdminSettingsService $adminSettings,
-    ) {
-    }
+        private readonly CouponSessionStore $couponStore,
+        private readonly CheckoutFlowService $checkout,
+    ) {}
 
     public function place(
         Request $request,
@@ -39,11 +44,19 @@ class StorefrontCheckoutOrderService
         string $paymentMethod,
         CustomerAddress $billingAddress,
         ?string $customerOrderNote = null,
-    ): Order
-    {
-        return DB::transaction(function () use ($request, $actor, $customer, $fulfillment, $paymentMethod, $billingAddress, $customerOrderNote): Order {
+        ?string $upiReference = null,
+    ): Order {
+        return DB::transaction(function () use ($request, $actor, $customer, $fulfillment, $paymentMethod, $billingAddress, $customerOrderNote, $upiReference): Order {
             $cart = $this->lockedCart($request);
-            $cartData = $this->cartPage->pageData($request);
+            $selectedShopId = $this->checkout->selectedShopId($request);
+
+            if ($selectedShopId === null || ! $cart->items->contains(fn ($item): bool => (int) $item->shop_id === $selectedShopId)) {
+                throw ValidationException::withMessages([
+                    'cart' => 'Please choose a valid shop from your cart.',
+                ]);
+            }
+
+            $cartData = $this->cartPage->dataForCartShop($cart, $request, $selectedShopId);
 
             if ((bool) ($cartData['is_empty'] ?? true)) {
                 throw ValidationException::withMessages([
@@ -89,6 +102,11 @@ class StorefrontCheckoutOrderService
             }
 
             $group = $groups->first();
+            if ((int) ($group['shop_id'] ?? 0) !== $selectedShopId) {
+                throw ValidationException::withMessages([
+                    'cart' => 'The checkout items do not belong to the selected shop.',
+                ]);
+            }
             $shop = $cart->items
                 ->map(fn ($item): ?Shop => $item->shop)
                 ->filter()
@@ -112,18 +130,38 @@ class StorefrontCheckoutOrderService
                 'fulfilment_type' => $fulfillment,
                 'order_status' => Order::STATUS_PENDING,
                 'payment_method' => $paymentMethod,
+                'payment_reference' => $paymentMethod === StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
+                    ? $this->nullableString($upiReference)
+                    : null,
                 'payment_status' => Order::PAYMENT_PENDING,
                 'currency_code' => $this->adminSettings->currencyConfig()['currency'] ?? 'INR',
                 'cash_rounding' => ['method' => 'none', 'applyTo' => []],
                 'amount_paid' => 0,
                 'customer_order_note' => $this->nullableString($customerOrderNote),
                 'status_note' => 'Storefront order placed',
+                'applied_coupon_code' => $this->couponStore->get($request, (int) $shop->getKey()),
                 'items' => $this->orderItems($group['items'] ?? []),
                 'totals' => $this->totalsRows((int) $deliveryData['shipping_cents'], $deliveryData),
             ], $actor);
 
-            $cart->items()->delete();
+            if ($paymentMethod === StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI) {
+                $this->directUpiAttempts->createInitial($order, $actor, (string) $upiReference);
+            }
+
+            $purchasedItemIds = collect($group['items'] ?? [])
+                ->reject(fn (array $item): bool => (bool) ($item['is_generated_gift'] ?? false))
+                ->pluck('id')
+                ->filter(fn ($id): bool => is_numeric($id))
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+            $cart->items()
+                ->where('shop_id', $selectedShopId)
+                ->whereKey($purchasedItemIds)
+                ->delete();
+            $this->couponStore->forget($request, (int) $shop->getKey());
             $this->clearCheckoutState($request);
+
+            StorefrontOrderPlaced::dispatch($order, "storefront.order.placed:{$order->uuid}");
 
             return $order;
         });
@@ -219,12 +257,13 @@ class StorefrontCheckoutOrderService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $items
+     * @param  array<int, array<string, mixed>>  $items
      * @return array<int, array{product_variant_id: int, quantity: int}>
      */
     private function orderItems(array $items): array
     {
         $rows = collect($items)
+            ->reject(fn (array $item): bool => (bool) ($item['is_generated_gift'] ?? false))
             ->map(fn (array $item): array => [
                 'product_variant_id' => (int) ($item['product_variant_id'] ?? $item['id'] ?? 0),
                 'quantity' => (int) ($item['quantity_value'] ?? $item['quantity'] ?? 0),
@@ -243,7 +282,7 @@ class StorefrontCheckoutOrderService
     }
 
     /**
-     * @param array<string, mixed> $deliveryData
+     * @param  array<string, mixed>  $deliveryData
      * @return array<int, array<string, mixed>>
      */
     private function totalsRows(int $shippingCents, array $deliveryData): array
@@ -272,6 +311,7 @@ class StorefrontCheckoutOrderService
             CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY,
             StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY,
             StorefrontPaymentMethodService::SELECTED_PAYMENT_SESSION_KEY,
+            CheckoutFlowService::SELECTED_SHOP_SESSION_KEY,
         ]);
     }
 

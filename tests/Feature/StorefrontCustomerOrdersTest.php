@@ -2,14 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Events\OrderStatusChanged;
 use App\Models\AdminSetting;
 use App\Models\Customer;
 use App\Models\CustomerCancellationReason;
+use App\Models\DirectMerchantUpiAttempt;
 use App\Models\MerchantCancellationReason;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderComment;
+use App\Models\OrderExchange;
 use App\Models\OrderItem;
+use App\Models\OrderRefund;
 use App\Models\OrderStatus;
 use App\Models\OrderStatusHistory;
 use App\Models\OrderTotal;
@@ -17,14 +21,18 @@ use App\Models\PaymentStatus;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductImage;
+use App\Models\ProductReview;
+use App\Models\ProductReviewImage;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\User;
 use Database\Seeders\OrderStatusSeeder;
 use Database\Seeders\PaymentStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -51,6 +59,7 @@ class StorefrontCustomerOrdersTest extends TestCase
     {
         parent::setUp();
 
+        Event::fake([OrderStatusChanged::class]);
         Storage::fake('public');
         $this->seed(OrderStatusSeeder::class);
         $this->seed(PaymentStatusSeeder::class);
@@ -172,14 +181,18 @@ class StorefrontCustomerOrdersTest extends TestCase
         $processingAt = now()->subHours(3);
         $commentAt = now()->subHours(2)->subMinutes(30);
         $packedAt = now()->subHours(2);
-        $shippedAt = now()->subHour();
+        $readyForDispatchAt = now()->subHour()->subMinutes(45);
+        $shippedAt = now()->subHour()->subMinutes(30);
+        $inTransitAt = now()->subHour();
         $outForDeliveryAt = now()->subMinutes(30);
         $this->history($order, null, Order::STATUS_PENDING, $placedAt);
         $this->history($order, Order::STATUS_PENDING, Order::STATUS_CONFIRMED, $confirmedAt);
         $this->history($order, Order::STATUS_CONFIRMED, Order::STATUS_PROCESSING, $processingAt);
         $this->history($order, Order::STATUS_PROCESSING, OrderStatus::CODE_PACKED, $packedAt);
-        $this->history($order, OrderStatus::CODE_PACKED, OrderStatus::CODE_SHIPPED, $shippedAt);
-        $this->history($order, OrderStatus::CODE_SHIPPED, OrderStatus::CODE_OUT_FOR_DELIVERY, $outForDeliveryAt);
+        $this->history($order, OrderStatus::CODE_PACKED, OrderStatus::CODE_READY_FOR_DISPATCH, $readyForDispatchAt);
+        $this->history($order, OrderStatus::CODE_READY_FOR_DISPATCH, OrderStatus::CODE_SHIPPED, $shippedAt);
+        $this->history($order, OrderStatus::CODE_SHIPPED, OrderStatus::CODE_IN_TRANSIT, $inTransitAt);
+        $this->history($order, OrderStatus::CODE_IN_TRANSIT, OrderStatus::CODE_OUT_FOR_DELIVERY, $outForDeliveryAt);
         $this->comment($order, 'Customer visible update', OrderComment::VISIBILITY_CUSTOMER, $commentAt);
         $this->comment($order, 'Merchant only internal note', OrderComment::VISIBILITY_MERCHANT_ONLY, $commentAt);
         $otherOrder = $this->order($globalCustomer, $fixture, ['order_number' => 'ORD-OTHER-COMMENTS']);
@@ -196,9 +209,23 @@ class StorefrontCustomerOrdersTest extends TestCase
             ->assertSee($fixture['shop']->name)
             ->assertSee('Order Progress')
             ->assertSee('Packed')
+            ->assertSee('Ready for Dispatch')
             ->assertSee('Shipped')
+            ->assertSee('In Transit')
             ->assertSee('Out for Delivery')
             ->assertSee('Delivered')
+            ->assertSeeInOrder([
+                'Order Placed',
+                'Confirmed',
+                'Processing',
+                'Packed',
+                'Ready for Dispatch',
+                'Shipped',
+                'In Transit',
+                'Out for Delivery',
+                'Delivered',
+                'Completed',
+            ])
             ->assertSee('Historical Product Name')
             ->assertDontSee('Changed Current Product Name')
             ->assertSee('Large / Grey')
@@ -344,6 +371,100 @@ class StorefrontCustomerOrdersTest extends TestCase
         $this->assertSame(1, substr_count($activity, '<p class="fw-semibold mb-4">Delivered</p>'));
     }
 
+    public function test_customer_activity_renders_refund_and_exchange_as_post_completion_events(): void
+    {
+        $customerUser = $this->customerUser('orders-returns@example.test', 'Returns Customer', '9422945199');
+        $roleId = $this->assignRole($customerUser, 'customer');
+        $customer = $this->globalCustomer($customerUser);
+        $fixture = $this->fixture('Returns Timeline Shop');
+        $originalProduct = $this->product($fixture, 'Timeline Original Product');
+        $replacementProduct = $this->product($fixture, 'Timeline Replacement Product');
+        $order = $this->order($customer, $fixture, [
+            'order_status' => Order::STATUS_COMPLETED,
+            'payment_status' => PaymentStatus::CODE_REFUNDED,
+            'grand_total' => 100,
+        ]);
+        $originalItem = $this->item($order, $originalProduct, ['quantity' => 2, 'line_total' => 100]);
+        $this->history($order, Order::STATUS_READY_FOR_PICKUP, Order::STATUS_COMPLETED, now()->subMinutes(30), [
+            'action' => 'merchant_complete_pickup',
+        ]);
+
+        $refund = OrderRefund::query()->create([
+            'refund_number' => 'REFUND-TIMELINE-001',
+            'order_id' => $order->getKey(),
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'reason_name' => 'Customer return',
+            'refund_method' => 'original',
+            'refund_subtotal' => 40,
+            'refund_tax' => 0,
+            'refund_total' => 40,
+            'status' => OrderRefund::STATUS_COMPLETED,
+            'created_by' => $fixture['merchantUser']->getKey(),
+        ]);
+        $refund->items()->create([
+            'order_item_id' => $originalItem->getKey(),
+            'quantity' => 1,
+            'unit_price' => 40,
+            'line_tax' => 0,
+            'line_total' => 40,
+            'restocked' => true,
+        ]);
+        $this->history($order, Order::STATUS_COMPLETED, Order::STATUS_COMPLETED, now()->subMinutes(20), [
+            'refund_number' => $refund->refund_number,
+            'refund_total' => '40.00',
+        ]);
+
+        $replacementOrder = $this->order($customer, $fixture, [
+            'created_source' => Order::SOURCE_EXCHANGE_REPLACEMENT,
+            'order_status' => Order::STATUS_COMPLETED,
+            'order_number' => 'ORD-REPLACEMENT-TIMELINE',
+        ]);
+        $this->item($replacementOrder, $replacementProduct, ['quantity' => 1, 'line_total' => 60]);
+        $exchange = OrderExchange::query()->create([
+            'exchange_number' => 'EXCH-TIMELINE-001',
+            'original_order_id' => $order->getKey(),
+            'replacement_order_id' => $replacementOrder->getKey(),
+            'merchant_id' => $fixture['merchant']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'returned_total' => 60,
+            'replacement_total' => 60,
+            'difference_amount' => 0,
+            'settlement_type' => OrderExchange::SETTLEMENT_EVEN,
+            'status' => OrderExchange::STATUS_COMPLETED,
+            'created_by' => $fixture['merchantUser']->getKey(),
+        ]);
+        $exchange->items()->create([
+            'order_item_id' => $originalItem->getKey(),
+            'quantity' => 1,
+            'unit_return_value' => 60,
+            'line_tax' => 0,
+            'line_total' => 60,
+            'restocked' => true,
+        ]);
+        $this->history($order, Order::STATUS_COMPLETED, Order::STATUS_COMPLETED, now()->subMinutes(10), [
+            'action' => OrderStatusHistory::ACTION_EXCHANGE_PROCESSED,
+            'exchange_id' => $exchange->getKey(),
+            'exchange_number' => $exchange->exchange_number,
+        ]);
+
+        $response = $this->actingAs($customerUser)
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.orders.show', $order));
+
+        $response->assertOk()
+            ->assertSee('Refund Processed')
+            ->assertSee('Refund of INR 40.00 processed for Timeline Original Product x 1.')
+            ->assertSee('Exchange Processed')
+            ->assertSee('Timeline Original Product x 1 exchanged for Timeline Replacement Product x 1.')
+            ->assertSee('Order Completed')
+            ->assertSee('Thank you for shopping with us.');
+
+        $activity = $this->orderActivitySection($response->getContent());
+        $this->assertSame(1, substr_count($activity, 'Order Completed'));
+        $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->order_status);
+    }
+
     public function test_customer_return_exchange_copy_prefers_valid_until_and_cash_at_shop_visit_guidance(): void
     {
         $customer = $this->customerUser('orders-return-copy@example.test', 'Return Copy Customer', '9422945112');
@@ -372,16 +493,21 @@ class StorefrontCustomerOrdersTest extends TestCase
             'action' => 'merchant_complete_pickup',
         ]);
 
-        $response = $this->actingAs($customer)
-            ->withSession(['active_role_id' => $roleId])
-            ->get(route('storefront.account.orders.show', $order));
+        Carbon::setTestNow(Carbon::parse('2026-09-02 10:00:00'));
+        try {
+            $response = $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->get(route('storefront.account.orders.show', $order));
 
-        $response->assertOk()
-            ->assertSee('Visit the shop for exchange handling.')
-            ->assertSee('Refund is not available for this item.')
-            ->assertSee('Exchange available until '.app_datetime($collectedAt->copy()->addDays(7)).'.')
-            ->assertDontSee('Policy window started')
-            ->assertDontSee('Request Pickup');
+            $response->assertOk()
+                ->assertSee('Visit the shop for exchange handling.')
+                ->assertSee('Refund is not available for this item.')
+                ->assertSee('Exchange available until '.app_datetime($collectedAt->copy()->addDays(7)).'.')
+                ->assertDontSee('Policy window started')
+                ->assertDontSee('Request Pickup');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_customer_return_exchange_copy_handles_expired_and_not_started_windows(): void
@@ -558,6 +684,85 @@ class StorefrontCustomerOrdersTest extends TestCase
             ->assertSee('Order Activity')
             ->assertSee('Customer requested cancellation. Reason: Ordered by mistake. Note: Please do not show this note to customer activity.')
             ->assertSee('Updated by '.$customer->name);
+    }
+
+    public function test_customer_can_resubmit_a_rejected_upi_attempt_without_resetting_order_expiry_baseline(): void
+    {
+        $customer = $this->customerUser('upi-resubmit@example.test', 'UPI Customer', '9422945191');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $other = $this->customerUser('upi-other@example.test', 'Other Customer', '9422945192');
+        $otherRoleId = $this->assignRole($other, 'customer');
+        $fixture = $this->fixture('UPI Resubmit Shop');
+        $createdAt = now()->subMinutes(12)->startOfSecond();
+        $order = $this->order($globalCustomer, $fixture, [
+            'payment_method' => 'merchant_upi',
+            'payment_reference' => 'ORIGINAL123',
+            'payment_status' => PaymentStatus::CODE_PENDING,
+            'amount_paid' => 0,
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ]);
+        $rejected = $order->directMerchantUpiAttempts()->create([
+            'sequence' => 1,
+            'submitted_reference' => 'ORIGINAL123',
+            'status' => DirectMerchantUpiAttempt::STATUS_REJECTED,
+            'active_slot' => null,
+            'submitted_at' => $createdAt,
+            'submitted_by' => $customer->getKey(),
+            'rejected_at' => now()->subMinutes(5),
+            'rejected_by' => $fixture['merchantUser']->getKey(),
+            'rejection_reason' => 'Reference was not found.',
+        ]);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Payment verification rejected')
+            ->assertSee('Reference was not found.')
+            ->assertSee('Submit Corrected UPI Reference');
+
+        $this->actingAs($other)
+            ->withSession(['active_role_id' => $otherRoleId])
+            ->post(route('storefront.account.orders.upi-reference', $order), ['upi_reference' => 'FORGED123'])
+            ->assertNotFound();
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.orders.upi-reference', $order), ['upi_reference' => 'CORRECTED456'])
+            ->assertRedirect(route('storefront.account.orders.show', $order))
+            ->assertSessionHas('success');
+
+        $attempts = $order->directMerchantUpiAttempts()->get();
+        $this->assertCount(2, $attempts);
+        $this->assertSame(DirectMerchantUpiAttempt::STATUS_REJECTED, $rejected->fresh()->status);
+        $this->assertSame('ORIGINAL123', $rejected->fresh()->submitted_reference);
+        $this->assertSame(DirectMerchantUpiAttempt::STATUS_SUBMITTED, $attempts->last()->status);
+        $this->assertSame('CORRECTED456', $attempts->last()->submitted_reference);
+        $this->assertSame('CORRECTED456', $order->fresh()->payment_reference);
+        $this->assertTrue($order->fresh()->created_at->equalTo($createdAt));
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.orders.upi-reference', $order), ['upi_reference' => 'THIRD789'])
+            ->assertSessionHasErrors('upi_reference');
+
+        $this->assertSame(2, $order->directMerchantUpiAttempts()->count());
+
+        foreach ([
+            ['payment_status' => PaymentStatus::CODE_PAID, 'order_status' => Order::STATUS_PENDING],
+            ['payment_status' => PaymentStatus::CODE_PENDING, 'order_status' => Order::STATUS_CANCELLED],
+            ['payment_status' => PaymentStatus::CODE_PENDING, 'order_status' => Order::STATUS_COMPLETED],
+        ] as $state) {
+            $order->forceFill($state)->save();
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $roleId])
+                ->post(route('storefront.account.orders.upi-reference', $order), ['upi_reference' => 'BLOCKED789'])
+                ->assertSessionHasErrors('upi_reference');
+        }
+
+        $this->assertSame(2, $order->directMerchantUpiAttempts()->count());
     }
 
     public function test_customer_can_cancel_unpaid_cod_delivery_order_until_packed_and_inventory_is_restored(): void
@@ -838,6 +1043,293 @@ class StorefrontCustomerOrdersTest extends TestCase
         $select = $this->cancellationReasonSelect($response->getContent());
         $this->assertLessThan(strpos($select, 'Second Global Reason'), strpos($select, 'First Global Reason'));
         $this->assertStringContainsString('value="first_global_reason" data-requires-note="1"', $select);
+    }
+
+    public function test_completed_pickup_and_delivery_items_can_be_reviewed_and_variant_resolves_to_parent_product(): void
+    {
+        foreach ([Order::FULFILMENT_PICKUP, Order::FULFILMENT_DELIVERY] as $index => $fulfilment) {
+            $user = $this->customerUser("review-{$index}@example.test", 'Review Customer', '94229452'.str_pad((string) $index, 2, '0', STR_PAD_LEFT));
+            $roleId = $this->assignRole($user, 'customer');
+            $customer = $this->globalCustomer($user);
+            $fixture = $this->fixture('Review Shop '.$index);
+            $product = $this->product($fixture, 'Reviewed Product '.$index);
+            $variant = $this->variant($product);
+            $order = $this->order($customer, $fixture, ['fulfilment_type' => $fulfilment, 'order_status' => Order::STATUS_COMPLETED]);
+            $item = $this->item($order, $product, ['product_variant_id' => $variant->getKey()]);
+
+            $this->actingAs($user)->withSession(['active_role_id' => $roleId])
+                ->post(route('storefront.account.reviews.store', $item), ['rating' => 5, 'title' => 'Excellent', 'review_text' => 'A genuine purchase review.'])
+                ->assertRedirect(route('storefront.account.orders.show', $order));
+
+            $review = ProductReview::query()->where('order_item_id', $item->getKey())->firstOrFail();
+            $this->assertSame(ProductReview::STATUS_PENDING, $review->status);
+            $this->assertSame($product->getKey(), $review->product_id);
+            $this->assertSame($variant->getKey(), $review->product_variant_id);
+            $this->assertDatabaseMissing('product_reviews', ['order_item_id' => $item->getKey(), 'status' => ProductReview::STATUS_APPROVED]);
+        }
+    }
+
+    public function test_review_security_validation_duplicates_and_edit_ownership_are_enforced(): void
+    {
+        $owner = $this->customerUser('review-owner@example.test', 'Owner Customer', '9422945301');
+        $ownerRole = $this->assignRole($owner, 'customer');
+        $ownerCustomer = $this->globalCustomer($owner);
+        $other = $this->customerUser('review-other@example.test', 'Other Customer', '9422945302');
+        $otherRole = $this->assignRole($other, 'customer');
+        $this->globalCustomer($other);
+        $fixture = $this->fixture('Review Security Shop');
+        $product = $this->product($fixture, 'Security Product');
+        $this->variant($product);
+        $pendingOrder = $this->order($ownerCustomer, $fixture, ['order_status' => Order::STATUS_PROCESSING]);
+        $pendingItem = $this->item($pendingOrder, $product);
+
+        $this->actingAs($owner)->withSession(['active_role_id' => $ownerRole])
+            ->post(route('storefront.account.reviews.store', $pendingItem), ['rating' => 5, 'review_text' => 'Too early'])->assertForbidden();
+
+        $completed = $this->order($ownerCustomer, $fixture, ['order_status' => Order::STATUS_COMPLETED]);
+        $item = $this->item($completed, $product);
+        $this->actingAs($other)->withSession(['active_role_id' => $otherRole])
+            ->post(route('storefront.account.reviews.store', $item), ['rating' => 5, 'review_text' => 'Forged purchase', 'status' => 'approved', 'verified_purchase' => true])->assertForbidden();
+
+        $this->actingAs($owner)->withSession(['active_role_id' => $ownerRole])
+            ->post(route('storefront.account.reviews.store', $item), ['rating' => 6, 'review_text' => 'Invalid'])->assertSessionHasErrors('rating');
+        $this->actingAs($owner)->withSession(['active_role_id' => $ownerRole])
+            ->post(route('storefront.account.reviews.store', $item), ['rating' => 4, 'review_text' => 'Valid', 'status' => 'approved', 'verified_purchase' => false]);
+        $review = ProductReview::query()->where('order_item_id', $item->getKey())->firstOrFail();
+        $this->assertSame(ProductReview::STATUS_PENDING, $review->status);
+        $this->assertFalse(array_key_exists('verified_purchase', $review->getAttributes()));
+
+        $this->actingAs($other)->withSession(['active_role_id' => $otherRole])
+            ->put(route('storefront.account.reviews.update', $review), ['rating' => 1, 'review_text' => 'Not mine'])->assertForbidden();
+        $this->actingAs($owner)->withSession(['active_role_id' => $ownerRole])
+            ->post(route('storefront.account.reviews.store', $item), ['rating' => 4, 'review_text' => 'Duplicate'])->assertConflict();
+
+        $review->update(['status' => ProductReview::STATUS_APPROVED]);
+        $this->actingAs($owner)->withSession(['active_role_id' => $ownerRole])
+            ->put(route('storefront.account.reviews.update', $review), ['rating' => 3, 'review_text' => 'Updated review'])->assertRedirect();
+        $this->assertSame(ProductReview::STATUS_PENDING, $review->fresh()->status);
+    }
+
+    public function test_admin_moderation_controls_public_review_aggregate(): void
+    {
+        $customerUser = $this->customerUser('review-public@example.test', 'Public Customer', '9422945401');
+        $customer = $this->globalCustomer($customerUser);
+        $fixture = $this->fixture('Public Review Shop');
+        $product = $this->product($fixture, 'Public Review Product');
+        $variant = $this->variant($product);
+        $order = $this->order($customer, $fixture, ['order_status' => Order::STATUS_COMPLETED]);
+        $item = $this->item($order, $product, ['product_variant_id' => $variant->getKey()]);
+        $review = ProductReview::query()->create(['customer_id' => $customer->getKey(), 'order_id' => $order->getKey(), 'order_item_id' => $item->getKey(), 'product_id' => $product->getKey(), 'product_variant_id' => $variant->getKey(), 'rating' => 5, 'title' => 'Excellent', 'review_text' => 'Approved text', 'status' => ProductReview::STATUS_PENDING]);
+
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))->assertOk()->assertSee('No reviews yet')->assertDontSee('Approved text');
+
+        $admin = $this->customerUser('review-admin@example.test', 'Review Admin', '9422945402');
+        $this->assignRole($admin, 'admin');
+        $this->actingAs($admin)->patch(route('admin.product-reviews.approve', $review))->assertRedirect();
+        $this->assertSame(ProductReview::STATUS_APPROVED, $review->fresh()->status);
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))->assertOk()->assertSee('5.0 (1 Review)')->assertSee('Approved text')->assertSee('Verified Purchase')->assertSee('href="#customer-reviews"', false)->assertSee('data-review-summary-link', false);
+        $this->actingAs($admin)->patch(route('admin.product-reviews.reject', $review))->assertRedirect();
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))->assertOk()->assertSee('No reviews yet')->assertDontSee('Approved text');
+
+        $secondItem = $this->item($order, $product);
+        $secondReview = ProductReview::query()->create(['customer_id' => $customer->getKey(), 'order_id' => $order->getKey(), 'order_item_id' => $secondItem->getKey(), 'product_id' => $product->getKey(), 'product_variant_id' => $variant->getKey(), 'rating' => 4, 'review_text' => 'Second pending review', 'status' => ProductReview::STATUS_PENDING]);
+
+        $this->actingAs($admin)->post(route('admin.product-reviews.bulk-action'), [
+            'action' => 'approve',
+            'review_ids' => [$review->getKey(), $secondReview->getKey()],
+        ])->assertRedirect();
+        $this->assertSame(ProductReview::STATUS_APPROVED, $review->fresh()->status);
+        $this->assertSame(ProductReview::STATUS_APPROVED, $secondReview->fresh()->status);
+        $this->assertSame($admin->getKey(), $secondReview->fresh()->moderated_by);
+        $this->assertNotNull($secondReview->fresh()->moderated_at);
+
+        $this->actingAs($admin)->post(route('admin.product-reviews.bulk-action'), [
+            'action' => 'reject',
+            'review_ids' => [$review->getKey(), $secondReview->getKey()],
+        ])->assertRedirect();
+        $this->assertSame(ProductReview::STATUS_REJECTED, $review->fresh()->status);
+        $this->assertSame(ProductReview::STATUS_REJECTED, $secondReview->fresh()->status);
+
+        $this->actingAs($admin)->post(route('admin.product-reviews.bulk-action'), [
+            'action' => 'publish',
+            'review_ids' => [$review->getKey()],
+        ])->assertSessionHasErrors('action');
+    }
+
+    public function test_review_images_are_optional_limited_owned_and_cleaned_up_on_edit(): void
+    {
+        $user = $this->customerUser('review-images@example.test', 'Image Customer', '9422945501');
+        $roleId = $this->assignRole($user, 'customer');
+        $customer = $this->globalCustomer($user);
+        $fixture = $this->fixture('Review Image Shop');
+        $product = $this->product($fixture, 'Review Image Product');
+        $this->variant($product);
+        $order = $this->order($customer, $fixture, ['order_status' => Order::STATUS_COMPLETED]);
+        $item = $this->item($order, $product);
+
+        $uploads = collect(range(1, 5))->map(fn (int $index) => UploadedFile::fake()->image("review-{$index}.jpg", 800, 800))->all();
+        $this->actingAs($user)->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.reviews.store', $item), [
+                'rating' => 5,
+                'review_text' => 'Review with genuine product photos.',
+                'images' => $uploads,
+            ])->assertRedirect();
+
+        $review = ProductReview::query()->where('order_item_id', $item->getKey())->firstOrFail();
+        $this->assertCount(5, $review->images);
+        $review->images->each(function (ProductReviewImage $image) use ($review): void {
+            $this->assertStringStartsWith("product-reviews/{$review->uuid}/images/", $image->image_path);
+            Storage::disk('public')->assertExists($image->image_path);
+            Storage::disk('public')->assertExists($image->thumbnail_path);
+        });
+
+        $removed = $review->images->first();
+        $removedWeb = $removed->image_path;
+        $removedThumb = $removed->thumbnail_path;
+        $this->actingAs($user)->withSession(['active_role_id' => $roleId])
+            ->put(route('storefront.account.reviews.update', $review), [
+                'rating' => 4,
+                'review_text' => 'Updated review photos.',
+                'remove_image_ids' => [$removed->getKey()],
+                'images' => [UploadedFile::fake()->image('replacement.webp', 800, 800)],
+            ])->assertRedirect();
+
+        $this->assertCount(5, $review->fresh()->images);
+        Storage::disk('public')->assertMissing($removedWeb);
+        Storage::disk('public')->assertMissing($removedThumb);
+        $this->assertSame(ProductReview::STATUS_PENDING, $review->fresh()->status);
+
+        $publicImage = $review->fresh()->images->last();
+        $publicImageUrl = Storage::disk('public')->url($publicImage->thumbnail_path);
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))
+            ->assertOk()
+            ->assertDontSee($publicImageUrl, false);
+        $review->update(['status' => ProductReview::STATUS_APPROVED]);
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))
+            ->assertOk()
+            ->assertSee($publicImageUrl, false);
+
+        $sixthItem = $this->item($order, $product);
+        $sixUploads = collect(range(1, 6))->map(fn (int $index) => UploadedFile::fake()->image("too-many-{$index}.png", 400, 400))->all();
+        $this->actingAs($user)->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.reviews.store', $sixthItem), [
+                'rating' => 5,
+                'review_text' => 'Too many images.',
+                'images' => $sixUploads,
+            ])->assertSessionHasErrors('images');
+        $this->assertDatabaseMissing('product_reviews', ['order_item_id' => $sixthItem->getKey()]);
+
+        $videoItem = $this->item($order, $product);
+        $this->actingAs($user)->withSession(['active_role_id' => $roleId])
+            ->post(route('storefront.account.reviews.store', $videoItem), [
+                'rating' => 5,
+                'review_text' => 'Video uploads are not supported.',
+                'images' => [UploadedFile::fake()->create('review.mp4', 100, 'video/mp4')],
+            ])->assertSessionHasErrors('images.0');
+        $this->assertDatabaseMissing('product_reviews', ['order_item_id' => $videoItem->getKey()]);
+    }
+
+    public function test_admin_can_trash_restore_and_permanently_delete_review_with_image_cleanup(): void
+    {
+        $customerUser = $this->customerUser('review-trash-customer@example.test', 'Trash Customer', '9422945601');
+        $customerRole = $this->assignRole($customerUser, 'customer');
+        $customer = $this->globalCustomer($customerUser);
+        $fixture = $this->fixture('Review Trash Shop');
+        $product = $this->product($fixture, 'Review Trash Product');
+        $this->variant($product);
+        $order = $this->order($customer, $fixture, ['order_status' => Order::STATUS_COMPLETED]);
+        $item = $this->item($order, $product);
+        $review = ProductReview::query()->create(['customer_id' => $customer->getKey(), 'order_id' => $order->getKey(), 'order_item_id' => $item->getKey(), 'product_id' => $product->getKey(), 'rating' => 5, 'review_text' => 'Review scheduled for deletion', 'status' => ProductReview::STATUS_APPROVED]);
+        $directory = "product-reviews/{$review->uuid}/images/test-image";
+        $image = $review->images()->create(['uuid' => (string) Str::uuid(), 'image_path' => "{$directory}/web.webp", 'thumbnail_path' => "{$directory}/thumb.webp", 'sort_order' => 0]);
+        Storage::disk('public')->put($image->image_path, 'web');
+        Storage::disk('public')->put($image->thumbnail_path, 'thumb');
+
+        $admin = $this->customerUser('review-trash-admin@example.test', 'Trash Admin', '9422945602');
+        $this->assignRole($admin, 'admin');
+
+        $this->actingAs($customerUser)->withSession(['active_role_id' => $customerRole])
+            ->delete(route('admin.product-reviews.destroy', $review))->assertForbidden();
+        $this->actingAs($admin)->delete(route('admin.product-reviews.destroy', $review))->assertRedirect();
+        $this->assertSoftDeleted($review);
+        $this->assertDatabaseHas('product_reviews', ['id' => $review->getKey(), 'order_item_id' => $item->getKey()]);
+        $this->actingAs($admin)->get(route('admin.product-reviews.index'))->assertOk()->assertDontSee('Review scheduled for deletion');
+        $this->actingAs($admin)->get(route('admin.product-reviews.index', ['status' => 'trash']))->assertOk()->assertSee('Review scheduled for deletion')->assertSee('Delete Permanently');
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))->assertOk()->assertSee('No reviews yet')->assertDontSee('Review scheduled for deletion');
+
+        $this->actingAs($customerUser)->withSession(['active_role_id' => $customerRole])
+            ->post(route('storefront.account.reviews.store', $item), ['rating' => 4, 'review_text' => 'Duplicate after deletion'])
+            ->assertConflict();
+
+        $this->actingAs($admin)->patch(route('admin.product-reviews.restore', $review))->assertRedirect();
+        $this->assertNull($review->fresh()->deleted_at);
+        $this->followingRedirects()->get(route('storefront.product.show', $product->slug))->assertOk()->assertSee('5.0 (1 Review)');
+
+        $this->actingAs($admin)->delete(route('admin.product-reviews.destroy', $review))->assertRedirect();
+        $this->actingAs($admin)->delete(route('admin.product-reviews.force-delete', $review))->assertRedirect();
+        $this->assertDatabaseMissing('product_reviews', ['id' => $review->getKey()]);
+        $this->assertDatabaseMissing('product_review_images', ['id' => $image->getKey()]);
+        Storage::disk('public')->assertMissing($image->image_path);
+        Storage::disk('public')->assertMissing($image->thumbnail_path);
+    }
+
+    public function test_customer_receipt_uses_stored_snapshots_labels_and_owner_authorization(): void
+    {
+        $customer = $this->customerUser('receipt-owner@example.test', 'Receipt Owner', '9422945191');
+        $other = $this->customerUser('receipt-other@example.test', 'Other Customer', '9422945192');
+        $roleId = $this->assignRole($customer, 'customer');
+        $this->assignRole($other, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $this->globalCustomer($other);
+        $fixture = $this->fixture('Receipt Shop');
+        $product = $this->product($fixture, 'Current Product');
+        $order = $this->order($globalCustomer, $fixture, [
+            'order_number' => 'ORD-RECEIPT-001',
+            'subtotal' => 500,
+            'discount_total' => 50,
+            'shipping_total' => 40,
+            'tax_total' => 45,
+            'grand_total' => 535,
+            'shipping_address_line_1' => 'Stored Delivery Road',
+            'shipping_city' => 'Nashik',
+            'shipping_postal_code' => '422009',
+        ]);
+        $this->item($order, $product, [
+            'product_name' => 'Historical Snapshot Product', 'variant_name' => 'Blue / M', 'sku' => 'SNAP-001',
+            'unit_price' => 500, 'line_subtotal' => 500, 'line_discount' => 50, 'line_tax' => 45, 'line_total' => 495,
+            'metadata' => ['promotion' => ['name' => 'Stored Offer', 'coupon_code' => 'SAVE50', 'details' => ['generated_by_promotion' => false]]],
+        ]);
+        $product->forceFill(['product_name' => 'Changed Live Product'])->save();
+
+        $url = route('storefront.account.orders.receipt', $order);
+        $this->get($url)->assertRedirect(route('storefront.login'));
+        $this->actingAs($other)->withSession(['active_role_id' => $roleId])->get($url)->assertNotFound();
+
+        $response = $this->actingAs($customer)->withSession(['active_role_id' => $roleId])->get($url);
+        $response
+            ->assertOk()->assertSee('ORDER RECEIPT')->assertSee('ORD-RECEIPT-001')
+            ->assertSee('Historical Snapshot Product')->assertDontSee('Changed Live Product')
+            ->assertSee('Blue / M')->assertSee('SNAP-001')->assertSee('Stored Offer')->assertSee('SAVE50')
+            ->assertSee('Cash on Delivery')->assertSee('Stored Delivery Road')->assertSee('INR 535.00')
+            ->assertSee('Print Receipt')->assertSee('onclick="window.print()"', false)
+            ->assertSee('@page { size: A4 portrait;', false)
+            ->assertSee('#wrapper > :not(.customer-receipt-page)', false)
+            ->assertSee('.customer-receipt-table { display: table !important;', false)
+            ->assertSee('.customer-receipt-settlement { display: grid !important;', false);
+
+        $this->get(route('storefront.account.orders.receipt', ['order' => $order, 'print' => 1]))
+            ->assertOk()
+            ->assertSee('document.fonts?.ready', false)
+            ->assertSee('requestAnimationFrame', false)
+            ->assertSee('printStarted', false)
+            ->assertSee("document.querySelectorAll('.customer-receipt-paper img')", false)
+            ->assertDontSee('Array.from(document.images)', false);
+
+        $order->forceFill(['payment_method' => 'cash_at_shop', 'fulfilment_type' => Order::FULFILMENT_PICKUP])->save();
+        $this->get($url)->assertOk()->assertSee('Cash at Shop')->assertSee('Pickup Address')->assertSee('Shop Road');
+
+        $order->forceFill(['payment_method' => 'merchant_upi', 'payment_reference' => 'UPI-SAFE-123'])->save();
+        $this->get($url)->assertOk()->assertSee('Direct Merchant UPI')->assertSee('UPI-SAFE-123');
     }
 
     /**

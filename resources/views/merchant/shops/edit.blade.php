@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant-safe shop edit form using existing shop fields only. --}}
 @extends('layouts.merchant')
 
-@section('title', 'Edit '.$shop->name.' | WindowShop')
+@section('title', 'Edit '.$shop->name.' | '.$marketplaceName)
 
 @section('page_title', 'Edit Shop')
 

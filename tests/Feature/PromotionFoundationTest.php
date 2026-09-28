@@ -16,9 +16,11 @@ use App\Models\Shop;
 use App\Models\User;
 use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PDO;
 use Tests\TestCase;
@@ -113,6 +115,189 @@ class PromotionFoundationTest extends TestCase
             'target_type' => PromotionTarget::TYPE_PRODUCT,
             'target_id' => $product->getKey(),
         ]);
+        $this->assertNull($promotion->promotional_image_path);
+    }
+
+    public function test_merchant_can_upload_promotional_artwork_to_an_owned_promotion_directory(): void
+    {
+        Storage::fake('public');
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-artwork-create@example.test');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->post(route('merchant.promotions.store'), $this->payload('fixed_discount', [
+                'name' => 'Artwork Offer',
+                'promotional_image' => UploadedFile::fake()->image('offer.jpg', 1800, 600),
+            ]))
+            ->assertRedirect();
+
+        $promotion = Promotion::query()->where('slug', 'artwork-offer')->firstOrFail();
+
+        $this->assertNotNull($promotion->promotional_image_path);
+        $this->assertStringStartsWith("promotions/{$promotion->uuid}/artwork/", $promotion->promotional_image_path);
+        $this->assertStringEndsWith('/web.webp', $promotion->promotional_image_path);
+        Storage::disk('public')->assertExists($promotion->promotional_image_path);
+        Storage::disk('public')->assertExists(dirname($promotion->promotional_image_path).'/thumb.webp');
+    }
+
+    public function test_promotional_artwork_upload_must_be_a_valid_configured_image(): void
+    {
+        Storage::fake('public');
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-artwork-invalid@example.test');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->from(route('merchant.promotions.create'))
+            ->post(route('merchant.promotions.store'), $this->payload('fixed_discount', [
+                'name' => 'Invalid Artwork Offer',
+                'promotional_image' => UploadedFile::fake()->create('offer.txt', 20, 'text/plain'),
+            ]))
+            ->assertRedirect(route('merchant.promotions.create'))
+            ->assertSessionHasErrors('promotional_image');
+
+        $this->assertDatabaseMissing('promotions', ['slug' => 'invalid-artwork-offer']);
+        $this->assertSame([], Storage::disk('public')->allFiles('promotions'));
+    }
+
+    public function test_editing_without_an_upload_preserves_existing_promotional_artwork(): void
+    {
+        Storage::fake('public');
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-artwork-preserve@example.test');
+        $promotion = $this->promotion($fixture, 'Preserved Artwork', [
+            'promotional_image_path' => 'promotions/existing/artwork/version/web.webp',
+        ]);
+        Storage::disk('public')->put($promotion->promotional_image_path, 'existing');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->put(route('merchant.promotions.update', $promotion), $this->payload('fixed_discount', [
+                'name' => 'Preserved Artwork Updated',
+            ]))
+            ->assertRedirect();
+
+        $this->assertSame('promotions/existing/artwork/version/web.webp', $promotion->fresh()->promotional_image_path);
+        Storage::disk('public')->assertExists('promotions/existing/artwork/version/web.webp');
+    }
+
+    public function test_replacing_and_removing_promotional_artwork_cleans_up_owned_variants(): void
+    {
+        Storage::fake('public');
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-artwork-replace@example.test');
+        $promotion = $this->promotion($fixture, 'Replace Artwork');
+        $oldDirectory = "promotions/{$promotion->uuid}/artwork/old-version";
+        $oldPath = "{$oldDirectory}/web.webp";
+        $promotion->forceFill(['promotional_image_path' => $oldPath])->save();
+        Storage::disk('public')->put($oldPath, 'old web');
+        Storage::disk('public')->put("{$oldDirectory}/thumb.webp", 'old thumb');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->put(route('merchant.promotions.update', $promotion), $this->payload('fixed_discount', [
+                'promotional_image' => UploadedFile::fake()->image('replacement.png', 1800, 600),
+            ]))
+            ->assertRedirect();
+
+        $newPath = $promotion->fresh()->promotional_image_path;
+        $this->assertNotSame($oldPath, $newPath);
+        Storage::disk('public')->assertMissing($oldPath);
+        Storage::disk('public')->assertMissing("{$oldDirectory}/thumb.webp");
+        Storage::disk('public')->assertExists($newPath);
+        Storage::disk('public')->assertExists(dirname($newPath).'/thumb.webp');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->put(route('merchant.promotions.update', $promotion), $this->payload('fixed_discount', [
+                'remove_promotional_image' => '1',
+            ]))
+            ->assertRedirect();
+
+        $this->assertNull($promotion->fresh()->promotional_image_path);
+        Storage::disk('public')->assertMissing($newPath);
+        Storage::disk('public')->assertMissing(dirname($newPath).'/thumb.webp');
+    }
+
+    public function test_merchant_cannot_replace_another_shops_promotional_artwork(): void
+    {
+        Storage::fake('public');
+        $this->seed(PromotionTemplateSeeder::class);
+        $owner = $this->fixture('promo-artwork-owner@example.test');
+        $other = $this->fixture('promo-artwork-other@example.test');
+        $promotion = $this->promotion($other, 'Protected Artwork');
+
+        $this->actingAs($owner['user'])
+            ->withSession(['active_shop_id' => $owner['shop']->getKey()])
+            ->put(route('merchant.promotions.update', $promotion), $this->payload('fixed_discount', [
+                'promotional_image' => UploadedFile::fake()->image('unauthorized.jpg', 1800, 600),
+            ]))
+            ->assertNotFound();
+
+        $this->assertNull($promotion->fresh()->promotional_image_path);
+        $this->assertSame([], Storage::disk('public')->allFiles('promotions'));
+    }
+
+    public function test_selected_storefront_offer_displays_promotional_artwork_before_offer_details(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-storefront-artwork@example.test');
+        $promotion = $this->promotion($fixture, 'Storefront Artwork Offer', [
+            'status' => Promotion::STATUS_ACTIVE,
+            'promotional_image_path' => 'promotions/storefront/artwork/version/web.webp',
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => PromotionReward::TYPE_FIXED_DISCOUNT,
+            'value_amount' => 100,
+        ]);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'sort_order' => 10,
+        ]);
+
+        $this->get(route('storefront.stores.offers', [
+            'slug' => $fixture['shop']->slug,
+            'promotion' => $promotion->uuid,
+        ]))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'shop-profile-breadcrumbs',
+                'shop-offer-artwork',
+                'Storefront Artwork Offer',
+                'tf-shop-control',
+            ], false)
+            ->assertSee('storage/promotions/storefront/artwork/version/web.webp', false);
+    }
+
+    public function test_selected_storefront_offer_without_artwork_preserves_the_existing_layout(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-storefront-no-artwork@example.test');
+        $promotion = $this->promotion($fixture, 'No Artwork Offer', [
+            'status' => Promotion::STATUS_ACTIVE,
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => PromotionReward::TYPE_FIXED_DISCOUNT,
+            'value_amount' => 100,
+        ]);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'sort_order' => 10,
+        ]);
+
+        $this->get(route('storefront.stores.offers', [
+            'slug' => $fixture['shop']->slug,
+            'promotion' => $promotion->uuid,
+        ]))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'No Artwork Offer',
+                'tf-shop-control',
+            ], false)
+            ->assertDontSee('shop-offer-artwork', false);
     }
 
     public function test_merchant_cannot_edit_another_shop_promotion_and_soft_delete_sets_deleted_at(): void
@@ -362,6 +547,66 @@ class PromotionFoundationTest extends TestCase
         ]);
         $this->assertDatabaseHas('promotion_targets', ['promotion_id' => $promotion->getKey(), 'target_role' => 'buy', 'target_id' => $buyCategory->getKey()]);
         $this->assertDatabaseHas('promotion_targets', ['promotion_id' => $promotion->getKey(), 'target_role' => 'get', 'target_id' => $getCategory->getKey()]);
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->get(route('merchant.promotions.edit', $promotion))
+            ->assertOk()
+            ->assertSee('id="buy_target_scope"', false)
+            ->assertSee('value="categories" selected', false)
+            ->assertSee('Selected: '.$buyCategory->full_path)
+            ->assertSee('Selected: '.$getCategory->full_path);
+    }
+
+    public function test_buy_get_offer_update_saves_when_browser_omits_hidden_eligible_target_scope(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-buy-get-update@example.test');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->post(route('merchant.promotions.store'), $this->payload('buy_x_get_y_free', [
+                'name' => 'Browser BOGO Save',
+                'buy_quantity' => 1,
+                'get_quantity' => 1,
+                'buy_target_scope' => 'all',
+                'get_target_scope' => 'all',
+            ]))
+            ->assertRedirect();
+
+        $promotion = Promotion::query()->where('slug', 'browser-bogo-save')->firstOrFail();
+        $payload = $this->payload('buy_x_get_y_free', [
+            'name' => 'Browser BOGO Save',
+            'buy_quantity' => 2,
+            'get_quantity' => 1,
+            'buy_target_scope' => 'all',
+            'get_target_scope' => 'all',
+        ]);
+        unset($payload['promotion_template_id'], $payload['target_scope']);
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->from(route('merchant.promotions.edit', $promotion))
+            ->put(route('merchant.promotions.update', $promotion), $payload)
+            ->assertRedirect(route('merchant.promotions.edit', $promotion))
+            ->assertSessionHasNoErrors();
+
+        $reward = $promotion->refresh()->rewards()->firstOrFail();
+        $this->assertSame(PromotionReward::TYPE_BUY_X_GET_Y_FREE, $reward->reward_type);
+        $this->assertSame(2, $reward->buy_quantity);
+        $this->assertSame(1, $reward->get_quantity);
+        $this->assertDatabaseHas('promotion_targets', [
+            'promotion_id' => $promotion->getKey(),
+            'target_role' => PromotionTarget::ROLE_BUY,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'target_id' => null,
+        ]);
+        $this->assertDatabaseHas('promotion_targets', [
+            'promotion_id' => $promotion->getKey(),
+            'target_role' => PromotionTarget::ROLE_GET,
+            'target_type' => PromotionTarget::TYPE_ALL,
+            'target_id' => null,
+        ]);
     }
 
     public function test_reward_types_store_expected_configuration(): void
@@ -369,6 +614,7 @@ class PromotionFoundationTest extends TestCase
         $this->seed(PromotionTemplateSeeder::class);
         $fixture = $this->fixture('promo-rewards@example.test');
         $gift = $this->product($fixture, 'Gift Product');
+        $giftVariant = $this->variant($gift);
 
         $cases = [
             ['fixed_discount', ['name' => 'Fixed Off', 'value_amount' => 500], ['reward_type' => 'fixed_discount', 'value_amount' => 500]],
@@ -377,7 +623,7 @@ class PromotionFoundationTest extends TestCase
             ['buy_x_get_y_free', ['name' => 'BOGO Free', 'buy_quantity' => 1, 'get_quantity' => 1], ['reward_type' => 'buy_x_get_y_free', 'buy_quantity' => 1, 'get_quantity' => 1]],
             ['quantity_discount', ['name' => 'Quantity Off', 'minimum_quantity' => 3, 'value_type' => 'percent', 'value_percent' => 10], ['reward_type' => 'quantity_discount', 'value_type' => 'percent', 'value_percent' => 10]],
             ['tier_pricing', ['name' => 'Tier Prices', 'minimum_quantity' => 1, 'tier_config' => [['min_quantity' => 1, 'unit_price' => 500], ['min_quantity' => 3, 'unit_price' => 450]]], ['reward_type' => 'tier_pricing']],
-            ['free_gift', ['name' => 'Custom Free Gift Offer', 'minimum_eligible_subtotal' => 2000, 'gift_product_ids' => [$gift->getKey()]], ['reward_type' => 'free_gift']],
+            ['free_gift', ['name' => 'Custom Free Gift Offer', 'minimum_eligible_subtotal' => 2000, 'gift_product_id' => $gift->getKey(), 'gift_variant_id' => $giftVariant->getKey()], ['reward_type' => 'free_gift']],
         ];
 
         foreach ($cases as [$code, $overrides, $expected]) {
@@ -401,9 +647,59 @@ class PromotionFoundationTest extends TestCase
         $this->assertDatabaseHas('promotion_targets', [
             'promotion_id' => $freeGift->getKey(),
             'target_role' => 'gift',
-            'target_type' => 'product',
-            'target_id' => $gift->getKey(),
+            'target_type' => 'variant',
+            'target_id' => $giftVariant->getKey(),
         ]);
+    }
+
+    public function test_free_gift_requires_one_variant_from_the_selected_shop_product(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('free-gift-validation@example.test');
+        $gift = $this->product($fixture, 'Gift Product');
+        $variant = $this->variant($gift);
+        $otherProduct = $this->product($fixture, 'Other Gift Product');
+        $otherVariant = $this->variant($otherProduct);
+        $otherShop = $this->fixture('free-gift-other-shop@example.test');
+        $crossShopProduct = $this->product($otherShop, 'Cross Shop Gift Product');
+        $crossShopVariant = $this->variant($crossShopProduct);
+
+        $basePayload = $this->payload('free_gift', [
+            'name' => 'Gift Validation',
+            'minimum_eligible_subtotal' => 2000,
+            'gift_product_id' => $gift->getKey(),
+            'gift_variant_id' => $variant->getKey(),
+        ]);
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->post(route('merchant.promotions.store'), $basePayload)
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('promotion_targets', [
+            'target_role' => PromotionTarget::ROLE_GIFT,
+            'target_type' => PromotionTarget::TYPE_VARIANT,
+            'target_id' => $variant->getKey(),
+        ]);
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->post(route('merchant.promotions.store'), [
+                ...$basePayload,
+                'name' => 'Wrong Product Gift',
+                'gift_variant_id' => $otherVariant->getKey(),
+            ])
+            ->assertSessionHasErrors('gift_variant_id');
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->post(route('merchant.promotions.store'), [
+                ...$basePayload,
+                'name' => 'Cross Shop Gift',
+                'gift_product_id' => $crossShopProduct->getKey(),
+                'gift_variant_id' => $crossShopVariant->getKey(),
+            ])
+            ->assertSessionHasErrors('gift_variant_id');
     }
 
     public function test_coupon_codes_are_unique_per_shop_but_reusable_across_shops(): void
@@ -561,6 +857,65 @@ class PromotionFoundationTest extends TestCase
         $this->assertSame('200.00', $promotion->rewards()->firstOrFail()->value_amount);
     }
 
+    public function test_quantity_discount_update_preserves_existing_product_targets_when_browser_omits_ids(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $fixture = $this->fixture('promo-quantity-preserve-targets@example.test');
+        $product = $this->product($fixture, 'Quantity Target Product');
+        $template = PromotionTemplate::query()->where('code', 'quantity_discount')->firstOrFail();
+        $promotion = $this->promotion($fixture, 'Quantity Target Offer', [
+            'promotion_template_id' => $template->getKey(),
+            'activation_type' => Promotion::ACTIVATION_COUPON,
+        ]);
+        $promotion->rewards()->create([
+            'reward_type' => PromotionReward::TYPE_QUANTITY_DISCOUNT,
+            'value_type' => 'percent',
+            'value_percent' => 10,
+        ]);
+        $promotion->conditions()->create([
+            'condition_type' => 'minimum_quantity',
+            'operator' => '>=',
+            'value_numeric' => 3,
+            'sort_order' => 10,
+        ]);
+        $promotion->targets()->create([
+            'target_role' => PromotionTarget::ROLE_ELIGIBLE,
+            'target_type' => PromotionTarget::TYPE_PRODUCT,
+            'target_id' => $product->getKey(),
+            'sort_order' => 10,
+        ]);
+        $promotion->coupons()->create([
+            'shop_id' => $fixture['shop']->getKey(),
+            'code' => 'QTYKEEP',
+            'status' => 'active',
+        ]);
+
+        $payload = $this->payload('quantity_discount', [
+            'name' => 'Quantity Target Offer Updated',
+            'activation_type' => Promotion::ACTIVATION_AUTOMATIC,
+            'target_scope' => 'products',
+            'minimum_quantity' => 3,
+            'value_type' => 'percent',
+            'value_percent' => 10,
+            'coupon_code' => null,
+        ]);
+        unset($payload['promotion_template_id'], $payload['product_ids']);
+
+        $this->actingAs($fixture['user'])
+            ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
+            ->put(route('merchant.promotions.update', $promotion), $payload)
+            ->assertRedirect(route('merchant.promotions.edit', $promotion))
+            ->assertSessionHas('success', 'Offer updated successfully.');
+
+        $promotion->refresh()->load('targets', 'coupons');
+        $this->assertSame(Promotion::ACTIVATION_AUTOMATIC, $promotion->activation_type);
+        $this->assertSame(
+            [$product->getKey()],
+            $promotion->targets->where('target_role', PromotionTarget::ROLE_ELIGIBLE)->where('target_type', PromotionTarget::TYPE_PRODUCT)->pluck('target_id')->values()->all()
+        );
+        $this->assertCount(0, $promotion->coupons);
+    }
+
     public function test_tampered_update_cannot_change_template_or_use_wrong_template_validation(): void
     {
         $this->seed(PromotionTemplateSeeder::class);
@@ -605,6 +960,7 @@ class PromotionFoundationTest extends TestCase
             'activation_type' => Promotion::ACTIVATION_COUPON,
             'refund_policy_mode' => Promotion::POLICY_ALLOWED,
             'refund_window_days' => 3,
+            'promotional_image_path' => 'promotions/example/artwork/version/web.webp',
         ]);
         $promotion->rewards()->create([
             'reward_type' => PromotionReward::TYPE_FIXED_DISCOUNT,
@@ -621,6 +977,10 @@ class PromotionFoundationTest extends TestCase
             'target_id' => $brand->getKey(),
             'sort_order' => 10,
         ]);
+        $publicOfferUrl = route('storefront.stores.offers', [
+            'slug' => $fixture['shop']->slug,
+            'promotion' => $promotion->uuid,
+        ]);
 
         $this->actingAs($fixture['user'])
             ->withSession(['active_shop_id' => $fixture['shop']->getKey()])
@@ -632,6 +992,10 @@ class PromotionFoundationTest extends TestCase
             ->assertSee('Fixed Amount Discount')
             ->assertSee('Offer Preview')
             ->assertSee('Activation & Usage', false)
+            ->assertSee('enctype="multipart/form-data"', false)
+            ->assertSee('name="promotional_image"', false)
+            ->assertSee('Recommended 1800 x 600 px')
+            ->assertDontSee('Public Offer URL')
             ->assertSee('Leave blank to start immediately')
             ->assertSee('Leave blank for unlimited');
 
@@ -650,8 +1014,21 @@ class PromotionFoundationTest extends TestCase
             ->assertDontSee('Tier / Bulk Pricing')
             ->assertSee('Editable UI Offer')
             ->assertSee('EDIT500')
+            ->assertSee('enctype="multipart/form-data"', false)
+            ->assertSee('storage/promotions/example/artwork/version/web.webp', false)
+            ->assertSee('name="remove_promotional_image"', false)
+            ->assertSee('id="promotional_image_preview"', false)
+            ->assertSee('js-clear-promotional-image', false)
+            ->assertSee('URL.createObjectURL(file)', false)
+            ->assertSee('Storefront &amp; Promotion', false)
+            ->assertSee('value="'.$publicOfferUrl.'"', false)
+            ->assertSee('href="'.$publicOfferUrl.'" target="_blank"', false)
+            ->assertSee('js-copy-offer-url', false)
+            ->assertSee('navigator.clipboard.writeText(input.value)', false)
+            ->assertSee("label.textContent = 'Copied!'", false)
             ->assertSee('value="brands" selected', false)
             ->assertSee('Editable Brand')
+            ->assertSee('Selected: Editable Brand')
             ->assertSee('value="'.$brand->getKey().'" selected', false)
             ->assertSee('value="500.00"', false)
             ->assertSee('value="3"', false);
@@ -664,6 +1041,7 @@ class PromotionFoundationTest extends TestCase
             'merchant_id',
             'shop_id',
             'promotion_template_id',
+            'promotional_image_path',
             'activation_type',
             'origin',
             'refund_policy_mode',

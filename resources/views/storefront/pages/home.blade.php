@@ -1,60 +1,10 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'WindowShop Storefront')
-@section('meta_description', 'Static WindowShop storefront Blade preview converted from the selected HTML template.')
+@section('title', $marketplaceName.' Storefront')
+@section('meta_description', $marketplaceName.' storefront Blade preview converted from the selected HTML template.')
 
 @php
-    $heroSlides = [
-        [
-            'image' => 'assets/storefront/images/slider/slider-1.jpg',
-            'eyebrow' => 'SUMMER COLLECTION',
-            'title' => 'Elevate Your Everyday Style',
-            'subtitle' => 'Fresh marketplace picks from local sellers and curated brands.',
-            'button' => 'Shop Styles',
-        ],
-        [
-            'image' => 'assets/storefront/images/slider/slider-2.jpg',
-            'eyebrow' => 'Join WindowShop Today',
-            'title' => 'Onboard your store and reach a wider audience with WindowShop',
-            'subtitle' => '',
-            'button' => 'Register now',
-        ],
-
-    ];
-
-    $fallbackCategories = [
-        [
-            'name' => 'Outerwear',
-            'image' => 'assets/storefront/images/category/cate-1.jpg',
-            'url' => '#top-picks',
-        ],
-        [
-            'name' => 'Tops & Shirts',
-            'image' => 'assets/storefront/images/category/cate-2.jpg',
-            'url' => '#top-picks',
-        ],
-        [
-            'name' => 'Bottoms',
-            'image' => 'assets/storefront/images/category/cate-3.jpg',
-            'url' => '#top-picks',
-        ],
-        [
-            'name' => 'Dresses',
-            'image' => 'assets/storefront/images/category/cate-4.jpg',
-            'url' => '#top-picks',
-        ],
-        [
-            'name' => 'Footwear',
-            'image' => 'assets/storefront/images/category/cate-5.jpg',
-            'url' => '#top-picks',
-        ],
-        [
-            'name' => 'Accessories',
-            'image' => 'assets/storefront/images/category/cate-6.jpg',
-            'url' => '#top-picks',
-        ],
-    ];
-    $categories = ($homepageCategories ?? collect())->isNotEmpty() ? $homepageCategories : collect($fallbackCategories);
+    $categories = $homepageCategories ?? collect();
 
     $demoProducts = [
         [
@@ -170,171 +120,88 @@
 @endphp
 
 @push('styles')
-    <style>
-        #categories .category-bag-card {
-            position: relative;
-            display: block;
-            padding-top: 22px;
-            color: inherit;
-        }
-
-        #categories .category-bag-frame {
-            position: relative;
-            width: min(100%, 148px);
-            aspect-ratio: 1 / 1.05;
-            margin: 0 auto 12px;
-            border-radius: 18px;
-            /* background:
-                linear-gradient(135deg, #083a6b 0 38%, transparent 38%),
-                linear-gradient(135deg, transparent 0 57%, #ff8a00 57% 100%),
-                #ffffff; */
-            box-shadow: 0 12px 24px rgba(8, 28, 52, .16);
-            overflow: visible;
-            transition: transform .25s ease, box-shadow .25s ease;
-        }
-
-        #categories .category-bag-card:hover .category-bag-frame {
-            transform: translateY(-3px);
-            box-shadow: 0 16px 30px rgba(8, 28, 52, .2);
-        }
-
-        #categories .category-bag-handle {
-            position: absolute;
-            left: 50%;
-            top: -20%;
-            width: 54%;
-            height: 36%;
-            transform: translateX(-50%);
-            border: 9px solid #5b5050d9;
-            border-bottom: 0;
-            border-radius: 999px 999px 0 0;
-            z-index: 1;
-        }
-
-        #categories .category-bag-ring {
-            position: absolute;
-            top: 0%;
-            width: 21px;
-            height: 21px;
-            border: 4px solid #ffffff;
-            border-radius: 50%;
-            background: #cec5c5;
-            box-shadow: 0 5px 12px rgba(0, 0, 0, .16);
-            z-index: 3;
-        }
-
-        #categories .category-bag-ring.left {
-            left: 18%;
-        }
-
-        #categories .category-bag-ring.right {
-            right: 18%;
-        }
-
-        #categories .category-bag-photo {
-            position: absolute;
-            left: 50%;
-            top: 55%;
-            width: 95%;
-            height: 90%;
-            transform: translate(-50%, -50%);
-            margin: 0;
-            padding: 4px;
-            border-radius: 20%;
-            background: #ffffff;
-            box-shadow: 0 9px 18px rgba(8, 28, 52, .16);
-            z-index: 4;
-            overflow: hidden;
-        }
-
-        #categories .category-bag-photo img {
-            display: block;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            object-position: center top;
-        }
-
-        #categories .category-bag-shine {
-            position: absolute;
-            right: 12%;
-            top: 40%;
-            width: 18%;
-            height: 5%;
-            transform: rotate(-34deg);
-            border-radius: 999px;
-            background: rgba(255, 255, 255, .82);
-            z-index: 2;
-        }
-
-        #categories .category-bag-card .cate-name {
-            margin: 0;
-            color: var(--main);
-            font-size: 15px;
-            line-height: 1.16;
-            font-weight: 600;
-            text-align: center;
-            overflow-wrap: anywhere;
-        }
-
-        #categories .category-bag-card:hover .cate-name,
-        #categories .category-bag-card:focus .cate-name,
-        #categories .category-bag-card:visited .cate-name {
-            color: var(--main);
-        }
-
-        @media (max-width: 575px) {
-            #categories .category-bag-card {
-                padding-top: 18px;
-            }
-
-            #categories .category-bag-frame {
-                width: min(100%, 132px);
-                border-radius: 16px;
-            }
-
-            #categories .category-bag-handle {
-                border-width: 7px;
-            }
-
-            #categories .category-bag-ring {
-                width: 18px;
-                height: 18px;
-                border-width: 4px;
-            }
-
-            #categories .category-bag-card .cate-name {
-                font-size: 13px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="{{ asset('assets/storefront/css/home-categories.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/storefront/css/shop-profile.css') }}?v={{ filemtime(public_path('assets/storefront/css/shop-profile.css')) }}">
+    <link rel="stylesheet" href="{{ asset('assets/storefront/css/home-stores.css') }}">
 @endpush
 
 @section('content')
     @include('storefront.partials.hero')
 
-    <section id="categories" class="flat-spacing">
-        <div class="container">
-            <div class="sect-heading type-2 text-center wow fadeInUp">
+    <section id="categories" class="home-categories">
+        <div class="container home-categories__content">
+            <div class="sect-heading type-2 text-center home-categories__heading wow fadeInUp">
                 <h3 class="s-title">
                     Shop By Categories
                 </h3>
                 <p class="s-desc text-body-1 cl-text-2">
-                    Top styles everyone's talking about.
+                    Explore products from local stores near you.
                 </p>
             </div>
-            <div dir="ltr" class="swiper tf-swiper" data-preview="8" data-tablet="4" data-mobile-sm="3" data-mobile="2"
-                data-space-lg="30" data-space-md="15" data-space="10" data-pagination="2" data-pagination-sm="3"
-                data-pagination-md="4" data-pagination-lg="8">
-                <div class="swiper-wrapper">
+            <div dir="ltr" class="swiper tf-swiper home-categories__rail" data-preview="8" data-tablet="4"
+                data-mobile-sm="2.2" data-mobile="2.2" data-space-lg="24" data-space-md="18" data-space="14"
+                role="region" aria-label="Product categories">
+                <div class="swiper-wrapper" role="list">
                     @foreach ($categories as $category)
                         @include('storefront.components.category-card', ['category' => $category])
                     @endforeach
                 </div>
-                <div class="sw-line-default style-2 tf-sw-pagination"></div>
+                <div class="sw-line-default style-2 tf-sw-pagination home-categories__pagination"></div>
             </div>
         </div>
     </section>
+    <section id="stores-near-you" class="home-stores">
+        <div class="container">
+            <div class="home-stores__header">
+                <div class="sect-heading type-2 home-stores__heading">
+                    <h3 class="s-title">Stores Near You</h3>
+                    <p class="s-desc text-body-1 cl-text-2">
+                        Explore local stores{{ !empty($nearbyStoresLocationLabel) ? ' near '.$nearbyStoresLocationLabel : ' near you' }}
+                    </p>
+                </div>
+                <a href="{{ route('storefront.stores') }}" class="home-stores__all">
+                    View All Stores <i class="icon icon-ArrowRight" aria-hidden="true"></i>
+                </a>
+            </div>
+
+            @if($nearbyStores->isNotEmpty())
+                <div class="home-stores__rail" role="list" aria-label="Stores near you">
+                    @foreach($nearbyStores as $store)
+                        <div class="home-stores__item" role="listitem">
+                            @include('storefront.components.shop-card', ['store' => $store, 'homepageVariant' => true])
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="home-stores__empty">No local stores are available right now.</div>
+            @endif
+        </div>
+    </section>
+    @if(($nearbyOfferArtwork ?? collect())->isNotEmpty())
+        <section id="offers-near-you" class="home-offers">
+            <div class="container">
+                <div class="sect-heading type-2 home-offers__heading">
+                    <h3 class="s-title">Offers Near You</h3>
+                    <p class="s-desc text-body-1 cl-text-2">Discover offers from local stores near you.</p>
+                </div>
+                <div class="home-offers__grid" role="list" aria-label="Offers from nearby stores">
+                    @foreach($nearbyOfferArtwork as $offer)
+                        <article class="home-offer" role="listitem">
+                            <a href="{{ $offer['products_url'] }}" class="home-offer__artwork" aria-label="View offer from {{ $offer['shop_name'] }}">
+                                <img src="{{ $offer['promotional_image_url'] }}" alt="{{ $offer['shop_name'] }} promotional offer">
+                            </a>
+                            <div class="home-offer__details">
+                                <a href="{{ $offer['shop_url'] }}" class="home-offer__shop">{{ $offer['shop_name'] }}</a>
+                                <a href="{{ $offer['products_url'] }}" class="home-stores__all">View Offer <i class="icon icon-ArrowRight" aria-hidden="true"></i></a>
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+    @endif
+    {{-- Legacy promotional/demo sections retired from the homepage. Keep shared theme assets intact. --}}
+    {{--
     <!-- banner -->
     <div class="banner-v01">
         <div class="bn_image">
@@ -675,28 +542,36 @@
     <!-- /Collection -->
 
     <!-- /Banner Countdown -->
-    <section id="top-picks" class="flat-spacing">
-        <div class="container">
-            <div class="sect-heading type-2 text-center wow fadeInUp">
-                <h3 class="s-title">
-                    New Arrivals
-                </h3>
-                <p class="s-desc text-body-1 cl-text-2">
-                    Fresh styles just in! Elevate your look.
-                </p>
-            </div>
-            <div dir="ltr" class="swiper tf-swiper wrap-sw-over" data-preview="4" data-tablet="3"
-                data-mobile-sm="2" data-mobile="1" data-space-lg="30" data-space-md="20" data-space="15">
-                <div class="swiper-wrapper">
-                    @foreach ($demoProducts as $product)
-                        @include('storefront.components.product-card', ['product' => $product])
+    --}}
+    @if(($newArrivalProducts ?? collect())->isNotEmpty())
+        <section id="top-picks" class="home-new-arrivals flat-spacing">
+            <div class="container">
+                <div class="home-new-arrivals__header">
+                    <div class="sect-heading type-2 home-new-arrivals__heading">
+                        <h3 class="s-title">New Arrivals</h3>
+                        <p class="s-desc text-body-1 cl-text-2">Fresh products recently added by local stores.</p>
+                    </div>
+                    <a href="{{ route('storefront.products') }}" class="home-stores__all">
+                        View All <i class="icon icon-ArrowRight" aria-hidden="true"></i>
+                    </a>
+                </div>
+                <div class="home-new-arrivals__grid">
+                    @foreach ($newArrivalProducts as $product)
+                        @include('storefront.components.product-card', [
+                            'product' => $product,
+                            'wrapSlide' => false,
+                            'showStore' => true,
+                            'showCompare' => false,
+                            'showQuickAdd' => false,
+                            'wishlistedProductIds' => $newArrivalWishlistedProductIds ?? [],
+                        ])
                     @endforeach
                 </div>
-                <div class="sw-dot-default tf-sw-pagination"></div>
             </div>
-        </div>
-    </section>
+        </section>
+    @endif
 
+    {{-- Static Shop by Store demo retired from the homepage.
     <!-- Store -->
     <section class="themesFlat">
         <div class="container">
@@ -783,6 +658,7 @@
         </div>
     </section>
     <!-- /Gallery -->
+    --}}
     <!-- Testimonial -->
     <section class="flat-spacing">
         <div class="container">

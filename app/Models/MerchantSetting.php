@@ -8,13 +8,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MerchantSetting extends Model
 {
     public const TYPE_BOOLEAN = 'boolean';
+
     public const TYPE_DECIMAL = 'decimal';
+
     public const TYPE_INTEGER = 'integer';
+
     public const TYPE_JSON = 'json';
+
     public const TYPE_STRING = 'string';
 
+    public const TYPE_ENCRYPTED = 'encrypted';
+
     public const TYPE_BOOL = self::TYPE_BOOLEAN;
+
     public const TYPE_FLOAT = self::TYPE_DECIMAL;
+
     public const TYPE_INT = self::TYPE_INTEGER;
 
     protected $fillable = [
@@ -28,5 +36,16 @@ class MerchantSetting extends Model
     public function merchant(): BelongsTo
     {
         return $this->belongsTo(MerchantProfile::class, 'merchant_id');
+    }
+
+    public function toArray(): array
+    {
+        $attributes = parent::toArray();
+
+        if ($this->setting_type === self::TYPE_ENCRYPTED && filled($this->setting_value)) {
+            $attributes['setting_value'] = 'Configured';
+        }
+
+        return $attributes;
     }
 }
