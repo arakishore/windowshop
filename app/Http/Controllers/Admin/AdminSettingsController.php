@@ -34,6 +34,7 @@ class AdminSettingsController extends Controller
         $this->initializer->initialize();
         app(StorefrontBannerSettingSeeder::class)->run();
         $marketplaceLogoSetting = $this->ensureMarketplaceLogoSetting();
+        $footerLogoSetting = $this->ensureFooterLogoSetting();
 
         return view('admin.settings.edit', [
             'defaults' => $this->initializer->defaults(),
@@ -43,6 +44,8 @@ class AdminSettingsController extends Controller
                 ->value('value') ?? '3',
             'marketplaceLogoPath' => $marketplaceLogoSetting->value ?: MarketplaceLogoService::DEFAULT_LOGO_PATH,
             'marketplaceLogoUrl' => $this->marketplaceLogo->url(),
+            'footerLogoPath' => $footerLogoSetting->value,
+            'footerLogoUrl' => $this->marketplaceLogo->footerUrl(),
             'timezones' => $this->timezones->all(),
             'currencies' => $this->currencies->all(),
         ]);
@@ -53,6 +56,8 @@ class AdminSettingsController extends Controller
         $request->validate([
             'marketplace_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
             'remove_marketplace_logo' => ['nullable', 'boolean'],
+            'footer_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+            'remove_footer_logo' => ['nullable', 'boolean'],
         ]);
 
         $payload = (array) $request->input('settings', []);
@@ -74,6 +79,7 @@ class AdminSettingsController extends Controller
 
         $this->updateStorefrontBannerSettings($payload);
         $this->updateMarketplaceLogo($request);
+        $this->updateFooterLogo($request);
 
         return back()->with('success', 'Admin settings updated successfully.');
     }
@@ -132,6 +138,71 @@ class AdminSettingsController extends Controller
 
             $this->marketplaceLogo->deleteManaged($previousPath);
         }
+    }
+
+    private function updateFooterLogo(Request $request): void
+    {
+        $setting = $this->ensureFooterLogoSetting();
+        $previousPath = $setting->value;
+
+        if ($request->hasFile('footer_logo')) {
+            $file = $request->file('footer_logo');
+            $path = $file->storeAs(
+                MarketplaceLogoService::MANAGED_DIRECTORY,
+                'marketplace-footer-logo-'.Str::lower(Str::random(5)).'.'.$file->extension(),
+                'public',
+            );
+
+            $setting->forceFill([
+                'value' => $path,
+                'updated_by' => Auth::id(),
+                'updated_at' => now(),
+            ])->save();
+
+            $this->marketplaceLogo->deleteManaged($previousPath);
+
+            return;
+        }
+
+        if ($request->boolean('remove_footer_logo')) {
+            $setting->forceFill([
+                'value' => null,
+                'updated_by' => Auth::id(),
+                'updated_at' => now(),
+            ])->save();
+
+            $this->marketplaceLogo->deleteManaged($previousPath);
+        }
+    }
+
+    private function ensureFooterLogoSetting(): SystemSetting
+    {
+        $group = SystemSettingGroup::query()->updateOrCreate(
+            ['slug' => 'marketplace'],
+            [
+                'name' => 'Marketplace',
+                'sort_order' => 15,
+                'status' => 'active',
+                'deleted_at' => null,
+            ],
+        );
+
+        $setting = SystemSetting::query()->firstOrNew(['key' => MarketplaceLogoService::FOOTER_SETTING_KEY]);
+
+        $setting->forceFill([
+            'group_id' => $group->getKey(),
+            'label' => 'Footer Logo',
+            'description' => 'Optional logo used in the storefront footer. A light/white logo is recommended for dark footer backgrounds.',
+            'value' => $setting->exists ? $setting->value : null,
+            'value_type' => SystemSetting::TYPE_STRING,
+            'is_public' => false,
+            'is_encrypted' => false,
+            'sort_order' => 15,
+            'status' => SystemSetting::STATUS_ACTIVE,
+            'deleted_at' => null,
+        ])->save();
+
+        return $setting;
     }
 
     private function ensureMarketplaceLogoSetting(): SystemSetting

@@ -103,20 +103,26 @@
                 </li>
             </ul>
         </div>
+        @php($mobileContact = $storefrontContact ?? [])
+        @if (($mobileContact['office_address'] ?? null) || ($mobileContact['email'] ?? null) || ($mobileContact['phone_href'] ?? null))
         <div class="need-help-wrap">
             <p class="nd-title h6 fw-medium mb-16">Need Help?</p>
+            @if (($mobileContact['office_address'] ?? null))
             <p class="lh-26 cl-text-2 mb-4">
-                600 N Michigan Ave, Chicago, IL 60611, USA
+                {{ $mobileContact['office_address'] }}
             </p>
-            <a href="#;" class="text-decoration-underline text-primary lh-26 mb-16">
-                Open in Maps
+            @endif
+            @if (($mobileContact['email'] ?? null))
+            <a href="mailto:{{ $mobileContact['email'] }}" class="cl-text-2 link mb-8">
+                {{ $mobileContact['email'] }}
             </a>
-            <a href="mailto:hi.amere@gmail.com" class="cl-text-2 link mb-8">
-                hi.amere@gmail.com
+            @endif
+            @if (($mobileContact['phone_href'] ?? null))
+            <a href="{{ $mobileContact['phone_href'] }}" class="cl-text-2 link">
+                {{ $mobileContact['phone'] ?? $mobileContact['phone_href'] }}
             </a>
-            <a href="tel:3156666688" class="cl-text-2 link">
-                315-666-6688
-            </a>
+            @endif
         </div>
+        @endif
     </div>
 </div>

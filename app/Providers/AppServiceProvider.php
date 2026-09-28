@@ -62,11 +62,7 @@ class AppServiceProvider extends ServiceProvider
             'components.*',
             'shared.*',
         ], function ($view): void {
-            static $marketplaceName = null;
-
-            $marketplaceName ??= app(SystemSettingService::class)->marketplaceName();
-
-            $view->with('marketplaceName', $marketplaceName);
+            $view->with('marketplaceName', app(SystemSettingService::class)->marketplaceName());
         });
 
         View::composer([
@@ -88,6 +84,20 @@ class AppServiceProvider extends ServiceProvider
                 'shouldAutoOpenCustomerLocationModal' => $currentPostalCode === null,
                 'storefrontCartCount' => app(CartResolver::class)->itemCount(request()),
                 'storefrontMiniCart' => app(CartPageService::class)->pageData(request()),
+            ]);
+        });
+
+        View::composer([
+            'storefront.partials.footer',
+            'storefront.partials.mobile-menu',
+        ], function ($view): void {
+            static $storefrontFooterLogoUrl = null;
+
+            $storefrontFooterLogoUrl ??= app(MarketplaceLogoService::class)->footerUrl();
+
+            $view->with([
+                'storefrontContact' => app(SystemSettingService::class)->publicContact(),
+                'storefrontFooterLogoUrl' => $storefrontFooterLogoUrl,
             ]);
         });
     }

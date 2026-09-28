@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Database\Seeders\MasterData\StorefrontBannerSettingSeeder;
+use Database\Seeders\MasterData\PublicContactSettingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -106,6 +107,54 @@ class AdminSystemSettingManagementTest extends TestCase
             ])
             ->assertRedirect(route('admin.system-settings.edit', $setting))
             ->assertSessionHasErrors('value');
+    }
+
+    public function test_admin_can_update_public_contact_settings_with_key_specific_validation(): void
+    {
+        $admin = $this->userWithRole('admin');
+        $this->seed(PublicContactSettingSeeder::class);
+        $email = SystemSetting::query()->where('key', 'contact.support_email')->firstOrFail();
+        $facebook = SystemSetting::query()->where('key', 'social.facebook')->firstOrFail();
+
+        $this->actingAs($admin)->get(route('admin.system-settings.index', ['search' => 'contact.']))
+            ->assertOk()->assertSee('contact.support_email')->assertSee('contact.phone');
+
+        $this->actingAs($admin)->put(route('admin.system-settings.update', $email), $this->payload($email, 'not-an-email'))
+            ->assertSessionHasErrors('value');
+        $this->actingAs($admin)->put(route('admin.system-settings.update', $facebook), $this->payload($facebook, 'javascript:alert(1)'))
+            ->assertSessionHasErrors('value');
+
+        $this->actingAs($admin)->put(route('admin.system-settings.update', $email), $this->payload($email, 'support@windowshop.test'))
+            ->assertRedirect(route('admin.system-settings.edit', $email));
+        $this->actingAs($admin)->put(route('admin.system-settings.update', $facebook), $this->payload($facebook, 'https://facebook.com/windowshop'))
+            ->assertRedirect(route('admin.system-settings.edit', $facebook));
+
+        $this->assertSame('support@windowshop.test', $email->fresh()->value);
+        $this->assertSame('https://facebook.com/windowshop', $facebook->fresh()->value);
+    }
+
+    public function test_non_admin_cannot_manage_public_contact_system_settings(): void
+    {
+        $merchant = $this->userWithRole('merchant');
+        $this->seed(PublicContactSettingSeeder::class);
+        $setting = SystemSetting::query()->where('key', 'contact.phone')->firstOrFail();
+
+        $this->actingAs($merchant)->get(route('admin.system-settings.edit', $setting))->assertForbidden();
+        $this->actingAs($merchant)->put(route('admin.system-settings.update', $setting), $this->payload($setting, '+91 98765 43210'))->assertForbidden();
+    }
+
+    private function payload(SystemSetting $setting, ?string $value): array
+    {
+        return [
+            'group_id' => $setting->group_id,
+            'label' => $setting->label,
+            'value' => $value,
+            'value_type' => $setting->value_type,
+            'description' => $setting->description,
+            'sort_order' => $setting->sort_order,
+            'status' => $setting->status,
+            'is_public' => 1,
+        ];
     }
 
     private function userWithRole(string $roleSlug): User

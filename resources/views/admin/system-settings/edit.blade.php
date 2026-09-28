@@ -49,7 +49,15 @@
                     </div>
                     <div class="col-md-8">
                         <label for="value" class="form-label">Value</label>
-                        <textarea id="value" name="value" rows="3" class="form-control @error('value') is-invalid @enderror">{{ old('value', $setting->value) }}</textarea>
+                        @if($setting->key === 'contact.support_email')
+                            <input id="value" name="value" type="email" maxlength="255" value="{{ old('value', $setting->value) }}" class="form-control @error('value') is-invalid @enderror">
+                        @elseif(str_starts_with($setting->key, 'social.'))
+                            <input id="value" name="value" type="url" maxlength="2048" placeholder="https://" value="{{ old('value', $setting->value) }}" class="form-control @error('value') is-invalid @enderror">
+                        @elseif(in_array($setting->key, ['contact.phone', 'contact.whatsapp'], true))
+                            <input id="value" name="value" type="tel" maxlength="50" value="{{ old('value', $setting->value) }}" class="form-control @error('value') is-invalid @enderror">
+                        @else
+                            <textarea id="value" name="value" rows="3" class="form-control @error('value') is-invalid @enderror">{{ old('value', $setting->value) }}</textarea>
+                        @endif
                         @error('value')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-md-4">
