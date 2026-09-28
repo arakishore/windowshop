@@ -63,12 +63,34 @@
 							</a>
 						</li>
 						<li class="nav-item">
+							<a href="{{ route('admin.product-reviews.index') }}" class="nav-link {{ request()->routeIs('admin.product-reviews.*') ? 'active' : '' }}">
+								<i class="ph-star"></i><span>Product Reviews</span>
+							</a>
+						</li>
+						<li class="nav-item">
 							<a href="{{ route('admin.settings.edit') }}" class="nav-link {{ request()->routeIs('admin.settings.*') ? 'active' : '' }}">
 								<i class="ph-gear"></i>
 								<span>
 									Settings
 								</span>
 							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.email-settings.edit') }}" class="nav-link {{ request()->routeIs('admin.email-settings.*') ? 'active' : '' }}">
+								<i class="ph-envelope"></i><span>Email Notifications</span>
+							</a>
+						</li>
+						<li class="nav-item"><a href="{{ route('admin.notification-templates.index') }}" class="nav-link {{ request()->routeIs('admin.notification-templates.*') ? 'active' : '' }}"><i class="ph-file-text"></i><span>Notification Templates</span></a></li>
+						<li class="nav-item"><a href="{{ route('admin.notification-rules.index') }}" class="nav-link {{ request()->routeIs('admin.notification-rules.*') ? 'active' : '' }}"><i class="ph-lock-key"></i><span>Notification Rules</span></a></li>
+
+						<li class="nav-item nav-item-submenu {{ request()->routeIs('admin.cms-pages.*') ? 'nav-item-expanded nav-item-open' : '' }}">
+							<a href="#" class="nav-link {{ request()->routeIs('admin.cms-pages.*') ? 'active' : '' }}">
+								<i class="ph-file-text"></i>
+								<span>Content Management</span>
+							</a>
+							<ul class="nav-group-sub collapse {{ request()->routeIs('admin.cms-pages.*') ? 'show' : '' }}">
+								<li class="nav-item"><a href="{{ route('admin.cms-pages.index') }}" class="nav-link {{ request()->routeIs('admin.cms-pages.*') ? 'active' : '' }}">Pages</a></li>
+							</ul>
 						</li>
 
 						<li class="nav-item nav-item-submenu {{ $isMarketingActive ? 'nav-item-expanded nav-item-open' : '' }}">

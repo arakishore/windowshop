@@ -28,10 +28,20 @@ class StorePromotionRequest extends FormRequest
 
     public function rules(): array
     {
+        $artworkThumb = config('images.offer_banner_web.variants.thumb', [600, 200]);
+
         return [
             'promotion_template_id' => ['required', 'integer', Rule::exists('promotion_templates', 'id')->where('status', 'active')],
             'name' => ['required', 'string', 'max:180'],
             'description' => ['nullable', 'string'],
+            'promotional_image' => [
+                'nullable',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:'.(int) config('images.offer_banner_web.max_upload_kb', 8192),
+                'dimensions:min_width='.(int) $artworkThumb[0].',min_height='.(int) $artworkThumb[1],
+            ],
+            'remove_promotional_image' => ['nullable', 'boolean'],
             'status' => ['required', Rule::in([Promotion::STATUS_DRAFT, Promotion::STATUS_ACTIVE, Promotion::STATUS_INACTIVE])],
             'activation_type' => ['required', Rule::in([Promotion::ACTIVATION_AUTOMATIC, Promotion::ACTIVATION_COUPON])],
             'starts_at' => ['nullable', 'date'],

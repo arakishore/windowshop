@@ -22,13 +22,13 @@
             </div>
             <div class="header-left d-none d-xl-flex">
                 <a href="{{ route('storefront.home') }}" class="logo-site">
-                    <img loading="lazy" width="150" height="30" src="{{ $marketplaceLogoUrl }}" alt="WindowShop">
+                    <img loading="lazy" width="150" height="30" src="{{ $marketplaceLogoUrl }}" alt="{{ $marketplaceName }}">
                 </a>
                 @include('storefront.partials.main-menu')
             </div>
             <div class="header-center d-xl-none">
                 <a href="{{ route('storefront.home') }}" class="logo-site">
-                    <img loading="lazy" width="150" height="30" src="{{ $marketplaceLogoUrl }}" alt="WindowShop">
+                    <img loading="lazy" width="150" height="30" src="{{ $marketplaceLogoUrl }}" alt="{{ $marketplaceName }}">
                 </a>
             </div>
             <div class="header-right">

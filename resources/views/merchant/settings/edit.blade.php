@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant settings editor backed by the generic merchant_settings table. --}}
 @extends('layouts.merchant')
 
-@section('title', 'Settings | WindowShop')
+@section('title', 'Settings | ' . $marketplaceName)
 
 @section('page_title', 'Settings')
 
@@ -341,7 +341,7 @@
                             <h5 class="mb-0">General Settings</h5>
                         </div>
                         <div class="card-body text-muted">
-                            General merchant preferences will appear here as WindowShop grows.
+                            General merchant preferences will appear here as {{ $marketplaceName }} grows.
                         </div>
                     </div>
                 </div>
@@ -725,7 +725,9 @@
                                     $codMin = $shopField('payment', 'cod_min_order_amount');
                                     $codMax = $shopField('payment', 'cod_max_order_amount');
                                     $cashAtShopEnabled = $shopField('payment', 'cash_at_shop_enabled');
+                                    $cashAtShopPickupExpiry = $shopField('payment', 'cash_at_shop_pickup_expiry_hours');
                                     $merchantUpiEnabled = $shopField('payment', 'merchant_upi_enabled');
+                                    $merchantUpiExpiry = $shopField('payment', 'merchant_upi_expiry_minutes');
                                     $merchantUpiId = $shopField('payment', 'merchant_upi_id');
                                     $merchantUpiPayee = $shopField('payment', 'merchant_upi_payee_name');
                                     $merchantUpiQrPath = $shopField('payment', 'merchant_upi_qr_path');
@@ -808,6 +810,23 @@
                                         <label class="form-check-label fw-semibold" for="{{ $cashAtShopEnabled['id'] }}">Cash at Shop</label>
                                     </div>
                                     <div class="text-muted fs-sm mt-1">Allow customers to pay at the shop when collecting their order.</div>
+                                    <div class="mt-3">
+                                        <label for="{{ $cashAtShopPickupExpiry['id'] }}" class="form-label fw-semibold">Pickup Collection Window</label>
+                                        <select
+                                            id="{{ $cashAtShopPickupExpiry['id'] }}"
+                                            name="{{ $cashAtShopPickupExpiry['name'] }}"
+                                            class="form-select {{ $errors->has($cashAtShopPickupExpiry['errorKey']) ? 'is-invalid' : '' }}"
+                                        >
+                                            <option value="0" @selected(blank($cashAtShopPickupExpiry['value']) || (int) $cashAtShopPickupExpiry['value'] === 0)>Never auto-cancel</option>
+                                            @foreach ([12, 24, 48, 72] as $hours)
+                                                <option value="{{ $hours }}" @selected((int) $cashAtShopPickupExpiry['value'] === $hours)>{{ $hours }} hours</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="form-text">Sets how long the customer may collect the order after it is marked Ready for Pickup.</div>
+                                        @if ($errors->has($cashAtShopPickupExpiry['errorKey']))
+                                            <div class="invalid-feedback d-block">{{ $errors->first($cashAtShopPickupExpiry['errorKey']) }}</div>
+                                        @endif
+                                    </div>
                                     <div class="alert alert-warning mt-2 mb-0 js-cash-at-shop-pickup-warning">
                                         Pickup from Shop must be enabled for this payment method to be offered at checkout.
                                     </div>
@@ -859,6 +878,23 @@
                                             >
                                             @if ($errors->has($merchantUpiPayee['errorKey']))
                                                 <div class="invalid-feedback d-block">{{ $errors->first($merchantUpiPayee['errorKey']) }}</div>
+                                            @endif
+                                        </div>
+                                        <div>
+                                            <label for="{{ $merchantUpiExpiry['id'] }}" class="form-label fw-semibold">Unverified Payment Expiry</label>
+                                            <select
+                                                id="{{ $merchantUpiExpiry['id'] }}"
+                                                name="{{ $merchantUpiExpiry['name'] }}"
+                                                class="form-select {{ $errors->has($merchantUpiExpiry['errorKey']) ? 'is-invalid' : '' }}"
+                                            >
+                                                <option value="0" @selected(blank($merchantUpiExpiry['value']) || (int) $merchantUpiExpiry['value'] === 0)>Never auto-cancel</option>
+                                                @foreach ([5, 10, 15, 30] as $minutes)
+                                                    <option value="{{ $minutes }}" @selected((int) $merchantUpiExpiry['value'] === $minutes)>{{ $minutes }} minutes</option>
+                                                @endforeach
+                                            </select>
+                                            <div class="form-text">Choose how long an unverified UPI order may remain pending. Select Never auto-cancel to manage these orders manually.</div>
+                                            @if ($errors->has($merchantUpiExpiry['errorKey']))
+                                                <div class="invalid-feedback d-block">{{ $errors->first($merchantUpiExpiry['errorKey']) }}</div>
                                             @endif
                                         </div>
                                     </div>

@@ -72,10 +72,19 @@ class SystemSettingController extends Controller
     {
         abort_if($systemSetting->trashed(), 404);
 
+        $valueRules = match (true) {
+            $systemSetting->key === 'contact.support_email' => ['nullable', 'email', 'max:255'],
+            str_starts_with($systemSetting->key, 'social.') => ['nullable', 'url:http,https', 'max:2048'],
+            in_array($systemSetting->key, ['contact.phone', 'contact.whatsapp'], true) => ['nullable', 'string', 'max:50', 'regex:/^[0-9+()\-\.\s]*$/'],
+            $systemSetting->key === 'contact.office_address' => ['nullable', 'string', 'max:1000'],
+            in_array($systemSetting->key, ['contact.support_hours', 'contact.whatsapp_hours'], true) => ['nullable', 'string', 'max:500'],
+            default => ['nullable', 'string'],
+        };
+
         $data = $request->validate([
             'group_id' => ['required', 'integer', Rule::exists('system_setting_groups', 'id')->whereNull('deleted_at')],
             'label' => ['required', 'string', 'max:150'],
-            'value' => ['nullable', 'string'],
+            'value' => $valueRules,
             'value_type' => ['required', Rule::in(SystemSetting::valueTypes())],
             'description' => ['nullable', 'string'],
             'sort_order' => ['required', 'integer', 'min:0'],

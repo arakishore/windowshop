@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant/company details form without shop or branch information. --}}
 @extends('layouts.merchant')
 
-@section('title', 'Merchant Details | WindowShop')
+@section('title', 'Merchant Details | ' . $marketplaceName)
 
 @section('page_title', 'Merchant Details')
 

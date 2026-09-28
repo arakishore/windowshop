@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Shopping Cart | WindowShop')
-@section('meta_description', 'Review your selected local shop products before checkout on WindowShop.')
+@section('title', 'Shopping Cart | ' . $marketplaceName)
+@section('meta_description', 'Review your selected local shop products before checkout on '.$marketplaceName.'.')
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('assets/admin/icons/fontawesome/styles.min.css') }}">
@@ -1492,7 +1492,7 @@
                                                     </p>
                                                 </div>
                                                 <div>
-                                                    <a href="{{ route('storefront.checkout') }}"
+                                                    <a href="{{ route('storefront.checkout', ['shop' => $shopGroup['shop_id']]) }}"
                                                         class="btn btn-ws-primary w-100 d-flex align-items-center justify-content-center gap-2 mt-3 px-4"
                                                         style="height:42px;">
                                                         Proceed to checkout <i class="fa-solid fa-arrow-right" style="font-size:12px;"></i>

@@ -1,7 +1,7 @@
 {{-- Purpose: Login screen scaffold that uses the auth layout without admin navbar or sidebar. --}}
 @extends('layouts.auth')
 
-@section('title', 'Login | WindowShop')
+@section('title', 'Login | ' . $marketplaceName)
 
 @section('content')
     <!-- Login form -->
@@ -11,7 +11,7 @@
             <div class="card-body">
                 <div class="text-center mb-3">
                     <div class="d-inline-flex align-items-center justify-content-center mb-4 mt-2">
-                        <img src="{{ asset('assets/admin/images/logov2.png') }}" class="h-48px" alt="WindowShop">
+                        <img src="{{ asset('assets/admin/images/logov2.png') }}" class="h-48px" alt="{{ $marketplaceName }}">
                     </div>
                     <h5 class="mb-0">Login to your account</h5>
                     <span class="d-block text-muted">Enter your credentials below</span>

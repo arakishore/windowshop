@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Events\StorefrontOrderPlaced;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
+use App\Models\DirectMerchantUpiAttempt;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderTotal;
@@ -30,19 +32,21 @@ use App\Services\Checkout\CheckoutPageService;
 use App\Services\Checkout\StorefrontDeliveryService;
 use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\Order\OrderStatusService;
+use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Promotion\Coupons\CouponSessionStore;
 use App\Services\Promotion\Engine\Data\AppliedPromotion;
 use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
 use App\Services\Promotion\Engine\Data\PromotionLineAdjustment;
 use App\Services\Promotion\Engine\Data\PromotionLineInput;
 use App\Services\Promotion\Redemptions\CouponRedemptionService;
-use App\Services\Order\OrderStatusService;
-use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Storefront\StorefrontCountryResolver;
 use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PDO;
 use Tests\TestCase;
@@ -50,6 +54,13 @@ use Tests\TestCase;
 class StorefrontCheckoutGateTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Event::fake([StorefrontOrderPlaced::class]);
+    }
 
     protected function beforeRefreshingDatabase()
     {
@@ -1037,11 +1048,13 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertJsonPath('total', '₹700.00');
     }
 
-    public function test_checkout_multishop_delivery_sums_shop_charges_and_hides_pickup(): void
+    public function test_multishop_cart_checkout_is_scoped_to_selected_shop_items_totals_delivery_and_payment(): void
     {
         $customer = $this->customerUser('delivery-multishop@example.test');
         $first = $this->productFixture(price: 600);
         $second = $this->productFixture(price: 700);
+        $first['product']->forceFill(['product_name' => 'Selected Shop Product'])->save();
+        $second['product']->forceFill(['product_name' => 'Other Shop Product'])->save();
         $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
         $this->cartItem($cart, $first['variant']);
         $this->cartItem($cart, $second['variant']);
@@ -1052,43 +1065,43 @@ class StorefrontCheckoutGateTest extends TestCase
             'is_default_billing' => true,
         ]);
         $this->shopSetting($first['shop'], 'fulfillment', 'delivery_flat_charge', 50, ShopSetting::TYPE_DECIMAL);
-        $this->shopSetting($second['shop'], 'fulfillment', 'delivery_flat_charge', 40, ShopSetting::TYPE_DECIMAL);
-        $this->shopSetting($second['shop'], 'fulfillment', 'free_delivery_above', 500, ShopSetting::TYPE_DECIMAL);
+        $this->shopSetting($first['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($second['shop'], 'fulfillment', 'delivery_enabled', false, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($second['shop'], 'payment', 'cod_enabled', false, ShopSetting::TYPE_BOOLEAN);
 
-        $this->actingAs($customer)
+        $response = $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
-            ->get(route('storefront.checkout'))
-            ->assertOk()
+            ->get(route('storefront.checkout', ['shop' => $first['shop']->getKey()]));
+
+        $response->assertOk()
+            ->assertSee('Selected Shop Product')
             ->assertSee('₹50.00')
-            ->assertSee('₹1,350.00')
-            ->assertDontSee('Pickup from Shop');
+            ->assertSee('₹650.00')
+            ->assertSee('Pickup from Shop')
+            ->assertSee('Cash on Delivery')
+            ->assertSessionHas(CheckoutFlowService::SELECTED_SHOP_SESSION_KEY, $first['shop']->getKey());
+
+        $cartData = $response->viewData('cartData');
+        $this->assertSame([$first['shop']->getKey()], collect($cartData['shop_groups'])->pluck('shop_id')->all());
+        $this->assertSame([$first['variant']->getKey()], collect($cartData['shop_groups'][0]['items'])->pluck('product_variant_id')->all());
+        $this->assertSame(60000, $cartData['subtotal_cents']);
     }
 
-    public function test_checkout_multishop_minimum_uses_each_shop_subtotal_not_whole_cart(): void
+    public function test_checkout_rejects_shop_that_is_not_in_the_current_cart(): void
     {
-        $customer = $this->customerUser('delivery-multishop-minimum@example.test');
+        $customer = $this->customerUser('invalid-checkout-shop@example.test');
         $first = $this->productFixture(price: 2000);
-        $second = $this->productFixture(price: 5000);
+        $other = $this->productFixture(price: 5000);
         $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
         $this->cartItem($cart, $first['variant']);
-        $this->cartItem($cart, $second['variant']);
-        $this->postalCode('422009');
-        $this->customerAddress($customer, $first['merchant'], [
-            'postal_code' => '422009',
-            'is_default_shipping' => true,
-            'is_default_billing' => true,
-        ]);
-        $this->shopSetting($first['shop'], 'fulfillment', 'delivery_min_order_amount', 5000, ShopSetting::TYPE_DECIMAL);
-        $this->shopSetting($second['shop'], 'fulfillment', 'delivery_min_order_amount', 3000, ShopSetting::TYPE_DECIMAL);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
-            ->get(route('storefront.checkout'))
-            ->assertOk()
-            ->assertSee('Standard Delivery')
-            ->assertSee('Unavailable')
-            ->assertSee($first['shop']->name.': Minimum order of')
-            ->assertDontSee($second['shop']->name.': Minimum order of');
+            ->get(route('storefront.checkout', ['shop' => $other['shop']->getKey()]))
+            ->assertRedirect(route('storefront.cart'))
+            ->assertSessionHas('error', 'Please choose a valid shop from your cart.');
+
+        $this->assertFalse(session()->has(CheckoutFlowService::SELECTED_SHOP_SESSION_KEY));
     }
 
     public function test_checkout_delivery_shows_selected_cod_when_enabled_without_limits(): void
@@ -1133,6 +1146,141 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertDontSee('Cash on Delivery')
             ->assertSee('No payment method is currently available for this delivery option.')
             ->assertSee('data-place-order-button disabled', false);
+    }
+
+    public function test_complete_direct_merchant_upi_is_available_for_delivery_and_pickup(): void
+    {
+        Storage::fake('public');
+        $customer = $this->customerUser('payment-upi-available@example.test');
+        $fixture = $this->productFixture(price: 1649);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->configureDirectUpi($fixture['shop']);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Direct Merchant UPI')
+            ->assertSee('Vana Women Studio')
+            ->assertSee('9422945125@ybl');
+
+        $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            ])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Direct Merchant UPI');
+    }
+
+    public function test_direct_merchant_upi_order_stores_customer_claim_pending_with_server_total(): void
+    {
+        Storage::fake('public');
+        $customer = $this->customerUser('payment-upi-order@example.test');
+        $fixture = $this->productFixture(price: 1649);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+        $this->configureDirectUpi($fixture['shop']);
+
+        $response = $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
+                'upi_reference' => '123456678',
+                'browser_total' => '1.00',
+            ]);
+
+        $order = Order::query()->firstOrFail();
+        $response->assertRedirect(route('storefront.checkout.success', $order));
+        $this->assertSame('123456678', $order->payment_reference);
+        $this->assertNull($order->upi_txn);
+        $this->assertSame(Order::PAYMENT_PENDING, $order->payment_status);
+        $this->assertSame('0.00', $order->amount_paid);
+        $this->assertSame('1649.00', $order->grand_total);
+        $this->assertSame(19, (int) $fixture['variant']->refresh()->stock_quantity);
+        $attempt = $order->directMerchantUpiAttempts()->sole();
+        $this->assertSame(1, $attempt->sequence);
+        $this->assertSame('123456678', $attempt->submitted_reference);
+        $this->assertSame(DirectMerchantUpiAttempt::STATUS_SUBMITTED, $attempt->status);
+        $this->assertSame($customer->getKey(), $attempt->submitted_by);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout.success', $order))
+            ->assertOk()
+            ->assertSee('Your payment reference was submitted and is awaiting merchant verification.')
+            ->assertSee('Payment verification pending')
+            ->assertSee('Your payment is awaiting merchant verification. We’ll notify you once it has been verified.')
+            ->assertDontSee('Your order is confirmed!')
+            ->assertSee('View Order')
+            ->assertSee(route('storefront.account.orders.show', $order), false)
+            ->assertSee('Continue Shopping');
+    }
+
+    public function test_disabled_or_incomplete_direct_upi_cannot_be_submitted_manually(): void
+    {
+        Storage::fake('public');
+        $customer = $this->customerUser('payment-upi-disabled@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $address = $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'merchant_upi_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($fixture['shop'], 'payment', 'merchant_upi_id', '9422945125@ybl', ShopSetting::TYPE_STRING);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
+                'upi_reference' => 'CUSTOMER123',
+            ])
+            ->assertSessionHasErrors('payment_method');
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_direct_upi_uses_only_the_selected_checkout_shops_settings(): void
+    {
+        Storage::fake('public');
+        $customer = $this->customerUser('payment-upi-shop-scope@example.test');
+        $selected = $this->productFixture(price: 700);
+        $other = $this->productFixture(price: 900);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $this->cartItem($cart, $selected['variant']);
+        $this->cartItem($cart, $other['variant']);
+        $this->customerAddress($customer, $selected['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+        $this->configureDirectUpi($other['shop']);
+
+        $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            ])
+            ->get(route('storefront.checkout', ['shop' => $selected['shop']->getKey()]))
+            ->assertOk()
+            ->assertDontSee('Direct Merchant UPI')
+            ->assertDontSee('9422945125@ybl');
     }
 
     public function test_checkout_delivery_cod_minimum_can_make_cod_unavailable(): void
@@ -1383,7 +1531,23 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Order placed successfully')
             ->assertSee($order->order_number)
             ->assertSee('Cash on Delivery')
-            ->assertSee('Pay when your order is delivered.');
+            ->assertSee('Pay when your order is delivered.')
+            ->assertSee('Order pending')
+            ->assertSee('Your order has been placed successfully. We’ll notify you when the shop confirms your order.')
+            ->assertDontSee('Your order is confirmed!')
+            ->assertSee('View Order')
+            ->assertSee(route('storefront.account.orders.show', $order), false)
+            ->assertSee('Continue Shopping');
+
+        $order->forceFill(['order_status' => Order::STATUS_CONFIRMED])->save();
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout.success', $order))
+            ->assertOk()
+            ->assertSee('Order confirmed')
+            ->assertSee('The shop has confirmed your order. We’ll notify you as it progresses.')
+            ->assertDontSee('Order pending');
     }
 
     public function test_checkout_places_pickup_cash_at_shop_order(): void
@@ -1416,14 +1580,65 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertSame('Main Road', $order->billing_address_line_1);
         $this->assertSame($fixture['shop']->getKey(), $order->shop_id);
         $this->assertDatabaseMissing('cart_items', ['id' => $item->getKey()]);
+        $this->assertDatabaseCount('direct_merchant_upi_attempts', 0);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
             ->get(route('storefront.checkout.success', $order))
             ->assertOk()
             ->assertSee('Cash at Shop')
-            ->assertSee('Pay when you collect your order.')
-            ->assertSee($fixture['shop']->name);
+            ->assertSee('Pay at the shop when you collect your order.')
+            ->assertSee('Order pending')
+            ->assertSee('Your order has been placed successfully. We’ll notify you when the shop confirms your order.')
+            ->assertDontSee('Your order is confirmed!')
+            ->assertSee($fixture['shop']->name)
+            ->assertSee('View Order')
+            ->assertSee(route('storefront.account.orders.show', $order), false)
+            ->assertSee('Continue Shopping');
+    }
+
+    public function test_multishop_order_creates_and_cleans_up_only_the_selected_shop(): void
+    {
+        $this->seed(PromotionTemplateSeeder::class);
+        $customer = $this->customerUser('place-selected-shop@example.test');
+        $first = $this->productFixture(price: 700);
+        $second = $this->productFixture(price: 1200);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $firstItem = $this->cartItem($cart, $first['variant']);
+        $secondItem = $this->cartItem($cart, $second['variant']);
+        $address = $this->customerAddress($customer, $first['merchant'], [
+            'postal_code' => '422009',
+            'is_default_billing' => true,
+        ]);
+        $this->couponPromotion($second, 'fixed_discount', 'SECOND200', ['value_amount' => '200.00']);
+
+        $response = $this->actingAs($customer)
+            ->withSession([
+                'active_role_id' => $this->roleId('customer'),
+                CheckoutFlowService::SELECTED_SHOP_SESSION_KEY => $first['shop']->getKey(),
+                CouponSessionStore::SESSION_KEY => [$second['shop']->getKey() => 'SECOND200'],
+            ])
+            ->post(route('storefront.checkout.place-order'), [
+                'address_id' => $address->getKey(),
+                'billing_same_as_delivery' => '1',
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ]);
+
+        $order = Order::query()->with('items')->sole();
+        $response->assertRedirect(route('storefront.checkout.success', $order));
+
+        $this->assertSame($first['shop']->getKey(), $order->shop_id);
+        $this->assertSame('700.00', $order->grand_total);
+        $this->assertCount(1, $order->items);
+        $this->assertSame($first['variant']->getKey(), $order->items->first()->product_variant_id);
+        $this->assertDatabaseMissing('cart_items', ['id' => $firstItem->getKey()]);
+        $this->assertDatabaseHas('cart_items', [
+            'id' => $secondItem->getKey(),
+            'cart_id' => $cart->getKey(),
+            'shop_id' => $second['shop']->getKey(),
+        ]);
+        $this->assertSame('SECOND200', session(CouponSessionStore::SESSION_KEY.'.'.$second['shop']->getKey()));
     }
 
     public function test_checkout_place_order_applies_session_coupon_through_authoritative_order_creation(): void
@@ -2162,6 +2377,38 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertDatabaseCount('orders', 1);
     }
 
+    public function test_checkout_renders_immediate_order_processing_state_and_repeat_submit_guard(): void
+    {
+        $customer = $this->customerUser('processing-state@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->shopSetting($fixture['shop'], 'payment', 'cod_enabled', true, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout', ['shop' => $fixture['shop']->getKey()]))
+            ->assertOk()
+            ->assertSee('data-place-order-spinner', false)
+            ->assertSee('data-place-order-processing', false)
+            ->assertSee('checkout-processing-overlay', false)
+            ->assertSee('aria-busy="true"', false)
+            ->assertSee('Processing your order…')
+            ->assertSee('Please wait while we confirm your order.')
+            ->assertSee('Do not refresh or close this page.')
+            ->assertDontSee('alert alert-info', false)
+            ->assertDontSee('click the button again')
+            ->assertSee("placeOrderLabel.textContent = 'Processing...'", false)
+            ->assertSee('if (orderSubmissionProcessing)', false)
+            ->assertSee('event.preventDefault()', false)
+            ->assertSee('resetOrderSubmission', false);
+    }
+
     public function test_checkout_order_failure_keeps_cart_items(): void
     {
         $customer = $this->customerUser('place-failure@example.test');
@@ -2545,8 +2792,7 @@ class StorefrontCheckoutGateTest extends TestCase
         bool $shippingEnabled = true,
         string $district = 'Nashik',
         string $state = 'Maharashtra',
-    ): PostalCode
-    {
+    ): PostalCode {
         return PostalCode::query()->create([
             'source_key' => sha1($postalCode.'|checkout test h.o|ho|'.strtolower($district).'|'.strtolower($state)),
             'circle_name' => $state,
@@ -2680,6 +2926,16 @@ class StorefrontCheckoutGateTest extends TestCase
     private function shopSetting(Shop $shop, string $group, string $key, mixed $value, string $type): void
     {
         app(ShopSettingsService::class)->setTyped((int) $shop->getKey(), $group, $key, $value, $type);
+    }
+
+    private function configureDirectUpi(Shop $shop): void
+    {
+        $path = 'shops/'.$shop->getKey().'/settings/upi-qr/test-qr.png';
+        Storage::disk('public')->put($path, 'test-qr');
+        $this->shopSetting($shop, 'payment', 'merchant_upi_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($shop, 'payment', 'merchant_upi_id', '9422945125@ybl', ShopSetting::TYPE_STRING);
+        $this->shopSetting($shop, 'payment', 'merchant_upi_payee_name', 'Vana Women Studio', ShopSetting::TYPE_STRING);
+        $this->shopSetting($shop, 'payment', 'merchant_upi_qr_path', $path, ShopSetting::TYPE_STRING);
     }
 
     private function guestCart(string $token): Cart

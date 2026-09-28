@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class OrderItem extends Model
 {
@@ -89,5 +90,15 @@ class OrderItem extends Model
         return $this->hasMany(OrderItemTaxComponent::class)
             ->orderBy('sort_order')
             ->orderBy('id');
+    }
+
+    public function review(): HasOne
+    {
+        return $this->hasOne(ProductReview::class);
+    }
+
+    public function reviewIncludingDeleted(): HasOne
+    {
+        return $this->hasOne(ProductReview::class)->withTrashed();
     }
 }

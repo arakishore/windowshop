@@ -4,6 +4,7 @@ namespace App\Services\Merchant;
 
 use App\Models\MerchantSetting;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
 use InvalidArgumentException;
 
 class MerchantSettingsService
@@ -68,6 +69,48 @@ class MerchantSettingsService
             });
     }
 
+    public function setSecret(int $merchantId, string $group, string $key, ?string $value): ?MerchantSetting
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return MerchantSetting::query()
+                ->where('merchant_id', $merchantId)
+                ->where('group', $group)
+                ->where('setting_key', $key)
+                ->first();
+        }
+
+        return $this->setTyped($merchantId, $group, $key, $value, MerchantSetting::TYPE_ENCRYPTED);
+    }
+
+    public function secret(int $merchantId, string $group, string $key): ?string
+    {
+        $setting = MerchantSetting::query()
+            ->where('merchant_id', $merchantId)
+            ->where('group', $group)
+            ->where('setting_key', $key)
+            ->where('setting_type', MerchantSetting::TYPE_ENCRYPTED)
+            ->first();
+
+        if (! $setting || blank($setting->setting_value)) {
+            return null;
+        }
+
+        return Crypt::decryptString($setting->setting_value);
+    }
+
+    public function secretConfigured(int $merchantId, string $group, string $key): bool
+    {
+        return MerchantSetting::query()
+            ->where('merchant_id', $merchantId)
+            ->where('group', $group)
+            ->where('setting_key', $key)
+            ->where('setting_type', MerchantSetting::TYPE_ENCRYPTED)
+            ->whereNotNull('setting_value')
+            ->exists();
+    }
+
     public function validate(string $group, string $key, mixed $value, ?string $type = null): void
     {
         if ($type !== null && ! in_array($type, $this->supportedTypes(), true)) {
@@ -114,6 +157,7 @@ class MerchantSettingsService
             MerchantSetting::TYPE_DECIMAL,
             MerchantSetting::TYPE_STRING,
             MerchantSetting::TYPE_JSON,
+            MerchantSetting::TYPE_ENCRYPTED,
         ];
     }
 
@@ -135,6 +179,7 @@ class MerchantSettingsService
             MerchantSetting::TYPE_INTEGER => (string) (int) $value,
             MerchantSetting::TYPE_DECIMAL => (string) (float) $value,
             MerchantSetting::TYPE_JSON => json_encode($value, JSON_THROW_ON_ERROR),
+            MerchantSetting::TYPE_ENCRYPTED => Crypt::encryptString((string) $value),
             default => $value === null ? null : (string) $value,
         };
     }
@@ -146,6 +191,7 @@ class MerchantSettingsService
             MerchantSetting::TYPE_INTEGER => (int) $value,
             MerchantSetting::TYPE_DECIMAL => (float) $value,
             MerchantSetting::TYPE_JSON => json_decode($value ?: 'null', true, 512, JSON_THROW_ON_ERROR),
+            MerchantSetting::TYPE_ENCRYPTED => $value ? 'Configured' : null,
             default => $value,
         };
     }

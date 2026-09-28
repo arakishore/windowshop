@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Profile | WindowShop')
-@section('meta_description', 'Review your WindowShop customer profile.')
+@section('title', 'Profile | ' . $marketplaceName)
+@section('meta_description', 'Review your '.$marketplaceName.' customer profile.')
 
 @section('content')
     @component('storefront.account.partials.shell', ['customer' => $customer, 'accountPageTitle' => 'Profile'])
@@ -41,7 +41,7 @@
             </div>
 
             <div class="account-address-actions">
-                <button type="submit" class="account-primary-button">Save Profile</button>
+                <button type="submit" class="account-primary-button animate-btn">Save Profile</button>
             </div>
         </form>
     @endcomponent

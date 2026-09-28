@@ -17,20 +17,25 @@ use App\Models\PromotionReward;
 use App\Models\PromotionTarget;
 use App\Models\PromotionTemplate;
 use App\Models\Shop;
+use App\Services\Image\ImageVariantService;
 use App\Services\Merchant\MerchantShopContextService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use RuntimeException;
+use Throwable;
 
 class PromotionController extends Controller
 {
     public function __construct(
         private readonly MerchantShopContextService $shopContextService,
+        private readonly ImageVariantService $imageVariantService,
     ) {
     }
 
@@ -102,12 +107,26 @@ class PromotionController extends Controller
         $this->validateTargets($shop, $data, $template);
         $this->validateCoupon($shop, $data);
 
-        $promotion = DB::transaction(function () use ($shop, $data, $template): Promotion {
-            $promotion = Promotion::query()->create($this->promotionAttributes($shop, $data, $template));
-            $this->replaceConfiguration($promotion, $shop, $data, $template);
+        $newArtworkPath = null;
 
-            return $promotion;
-        });
+        try {
+            $promotion = DB::transaction(function () use ($request, $shop, $data, $template, &$newArtworkPath): Promotion {
+                $promotion = Promotion::query()->create($this->promotionAttributes($shop, $data, $template));
+
+                if ($request->hasFile('promotional_image')) {
+                    $newArtworkPath = $this->storePromotionalArtwork($request, $promotion);
+                    $promotion->forceFill(['promotional_image_path' => $newArtworkPath])->save();
+                }
+
+                $this->replaceConfiguration($promotion, $shop, $data, $template);
+
+                return $promotion;
+            });
+        } catch (Throwable $exception) {
+            $this->deletePromotionalArtwork($newArtworkPath);
+
+            throw $exception;
+        }
 
         return redirect()
             ->route('merchant.promotions.edit', $promotion)
@@ -133,10 +152,32 @@ class PromotionController extends Controller
         $this->validateTargets($shop, $data, $template);
         $this->validateCoupon($shop, $data, $promotion);
 
-        DB::transaction(function () use ($promotion, $shop, $data, $template): void {
-            $promotion->forceFill($this->promotionAttributes($shop, $data, $template, $promotion))->save();
-            $this->replaceConfiguration($promotion, $shop, $data, $template);
-        });
+        $oldArtworkPath = $promotion->promotional_image_path;
+        $newArtworkPath = null;
+
+        try {
+            DB::transaction(function () use ($request, $promotion, $shop, $data, $template, &$newArtworkPath): void {
+                $attributes = $this->promotionAttributes($shop, $data, $template, $promotion);
+
+                if ($request->hasFile('promotional_image')) {
+                    $newArtworkPath = $this->storePromotionalArtwork($request, $promotion);
+                    $attributes['promotional_image_path'] = $newArtworkPath;
+                } elseif ($request->boolean('remove_promotional_image')) {
+                    $attributes['promotional_image_path'] = null;
+                }
+
+                $promotion->forceFill($attributes)->save();
+                $this->replaceConfiguration($promotion, $shop, $data, $template);
+            });
+        } catch (Throwable $exception) {
+            $this->deletePromotionalArtwork($newArtworkPath);
+
+            throw $exception;
+        }
+
+        if ($oldArtworkPath !== $promotion->fresh()->promotional_image_path) {
+            $this->deletePromotionalArtwork($oldArtworkPath, $promotion);
+        }
 
         return redirect()
             ->route('merchant.promotions.edit', $promotion)
@@ -697,6 +738,44 @@ class PromotionController extends Controller
         }
 
         return $slug;
+    }
+
+    private function storePromotionalArtwork(Request $request, Promotion $promotion): string
+    {
+        $directory = "promotions/{$promotion->uuid}/artwork/".Str::uuid();
+
+        try {
+            $paths = $this->imageVariantService->store(
+                $request->file('promotional_image'),
+                'offer_banner_web',
+                $directory,
+            );
+        } catch (Throwable $exception) {
+            Storage::disk('public')->deleteDirectory($directory);
+
+            if ($exception instanceof RuntimeException) {
+                throw ValidationException::withMessages([
+                    'promotional_image' => $exception->getMessage(),
+                ]);
+            }
+
+            throw $exception;
+        }
+
+        return $paths['web'] ?? array_values($paths)[0];
+    }
+
+    private function deletePromotionalArtwork(?string $path, ?Promotion $promotion = null): void
+    {
+        if (! $path) {
+            return;
+        }
+
+        if ($promotion !== null && ! str_starts_with($path, "promotions/{$promotion->uuid}/artwork/")) {
+            return;
+        }
+
+        Storage::disk('public')->deleteDirectory(dirname($path));
     }
 
     private function statuses(): array

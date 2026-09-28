@@ -4069,3 +4069,34 @@ Verification Results:
 - `php artisan test tests\Feature\StorefrontCustomerAuthPagesTest.php` passed: 4 tests, 60 assertions.
 - `php artisan test tests\Feature\StorefrontCartPageTest.php` passed: 18 tests, 103 assertions.
 - `php artisan test tests\Feature\StorefrontAddToCartTest.php` passed: 18 tests, 81 assertions.
+
+
+## 2026-09-28 - Configurable Storefront Footer Logo (marketplace.footer_logo)
+
+### Task
+Add a separate configurable Footer Logo: new global system setting marketplace.footer_logo under the Marketplace group, optional, falling back to marketplace.logo.
+
+### Decisions
+- Canonical source is system_settings (Marketplace group), NOT legacy admin_settings. Follows the frozen rule that new global settings must use system_settings.
+- Reused MarketplaceLogoService (same MANAGED_DIRECTORY marketplace/logo, same isManagedPath/deleteManaged guards, same png/jpg/jpeg/webp 2MB validation) instead of a second upload architecture. New FOOTER_SETTING_KEY constant plus footerPath()/footerUrl(); footerUrl() falls back to url() (header logo chain incl. default).
+- Footer Logo is optional: value null means fallback. Removing it clears the value (unlike header logo which resets to the default path) and deletes the old managed file via the same safe handling.
+- Seeded via new Database\Seeders\MasterData\MarketplaceFooterLogoSeeder (insert-if-missing with null value; metadata-only update otherwise so configured values are never overwritten), called from SystemFoundationSeeder.
+- Header behaviour unchanged: header/mobile header still use marketplaceLogoUrl; footer uses storefrontFooterLogoUrl shared through the existing footer/mobile-menu view composer (cached once per request).
+- Footer col-left now always renders the logo; the OUR STORE contact block stays conditional on contact data.
+
+### Files Changed
+- app/Services/Marketplace/MarketplaceLogoService.php
+- app/Http/Controllers/Admin/AdminSettingsController.php
+- app/Providers/AppServiceProvider.php
+- database/seeders/MasterData/MarketplaceFooterLogoSeeder.php (new)
+- database/seeders/MasterData/SystemFoundationSeeder.php
+- resources/views/admin/settings/edit.blade.php (Footer Logo card in Marketplace tab, shared logo-preview JS)
+- resources/views/storefront/partials/footer.blade.php
+- tests/Feature/StorefrontFooterLogoTest.php (new)
+- docs/Prompt_Outcome_Log.md
+
+### Tests
+- php artisan test tests/Feature/StorefrontFooterLogoTest.php passed: 11 tests, 42 assertions (configured logo, fallback to marketplace.logo, fallback to default, header unaffected, admin page shows section, listed under Marketplace system settings, upload/replace/remove with managed-file assertions, svg/oversize validation, seeder preserves value).
+- Neighbour suites passed: StorefrontMarketplaceLogoTest, AdminMarketplaceLogoSettingsTest, AdminSystemSettingManagementTest, StorefrontContactPageTest (22 tests, 116 assertions).
+- git diff --check clean.
+- Playwright browser verification NOT performed (browser instance locked by another session); needs manual check of Admin Settings Marketplace tab and storefront footer.

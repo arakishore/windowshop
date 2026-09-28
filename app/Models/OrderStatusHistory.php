@@ -7,6 +7,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OrderStatusHistory extends Model
 {
+    public const ACTION_REFUND_PROCESSED = 'refund_processed';
+
+    public const ACTION_EXCHANGE_PROCESSED = 'exchange_processed';
+
+    public const ACTION_UPI_PAYMENT_CONFIRMED = 'upi_payment_confirmed';
+
+    public const ACTION_UPI_PAYMENT_REJECTED = 'upi_payment_rejected';
+
+    public const ACTION_UPI_PAYMENT_EXPIRED = 'upi_payment_expired';
+
+    public const ACTION_PICKUP_COLLECTION_EXPIRED = 'pickup_collection_expired';
+
     public $timestamps = false;
 
     protected $fillable = [

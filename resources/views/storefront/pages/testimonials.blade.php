@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Testimonials | WindowShop')
-@section('meta_description', 'Read real stories from local customers and merchants using WindowShop.')
+@section('title', 'Testimonials | ' . $marketplaceName)
+@section('meta_description', 'Read real stories from local customers and merchants using '.$marketplaceName.'.')
 
 @push('styles')
     <style>
@@ -22,7 +22,7 @@
                 </div>
                 <h3>Testimonials</h3>
                 <p class="text-body-1 cl-text-2">
-                    Real stories from local customers and merchants who use WindowShop to discover, browse, and grow.
+                    Real stories from local customers and merchants who use {{ $marketplaceName }} to discover, browse, and grow.
                 </p>
             </div>
         </div>

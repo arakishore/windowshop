@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Products | WindowShop')
-@section('meta_description', 'Browse products available from local shops on WindowShop.')
+@section('title', 'Products | ' . $marketplaceName)
+@section('meta_description', 'Browse products available from local shops on '.$marketplaceName.'.')
 
 @section('content')
     <section class="section-page-title text-center storefront-page-title">
@@ -83,6 +83,7 @@
                                             {{ $product['badge'] }}</li>
                                     </ul>
                                 @endif
+                                @include('storefront.components.product-promotion', ['product' => $product])
                             </div>
                             <div class="card-product_info">
                                 <a href="{{ $product['url'] }}"
@@ -96,6 +97,7 @@
                                         <span class="price-old text-caption-01 cl-text-3">{{ $product['old_price'] }}</span>
                                     @endif
                                 </div>
+                                @include('storefront.components.product-promotion-text', ['product' => $product])
                                 <p class="description text-caption-01 mb-10">
                                     {{ $product['description'] }}
                                 </p>
@@ -115,7 +117,7 @@
                                         <a href="#shoppingCart" data-bs-toggle="offcanvas"
                                             class="hover-tooltip box-icon">
                                             <span class="icon icon-Handbag"></span>
-                                            <span class="tooltip">Add to Cart</span>
+                                            <span class="tooltip">Add to Cart1</span>
                                         </a>
                                     </li>
                                     <li class="wishlist">
@@ -126,9 +128,9 @@
                                         ])
                                     </li>
                                     <li>
-                                        <a href="#;" class="hover-tooltip box-icon">
+                                        <a href="{{ $product['url'] }}" class="hover-tooltip box-icon">
                                             <span class="icon icon-Eye"></span>
-                                            <span class="tooltip">Quick view</span>
+                                            <span class="tooltip">View</span>
                                         </a>
                                     </li>
                                 </ul>
@@ -158,9 +160,9 @@
                                         @include('storefront.components.wishlist-button', ['product' => $product, 'wishlistedProductIds' => $wishlistedProductIds ?? []])
                                     </li>
                                     <li>
-                                        <a href="#;" class="hover-tooltip tooltip-left box-icon">
+                                        <a href="{{ $product['url'] }}" class="hover-tooltip tooltip-left box-icon">
                                             <span class="icon icon-Eye"></span>
-                                            <span class="tooltip">Quick view</span>
+                                            <span class="tooltip">View</span>
                                         </a>
                                     </li>
                                 </ul>
@@ -170,12 +172,13 @@
                                             {{ $product['badge'] }}</li>
                                     </ul>
                                 @endif
-                                <div class="product-action_bot">
+                                @include('storefront.components.product-promotion', ['product' => $product])
+                                {{-- <div class="product-action_bot">
                                     <a href="#shoppingCart" data-bs-toggle="offcanvas"
                                         class="tf-btn btn-white small w-100">
-                                        Add to cart
+                                        Add to cart4
                                     </a>
-                                </div>
+                                </div> --}}
                             </div>
                             <div class="card-product_info">
                                 <a href="{{ $product['url'] }}"
@@ -189,6 +192,7 @@
                                         <span class="price-old text-caption-01 cl-text-3">{{ $product['old_price'] }}</span>
                                     @endif
                                 </div>
+                                @include('storefront.components.product-promotion-text', ['product' => $product])
                                 @if (! empty($product['swatches']))
                                     <ul class="product-color_list">
                                         @foreach ($product['swatches'] as $swatch)

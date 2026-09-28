@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Stores Near You | WindowShop')
-@section('meta_description', 'Discover local shops around your selected location on WindowShop.')
+@section('title', 'Stores Near You | ' . $marketplaceName)
+@section('meta_description', 'Discover local shops around your selected location on '.$marketplaceName.'.')
 
 @push('styles')
     <style>
@@ -86,7 +86,7 @@
         }
 
         .store-eyebrow {
-            color: #047857;
+            color: #fd8301;
             font-size: 13px;
             font-weight: 700;
             letter-spacing: .04em;
@@ -119,10 +119,9 @@
 
         .store-location-card {
             background: #fff;
-            border: 1px solid #d1fae5;
+            border: 1px solid #ffe1c5;
             border-radius: 14px;
             box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
-            min-width: 260px;
             padding: 16px 18px;
         }
 
@@ -142,11 +141,10 @@
         }
 
         .store-location-change {
-            color: #047857;
+            color: #fd8301;
             display: inline-flex;
             font-size: 13px;
             font-weight: 700;
-            margin-top: 8px;
             text-decoration: none;
         }
 
@@ -293,20 +291,21 @@
             background: #fff;
             border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 6px 24px rgba(15, 23, 42, 0.08);
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .shop-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 34px rgba(15, 23, 42, 0.13);
         }
 
         .shop-image-wrapper {
             position: relative;
             width: 100%;
             aspect-ratio: 16 / 10;
-            overflow: hidden;
+            overflow: visible;
+            background: #f3f4f6;
         }
 
         .shop-image {
@@ -318,21 +317,79 @@
 
         .shop-logo {
             position: absolute;
-            top: 14px;
-            left: 14px;
-            width: 56px;
-            height: 56px;
+            bottom: -26px;
+            left: 18px;
+            width: 58px;
+            height: 58px;
 
             border-radius: 12px;
             background: #fff;
-            border: 2px solid rgba(255, 255, 255, 0.9);
+            border: 3px solid #fff;
 
             display: flex;
             align-items: center;
             justify-content: center;
 
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
             overflow: hidden;
+            z-index: 3;
+        }
+
+        .shop-type-badge {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            max-width: calc(100% - 110px);
+            padding: 5px 9px;
+            border: 1px solid rgba(255, 255, 255, .72);
+            border-radius: 999px;
+            background: rgba(17, 24, 39, .76);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            backdrop-filter: blur(8px);
+        }
+
+        .shop-offers-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 120px;
+            height: 100px;
+            padding: 14px 12px;
+            border: 2px solid rgba(255, 237, 213, .95);
+            background: linear-gradient(135deg, #ef4444 0%, #f97316 58%, #f59e0b 100%);
+            color: #fff;
+            text-align: center;
+            line-height: .95;
+            text-shadow: 0 1px 1px rgba(127, 29, 29, .35);
+            clip-path: polygon(50% 0%, 60% 14%, 76% 8%, 79% 25%, 96% 28%, 85% 41%, 100% 54%, 83% 61%, 88% 78%, 69% 76%, 61% 94%, 50% 81%, 38% 96%, 31% 78%, 13% 84%, 17% 65%, 0% 57%, 14% 44%, 4% 29%, 21% 26%, 24% 8%, 40% 14%);
+            box-shadow: 0 9px 20px rgba(234, 88, 12, .28);
+            transform: rotate(6deg);
+            z-index: 2;
+        }
+
+        .shop-offers-badge span {
+            font-size: 15px;
+            font-weight: 900;
+            letter-spacing: .05em;
+            line-height: 1;
+        }
+
+        .shop-offers-badge strong {
+            color: #fff7ad;
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: .02em;
+            line-height: 1;
         }
 
         .shop-logo img {
@@ -374,22 +431,26 @@
         }
 
         .shop-content {
-            padding: 18px 20px 22px;
+            padding: 38px 18px 18px;
         }
 
         .shop-name {
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 700;
             color: #111;
-            margin-bottom: 14px;
+            margin-bottom: 10px;
             line-height: 1.3;
+        }
+
+        .shop-name a {
+            color: inherit;
         }
 
         .shop-meta {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-bottom: 18px;
+            gap: 8px;
+            margin-bottom: 14px;
         }
 
         .meta-row {
@@ -408,67 +469,28 @@
             flex-shrink: 0;
         }
 
-        .meta-label {
-            font-weight: 500;
-            color: #555;
-            white-space: nowrap;
-        }
-
         .meta-value {
             color: #333;
             word-break: break-word;
         }
 
-        .website-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            min-width: 0;
-        }
-
-        .website-url {
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            color: #333;
-            font-size: 14px;
-        }
-
-        .copy-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 4px;
-            color: #666;
-            font-size: 15px;
-            border-radius: 4px;
-            flex-shrink: 0;
-            transition: color 0.15s, background 0.15s;
-        }
-
-        .copy-btn:hover {
-            color: #111;
-            background: #f0f0f0;
-        }
-
-        .open-store-link {
+        .shop-card-cta {
             display: inline-flex;
             align-items: center;
             gap: 6px;
             font-size: 14px;
-            font-weight: 500;
-            color: #1a73e8;
+            font-weight: 700;
+            color: #111827;
             text-decoration: none;
             transition: color 0.15s;
         }
 
-        .open-store-link:hover {
-            color: #0d47a1;
+        .shop-card-cta:hover {
+            color: #047857;
             text-decoration: underline;
         }
 
-        .open-store-link i {
+        .shop-card-cta i {
             font-size: 13px;
         }
 
@@ -491,11 +513,26 @@
             }
 
             .shop-content {
-                padding: 16px;
+                padding: 36px 16px 16px;
             }
 
             .shop-name {
                 font-size: 17px;
+            }
+
+            .shop-offers-badge {
+                width: 96px;
+                height: 80px;
+                right: 8px;
+                top: 8px;
+            }
+
+            .shop-offers-badge span {
+                font-size: 12px;
+            }
+
+            .shop-offers-badge strong {
+                font-size: 16px;
             }
         }
     </style>
@@ -524,17 +561,15 @@
                         <i class="icon icon-CaretRightThin cl-text-3"></i>
                         <span class="text-caption-01 cl-text-3">Our Stores</span>
                     </div>
-                    <div class="store-eyebrow">WindowShop Marketplace</div>
+                    <div class="store-eyebrow">{{ $marketplaceName }} Marketplace</div>
                     <h1>Stores Near You</h1>
                     <p>Discover shops around your selected location.</p>
                 </div>
 
                 <div class="store-location-card">
-                    <div class="store-location-label">Selected PIN</div>
-                    <div class="store-location-value">{{ $selectedPostalCode ?: 'Not selected' }}</div>
                     <a href="#customer-location-modal" data-bs-toggle="modal"
                         class="store-location-change customer-location-trigger">
-                        Change Location
+                        <span class="location-pin-icon" aria-hidden="true"></span> Change Location
                     </a>
                 </div>
             </div>
@@ -613,92 +648,7 @@
             @if ($stores->count())
                 <div class="tf-grid-layout sm-col-2 xl-col-3 flat-spacing-2 pb-0">
                     @forelse($stores as $store)
-                        <div class="shop-card">
-                            <div class="shop-image-wrapper">
-                                <img class="shop-image" loading="lazy" width="450" height="338"
-                                    src="{{ asset($store['image']) }}" alt="{{ $store['name'] }}"
-                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                <div class="no-image" style="display:none;">No Image</div>
-
-                                <div class="shop-logo {{ empty($store['logo']) ? 'shop-logo-initial' : '' }}">
-                                    @if (!empty($store['logo']))
-                                        <img loading="lazy" width="56" height="56" src="{{ asset($store['logo']) }}"
-                                            alt="{{ $store['name'] }} logo">
-                                    @else
-                                        <span class="shop-initial">
-                                            @php
-                                                $initials = collect(preg_split('/\s+/', trim($store['name'])))
-                                                    ->filter()
-                                                    ->map(fn($word) => mb_strtoupper(mb_substr($word, 0, 1)))
-                                                    ->take(3)
-                                                    ->implode('');
-                                            @endphp
-
-                                            {{ $initials }}
-                                        </span>
-                                    @endif
-                                </div>
-                            </div>
-
-                            <div class="shop-content">
-                                <h3 class="shop-name">{{ $store['name'] }}</h3>
-
-                                <div class="shop-meta">
-                                    <div class="meta-row">
-                                        <i class="icon icon-Tag"></i>
-                                        <span><span class="meta-label">Shop Type:</span> <span
-                                                class="meta-value">{{ $store['shop_type'] ?: 'General Store' }}</span></span>
-                                    </div>
-
-                                    @if (!empty($store['audiences']))
-                                        <div class="meta-row">
-                                            <i class="icon icon-Users"></i>
-                                            <span><span class="meta-label">Audience:</span> <span
-                                                    class="meta-value">{{ implode(', ', $store['audiences']) }}</span></span>
-                                        </div>
-                                    @endif
-
-                                    <div class="meta-row">
-                                        <i class="icon icon-MapPin"></i>
-                                        <span>
-                                            <span class="meta-label">Address:</span>
-                                            <span class="meta-value">
-                                                @if (!empty($store['maps_url']))
-                                                    <a href="{{ $store['maps_url'] }}" target="_blank"
-                                                        rel="noopener noreferrer" class="link"
-                                                        title="Open address in Google Maps">
-                                                        {{ $store['address'] ?: 'Address unavailable' }}
-                                                        <i class="icon icon-ArrowUpRight1"></i>
-                                                    </a>
-                                                @else
-                                                    <span>{{ $store['address'] ?: 'Address unavailable' }}</span>
-                                                @endif
-                                            </span>
-                                        </span>
-                                    </div>
-
-                                    <div class="meta-row">
-                                        <i class="icon icon-Globe"></i>
-                                        <div class="website-row">
-                                            <span class="meta-label">Website URL:</span>
-                                            <span class="website-url" title="{{ $store['website_url'] }}">
-                                                {{ $store['website_url'] }}</span>
-                                            <button class="copy-btn" type="button" data-copy-url="{{ $store['website_url'] }}"
-                                                title="Copy URL">
-                                                <i class="icon icon-CopySimple"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <a href="{{ $store['store_url'] }}" class="open-store-link" target="_blank"
-                                    rel="noopener">
-                                    Open Store Website <i class="icon icon-ArrowUpRight1"></i>
-                                </a>
-                            </div>
-                        </div>
-
-
+                        @include('storefront.components.shop-card', ['store' => $store])
                     @empty
                         <p class="text-body-1 cl-text-2">No stores are currently available.</p>
                     @endforelse

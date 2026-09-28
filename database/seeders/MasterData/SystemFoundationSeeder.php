@@ -149,5 +149,7 @@ class SystemFoundationSeeder extends Seeder
         }
 
         $this->call(StorefrontBannerSettingSeeder::class);
+        $this->call(PublicContactSettingSeeder::class);
+        $this->call(MarketplaceFooterLogoSeeder::class);
     }
 }

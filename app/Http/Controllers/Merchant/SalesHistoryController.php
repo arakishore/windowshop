@@ -201,6 +201,7 @@ class SalesHistoryController extends Controller
             'replacementSelector' => $this->replacementSelector((int) $shop->merchant_id),
             'paymentMethods' => $this->paymentMethods(),
             'posCurrency' => $this->adminSettings->currencyConfig(),
+            ...$this->navigationData($order),
         ]);
     }
 
@@ -242,6 +243,7 @@ class SalesHistoryController extends Controller
             'exchange' => $exchange->load(['items.orderItem', 'replacementOrder.items', 'originalOrder', 'createdBy']),
             'autoPrint' => $request->boolean('print'),
             'posCurrency' => $this->adminSettings->currencyConfig(),
+            ...$this->navigationData($exchange->originalOrder),
         ]);
     }
 
@@ -264,6 +266,7 @@ class SalesHistoryController extends Controller
             'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
             'paymentMethods' => ['original' => 'Use original method'] + $this->paymentMethods(),
             'posCurrency' => $this->adminSettings->currencyConfig(),
+            ...$this->navigationData($order),
         ]);
     }
 
@@ -288,7 +291,7 @@ class SalesHistoryController extends Controller
         $this->refundService->create($order, $data, $request->user());
 
         return redirect()
-            ->route('merchant.sales.show', $order)
+            ->to($this->navigationData($order)['orderBackRoute'])
             ->with('success', 'Refund processed successfully.');
     }
 
@@ -298,8 +301,27 @@ class SalesHistoryController extends Controller
         abort_unless((int) $order->shop_id === (int) $shop->getKey(), 404);
         abort_unless((int) $order->merchant_id === (int) $shop->merchant_id, 404);
         abort_unless($order->order_status === Order::STATUS_COMPLETED, 404);
+        abort_unless(
+            $order->created_source === Order::SOURCE_POS
+                || in_array($order->created_source, Order::merchantOperationalSources(), true),
+            404,
+        );
 
         return $shop;
+    }
+
+    /**
+     * @return array{orderBackRoute: string, orderBackIndexRoute: string, orderBackSectionLabel: string}
+     */
+    private function navigationData(Order $order): array
+    {
+        $isPos = $order->created_source === Order::SOURCE_POS;
+
+        return [
+            'orderBackRoute' => $isPos ? route('merchant.sales.show', $order) : route('merchant.orders.show', $order),
+            'orderBackIndexRoute' => $isPos ? route('merchant.sales.index') : route('merchant.orders.index'),
+            'orderBackSectionLabel' => $isPos ? 'Sales History' : 'Orders',
+        ];
     }
 
     /**

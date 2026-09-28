@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant web login screen using the shared authentication layout. --}}
 @extends('layouts.auth')
 
-@section('title', 'Merchant Login | WindowShop')
+@section('title', 'Merchant Login | ' . $marketplaceName)
 
 @section('content')
     <form class="login-form" method="POST" action="{{ route('merchant.authenticate') }}">
@@ -10,10 +10,10 @@
             <div class="card-body">
                 <div class="text-center mb-3">
                     <div class="d-inline-flex align-items-center justify-content-center mb-4 mt-2">
-                        <img src="{{ asset('assets/admin/images/logov2.png') }}" class="h-48px" alt="WindowShop">
+                        <img src="{{ asset('assets/admin/images/logov2.png') }}" class="h-48px" alt="{{ $marketplaceName }}">
                     </div>
                     <h5 class="mb-0">Merchant login</h5>
-                    <span class="d-block text-muted">Access your WindowShop merchant panel</span>
+                    <span class="d-block text-muted">Access your {{ $marketplaceName }} merchant panel</span>
                 </div>
 
                 @if ($errors->any())

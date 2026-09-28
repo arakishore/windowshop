@@ -22,7 +22,7 @@
 
         <div class="navbar-brand flex-1 flex-lg-0">
             <a href="{{ route('merchant.dashboard') }}" class="d-inline-flex align-items-center text-white text-decoration-none">
-                <img src="{{ asset('assets/admin/images/logov2.png') }}" alt="WindowShop">
+                <img src="{{ asset('assets/admin/images/logov2.png') }}" alt="{{ $marketplaceName }}">
                 <span class="fw-semibold ms-2">Merchant Panel</span>
             </a>
         </div>

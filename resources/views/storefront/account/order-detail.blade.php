@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', $order->order_number.' | WindowShop')
-@section('meta_description', 'WindowShop customer order details.')
+@section('title', $order->order_number.' | '.$marketplaceName)
+@section('meta_description', $marketplaceName.' customer order details.')
 
 @section('content')
     @component('storefront.account.partials.shell', ['customer' => $customer, 'accountPageTitle' => 'Order '.$order->order_number])
@@ -13,6 +13,7 @@
             $pickupLines = $presenter->pickupLines($order);
             $showBilling = $billingLines !== [] && ! $presenter->billingSameAsShipping($order);
             $activityItems = $presenter->activity($order);
+            $latestUpiAttempt = $order->directMerchantUpiAttempts->sortByDesc('sequence')->first();
             $cancelledHistory = $order->statusHistories
                 ->where('to_status', \App\Models\Order::STATUS_CANCELLED)
                 ->sortByDesc('created_at')
@@ -27,9 +28,10 @@
                     <span class="account-status-badge {{ $presenter->statusClass($order->order_status) }}">{{ $presenter->statusLabel($order->order_status) }}</span>
                 </div>
                 <p class="cl-text-2 mb-0">Placed {{ app_datetime($order->created_at) }}</p>
-                <p class="fw-medium mb-0">{{ $order->shop?->name ?? 'WindowShop Store' }}</p>
+                <p class="fw-medium mb-0">{{ $order->shop?->name ?? $marketplaceName.' Store' }}</p>
             </div>
             <div class="account-order-actions">
+                <a href="{{ route('storefront.account.orders.receipt', ['order' => $order, 'print' => 1]) }}" target="_blank" rel="noopener" class="tf-btn btn-line small">Print Receipt</a>
                 @if ($canCancelOrder)
                     <button type="button" class="account-cancel-order-btn" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">Cancel Order</button>
                 @endif
@@ -120,6 +122,22 @@
                                     <a href="{{ $productUrl ?? '#;' }}" class="fw-medium link-underline-text">{{ $item->product_name }}</a>
                                     @if ($item->variant_name)
                                         <p class="text-caption-01 cl-text-3 mb-0">{{ $item->variant_name }}</p>
+                                    @endif
+                                    @if ($order->order_status === \App\Models\Order::STATUS_COMPLETED && $item->product_id)
+                                        <div class="mt-12 d-flex align-items-center gap-2 flex-wrap">
+                                            @if ($item->review)
+                                                <a class="tf-btn btn-line small" href="{{ route('storefront.account.reviews.edit', $item->review) }}">Edit Review</a>
+                                                @if ($item->review->status === \App\Models\ProductReview::STATUS_PENDING)
+                                                    <span class="badge bg-warning-subtle text-warning-emphasis">Pending Approval</span>
+                                                @elseif ($item->review->status === \App\Models\ProductReview::STATUS_REJECTED)
+                                                    <span class="badge bg-danger-subtle text-danger-emphasis">Rejected - edit to resubmit</span>
+                                                @endif
+                                            @elseif ($item->reviewIncludingDeleted)
+                                                <span class="text-caption-01 cl-text-3">Review removed</span>
+                                            @else
+                                                <a class="tf-btn btn-line small" href="{{ route('storefront.account.reviews.create', $item) }}">Write a Review</a>
+                                            @endif
+                                        </div>
                                     @endif
                                     @if ($item->sku)
                                         <p class="text-caption-01 cl-text-3 mb-0">SKU: {{ $item->sku }}</p>
@@ -216,6 +234,29 @@
                     <div class="account-info-list">
                         <div><span>Method</span><strong>{{ $paymentMethodLabel }}</strong></div>
                         <div><span>Status</span><strong>{{ $presenter->paymentStatusLabel($order->payment_status) }}</strong></div>
+                        @if ($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI)
+                            <div><span>Verification</span><strong>{{ $order->payment_status === \App\Models\Order::PAYMENT_PAID ? 'Payment Confirmed' : ($latestUpiAttempt?->status === \App\Models\DirectMerchantUpiAttempt::STATUS_REJECTED ? 'Payment Verification Rejected' : 'Payment Verification Pending') }}</strong></div>
+                            @if ($order->payment_reference)
+                                <div><span>Submitted Reference</span><strong>{{ $order->payment_reference }}</strong></div>
+                            @endif
+                            @if ($latestUpiAttempt?->status === \App\Models\DirectMerchantUpiAttempt::STATUS_REJECTED)
+                                <div class="account-order-alert mt-16">
+                                    <h6 class="mb-6">Payment verification rejected</h6>
+                                    @if (filled($latestUpiAttempt->rejection_reason))
+                                        <p class="mb-12">{{ $latestUpiAttempt->rejection_reason }}</p>
+                                    @endif
+                                    @if ($canResubmitUpi)
+                                        <form method="POST" action="{{ route('storefront.account.orders.upi-reference', $order) }}">
+                                            @csrf
+                                            <label for="upi_reference" class="form-label">Submit Corrected UPI Reference</label>
+                                            <input id="upi_reference" name="upi_reference" type="text" maxlength="100" required value="{{ old('upi_reference') }}" class="form-control @error('upi_reference') is-invalid @enderror">
+                                            @error('upi_reference')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                            <button type="submit" class="tf-btn animate-btn small mt-12">Submit for Verification</button>
+                                        </form>
+                                    @endif
+                                </div>
+                            @endif
+                        @endif
                         <div><span>Amount Paid</span><strong>{{ $presenter->money($order->amount_paid) }}</strong></div>
                         <div><span>Balance</span><strong>{{ $presenter->money($presenter->balance($order)) }}</strong></div>
                     </div>
@@ -517,7 +558,7 @@
         .account-info-list,
         .account-address-snapshot {
             display: grid;
-            gap: 12px;
+            gap: 2px;
         }
 
         .account-order-item {

@@ -3,22 +3,31 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Enums\BannerPosition;
+use App\Models\CmsPage;
 use App\Models\PostalCode;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Promotion;
 use App\Models\Shop;
+use App\Models\ShopPage;
 use App\Models\ShopAudience;
 use App\Models\WishlistItem;
 use App\Services\Banner\BannerService;
 use App\Services\Cart\CartPageService;
 use App\Services\Checkout\CheckoutFlowService;
 use App\Services\Delivery\ShopDeliveryServiceabilityService;
+use App\Services\Merchant\ShopPageContent;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductLocationSorter;
 use App\Services\Storefront\ProductListingService;
+use App\Services\Storefront\ShopOfferProductService;
+use App\Services\Storefront\ShopPromotionPresenter;
 use App\Services\Storefront\StorefrontCustomerContext;
+use App\Services\Storefront\StorefrontCountryResolver;
 use App\Services\Storefront\StorefrontUrlService;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,15 +41,50 @@ class StorefrontController extends Controller
         private readonly NavigationService $navigation,
         private readonly BannerService $banners,
         private readonly ProductListingService $productListings,
+        private readonly ShopPromotionPresenter $shopPromotions,
+        private readonly ShopOfferProductService $offerProducts,
+        private readonly ShopPageContent $pageContent,
         private readonly StorefrontCustomerContext $customerContext,
         private readonly StorefrontUrlService $urls,
+        private readonly SystemSettingService $systemSettings,
     ) {}
 
-    public function home(): View
+    public function home(Request $request, CustomerLocationService $location): View
     {
+        $postalCode = $location->postalCode($request);
+        $postalCodeRecord = $postalCode ? $location->postalCodeRecord($postalCode) : null;
+        $district = trim((string) ($postalCodeRecord?->district ?? ''));
+        $state = trim((string) ($postalCodeRecord?->state ?? ''));
+        $nearbyStoresQuery = $this->storeDiscoveryBaseQuery();
+        $this->applyStoreLocationScope($nearbyStoresQuery, $district, $state);
+        $eligibleShopIds = (clone $nearbyStoresQuery)->reorder()->pluck('shops.id')->all();
+        $offerCounts = $this->shopPromotions->currentOfferCountsForShopIds($eligibleShopIds);
+        $offerShopIds = array_keys($offerCounts);
+
+        if ($offerShopIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($offerShopIds), '?'));
+            $nearbyStoresQuery->orderByRaw("CASE WHEN shops.id IN ({$placeholders}) THEN 0 ELSE 1 END", $offerShopIds);
+        }
+
+        $nearbyStoreModels = $nearbyStoresQuery
+            ->orderByDesc('shops.created_at')
+            ->orderByDesc('shops.id')
+            ->limit(6)
+            ->get();
+        $nearbyStores = $nearbyStoreModels
+            ->map(fn (Shop $shop): array => $this->storeCardData($shop, $offerShopIds, $offerCounts));
+        $nearbyOfferArtwork = $this->shopPromotions->currentArtworkForShopIds($eligibleShopIds);
+        $newArrivalProducts = $this->productListings->newestProductsForShopIds($eligibleShopIds);
+
         return view('storefront.pages.home', [
             'heroBanners' => $this->banners->getMarketplaceHeroBanners(),
+            'heroCity' => mb_strtoupper($district !== '' ? $district : 'NASHIK'),
             'homepageCategories' => $this->homepageCategoryCards(),
+            'nearbyStores' => $nearbyStores,
+            'nearbyStoresLocationLabel' => $district !== '' ? $district : $postalCode,
+            'nearbyOfferArtwork' => $nearbyOfferArtwork,
+            'newArrivalProducts' => $newArrivalProducts,
+            'newArrivalWishlistedProductIds' => $this->wishlistedProductIds($request, $newArrivalProducts),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
@@ -102,8 +146,11 @@ class StorefrontController extends Controller
         $stores = $storesQuery
             ->orderBy('name')
             ->paginate(24)
-            ->withQueryString()
-            ->through(fn (Shop $shop): array => $this->storeCardData($shop));
+            ->withQueryString();
+        $offerShopIds = $this->shopPromotions->currentOfferShopIds(
+            $stores->getCollection()->pluck('id')->all()
+        );
+        $stores = $stores->through(fn (Shop $shop): array => $this->storeCardData($shop, $offerShopIds));
 
         return view('storefront.pages.stores', [
             'stores' => $stores,
@@ -182,16 +229,20 @@ class StorefrontController extends Controller
         }
     }
 
-    private function storeCardData(Shop $shop): array
+    private function storeCardData(Shop $shop, array $offerShopIds = [], array $offerCounts = []): array
     {
         $imagePath = $shop->banner_path ?: $shop->logo_path;
-        $storeUrl = route('storefront.store.show', $shop->slug);
+        $storeUrl = route('storefront.stores.show', $shop->slug);
         $fullAddress = collect([
             $shop->address_line_1,
             $shop->address_line_2,
             $shop->landmark,
             $shop->city?->name,
             $shop->pincode,
+        ])->filter()->implode(', ');
+        $locationLabel = collect([
+            $shop->landmark,
+            $shop->city?->name,
         ])->filter()->implode(', ');
 
         $latitude = is_numeric($shop->latitude) ? (float) $shop->latitude : null;
@@ -214,15 +265,77 @@ class StorefrontController extends Controller
         return [
             'name' => $shop->name,
             'address' => $fullAddress ?: null,
+            'location_label' => $locationLabel ?: ($fullAddress ?: null),
             'maps_url' => $mapsUrl,
             'shop_type' => $shop->rootProductCategory?->name,
             'audiences' => $shop->audiences->pluck('name')->values()->all(),
+            'has_offers' => in_array((int) $shop->getKey(), $offerShopIds, true),
+            'offer_count' => (int) ($offerCounts[(int) $shop->getKey()] ?? 0),
+            'image_is_placeholder' => $imagePath === null,
             'image' => $imagePath ? 'storage/'.$imagePath : 'assets/storefront/images/no-image-icon.png',
             'logo' => $shop->logo_path ? 'storage/'.$shop->logo_path : null,
             'initials' => $this->storeInitials($shop->name),
-            'website_url' => $shop->website_url ?: $storeUrl,
             'store_url' => $storeUrl,
         ];
+    }
+
+    private function similarShops(Shop $shop, int $limit = 4): Collection
+    {
+        $categoryId = $shop->root_product_category_id ? (int) $shop->root_product_category_id : null;
+        $audienceIds = $shop->audiences
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->filter()
+            ->values()
+            ->all();
+        $matches = collect();
+
+        $addMatches = function ($query) use (&$matches, $limit): void {
+            if ($matches->count() >= $limit) {
+                return;
+            }
+
+            $existingIds = $matches->pluck('id')->all();
+
+            if ($existingIds !== []) {
+                $query->whereNotIn('id', $existingIds);
+            }
+
+            $shops = $query
+                ->orderBy('name')
+                ->limit($limit - $matches->count())
+                ->get();
+
+            $matches = $matches->concat($shops);
+        };
+
+        $baseQuery = fn () => $this->storeDiscoveryBaseQuery()
+            ->whereKeyNot($shop->getKey());
+
+        if ($categoryId !== null && $audienceIds !== []) {
+            $addMatches($baseQuery()
+                ->where('root_product_category_id', $categoryId)
+                ->whereHas('audiences', fn ($query) => $query->whereIn('shop_audiences.id', $audienceIds)));
+        }
+
+        if ($categoryId !== null) {
+            $addMatches($baseQuery()
+                ->where('root_product_category_id', $categoryId));
+        }
+
+        if ($audienceIds !== []) {
+            $addMatches($baseQuery()
+                ->whereHas('audiences', fn ($query) => $query->whereIn('shop_audiences.id', $audienceIds)));
+        }
+
+        $addMatches($baseQuery());
+
+        $matches = $matches->take($limit)->values();
+        $offerShopIds = $this->shopPromotions->currentOfferShopIds($matches->pluck('id')->all());
+
+        return $matches
+            ->map(fn (Shop $shop): array => $this->storeCardData($shop, $offerShopIds))
+            ->values();
     }
 
     private function storeInitials(string $name): string
@@ -314,36 +427,29 @@ class StorefrontController extends Controller
 
     public function terms(): View
     {
-        return view('storefront.pages.terms', [
-            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
-        ]);
+        return $this->marketplaceCmsPage('terms', 'storefront.pages.terms');
     }
 
     public function privacy(): View
     {
-        return view('storefront.pages.privacy', [
-            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
-        ]);
+        return $this->marketplaceCmsPage('privacy', 'storefront.pages.privacy');
     }
 
     public function returns(): View
     {
-        return view('storefront.pages.returns', [
-            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
-        ]);
+        return $this->marketplaceCmsPage('return_refund', 'storefront.pages.returns');
     }
 
     public function shipping(): View
     {
-        return view('storefront.pages.shipping', [
-            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
-        ]);
+        return $this->marketplaceCmsPage('shipping', 'storefront.pages.shipping');
     }
 
     public function contact(): View
     {
         return view('storefront.pages.contact', [
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
+            'contactDetails' => $this->systemSettings->publicContact(),
         ]);
     }
 
@@ -367,7 +473,7 @@ class StorefrontController extends Controller
         ]);
     }
 
-    public function register(Request $request, CheckoutFlowService $checkout, StorefrontCustomerContext $customerContext): View|RedirectResponse
+    public function register(Request $request, CheckoutFlowService $checkout, StorefrontCustomerContext $customerContext, StorefrontCountryResolver $countries): View|RedirectResponse
     {
         $checkoutMode = $request->query('from') === 'checkout' && $checkout->hasCartItems($request);
 
@@ -383,6 +489,7 @@ class StorefrontController extends Controller
 
         return view('storefront.pages.customer-register', [
             'checkoutMode' => $checkoutMode,
+            'defaultCountryCode' => $countries->defaultCountryCode(),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
@@ -632,12 +739,7 @@ class StorefrontController extends Controller
 
     private function categoryListingView(Request $request, ProductCategory $category): View
     {
-        $selectedFilters = [
-            'attributes' => $request->array('attributes'),
-            'price_min' => $request->input('price_min'),
-            'price_max' => $request->input('price_max'),
-            'discount_min' => $request->array('discount_min'),
-        ];
+        $selectedFilters = $this->selectedProductFilters($request);
 
         return view('storefront.pages.category-products', [
             'category' => $category,
@@ -646,11 +748,27 @@ class StorefrontController extends Controller
             'products' => $products = $this->productListings->categoryProducts($category, $selectedFilters),
             'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
             'attributeFilters' => $this->productListings->categoryAttributeFilters($category),
+            'shopFilterOptions' => $this->productListings->categoryShopFilters($category),
             'storefrontUrls' => $this->urls,
             'selectedFilters' => $selectedFilters,
             'selectedAttributeFilters' => $selectedFilters['attributes'],
+            'selectedCategoryFilters' => $selectedFilters['categories'],
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
+    }
+
+    private function selectedProductFilters(Request $request): array
+    {
+        return [
+            'search' => $request->input('search'),
+            'shops' => $request->array('shops'),
+            'categories' => $request->array('categories'),
+            'sort' => $request->input('sort'),
+            'attributes' => $request->array('attributes'),
+            'price_min' => $request->input('price_min'),
+            'price_max' => $request->input('price_max'),
+            'discount_min' => $request->array('discount_min'),
+        ];
     }
 
     /**
@@ -712,15 +830,136 @@ class StorefrontController extends Controller
             ->all();
     }
 
-    public function store(string $slug): View
+    public function store(Request $request, string $slug): View
     {
-        $shop = $this->activeShopBySlug($slug);
+        return $this->shopPageView($request, $slug, true);
+    }
 
-        return view('storefront.pages.placeholder', [
-            'pageTitle' => $shop->name,
-            'pageDescription' => 'Merchant storefront content is intentionally deferred.',
+    public function storeProfile(Request $request, string $slug): View
+    {
+        return $this->shopPageView($request, $slug, false);
+    }
+
+    public function storeCmsPage(string $slug, string $pageSlug): View
+    {
+        $shop = $this->activeShopBySlug($slug)->load([
+            'rootProductCategory:id,name,slug',
+            'audiences:id,name,slug',
+            'city:id,name',
+            'state:id,name',
+            'country:id,name',
+        ]);
+        $page = $shop->pages()
+            ->where('slug', $pageSlug)
+            ->where('status', ShopPage::STATUS_PUBLISHED)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->firstOrFail();
+        $heroProducts = $this->productListings->shopProducts($shop, [], 5);
+        $shopProfile = $this->shopProfileData($shop);
+        $shopProfile['product_count'] = $heroProducts->total();
+
+        return view('storefront.pages.store-cms-page', [
+            'shop' => $shop,
+            'page' => $page,
+            'shopProfile' => $shopProfile,
+            'heroProducts' => $heroProducts,
+            'heroBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_HERO),
+            'shopLocation' => $this->shopLocationData($shop),
+            'shopWhatsappUrl' => $this->productListings->shopWhatsappUrl($shop, "Hello {$shop->name}!"),
+            'hasShopOffers' => $this->shopPromotions->currentForShop($shop, 1)->isNotEmpty(),
+            'shopFooterPages' => $this->publishedStandardPages($shop),
             'storefrontShop' => $shop,
             'storefrontNavigationCategories' => $this->navigation->getMerchantCategories($shop),
+        ]);
+    }
+
+    private function shopPageView(Request $request, string $slug, bool $merchantStorefront): View
+    {
+        $shop = $this->activeShopBySlug($slug)->load([
+            'rootProductCategory:id,name,slug',
+            'audiences:id,name,slug',
+            'city:id,name',
+            'state:id,name',
+            'country:id,name',
+            'merchant:id,status',
+        ]);
+        $selectedFilters = $this->selectedProductFilters($request);
+        $products = $this->productListings->shopProducts($shop, $selectedFilters);
+        $shopProfile = $this->shopProfileData($shop);
+        $shopProfile['product_count'] = $products->total();
+        $offerProductIds = $this->offerProducts->productIdsForShop($shop);
+        $offerPreview = $this->productListings->shopProductPreviewByIds($shop, $offerProductIds, ProductListingService::PER_PAGE);
+
+        return view('storefront.pages.store-profile', [
+            'shop' => $shop,
+            'shopProfile' => $shopProfile,
+            'shopWhatsappUrl' => $this->productListings->shopWhatsappUrl($shop, "Hello {$shop->name}!"),
+            'products' => $products,
+            'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
+            'heroBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_HERO),
+            'middleBanners' => $this->banners->getStoreBanners((int) $shop->getKey(), BannerPosition::STORE_MIDDLE),
+            'shopPromotions' => $this->shopPromotions->currentForShop($shop),
+            'offerProducts' => $offerPreview['products'],
+            'offerProductsTotal' => $offerPreview['total'],
+            'offerProductsUrl' => route('storefront.stores.offers', $shop->slug),
+            'similarShops' => $this->similarShops($shop),
+            'shopLocation' => $this->shopLocationData($shop),
+            'shopFooterPages' => $this->publishedStandardPages($shop),
+            'categoryFilterOptions' => $this->productListings->shopCategoryFilters($shop),
+            'attributeFilters' => $this->productListings->shopAttributeFilters($shop),
+            'selectedFilters' => $selectedFilters,
+            'selectedAttributeFilters' => $selectedFilters['attributes'],
+            'selectedCategoryFilters' => $selectedFilters['categories'],
+            'showShopFilter' => false,
+            'storefrontShop' => $merchantStorefront ? $shop : null,
+            'storefrontNavigationCategories' => $merchantStorefront
+                ? $this->navigation->getMerchantCategories($shop)
+                : $this->navigation->getMarketplaceCategories(),
+        ]);
+    }
+
+    public function storeOfferProducts(Request $request, string $slug): View
+    {
+        $shop = $this->activeShopBySlug($slug)->load([
+            'rootProductCategory:id,name,slug',
+            'audiences:id,name,slug',
+            'city:id,name',
+            'state:id,name',
+            'country:id,name',
+            'merchant:id,status',
+        ]);
+        $selectedFilters = $this->selectedProductFilters($request);
+        $promotionIdentifier = trim((string) $request->query('promotion', ''));
+        $selectedPromotion = $promotionIdentifier !== ''
+            ? $this->offerProducts->currentPromotionForShop($shop, $promotionIdentifier)
+            : null;
+        $invalidPromotionFilter = $promotionIdentifier !== '' && $selectedPromotion === null;
+        $offerProductIds = $selectedPromotion instanceof Promotion
+            ? $this->offerProducts->productIdsForPromotion($selectedPromotion, $shop)
+            : ($invalidPromotionFilter ? [] : $this->offerProducts->productIdsForShop($shop));
+        $products = $this->productListings->shopProductsByIds($shop, $offerProductIds, $selectedFilters);
+        $shopProfile = $this->shopProfileData($shop);
+        $shopProfile['product_count'] = $products->total();
+        $selectedOffer = $selectedPromotion instanceof Promotion
+            ? $this->shopPromotions->card($selectedPromotion, $shop)
+            : null;
+
+        return view('storefront.pages.store-offers', [
+            'shop' => $shop,
+            'shopProfile' => $shopProfile,
+            'products' => $products,
+            'selectedOffer' => $selectedOffer,
+            'invalidPromotionFilter' => $invalidPromotionFilter,
+            'wishlistedProductIds' => $this->wishlistedProductIds($request, $products->items()),
+            'categoryFilterOptions' => $this->productListings->shopCategoryFilters($shop),
+            'attributeFilters' => $this->productListings->shopAttributeFilters($shop),
+            'selectedFilters' => $selectedFilters,
+            'selectedAttributeFilters' => $selectedFilters['attributes'],
+            'selectedCategoryFilters' => $selectedFilters['categories'],
+            'showShopFilter' => false,
+            'storefrontShop' => null,
+            'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }
 
@@ -745,7 +984,207 @@ class StorefrontController extends Controller
         return Shop::query()
             ->where('slug', $slug)
             ->where('status', 'active')
+            ->whereHas('merchant', fn ($query) => $query->where('status', 'active'))
             ->firstOrFail();
+    }
+
+    private function publishedStandardPages(Shop $shop): Collection
+    {
+        return $shop->pages()
+            ->where('page_type', ShopPage::TYPE_STANDARD)
+            ->where('status', ShopPage::STATUS_PUBLISHED)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->whereIn('page_key', ['about', 'privacy', 'terms', 'policies'])
+            ->get(['page_key', 'slug', 'title'])
+            ->keyBy('page_key');
+    }
+
+    private function shopProfileData(Shop $shop): array
+    {
+        $address = $this->shopAddress($shop);
+
+        return [
+            'name' => $shop->name,
+            'initials' => $this->storeInitials($shop->name),
+            'logo' => $shop->logo_path ? 'storage/'.$shop->logo_path : null,
+            'cover' => $shop->banner_path ? 'storage/'.$shop->banner_path : null,
+            'shop_type' => $shop->rootProductCategory?->name,
+            'audiences' => $shop->audiences->pluck('name')->values()->all(),
+            'address' => $address,
+            'maps_url' => $this->shopMapsUrl($shop, $address),
+            'description' => $shop->description ?: $shop->short_description,
+            'website_url' => route('storefront.store.show', $shop->slug),
+            'product_count' => 0,
+        ];
+    }
+
+    private function shopLocationData(Shop $shop): array
+    {
+        $address = $this->shopFullAddress($shop);
+        $latitude = is_numeric($shop->latitude) ? (float) $shop->latitude : null;
+        $longitude = is_numeric($shop->longitude) ? (float) $shop->longitude : null;
+        $hasCoordinates = $latitude !== null && $longitude !== null;
+        $mapLatitude = $latitude;
+        $mapLongitude = $longitude;
+        $mapPrecision = $hasCoordinates ? 'shop' : null;
+        $showMarker = $hasCoordinates;
+        $zoom = 15;
+
+        if (! $hasCoordinates) {
+            $postalCoordinates = $this->postalCodeCoordinates($shop);
+
+            if ($postalCoordinates !== null) {
+                $mapLatitude = $postalCoordinates['latitude'];
+                $mapLongitude = $postalCoordinates['longitude'];
+                $mapPrecision = 'postal_code';
+                $zoom = 13;
+            } else {
+                $cityCoordinates = $this->cityCoordinates($shop);
+
+                if ($cityCoordinates !== null) {
+                    $mapLatitude = $cityCoordinates['latitude'];
+                    $mapLongitude = $cityCoordinates['longitude'];
+                    $mapPrecision = 'city';
+                    $zoom = 11;
+                }
+            }
+        }
+
+        return [
+            'name' => $shop->name,
+            'address' => $address,
+            'area' => $shop->landmark,
+            'city' => $shop->city?->name,
+            'state' => $shop->state?->name,
+            'pincode' => $shop->pincode,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'has_coordinates' => $hasCoordinates,
+            'map_latitude' => $mapLatitude,
+            'map_longitude' => $mapLongitude,
+            'map_available' => $mapLatitude !== null && $mapLongitude !== null,
+            'map_precision' => $mapPrecision,
+            'show_marker' => $showMarker,
+            'zoom' => $zoom,
+            'directions_url' => $this->shopDirectionsUrl($shop, $address),
+        ];
+    }
+
+    private function postalCodeCoordinates(Shop $shop): ?array
+    {
+        $pincode = trim((string) $shop->pincode);
+
+        if ($pincode === '') {
+            return null;
+        }
+
+        $postalCode = PostalCode::query()
+            ->active()
+            ->where('postal_code', $pincode)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->orderByDesc('shipping_enabled')
+            ->orderBy('office_name')
+            ->first(['latitude', 'longitude']);
+
+        if (! $postalCode || ! is_numeric($postalCode->latitude) || ! is_numeric($postalCode->longitude)) {
+            return null;
+        }
+
+        return [
+            'latitude' => (float) $postalCode->latitude,
+            'longitude' => (float) $postalCode->longitude,
+        ];
+    }
+
+    private function cityCoordinates(Shop $shop): ?array
+    {
+        $city = trim((string) $shop->city?->name);
+        $state = trim((string) $shop->state?->name);
+
+        if ($city === '') {
+            return null;
+        }
+
+        $coordinates = PostalCode::query()
+            ->active()
+            ->where('district', $city)
+            ->when($state !== '', fn ($query) => $query->where('state', $state))
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->selectRaw('AVG(latitude) as latitude, AVG(longitude) as longitude')
+            ->first();
+
+        if (! $coordinates || ! is_numeric($coordinates->latitude) || ! is_numeric($coordinates->longitude)) {
+            return null;
+        }
+
+        return [
+            'latitude' => (float) $coordinates->latitude,
+            'longitude' => (float) $coordinates->longitude,
+        ];
+    }
+
+    private function shopAddress(Shop $shop): string
+    {
+        return collect([
+            $shop->address_line_1,
+            $shop->address_line_2,
+            $shop->landmark,
+            $shop->city?->name,
+            $shop->pincode,
+        ])->filter()->implode(', ');
+    }
+
+    private function shopFullAddress(Shop $shop): string
+    {
+        return collect([
+            $shop->address_line_1,
+            $shop->address_line_2,
+            $shop->landmark,
+            $shop->city?->name,
+            $shop->state?->name,
+            $shop->pincode,
+            $shop->country?->name,
+        ])->filter()->implode(', ');
+    }
+
+    private function shopDirectionsUrl(Shop $shop, string $address): ?string
+    {
+        $latitude = is_numeric($shop->latitude) ? (float) $shop->latitude : null;
+        $longitude = is_numeric($shop->longitude) ? (float) $shop->longitude : null;
+
+        if ($latitude !== null && $longitude !== null) {
+            return "https://www.google.com/maps/dir/?api=1&destination={$latitude},{$longitude}";
+        }
+
+        if ($address !== '') {
+            return 'https://www.google.com/maps/dir/?api=1&destination='.urlencode($address);
+        }
+
+        return null;
+    }
+
+    private function shopMapsUrl(Shop $shop, string $address): ?string
+    {
+        $latitude = is_numeric($shop->latitude) ? (float) $shop->latitude : null;
+        $longitude = is_numeric($shop->longitude) ? (float) $shop->longitude : null;
+
+        if ($latitude !== null && $longitude !== null) {
+            return "https://www.google.com/maps?q={$latitude},{$longitude}";
+        }
+
+        $searchQuery = collect([
+            $shop->name,
+            $address,
+            $shop->state?->name,
+            $shop->country?->name,
+        ])->filter()->implode(', ');
+
+        return $searchQuery !== ''
+            ? 'https://www.google.com/maps/search/?api=1&query='.urlencode($searchQuery)
+            : null;
     }
 
     private function homepageCategoryCards(): Collection
@@ -761,6 +1200,28 @@ class StorefrontController extends Controller
                     'url' => $this->urls->category($category),
                 ];
             });
+    }
+
+    private function marketplaceCmsPage(string $pageKey, string $fallbackView): View
+    {
+        $navigation = $this->navigation->getMarketplaceCategories();
+        $page = CmsPage::query()
+            ->where('page_type', CmsPage::TYPE_STANDARD)
+            ->where('page_key', $pageKey)
+            ->where('status', CmsPage::STATUS_PUBLISHED)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->first();
+
+        if (! $page) {
+            return view($fallbackView, ['storefrontNavigationCategories' => $navigation]);
+        }
+
+        return view('storefront.pages.marketplace-cms-page', [
+            'page' => $page,
+            'pageBody' => $this->pageContent->render($page->body),
+            'storefrontNavigationCategories' => $navigation,
+        ]);
     }
 
     private function findCategoryInTree(iterable $categories, string $slug): ?ProductCategory

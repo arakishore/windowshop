@@ -253,7 +253,7 @@ class StorefrontProductListingTest extends TestCase
             ->assertSee('Full cotton shirt product description from the database.')
             ->assertSee('product-heading-row', false)
             ->assertSee('product-wishlist-btn', false)
-            ->assertSee('Reviews coming soon')
+            ->assertSee('No reviews yet')
             ->assertDontSee('Available from local shop')
             ->assertSee($fixture['shop']->name)
             ->assertSee($fixture['category']->name)
@@ -320,8 +320,8 @@ class StorefrontProductListingTest extends TestCase
         $this->assertStringContainsString('Add To Cart', $content);
         $this->assertStringContainsString('sold-by-card', $content);
         $this->assertStringContainsString('Customer Reviews', $content);
-        $this->assertStringContainsString('Sample review layout', $content);
-        $this->assertStringContainsString('Useful product details before visiting', $content);
+        $this->assertStringContainsString('No customer reviews yet.', $content);
+        $this->assertStringNotContainsString('Sample review layout', $content);
         $this->assertStringNotContainsString('(0 reviews)', $content);
         $this->assertStringNotContainsString('Contact Store', $content);
     }

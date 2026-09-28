@@ -218,6 +218,16 @@ class Product extends Model
             ->orderBy('id');
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class);
+    }
+
+    public function approvedReviews(): HasMany
+    {
+        return $this->reviews()->approved();
+    }
+
     public function wishlistItems(): HasMany
     {
         return $this->hasMany(WishlistItem::class);

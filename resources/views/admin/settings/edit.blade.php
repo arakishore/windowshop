@@ -1,7 +1,7 @@
 {{-- Purpose: Admin-owned global settings inherited by every merchant and POS surface. --}}
 @extends('layouts.admin')
 
-@section('title', 'Admin Settings | WindowShop')
+@section('title', 'Admin Settings | ' . $marketplaceName)
 
 @section('page_title', 'Admin Settings')
 
@@ -136,6 +136,9 @@
         $marketplaceLogoPath = $marketplaceLogoPath ?? 'assets/admin/images/logov2.png';
         $marketplaceLogoUrl = $marketplaceLogoUrl ?? asset('assets/admin/images/logov2.png');
         $hasCustomMarketplaceLogo = str_starts_with($marketplaceLogoPath, 'marketplace/logo/');
+        $footerLogoPath = $footerLogoPath ?? null;
+        $footerLogoUrl = $footerLogoUrl ?? $marketplaceLogoUrl;
+        $hasCustomFooterLogo = is_string($footerLogoPath) && str_starts_with($footerLogoPath, 'marketplace/logo/');
         $monthOptions = [
             1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
             5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
@@ -204,7 +207,7 @@
                     <div class="card admin-settings-card">
                         <div class="card-header">
                             <h5 class="mb-0">Marketplace Logo</h5>
-                            <div class="text-muted fs-sm mt-1">Global WindowShop logo used by admin marketplace surfaces.</div>
+                            <div class="text-muted fs-sm mt-1">Global {{ $marketplaceName }} logo used by admin marketplace surfaces.</div>
                         </div>
                         <div class="card-body">
                             <div class="admin-settings-grid">
@@ -244,9 +247,62 @@
                                         <div class="form-check mt-3">
                                             <input id="remove_marketplace_logo" name="remove_marketplace_logo" type="checkbox" value="1" class="form-check-input @error('remove_marketplace_logo') is-invalid @enderror">
                                             <label for="remove_marketplace_logo" class="form-check-label">Remove Logo</label>
-                                            <div class="form-text">Removing the uploaded logo restores the default WindowShop logo.</div>
+                                            <div class="form-text">Removing the uploaded logo restores the default {{ $marketplaceName }} logo.</div>
                                         </div>
                                         @error('remove_marketplace_logo')
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                                        @enderror
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card admin-settings-card mt-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">Footer Logo</h5>
+                            <div class="text-muted fs-sm mt-1">Optional logo used in the storefront footer. A light/white logo is recommended for dark footer backgrounds.</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="admin-settings-grid">
+                                <div>
+                                    <label class="form-label fw-semibold">Current Footer Logo Preview</label>
+                                    <div class="admin-settings-logo-preview">
+                                        <img id="footer_logo_preview" src="{{ $footerLogoUrl }}" data-current-src="{{ $footerLogoUrl }}" alt="Footer logo">
+                                    </div>
+                                    <div class="text-muted small text-break mt-2">Current: {{ $footerLogoPath ?: 'Falls back to the marketplace logo.' }}</div>
+                                </div>
+                                <div>
+                                    <label for="footer_logo" class="form-label fw-semibold">Upload / Change Footer Logo</label>
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <label for="footer_logo" class="btn btn-outline-primary btn-sm mb-0">
+                                            <i class="ph-upload me-1"></i>
+                                            Choose image
+                                        </label>
+                                        <button type="button" class="btn btn-link btn-sm text-muted js-clear-footer-logo-preview">
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <input
+                                        id="footer_logo"
+                                        name="footer_logo"
+                                        type="file"
+                                        accept=".png,.jpg,.jpeg,.webp"
+                                        class="d-none @error('footer_logo') is-invalid @enderror"
+                                    >
+                                    <div class="form-text">
+                                        Recommended size: approximately 400 x 120 px. PNG, JPG or WebP. Maximum file size: 2 MB. A light/white logo is recommended for dark footer backgrounds.
+                                    </div>
+                                    @error('footer_logo')
+                                        <div class="invalid-feedback d-block">{{ $message }}</div>
+                                    @enderror
+
+                                    @if($hasCustomFooterLogo)
+                                        <div class="form-check mt-3">
+                                            <input id="remove_footer_logo" name="remove_footer_logo" type="checkbox" value="1" class="form-check-input @error('remove_footer_logo') is-invalid @enderror">
+                                            <label for="remove_footer_logo" class="form-check-label">Remove Footer Logo</label>
+                                            <div class="form-text">Removing the uploaded footer logo restores the marketplace logo fallback.</div>
+                                        </div>
+                                        @error('remove_footer_logo')
                                             <div class="invalid-feedback d-block">{{ $message }}</div>
                                         @enderror
                                     @endif
@@ -504,10 +560,14 @@
                 document.querySelector('.js-admin-currency-preview').textContent = before ? `${symbol}${amount}` : `${amount} ${symbol}`;
             };
             const setupMarketplaceLogoPreview = () => {
-                const input = document.getElementById('marketplace_logo');
-                const preview = document.getElementById('marketplace_logo_preview');
-                const clear = document.querySelector('.js-clear-marketplace-logo-preview');
-                const remove = document.getElementById('remove_marketplace_logo');
+                setupLogoPreview('marketplace_logo', 'marketplace_logo_preview', '.js-clear-marketplace-logo-preview', 'remove_marketplace_logo');
+                setupLogoPreview('footer_logo', 'footer_logo_preview', '.js-clear-footer-logo-preview', 'remove_footer_logo');
+            };
+            const setupLogoPreview = (inputId, previewId, clearSelector, removeId) => {
+                const input = document.getElementById(inputId);
+                const preview = document.getElementById(previewId);
+                const clear = document.querySelector(clearSelector);
+                const remove = document.getElementById(removeId);
                 let objectUrl = null;
 
                 if (!input || !preview) {

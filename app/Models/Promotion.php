@@ -36,6 +36,7 @@ class Promotion extends Model
         'name',
         'slug',
         'description',
+        'promotional_image_path',
         'status',
         'activation_type',
         'origin',

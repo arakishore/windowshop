@@ -12,14 +12,19 @@ use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Order\DeliveryCompletionService;
+use App\Services\Order\DirectMerchantUpiPaymentService;
 use App\Services\Order\MerchantOrderStockShortageService;
+use App\Services\Order\OrderActivityPresenter;
+use App\Services\Order\OrderExchangeService;
 use App\Services\Order\OrderInventoryService;
+use App\Services\Order\OrderRefundService;
 use App\Services\Order\OrderReturnExchangeEligibilityService;
 use App\Services\Order\OrderStatusService;
 use App\Services\Order\PickupCompletionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -36,8 +41,11 @@ class OrderController extends Controller
         private readonly DeliveryCompletionService $deliveryCompletionService,
         private readonly MerchantOrderStockShortageService $stockShortageService,
         private readonly OrderReturnExchangeEligibilityService $returnExchangeEligibility,
-    ) {
-    }
+        private readonly OrderRefundService $refundService,
+        private readonly OrderExchangeService $exchangeService,
+        private readonly OrderActivityPresenter $orderActivityPresenter,
+        private readonly DirectMerchantUpiPaymentService $directUpiPayments,
+    ) {}
 
     public function index(Request $request): View
     {
@@ -106,6 +114,10 @@ class OrderController extends Controller
             'totals',
             'customer',
             'statusHistories.changedBy',
+            'directMerchantUpiAttempts',
+            'refunds.items.orderItem',
+            'exchanges.items.orderItem',
+            'exchanges.replacementOrder.items',
             'comments.createdBy',
         ]);
         $allowedNextStatuses = $this->orderStatusService->allowedNextStatuses($order);
@@ -125,6 +137,9 @@ class OrderController extends Controller
             'posCurrency' => $this->adminSettings->currencyConfig(),
             'stockShortage' => $stockShortage,
             'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
+            'refundableQuantities' => $this->refundService->refundableQuantities($order),
+            'exchangeableQuantities' => $this->exchangeService->exchangeableQuantities($order),
+            'orderActivityPresenter' => $this->orderActivityPresenter,
         ]);
     }
 
@@ -265,6 +280,48 @@ class OrderController extends Controller
             ->with('success', 'Order marked shipped successfully.');
     }
 
+    public function markReadyForDispatch(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->orderStatusService->transition(
+                $order,
+                OrderStatus::CODE_READY_FOR_DISPATCH,
+                $request->user(),
+                'Order is ready for dispatch.',
+                ['action' => 'merchant_mark_ready_for_dispatch'],
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order marked ready for dispatch successfully.');
+    }
+
+    public function markInTransit(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $this->orderStatusService->transition(
+                $order,
+                OrderStatus::CODE_IN_TRANSIT,
+                $request->user(),
+                'Order is in transit.',
+                ['action' => 'merchant_mark_in_transit'],
+            );
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Order marked in transit successfully.');
+    }
+
     public function markOutForDelivery(Request $request, Order $order): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
@@ -355,6 +412,42 @@ class OrderController extends Controller
             ->with('success', 'Order cancelled successfully.');
     }
 
+    public function confirmUpiPayment(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+        $data = $request->validate([
+            'upi_txn' => ['required', 'string', 'max:100'],
+        ]);
+
+        try {
+            $this->directUpiPayments->confirm($order, $request->user(), (string) $data['upi_txn']);
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Direct Merchant UPI payment confirmed successfully.');
+    }
+
+    public function rejectUpiPayment(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+        $data = $request->validate([
+            'upi_rejection_reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->directUpiPayments->reject($order, $request->user(), (string) $data['upi_rejection_reason']);
+        } catch (ValidationException $exception) {
+            return $this->transitionFailed($exception);
+        }
+
+        return redirect()
+            ->route('merchant.orders.show', $order)
+            ->with('success', 'Payment marked as not verified. The order remains open.');
+    }
+
     public function storeComment(Request $request, Order $order): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
@@ -414,8 +507,8 @@ class OrderController extends Controller
     }
 
     /**
-     * @param array<int, string> $allowedNextStatuses
-     * @return \Illuminate\Support\Collection<int, MerchantCancellationReason>
+     * @param  array<int, string>  $allowedNextStatuses
+     * @return Collection<int, MerchantCancellationReason>
      */
     private function cancellationReasons(int $merchantId, array $allowedNextStatuses)
     {
@@ -489,7 +582,7 @@ class OrderController extends Controller
     }
 
     /**
-     * @param array<string, OrderStatus> $statuses
+     * @param  array<string, OrderStatus>  $statuses
      * @return array<string, string>
      */
     private function orderStatusOptions(array $statuses): array
@@ -499,8 +592,10 @@ class OrderController extends Controller
             Order::STATUS_CONFIRMED => 'Confirmed',
             Order::STATUS_PROCESSING => 'Processing',
             OrderStatus::CODE_PACKED => 'Packed',
+            OrderStatus::CODE_READY_FOR_DISPATCH => 'Ready for Dispatch',
             Order::STATUS_READY_FOR_PICKUP => 'Ready for Pickup',
             OrderStatus::CODE_SHIPPED => 'Shipped',
+            OrderStatus::CODE_IN_TRANSIT => 'In Transit',
             OrderStatus::CODE_OUT_FOR_DELIVERY => 'Out for Delivery',
             OrderStatus::CODE_DELIVERED => 'Delivered',
             Order::STATUS_COMPLETED => 'Completed',

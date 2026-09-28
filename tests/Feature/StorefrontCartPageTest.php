@@ -157,7 +157,8 @@ class StorefrontCartPageTest extends TestCase
             ->assertSee($second['shop']->name)
             ->assertSee('Shop subtotal')
             ->assertSee('350.00', false)
-            ->assertSee('href="'.route('storefront.checkout').'"', false)
+            ->assertSee('href="'.route('storefront.checkout', ['shop' => $first['shop']->getKey()]).'"', false)
+            ->assertSee('href="'.route('storefront.checkout', ['shop' => $second['shop']->getKey()]).'"', false)
             ->assertDontSee('id="checkout-btn"', false)
             ->assertDontSee('each-total-price', false)
             ->assertDontSee('each-subtotal-price', false);

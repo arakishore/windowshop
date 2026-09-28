@@ -5,24 +5,35 @@
         <div class="fake-class bottom-0 bg-white_10 d-none d-sm-flex"></div>
         <div class="container-full">
             <div class="footer-inner flat-spacing">
+                @php($footerContact = $storefrontContact ?? [])
                 <div class="col-left">
                     <div class="footer-col-block type-white footer-wrap-start">
+                        <a href="{{ route('storefront.home') }}" class="footer-logo-link d-inline-block mb-16" aria-label="{{ $marketplaceName }} home">
+                            <img loading="lazy" width="150" height="30" src="{{ $storefrontFooterLogoUrl ?? asset('assets/admin/images/logov2.png') }}" alt="{{ $marketplaceName }}">
+                        </a>
+                        @if(($footerContact['phone_href'] ?? null) || ($footerContact['office_address'] ?? null) || ($footerContact['email'] ?? null) || ($footerContact['social_links'] ?? []))
                         <p class="footer-heading footer-heading-mobile text-white">OUR STORE</p>
                         <div class="tf-collapse-content">
-                            <p class="cl-text-3 mb-4">
-                                24/7 Support Center:
-                            </p>
-                            <a href="tel:0112348888" class="text-white link h4 fw-medium mb-12">
-                                (+01) 1234 8888
-                            </a>
-                            <a href="ml.html?q=600+N+Michigan+Ave+Chicago,+IL+60611+USA" target="_blank"
-                                class="cl-text-3 link mb-4">
-                                600 N Michigan Ave, Chicago, IL 60611, USA
-                            </a>
-                            <a href="mailto:hi.amere@gmail.com" class="cl-text-3 link">
-                                hi.amere@gmail.com
-                            </a>
+                            @if(($footerContact['phone_href'] ?? null))
+                                <a href="{{ $footerContact['phone_href'] }}" class="text-white link h4 fw-medium mb-12">{{ $footerContact['phone'] ?? $footerContact['phone_href'] }}</a>
+                            @endif
+                            @if(($footerContact['office_address'] ?? null))
+                                <p class="cl-text-3 mb-4" style="white-space: pre-line;">{{ $footerContact['office_address'] }}</p>
+                            @endif
+                            @if(($footerContact['email'] ?? null))
+                                <a href="mailto:{{ $footerContact['email'] }}" class="cl-text-3 link mb-12">{{ $footerContact['email'] }}</a>
+                            @endif
+                            @if(($footerContact['social_links'] ?? []))
+                                <div class="tf-social-icon-2 style-2 mt-12">
+                                    @foreach(['Facebook' => 'FacebookLogo', 'Instagram' => 'InstagramLogo', 'X / Twitter' => 'XLogo', 'YouTube' => 'YoutubeLogo', 'LinkedIn' => 'LinkedinLogo'] as $label => $icon)
+                                        @if(isset($footerContact['social_links'][$label]))
+                                            <a href="{{ $footerContact['social_links'][$label] }}" class="text-white" target="_blank" rel="noopener noreferrer" aria-label="{{ $label }}"><i class="icon icon-{{ $icon }}" aria-hidden="true"></i></a>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            @endif
                         </div>
+                        @endif
                     </div>
                 </div>
                 
@@ -108,7 +119,7 @@
 
                 </div>
                 <p class="text-nocopy cl-text-3">
-                    ©2026 Amerce. All Rights Reserved.
+                    &copy; {{ now()->year }} {{ $marketplaceName }}. All Rights Reserved.
                 </p>
                 <ul class="tf-list payment-list">
                     <li><img loading="lazy" width="38" height="24"

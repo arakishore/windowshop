@@ -1,7 +1,7 @@
 {{-- Purpose: Merchant tax behaviour settings; legal tax data remains on merchant profile/address. --}}
 @extends('layouts.merchant')
 
-@section('title', 'Tax Settings | WindowShop')
+@section('title', 'Tax Settings | ' . $marketplaceName)
 
 @section('page_title', 'Tax Settings')
 
@@ -57,7 +57,7 @@
         <div class="card-header d-flex align-items-center justify-content-between gap-3">
             <div>
                 <h5 class="mb-0">Tax Settings</h5>
-                <div class="text-muted fs-sm mt-1">Choose how WindowShop should behave for tax. Legal details come from Merchant Details.</div>
+                <div class="text-muted fs-sm mt-1">Choose how {{ $marketplaceName }} should behave for tax. Legal details come from Merchant Details.</div>
             </div>
             <span class="badge bg-secondary bg-opacity-10 text-secondary">Configuration only</span>
         </div>
@@ -95,7 +95,7 @@
                     <div>
                         <label class="form-label fw-semibold" for="tax_enabled">
                             Enable Tax Calculation
-                            <i class="ph-question tax-help-icon" data-bs-popup="tooltip" title="Turn on when this merchant wants WindowShop to use tax behaviour in later product and POS steps."></i>
+                            <i class="ph-question tax-help-icon" data-bs-popup="tooltip" title="Turn on when this merchant wants {{ $marketplaceName }} to use tax behaviour in later product and POS steps."></i>
                         </label>
                         <select name="tax_enabled" id="tax_enabled" class="form-select @error('tax_enabled') is-invalid @enderror">
                             <option value="0" @selected(! $taxEnabled)>No</option>

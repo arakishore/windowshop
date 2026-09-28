@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Privacy Policy | WindowShop')
-@section('meta_description', 'WindowShop privacy policy covering information collection, use, retention, and customer choices.')
+@section('title', 'Privacy Policy | ' . $marketplaceName)
+@section('meta_description', $marketplaceName.' privacy policy covering information collection, use, retention, and customer choices.')
 
 @section('content')
     <section class="section-page-title text-center storefront-page-title">
@@ -26,7 +26,7 @@
                 </div>
                 <div class="term-item">
                     <h5 class="term-title">2. How We Use Information</h5>
-                    <p class="term-text cl-text-2">We use information to operate WindowShop, respond to enquiries, improve discovery, support merchant pages, prevent misuse, and communicate relevant updates where permitted.</p>
+                    <p class="term-text cl-text-2">We use information to operate {{ $marketplaceName }}, respond to enquiries, improve discovery, support merchant pages, prevent misuse, and communicate relevant updates where permitted.</p>
                 </div>
                 <div class="term-item">
                     <h5 class="term-title">3. Sharing Information</h5>

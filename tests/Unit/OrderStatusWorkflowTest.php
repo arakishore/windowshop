@@ -56,9 +56,15 @@ class OrderStatusWorkflowTest extends TestCase
             Order::STATUS_CANCELLED,
         ]);
         $this->assertAllowed($service, Order::FULFILMENT_DELIVERY, OrderStatus::CODE_PACKED, [
+            OrderStatus::CODE_READY_FOR_DISPATCH,
+        ]);
+        $this->assertAllowed($service, Order::FULFILMENT_DELIVERY, OrderStatus::CODE_READY_FOR_DISPATCH, [
             OrderStatus::CODE_SHIPPED,
         ]);
         $this->assertAllowed($service, Order::FULFILMENT_DELIVERY, OrderStatus::CODE_SHIPPED, [
+            OrderStatus::CODE_IN_TRANSIT,
+        ]);
+        $this->assertAllowed($service, Order::FULFILMENT_DELIVERY, OrderStatus::CODE_IN_TRANSIT, [
             OrderStatus::CODE_OUT_FOR_DELIVERY,
         ]);
         $this->assertAllowed($service, Order::FULFILMENT_DELIVERY, OrderStatus::CODE_OUT_FOR_DELIVERY, [
@@ -94,7 +100,7 @@ class OrderStatusWorkflowTest extends TestCase
             $this->assertTrue($service->canCustomerCancel($order), "Delivery {$status} should be customer cancellable.");
         }
 
-        foreach ([OrderStatus::CODE_SHIPPED, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_CANCELLED] as $status) {
+        foreach ([OrderStatus::CODE_READY_FOR_DISPATCH, OrderStatus::CODE_SHIPPED, OrderStatus::CODE_IN_TRANSIT, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_CANCELLED] as $status) {
             $order = $this->order(Order::FULFILMENT_DELIVERY, $status);
 
             $this->assertFalse($service->canCustomerCancel($order), "Delivery {$status} should not be customer cancellable.");
@@ -123,7 +129,7 @@ class OrderStatusWorkflowTest extends TestCase
     {
         $service = new OrderStatusService();
 
-        foreach ([OrderStatus::CODE_PACKED, OrderStatus::CODE_SHIPPED, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED] as $status) {
+        foreach ([OrderStatus::CODE_PACKED, OrderStatus::CODE_READY_FOR_DISPATCH, OrderStatus::CODE_SHIPPED, OrderStatus::CODE_IN_TRANSIT, OrderStatus::CODE_OUT_FOR_DELIVERY, OrderStatus::CODE_DELIVERED] as $status) {
             $order = $this->order(Order::FULFILMENT_PICKUP, $status);
             $this->assertSame([], $service->allowedNextStatuses($order));
             $this->assertFalse($service->canTransition($order, Order::STATUS_COMPLETED));
@@ -175,8 +181,10 @@ class OrderStatusWorkflowTest extends TestCase
             Order::STATUS_CONFIRMED,
             Order::STATUS_PROCESSING,
             OrderStatus::CODE_PACKED,
+            OrderStatus::CODE_READY_FOR_DISPATCH,
             Order::STATUS_READY_FOR_PICKUP,
             OrderStatus::CODE_SHIPPED,
+            OrderStatus::CODE_IN_TRANSIT,
             OrderStatus::CODE_OUT_FOR_DELIVERY,
             OrderStatus::CODE_DELIVERED,
             Order::STATUS_COMPLETED,

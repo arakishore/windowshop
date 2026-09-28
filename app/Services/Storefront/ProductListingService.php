@@ -6,7 +6,9 @@ use App\Models\Product;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductCategory;
+use App\Models\ProductReview;
 use App\Models\ProductVariant;
+use App\Models\Shop;
 use App\Services\Admin\AdminSettingsService;
 use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
 use App\Services\System\SystemSettingService;
@@ -31,6 +33,7 @@ class ProductListingService
         private readonly CustomerPurchaseAvailabilityGuard $availabilityGuard,
         private readonly StorefrontUrlService $urls,
         private readonly StorefrontProductPolicyPresenter $policyPresenter,
+        private readonly ProductPromotionPresenter $promotionPresenter,
     ) {
     }
 
@@ -42,6 +45,27 @@ class ProductListingService
             ->through(fn (Product $product): array => $this->cardData($product));
     }
 
+    /**
+     * @param array<int, int> $shopIds
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function newestProductsForShopIds(array $shopIds, int $limit = 8): Collection
+    {
+        $shopIds = $this->sanitizeIdList($shopIds);
+
+        if ($shopIds === [] || $limit < 1) {
+            return collect();
+        }
+
+        return $this->storefrontQuery(null, [
+            'shops' => $shopIds,
+            'sort' => 'new-arrivals',
+        ])
+            ->limit($limit)
+            ->get()
+            ->map(fn (Product $product): array => $this->cardData($product));
+    }
+
     public function categoryProducts(ProductCategory $category, array $filters = [], int $perPage = self::PER_PAGE): LengthAwarePaginator
     {
         $filters = $this->sanitizeListingFilters($filters);
@@ -50,6 +74,56 @@ class ProductListingService
             ->paginate($perPage)
             ->withQueryString()
             ->through(fn (Product $product): array => $this->cardData($product));
+    }
+
+    public function shopProducts(Shop $shop, array $filters = [], int $perPage = self::PER_PAGE): LengthAwarePaginator
+    {
+        $filters = $this->sanitizeListingFilters($filters);
+
+        return $this->storefrontQuery(null, $filters)
+            ->where('products.shop_id', $shop->getKey())
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(fn (Product $product): array => $this->cardData($product));
+    }
+
+    /**
+     * @param array<int, int> $productIds
+     */
+    public function shopProductsByIds(Shop $shop, array $productIds, array $filters = [], int $perPage = self::PER_PAGE): LengthAwarePaginator
+    {
+        $filters = $this->sanitizeListingFilters($filters);
+
+        return $this->storefrontQuery(null, $filters)
+            ->where('products.shop_id', $shop->getKey())
+            ->whereIn('products.id', $productIds === [] ? [0] : $productIds)
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(fn (Product $product): array => $this->cardData($product));
+    }
+
+    /**
+     * @param array<int, int> $productIds
+     * @return array{products: Collection<int, array<string, mixed>>, total: int}
+     */
+    public function shopProductPreviewByIds(Shop $shop, array $productIds, int $limit = self::PER_PAGE): array
+    {
+        $query = $this->storefrontQuery()
+            ->where('products.shop_id', $shop->getKey())
+            ->whereIn('products.id', $productIds === [] ? [0] : $productIds);
+
+        $total = (clone $query)
+            ->withoutEagerLoads()
+            ->reorder()
+            ->count();
+
+        return [
+            'products' => $query
+                ->limit($limit)
+                ->get()
+                ->map(fn (Product $product): array => $this->cardData($product)),
+            'total' => $total,
+        ];
     }
 
     /**
@@ -67,6 +141,76 @@ class ProductListingService
             ->get()
             ->filter(fn (ProductCategoryAttributeGroup $mapping): bool => $mapping->group !== null && $mapping->group->values->isNotEmpty())
             ->values();
+    }
+
+    /**
+     * @return Collection<int, Shop>
+     */
+    public function categoryShopFilters(ProductCategory $category): Collection
+    {
+        $shopIds = $this->storefrontQuery($this->categoryIds($category))
+            ->withoutEagerLoads()
+            ->reorder()
+            ->distinct()
+            ->pluck('products.shop_id')
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($shopIds->isEmpty()) {
+            return collect();
+        }
+
+        return Shop::query()
+            ->select('id', 'merchant_id', 'name', 'slug', 'status')
+            ->whereIn('id', $shopIds->all())
+            ->where('status', 'active')
+            ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active'))
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, ProductCategory>
+     */
+    public function shopCategoryFilters(Shop $shop): Collection
+    {
+        $categoryIds = $this->storefrontQuery()
+            ->withoutEagerLoads()
+            ->reorder()
+            ->where('products.shop_id', $shop->getKey())
+            ->distinct()
+            ->pluck('products.product_category_id')
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($categoryIds->isEmpty()) {
+            return collect();
+        }
+
+        return ProductCategory::query()
+            ->whereIn('id', $categoryIds->all())
+            ->where('status', 'active')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'parent_id', 'name', 'slug', 'status']);
+    }
+
+    /**
+     * @return Collection<int, ProductCategoryAttributeGroup>
+     */
+    public function shopAttributeFilters(Shop $shop): Collection
+    {
+        $rootCategory = $shop->rootProductCategory;
+
+        if (! $rootCategory instanceof ProductCategory) {
+            return collect();
+        }
+
+        return $this->categoryAttributeFilters($rootCategory);
     }
 
     /**
@@ -94,7 +238,7 @@ class ProductListingService
 
     /**
      * @param array<int, int>|null $categoryIds
-     * @param array{attributes: array<int, array<int, int>>, price_min: float|null, price_max: float|null, discount_min: int|null} $filters
+     * @param array{attributes?: array<int, array<int, int>>, price_min?: float|null, price_max?: float|null, discount_min?: int|null, search?: string, shops?: array<int, int>, sort?: string} $filters
      */
     private function storefrontQuery(?array $categoryIds = null, array $filters = []): Builder
     {
@@ -110,10 +254,34 @@ class ProductListingService
             ->orderBy('sort_order')
             ->orderBy('id')
             ->limit(1);
+        $defaultVariantSellingPrice = ProductVariant::query()
+            ->select('selling_price')
+            ->whereColumn('product_variants.product_id', 'products.id')
+            ->where('status', 'active')
+            ->where('is_sellable', true)
+            ->where('is_default', true)
+            ->where('mrp', '>', 0)
+            ->where('selling_price', '>', 0)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->limit(1);
+        $defaultVariantMrp = ProductVariant::query()
+            ->select('mrp')
+            ->whereColumn('product_variants.product_id', 'products.id')
+            ->where('status', 'active')
+            ->where('is_sellable', true)
+            ->where('is_default', true)
+            ->where('mrp', '>', 0)
+            ->where('selling_price', '>', 0)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->limit(1);
 
         $query = Product::query()
             ->select('products.*')
             ->selectSub($defaultVariantId, 'storefront_variant_id')
+            ->selectSub($defaultVariantSellingPrice, 'storefront_selling_price')
+            ->selectSub($defaultVariantMrp, 'storefront_mrp')
             ->leftJoin('shops as storefront_location_shops', function (JoinClause $join): void {
                 $join->on('storefront_location_shops.id', '=', 'products.shop_id')
                     ->whereColumn('storefront_location_shops.merchant_id', 'products.merchant_id');
@@ -123,6 +291,7 @@ class ProductListingService
                 'category:id,parent_id,name,slug',
                 'category.parent:id,parent_id,name,slug',
                 'category.parent.parent:id,parent_id,name,slug',
+                'collections:id',
                 'shop:id,merchant_id,name,slug,status',
                 'primaryImage' => fn ($query) => $query
                     ->where('status', 'active')
@@ -133,6 +302,9 @@ class ProductListingService
             ])
             ->where('products.status', 'active')
             ->when($categoryIds !== null, fn (Builder $query) => $query->whereIn('products.product_category_id', $categoryIds))
+            ->when(($filters['categories'] ?? []) !== [], fn (Builder $query) => $query->whereIn('products.product_category_id', $filters['categories']))
+            ->when(($filters['search'] ?? '') !== '', fn (Builder $query) => $query->where('products.product_name', 'like', '%'.$filters['search'].'%'))
+            ->when(($filters['shops'] ?? []) !== [], fn (Builder $query) => $query->whereIn('products.shop_id', $filters['shops']))
             ->when(($filters['attributes'] ?? []) !== [], fn (Builder $query) => $this->applyAttributeFilters($query, $filters['attributes']))
             ->when($this->hasPriceFilters($filters), fn (Builder $query) => $this->applyPriceFilters($query, $filters))
             ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active'))
@@ -141,18 +313,12 @@ class ProductListingService
                 ->whereColumn('shops.merchant_id', 'products.merchant_id')
                 ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active')))
             ->whereExists($defaultVariantId)
-            ->tap(fn (Builder $query) => $this->locationSorter->apply(
+            ->when(($filters['sort'] ?? 'popularity') === 'popularity', fn (Builder $query) => $this->locationSorter->apply(
                 $query,
                 $this->location->postalCode(),
                 'storefront_location_shops.pincode',
             ))
-            ->orderByRaw(
-                'CASE WHEN products.is_featured = 1 AND (products.featured_from IS NULL OR products.featured_from <= ?) AND (products.featured_until IS NULL OR products.featured_until >= ?) THEN 0 ELSE 1 END',
-                [$now, $now],
-            )
-            ->orderBy('products.sort_order')
-            ->orderByDesc('products.created_at')
-            ->orderBy('products.id');
+            ->tap(fn (Builder $query) => $this->applyListingSort($query, $filters['sort'] ?? 'popularity', $now));
 
         return $query;
     }
@@ -217,7 +383,7 @@ class ProductListingService
 
     /**
      * @param array<string, mixed> $filters
-     * @return array{attributes: array<int, array<int, int>>, price_min: float|null, price_max: float|null, discount_min: int|null}
+     * @return array{attributes: array<int, array<int, int>>, categories: array<int, int>, price_min: float|null, price_max: float|null, discount_min: int|null, search: string, shops: array<int, int>, sort: string}
      */
     private function sanitizeListingFilters(array $filters): array
     {
@@ -227,10 +393,45 @@ class ProductListingService
 
         return [
             'attributes' => $this->sanitizeAttributeFilters((array) ($filters['attributes'] ?? [])),
+            'categories' => $this->sanitizeIdList((array) ($filters['categories'] ?? [])),
             'price_min' => $this->sanitizePrice($filters['price_min'] ?? null),
             'price_max' => $this->sanitizePrice($filters['price_max'] ?? null),
             'discount_min' => $discounts->isEmpty() ? null : (int) $discounts->max(),
+            'search' => trim((string) ($filters['search'] ?? '')),
+            'sort' => $this->sanitizeSort($filters['sort'] ?? null),
+            'shops' => collect((array) ($filters['shops'] ?? []))
+                ->pipe(fn ($ids): array => $this->sanitizeIdList($ids->all())),
         ];
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @return array<int, int>
+     */
+    private function sanitizeIdList(array $values): array
+    {
+        return collect($values)
+            ->map(fn ($id) => filter_var($id, FILTER_VALIDATE_INT))
+            ->filter(fn ($id): bool => $id !== false && $id > 0)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function sanitizeSort(mixed $value): string
+    {
+        $sort = (string) $value;
+
+        return in_array($sort, [
+            'popularity',
+            'new-arrivals',
+            'top-sellers',
+            'price-high-low',
+            'price-low-high',
+            'discount-high-low',
+            'rating-high-low',
+        ], true) ? $sort : 'popularity';
     }
 
     /**
@@ -320,6 +521,38 @@ class ProductListingService
         });
     }
 
+    private function applyListingSort(Builder $query, string $sort, mixed $now): void
+    {
+        match ($sort) {
+            'new-arrivals' => $query
+                ->orderByDesc('products.created_at')
+                ->orderBy('products.id'),
+            'top-sellers' => $query
+                ->orderByDesc('products.created_at')
+                ->orderBy('products.id'),
+            'price-high-low' => $query
+                ->orderByDesc('storefront_selling_price')
+                ->orderBy('products.id'),
+            'price-low-high' => $query
+                ->orderBy('storefront_selling_price')
+                ->orderBy('products.id'),
+            'discount-high-low' => $query
+                ->orderByRaw('((storefront_mrp - storefront_selling_price) * 100 / storefront_mrp) DESC')
+                ->orderBy('products.id'),
+            'rating-high-low' => $query
+                ->orderByDesc('products.created_at')
+                ->orderBy('products.id'),
+            default => $query
+                ->orderByRaw(
+                    'CASE WHEN products.is_featured = 1 AND (products.featured_from IS NULL OR products.featured_from <= ?) AND (products.featured_until IS NULL OR products.featured_until >= ?) THEN 0 ELSE 1 END',
+                    [$now, $now],
+                )
+                ->orderBy('products.sort_order')
+                ->orderByDesc('products.created_at')
+                ->orderBy('products.id'),
+        };
+    }
+
     /**
      * @return array<int, int>
      */
@@ -349,12 +582,14 @@ class ProductListingService
         $discountPercent = $hasDiscount ? (int) round((($mrp - $sellingPrice) / $mrp) * 100) : 0;
         $image = $this->imageUrl($product);
         $availability = $this->availabilityGuard->decision($variant, 1);
+        $promotion = $this->promotionPresenter->forProduct($product);
 
         return [
             'product_id' => (int) $product->getKey(),
             'name' => $product->product_name,
             'brand' => $product->brand?->name,
             'store' => $product->shop?->name ?? 'Local Store',
+            'store_url' => $product->shop?->slug ? route('storefront.stores.show', $product->shop->slug) : null,
             'url' => $this->urls->product($product),
             'wishlist_store_url' => route('storefront.wishlist.products.store', $product),
             'wishlist_destroy_url' => route('storefront.wishlist.products.destroy', $product),
@@ -371,6 +606,9 @@ class ProductListingService
             'old_price' => $hasDiscount ? $this->money($mrp) : null,
             'badge' => $discountPercent > 0 ? '-'.$discountPercent.'%' : null,
             'badge_class' => $discountPercent > 0 ? 'sale' : null,
+            'promotion_label' => $promotion['promotion_label'],
+            'promotion_text' => $promotion['promotion_text'],
+            'promotion_icon' => $promotion['promotion_icon'],
             'description' => $product->short_description ?: 'A local shop product listing with clean catalogue-ready details.',
             'show_rating' => false,
             'swatches' => [],
@@ -390,6 +628,14 @@ class ProductListingService
         $images = $this->detailImages($product);
         $description = $product->description ?: ($product->short_description ?: 'A local shop product listing with clean catalogue-ready details.');
         $availability = $this->availabilityGuard->decision($variant, 1);
+        $approvedReviews = ProductReview::query()
+            ->approved()
+            ->with(['customer:id,name', 'images'])
+            ->where('product_id', $product->getKey())
+            ->latest('created_at')
+            ->get();
+        $reviewCount = $approvedReviews->count();
+        $averageRating = $reviewCount > 0 ? round((float) $approvedReviews->avg('rating'), 1) : 0.0;
 
         return [
             'product_id' => (int) $product->getKey(),
@@ -404,7 +650,7 @@ class ProductListingService
             'category_path' => $this->urls->categoryPath($product->category),
             'canonical_url' => $this->urls->product($product),
             'store' => $product->shop?->name ?? 'Local Store',
-            'store_url' => $product->shop?->slug ? route('storefront.store.show', $product->shop->slug) : null,
+            'store_url' => $product->shop?->slug ? route('storefront.stores.show', $product->shop->slug) : null,
             'store_address' => $this->shopAddress($product->shop),
             'store_whatsapp_url' => $this->whatsappUrl($product),
             'return_exchange_policy' => $this->policyPresenter->returnExchange($product),
@@ -423,7 +669,19 @@ class ProductListingService
             'old_price' => $hasDiscount ? $this->money($mrp) : null,
             'discount' => $discountPercent > 0 ? '-'.$discountPercent.'%' : null,
             'sku' => $variant->sku ?: 'SKU-'.$variant->getKey(),
-            'reviews' => '0 reviews',
+            'review_count' => $reviewCount,
+            'average_rating' => $averageRating,
+            'reviews' => $approvedReviews->map(fn (ProductReview $review): array => [
+                'rating' => $review->rating,
+                'title' => $review->title,
+                'text' => $review->review_text,
+                'customer_name' => $review->customerDisplayName(),
+                'date' => $review->created_at->format('M j, Y'),
+                'images' => $review->images->map(fn ($image): array => [
+                    'url' => Storage::disk('public')->url($image->image_path),
+                    'thumbnail_url' => Storage::disk('public')->url($image->thumbnail_path),
+                ]),
+            ]),
             'sold_text' => 'Available from local shop',
             'viewing_text' => 'Check product details before visiting the store',
             'description' => $description,
@@ -780,14 +1038,19 @@ class ProductListingService
             return null;
         }
 
+        $shopName = $shop->name ?: 'your shop';
+        $message = "Hello {$shopName}! I am interested in your {$product->product_name}.";
+
+        return $this->shopWhatsappUrl($shop, $message);
+    }
+
+    public function shopWhatsappUrl(Shop $shop, string $message): ?string
+    {
         $phone = $this->whatsappPhone($shop->whatsapp_number ?: $shop->mobile);
 
         if ($phone === null) {
             return null;
         }
-
-        $shopName = $shop->name ?: 'your shop';
-        $message = "Hello {$shopName}! I am interested in your {$product->product_name}.";
 
         return 'https://wa.me/'.$phone.'?text='.rawurlencode($message);
     }

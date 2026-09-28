@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Forgot Password | WindowShop')
-@section('meta_description', 'Static customer forgotten password page for WindowShop shoppers.')
+@section('title', 'Forgot Password | ' . $marketplaceName)
+@section('meta_description', 'Customer forgotten password page for '.$marketplaceName.' shoppers.')
 
 @push('styles')
     <style>

@@ -1,7 +1,7 @@
 @extends('storefront.layouts.app')
 
-@section('title', 'Checkout | WindowShop')
-@section('meta_description', 'Complete checkout for selected local shop products on WindowShop.')
+@section('title', 'Checkout | ' . $marketplaceName)
+@section('meta_description', 'Complete checkout for selected local shop products on '.$marketplaceName.'.')
 
 @php
     $addressFormDefaults = [
@@ -195,6 +195,88 @@
             background: #f8fafc;
         }
 
+        .checkout-upi-panel {
+            margin-top: 16px;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #f8fafc;
+        }
+
+        .checkout-upi-layout {
+            display: grid;
+            grid-template-columns: 160px minmax(0, 1fr);
+            gap: 20px;
+            align-items: center;
+            margin: 16px 0 18px;
+        }
+
+        .checkout-upi-qr {
+            display: block;
+            width: 160px;
+            height: 160px;
+            padding: 6px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #fff;
+            object-fit: contain;
+        }
+
+        .checkout-upi-id-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .checkout-upi-copy {
+            min-width: 58px;
+        }
+
+        .checkout-upi-steps {
+            margin: 0;
+            padding-left: 20px;
+            color: #4b5563;
+        }
+
+        .checkout-upi-steps li + li {
+            margin-top: 5px;
+        }
+
+        .checkout-upi-pending-note,
+        .checkout-upi-order-hint {
+            color: #64748b;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .checkout-processing-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(15, 23, 42, .58);
+        }
+
+        .checkout-processing-card {
+            width: min(360px, 100%);
+            padding: 28px 24px;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, .24);
+            color: #111827;
+            text-align: center;
+        }
+
+        .checkout-processing-card .spinner-border {
+            width: 2rem;
+            height: 2rem;
+        }
+
         @media (max-width: 991px) {
             .checkout-grid {
                 grid-template-columns: 1fr;
@@ -212,6 +294,22 @@
 
             .checkout-address-form {
                 grid-template-columns: 1fr;
+            }
+
+            .checkout-upi-panel {
+                padding: 16px;
+            }
+
+            .checkout-upi-layout {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .checkout-upi-qr {
+                width: min(190px, 100%);
+                height: auto;
+                aspect-ratio: 1;
+                margin: 0 auto;
             }
         }
     </style>
@@ -540,6 +638,43 @@
                                 <div class="checkout-empty-panel" data-payment-empty>{{ $paymentUnavailableMessage }}</div>
                             @endforelse
                         </div>
+                        @php($selectedPayment = collect($paymentMethods)->firstWhere('id', $selectedPaymentMethod))
+                        @php($selectedUpiDetails = $selectedPaymentMethod === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI ? ($selectedPayment['details'] ?? null) : null)
+                        <div class="checkout-upi-panel {{ $selectedUpiDetails ? '' : 'd-none' }}" data-upi-payment-panel>
+                            <p class="mb-1">Pay <strong data-upi-amount>{{ $selectedUpiDetails['amount'] ?? '' }}</strong> directly to</p>
+                            <h6 class="mb-0" data-upi-payee>{{ $selectedUpiDetails['payee_name'] ?? '' }}</h6>
+                            <div class="checkout-upi-layout">
+                                <img src="{{ $selectedUpiDetails['qr_url'] ?? '' }}" alt="Merchant UPI QR code" class="checkout-upi-qr" data-upi-qr>
+                                <div>
+                                    <div class="text-muted text-caption-01 mb-1">UPI ID</div>
+                                    <div class="checkout-upi-id-row">
+                                        <span class="fw-semibold text-break" data-upi-id>{{ $selectedUpiDetails['upi_id'] ?? '' }}</span>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary checkout-upi-copy" data-upi-copy aria-label="Copy merchant UPI ID">Copy</button>
+                                        <span class="text-success text-caption-01 d-none" data-upi-copy-feedback role="status" aria-live="polite">Copied</span>
+                                    </div>
+                                    <ol class="checkout-upi-steps">
+                                        <li>Scan the QR and pay the exact amount.</li>
+                                        <li>Enter the UPI transaction/reference ID below.</li>
+                                        <li>Place your order.</li>
+                                    </ol>
+                                </div>
+                            </div>
+                            <label for="upi_reference" class="form-label fw-semibold">UPI Transaction / Reference ID</label>
+                            <input
+                                id="upi_reference"
+                                name="upi_reference"
+                                form="checkout-place-order-form"
+                                type="text"
+                                maxlength="100"
+                                value="{{ old('upi_reference') }}"
+                                class="form-control @error('upi_reference') is-invalid @enderror"
+                                data-upi-reference
+                                @required($selectedUpiDetails)
+                                @disabled(! $selectedUpiDetails)
+                            >
+                            @error('upi_reference')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                            <div class="checkout-upi-pending-note mt-2">Your order will remain pending until the shop verifies your payment.</div>
+                        </div>
                     </div>
                 </div>
 
@@ -607,26 +742,45 @@
                         <strong data-checkout-grand-total>{{ $cartData['total'] }}</strong>
                     </div>
 
-                    <form method="POST" action="{{ route('storefront.checkout.place-order') }}" class="mt-20" data-place-order-form>
+                    <form id="checkout-place-order-form" method="POST" action="{{ route('storefront.checkout.place-order') }}" class="mt-20" data-place-order-form>
                         @csrf
                         <input type="hidden" name="address_id" value="{{ $selectedAddressId }}">
                         <input type="hidden" name="billing_same_as_delivery" value="{{ $billingSameForView ? 1 : 0 }}" data-billing-same-order-field>
                         <input type="hidden" name="billing_address_id" value="{{ $selectedBillingAddressIdForView }}">
                         <input type="hidden" name="shipping_method" value="{{ $selectedFulfillment ?: 'delivery' }}" data-selected-fulfillment-field>
                         <input type="hidden" name="payment_method" value="{{ $selectedPaymentMethod }}" data-selected-payment-field>
+                        <p class="checkout-upi-order-hint {{ $selectedUpiDetails ? '' : 'd-none' }} mb-3" data-upi-order-hint>Pay by UPI and enter the transaction ID before placing your order.</p>
                         <div class="mb-3">
                             <label for="customer_order_note" class="form-label">Order Note <span class="text-muted">(Optional)</span></label>
                             <textarea id="customer_order_note" name="customer_order_note" rows="3" maxlength="1000" class="form-control @error('customer_order_note') is-invalid @enderror" placeholder="Add delivery or order instructions">{{ old('customer_order_note') }}</textarea>
                             @error('customer_order_note')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
-                        <button type="submit" class="tf-btn animate-btn w-100" data-place-order-button {{ $canPlaceOrder ? '' : 'disabled' }}>
-                            Place Order
+                        <button
+                            type="submit"
+                            class="tf-btn animate-btn w-100"
+                            data-place-order-button {{ $canPlaceOrder ? '' : 'disabled' }}
+                            data-checkout-has-address="{{ $selectedAddress ? '1' : '0' }}"
+                            data-checkout-has-postal-code="{{ $selectedPostalCode !== null ? '1' : '0' }}"
+                            data-checkout-has-billing-address="{{ $selectedBillingAddress ? '1' : '0' }}"
+                            data-checkout-cart-has-items="{{ ! ($cartData['is_empty'] ?? true) ? '1' : '0' }}"
+                        >
+                            <span class="spinner-border spinner-border-sm d-none" aria-hidden="true" data-place-order-spinner></span>
+                            <span data-place-order-label>Place Order</span>
                         </button>
                     </form>
                 </aside>
             </div>
         </div>
     </section>
+
+    <div class="checkout-processing-overlay d-none" role="status" aria-live="polite" aria-busy="true" data-place-order-processing>
+        <div class="checkout-processing-card">
+            <span class="spinner-border mb-3" aria-hidden="true"></span>
+            <strong class="d-block fs-5 mb-2">Processing your order…</strong>
+            <span class="d-block">Please wait while we confirm your order.</span>
+            <span class="d-block mt-2 text-muted">Do not refresh or close this page.</span>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -643,8 +797,18 @@
             const grandTotal = document.querySelector('[data-checkout-grand-total]');
             const placeOrderButton = document.querySelector('[data-place-order-button]');
             const placeOrderForm = document.querySelector('[data-place-order-form]');
+            const placeOrderLabel = document.querySelector('[data-place-order-label]');
+            const placeOrderSpinner = document.querySelector('[data-place-order-spinner]');
+            const placeOrderProcessing = document.querySelector('[data-place-order-processing]');
             const paymentOptions = document.querySelector('[data-payment-options]');
             const selectedPaymentField = document.querySelector('[data-selected-payment-field]');
+            const upiPanel = document.querySelector('[data-upi-payment-panel]');
+            const upiReference = document.querySelector('[data-upi-reference]');
+            const upiOrderHint = document.querySelector('[data-upi-order-hint]');
+            const upiCopyButton = document.querySelector('[data-upi-copy]');
+            const upiCopyFeedback = document.querySelector('[data-upi-copy-feedback]');
+            let currentPaymentMethods = @json($paymentMethods);
+            let orderSubmissionProcessing = false;
 
             if (!form || !toggle || !panel || !orderField) {
                 return;
@@ -782,8 +946,8 @@
                 radio.checked = Boolean(method.selected);
                 radio.disabled = !method.available;
                 radio.addEventListener('change', () => {
-                    if (radio.checked && !radio.disabled && selectedPaymentField) {
-                        selectedPaymentField.value = radio.value;
+                    if (radio.checked && !radio.disabled) {
+                        selectPaymentMethod(method);
                     }
                 });
 
@@ -817,6 +981,109 @@
                 return label;
             };
 
+            const renderUpiDetails = (method) => {
+                if (!upiPanel || !upiReference) {
+                    return;
+                }
+
+                const details = method && method.id === 'merchant_upi' ? method.details : null;
+                upiPanel.classList.toggle('d-none', !details);
+                upiOrderHint?.classList.toggle('d-none', !details);
+                upiReference.required = Boolean(details);
+                upiReference.disabled = !details;
+                upiCopyFeedback?.classList.add('d-none');
+                if (upiCopyButton) {
+                    upiCopyButton.textContent = 'Copy';
+                }
+
+                if (!details) {
+                    return;
+                }
+
+                upiPanel.querySelector('[data-upi-amount]').textContent = details.amount || '';
+                upiPanel.querySelector('[data-upi-payee]').textContent = details.payee_name || '';
+                upiPanel.querySelector('[data-upi-id]').textContent = details.upi_id || '';
+                upiPanel.querySelector('[data-upi-qr]').src = details.qr_url || '';
+            };
+
+            const updatePlaceOrderState = (method) => {
+                if (!placeOrderButton) {
+                    return;
+                }
+
+                if (orderSubmissionProcessing) {
+                    placeOrderButton.disabled = true;
+                    return;
+                }
+
+                const fulfillment = selectedFulfillmentField?.value || '';
+                const fulfillmentReady = fulfillment !== ''
+                    && (fulfillment !== 'delivery'
+                        || (placeOrderButton.dataset.checkoutHasAddress === '1'
+                            && placeOrderButton.dataset.checkoutHasPostalCode === '1'));
+                const checkoutReady = fulfillmentReady
+                    && placeOrderButton.dataset.checkoutHasBillingAddress === '1'
+                    && placeOrderButton.dataset.checkoutCartHasItems === '1';
+
+                placeOrderButton.disabled = !checkoutReady || !method || !method.available;
+            };
+
+            const selectPaymentMethod = (method) => {
+                if (selectedPaymentField) {
+                    selectedPaymentField.value = method?.id || '';
+                }
+
+                document.querySelectorAll('[data-payment-option]').forEach((option) => {
+                    option.classList.toggle('is-selected', option.dataset.paymentOption === method?.id);
+                });
+                renderUpiDetails(method);
+                updatePlaceOrderState(method);
+            };
+
+            const fallbackCopy = (value) => {
+                const input = document.createElement('textarea');
+                input.value = value;
+                input.setAttribute('readonly', '');
+                input.style.position = 'fixed';
+                input.style.opacity = '0';
+                document.body.appendChild(input);
+                input.select();
+
+                try {
+                    return document.execCommand('copy');
+                } finally {
+                    input.remove();
+                }
+            };
+
+            upiCopyButton?.addEventListener('click', async () => {
+                const value = upiPanel?.querySelector('[data-upi-id]')?.textContent?.trim() || '';
+                if (!value) {
+                    return;
+                }
+
+                let copied = false;
+                try {
+                    if (navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(value);
+                        copied = true;
+                    } else {
+                        copied = fallbackCopy(value);
+                    }
+                } catch (error) {
+                    copied = fallbackCopy(value);
+                }
+
+                if (copied) {
+                    upiCopyButton.textContent = 'Copied';
+                    upiCopyFeedback?.classList.remove('d-none');
+                    window.setTimeout(() => {
+                        upiCopyButton.textContent = 'Copy';
+                        upiCopyFeedback?.classList.add('d-none');
+                    }, 1800);
+                }
+            });
+
             const renderPaymentMethods = (methods, selected, message) => {
                 if (!paymentOptions || !Array.isArray(methods)) {
                     return;
@@ -840,6 +1107,8 @@
                 if (selectedPaymentField) {
                     selectedPaymentField.value = selected || '';
                 }
+                currentPaymentMethods = methods;
+                selectPaymentMethod(methods.find((method) => method.id === selected));
             };
 
             const syncFulfillment = async (fulfillment) => {
@@ -890,7 +1159,7 @@
                     }
 
                     if (placeOrderButton) {
-                        placeOrderButton.disabled = !payload.can_place_order;
+                        placeOrderButton.disabled = orderSubmissionProcessing || !payload.can_place_order;
                     }
                 } catch (error) {
                     console.warn(error.message);
@@ -907,20 +1176,48 @@
 
             document.querySelectorAll('[data-payment-radio]').forEach((radio) => {
                 radio.addEventListener('change', () => {
-                    if (radio.checked && !radio.disabled && selectedPaymentField) {
-                        selectedPaymentField.value = radio.value;
+                    if (radio.checked && !radio.disabled) {
+                        selectPaymentMethod(currentPaymentMethods.find((method) => method.id === radio.value));
                     }
                 });
             });
 
             if (placeOrderForm && placeOrderButton) {
-                placeOrderForm.addEventListener('submit', () => {
+                const resetOrderSubmission = () => {
+                    orderSubmissionProcessing = false;
+                    placeOrderSpinner?.classList.add('d-none');
+                    placeOrderProcessing?.classList.add('d-none');
+                    if (placeOrderLabel) {
+                        placeOrderLabel.textContent = 'Place Order';
+                    }
+                    const selectedMethod = currentPaymentMethods.find((method) => method.id === selectedPaymentField?.value);
+                    updatePlaceOrderState(selectedMethod);
+                };
+
+                placeOrderForm.addEventListener('submit', (event) => {
+                    if (orderSubmissionProcessing) {
+                        event.preventDefault();
+                        return;
+                    }
+
                     if (placeOrderButton.disabled) {
                         return;
                     }
 
+                    orderSubmissionProcessing = true;
                     placeOrderButton.disabled = true;
-                    placeOrderButton.textContent = 'Placing Order...';
+                    placeOrderSpinner?.classList.remove('d-none');
+                    placeOrderProcessing?.classList.remove('d-none');
+                    if (placeOrderLabel) {
+                        placeOrderLabel.textContent = 'Processing...';
+                    }
+                });
+
+                placeOrderForm.addEventListener('invalid', resetOrderSubmission, true);
+                window.addEventListener('pageshow', (event) => {
+                    if (event.persisted) {
+                        resetOrderSubmission();
+                    }
                 });
             }
 

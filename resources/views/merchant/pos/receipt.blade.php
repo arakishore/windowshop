@@ -1,7 +1,7 @@
 {{-- Purpose: Printable POS receipt for completed merchant cash sales. --}}
 @extends('layouts.merchant')
 
-@section('title', 'POS Receipt | WindowShop')
+@section('title', 'POS Receipt | ' . $marketplaceName)
 
 @push('styles')
     <style>
