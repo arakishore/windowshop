@@ -5,12 +5,17 @@ namespace App\Http\Controllers\Merchant;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
 use App\Models\Shop;
+use App\Notifications\NotificationChannelName;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Notification\MerchantOperationalEmailRecipientResolver;
+use App\Services\Notification\NotificationEventCatalogue;
+use App\Services\Notification\NotificationPreferenceResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class MerchantNotificationSettingsController extends Controller
@@ -18,15 +23,28 @@ class MerchantNotificationSettingsController extends Controller
     public function __construct(
         private readonly MerchantShopContextService $shopContext,
         private readonly MerchantOperationalEmailRecipientResolver $recipients,
+        private readonly NotificationEventCatalogue $catalogue,
+        private readonly NotificationPreferenceResolver $preferences,
     ) {}
 
     public function edit(Request $request): View
     {
         $shop = $this->activeShop($request);
 
+        $customerOrderEvents = $this->customerOrderEvents();
+
         return view('merchant.notification-settings.edit', [
             'shop' => $shop,
             'recipients' => $this->recipients->resolve($shop),
+            'customerOrderEvents' => $customerOrderEvents,
+            'customerOrderDefaults' => $customerOrderEvents->mapWithKeys(fn ($event): array => [
+                $event->key => $this->preferences->defaultEnabled($event->key, NotificationChannelName::EMAIL),
+            ]),
+            'customerOrderPreferences' => $customerOrderEvents->mapWithKeys(function ($event) use ($shop): array {
+                $override = $this->preferences->shopOverride($shop->getKey(), $event->key, NotificationChannelName::EMAIL);
+
+                return [$event->key => $override === null ? 'default' : ($override ? 'on' : 'off')];
+            }),
         ]);
     }
 
@@ -76,9 +94,32 @@ class MerchantNotificationSettingsController extends Controller
             }
         }
 
+        $submittedPreferences = $request->validate([
+            'notification_preferences' => ['nullable', 'array'],
+            'notification_preferences.*' => ['required', Rule::in(['default', 'on', 'off'])],
+        ])['notification_preferences'] ?? [];
+        $events = $this->customerOrderEvents();
+        $unknown = collect(array_keys($submittedPreferences))->diff($events->keys());
+        if ($unknown->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'notification_preferences' => 'One or more notification preferences cannot be changed.',
+            ]);
+        }
+
         $this->recipients->save($shop, $groups);
 
-        return back()->with('success', 'Notification recipients updated successfully.');
+        foreach ($events as $event) {
+            if (! array_key_exists($event->key, $submittedPreferences)) {
+                continue;
+            }
+            match ($submittedPreferences[$event->key]) {
+                'default' => $this->preferences->clearForShop($shop->getKey(), $event->key, NotificationChannelName::EMAIL),
+                'on' => $this->preferences->setForShop($shop->getKey(), $event->key, NotificationChannelName::EMAIL, true),
+                'off' => $this->preferences->setForShop($shop->getKey(), $event->key, NotificationChannelName::EMAIL, false),
+            };
+        }
+
+        return back()->with('success', 'Notification settings updated successfully.');
     }
 
     private function activeShop(Request $request): Shop
@@ -89,5 +130,15 @@ class MerchantNotificationSettingsController extends Controller
         abort_unless($shop instanceof Shop, 403);
 
         return $shop;
+    }
+
+    /** @return Collection<string, \App\Notifications\NotificationEventDefinition> */
+    private function customerOrderEvents(): Collection
+    {
+        return $this->catalogue->all()->filter(fn ($event): bool => $event->audience === 'customer'
+            && $event->category === 'order_status'
+            && $event->preferenceScope === 'shop_merchant'
+            && $event->supports(NotificationChannelName::EMAIL)
+            && ! $event->mandatory(NotificationChannelName::EMAIL));
     }
 }

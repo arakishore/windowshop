@@ -117,18 +117,24 @@ class NotificationTemplateController extends Controller
     public function rules(): View
     {
         $events = $this->catalogue->all();
-        $globalEmailEnabled = $events->filter(fn ($event) => $event->preferenceScope === 'global' && $event->supports(NotificationChannelName::EMAIL))
-            ->mapWithKeys(fn ($event) => [$event->key => $this->preferences->enabled(new NotificationMessage($event->key, $event->audience, NotificationChannelName::EMAIL))]);
+        $emailDefaults = $events->filter(fn ($event) => $event->supports(NotificationChannelName::EMAIL))
+            ->mapWithKeys(fn ($event) => [$event->key => $this->preferences->defaultEnabled($event->key, NotificationChannelName::EMAIL)]);
 
-        return view('admin.notification-templates.rules', compact('events', 'globalEmailEnabled'));
+        return view('admin.notification-templates.rules', compact('events', 'emailDefaults'));
     }
 
     public function updateGlobalRule(Request $request): RedirectResponse
     {
         $data = $request->validate(['event_key' => ['required', 'string'], 'enabled' => ['required', 'boolean']]);
         $event = $this->catalogue->find($data['event_key']);
-        abort_unless($event?->preferenceScope === 'global' && $event->supports(NotificationChannelName::EMAIL), 404);
-        $this->preferences->setGlobal($event->key, NotificationChannelName::EMAIL, (bool) $data['enabled']);
+        abort_unless($event?->supports(NotificationChannelName::EMAIL) && ! $event->mandatory(NotificationChannelName::EMAIL), 404);
+        if ($event->preferenceScope === 'global') {
+            $this->preferences->setGlobal($event->key, NotificationChannelName::EMAIL, (bool) $data['enabled']);
+        } elseif ($event->preferenceScope === 'shop_merchant') {
+            $this->preferences->setDefault($event->key, NotificationChannelName::EMAIL, (bool) $data['enabled']);
+        } else {
+            abort(404);
+        }
 
         return back()->with('success', 'Global notification rule updated.');
     }

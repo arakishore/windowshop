@@ -161,10 +161,24 @@ class AdminNotificationManagementTest extends TestCase
         $admin = $this->admin();
         $this->actingAs($admin)->get(route('admin.notification-rules.index'))
             ->assertOk()->assertSee('Mandatory / locked')->assertSee('Merchant configurable')->assertSee('New order for admin')
+            ->assertSee('Default for Order processing')
             ->assertSee('notification-rules-table')->assertSee("jQuery('#notification-rules-table').DataTable", false)
             ->assertSee('datatables.min.js')->assertSee('responsive.min.js');
         $this->actingAs($admin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'order.new.admin', 'enabled' => 1])->assertSessionHas('success');
         $this->assertTrue(app(NotificationPreferenceResolver::class)->enabled(new NotificationMessage('order.new.admin', 'admin', 'email')));
+
+        $resolver = app(NotificationPreferenceResolver::class);
+        $this->assertFalse($resolver->defaultEnabled('order.processing.customer', 'email'));
+        $this->actingAs($admin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'order.processing.customer', 'enabled' => 1])->assertSessionHas('success');
+        $this->assertTrue($resolver->defaultEnabled('order.processing.customer', 'email'));
+        $this->actingAs($admin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'order.processing.customer', 'enabled' => 0])->assertSessionHas('success');
+        $this->assertFalse($resolver->defaultEnabled('order.processing.customer', 'email'));
+
+        $this->actingAs($admin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'order.cancelled.customer', 'enabled' => 0])->assertNotFound();
+        $this->actingAs($admin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'unknown.event', 'enabled' => 1])->assertNotFound();
+
+        $nonAdmin = User::query()->create(['name' => 'Merchant', 'email' => 'merchant-rule@example.test', 'password' => Hash::make('password'), 'status' => 'active']);
+        $this->actingAs($nonAdmin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'order.processing.customer', 'enabled' => 1])->assertForbidden();
     }
 
     private function template(string $event, string $channel): NotificationTemplate

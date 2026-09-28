@@ -50,6 +50,15 @@ class ShopSettingsService
             ->exists();
     }
 
+    public function delete(int $shopId, string $group, string $key): void
+    {
+        ShopSetting::query()
+            ->where('shop_id', $shopId)
+            ->where('group', $group)
+            ->where('setting_key', $key)
+            ->delete();
+    }
+
     /**
      * @return Collection<string, mixed>
      */

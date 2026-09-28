@@ -34,9 +34,7 @@ class NotificationPreferenceResolver
         $key = $this->key($message->key, $message->channel);
 
         if ($definition->preferenceScope === 'global') {
-            return $this->adminSettings->has('notifications', $key)
-                ? (bool) $this->adminSettings->get('notifications', $key)
-                : $definition->defaultEnabled($message->channel);
+            return $this->defaultEnabled($message->key, $message->channel);
         }
 
         if ($message->shopId !== null && $this->shopSettings->has($message->shopId, 'notifications', $key)) {
@@ -47,7 +45,7 @@ class NotificationPreferenceResolver
             return (bool) $this->merchantSettings->get($message->merchantId, 'notifications', $key);
         }
 
-        return $definition->defaultEnabled($message->channel);
+        return $this->defaultEnabled($message->key, $message->channel);
     }
 
     public function setForMerchant(int $merchantId, string $eventKey, string $channel, bool $enabled): void
@@ -62,10 +60,52 @@ class NotificationPreferenceResolver
         $this->shopSettings->set($shopId, 'notifications', $this->key($eventKey, $channel), $enabled);
     }
 
+    public function clearForShop(int $shopId, string $eventKey, string $channel): void
+    {
+        $this->assertConfigurable($eventKey, $channel, true, 'shop_merchant');
+        $this->shopSettings->delete($shopId, 'notifications', $this->key($eventKey, $channel));
+    }
+
+    public function shopOverride(int $shopId, string $eventKey, string $channel): ?bool
+    {
+        $this->assertConfigurable($eventKey, $channel, true, 'shop_merchant');
+        $key = $this->key($eventKey, $channel);
+
+        return $this->shopSettings->has($shopId, 'notifications', $key)
+            ? (bool) $this->shopSettings->get($shopId, 'notifications', $key)
+            : null;
+    }
+
     public function setGlobal(string $eventKey, string $channel, bool $enabled): void
     {
         $this->assertConfigurable($eventKey, $channel, $enabled, 'global');
         $this->adminSettings->set('notifications', $this->key($eventKey, $channel), $enabled);
+    }
+
+    public function setDefault(string $eventKey, string $channel, bool $enabled): void
+    {
+        $this->assertConfigurable($eventKey, $channel, $enabled, 'shop_merchant');
+        if ($this->catalogue->find($eventKey)?->mandatory($channel)) {
+            throw new InvalidArgumentException('Mandatory notification defaults cannot be changed.');
+        }
+        $this->adminSettings->set('notifications', $this->key($eventKey, $channel), $enabled);
+    }
+
+    public function defaultEnabled(string $eventKey, string $channel): bool
+    {
+        NotificationChannelName::assertSupported($channel);
+        $definition = $this->catalogue->find($eventKey);
+        if ($definition === null || ! $definition->supports($channel)) {
+            return false;
+        }
+        if ($definition->mandatory($channel)) {
+            return true;
+        }
+        $key = $this->key($eventKey, $channel);
+
+        return $this->adminSettings->has('notifications', $key)
+            ? (bool) $this->adminSettings->get('notifications', $key)
+            : $definition->defaultEnabled($channel);
     }
 
     private function assertConfigurable(string $eventKey, string $channel, bool $enabled, string $scope): void

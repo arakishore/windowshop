@@ -11,9 +11,11 @@ use App\Models\ProductCategory;
 use App\Models\Shop;
 use App\Models\User;
 use App\Notifications\Channels\EmailChannel;
+use App\Notifications\NotificationChannelName;
 use App\Notifications\NotificationMessage;
 use App\Services\Notification\EmailConfigurationService;
 use App\Services\Notification\MerchantOperationalEmailRecipientResolver;
+use App\Services\Notification\NotificationPreferenceResolver;
 use App\Services\Notification\OrderEmailPresenter;
 use Database\Seeders\NotificationTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -128,6 +130,123 @@ class MerchantNotificationSettingsTest extends TestCase
 
         $this->assertSame([], app(MerchantOperationalEmailRecipientResolver::class)->resolve($shopA)['additional_to']);
         $this->assertSame(['b-team@example.test'], app(MerchantOperationalEmailRecipientResolver::class)->resolve($shopB)['additional_to']);
+    }
+
+    public function test_customer_order_preferences_render_catalogue_defaults_without_creating_overrides(): void
+    {
+        [$merchant, $shop] = $this->merchantShop('Preferences', 'preferences@example.test');
+        $this->merchantRole($merchant->user);
+
+        $this->actingAs($merchant->user)->withSession(['active_shop_id' => $shop->getKey()])
+            ->get(route('merchant.notification-settings.edit'))
+            ->assertOk()
+            ->assertSee('Customer Order Notifications')
+            ->assertSee('Order confirmed')
+            ->assertSee('Order processing')
+            ->assertSee('notification_preferences[order.confirmed.customer]', false)
+            ->assertSee('notification_preferences[order.processing.customer]', false)
+            ->assertDontSee('notification_preferences[order.cancelled.customer]', false)
+            ->assertDontSee('notification_preferences[order.new.merchant]', false);
+
+        $this->assertSame(0, DB::table('shop_settings')
+            ->where('shop_id', $shop->getKey())
+            ->where('group', 'notifications')
+            ->where('setting_key', 'like', 'events.%')
+            ->count());
+
+        $html = $this->actingAs($merchant->user)->withSession(['active_shop_id' => $shop->getKey()])
+            ->get(route('merchant.notification-settings.edit'))->getContent();
+        $this->assertStringContainsString('Use WindowShop Default (ON)', $html);
+        $this->assertStringContainsString('Use WindowShop Default (OFF)', $html);
+        $this->assertMatchesRegularExpression('/name="notification_preferences\[order\.confirmed\.customer\]"[^>]*>.*?<option value="default" selected>/s', $html);
+    }
+
+    public function test_shop_preferences_override_defaults_and_affect_runtime_resolution(): void
+    {
+        [$merchant, $shopA] = $this->merchantShop('Preferences', 'preferences@example.test');
+        $shopB = $this->shop($merchant, 'Other Shop');
+        $this->merchantRole($merchant->user);
+        $session = ['active_shop_id' => $shopA->getKey()];
+
+        $this->actingAs($merchant->user)->withSession($session)
+            ->put(route('merchant.notification-settings.update'), [
+                'email' => ['additional_to' => '', 'cc' => '', 'bcc' => ''],
+                'notification_preferences' => [
+                    'order.confirmed.customer' => 'off',
+                    'order.processing.customer' => 'on',
+                ],
+            ])->assertSessionHas('success');
+
+        $resolver = app(NotificationPreferenceResolver::class);
+        $message = fn (string $key, Shop $shop): NotificationMessage => new NotificationMessage(
+            $key, 'customer', NotificationChannelName::EMAIL, 'snapshot@example.test',
+            shopId: $shop->getKey(), merchantId: $merchant->getKey(),
+        );
+        $this->assertFalse($resolver->enabled($message('order.confirmed.customer', $shopA)));
+        $this->assertTrue($resolver->enabled($message('order.processing.customer', $shopA)));
+        $this->assertTrue($resolver->enabled($message('order.confirmed.customer', $shopB)));
+        $this->assertFalse($resolver->enabled($message('order.processing.customer', $shopB)));
+        $this->assertDatabaseHas('shop_settings', [
+            'shop_id' => $shopA->getKey(), 'group' => 'notifications',
+            'setting_key' => 'events.order.confirmed.customer.email.enabled', 'setting_value' => '0',
+        ]);
+        $this->assertDatabaseHas('shop_settings', [
+            'shop_id' => $shopA->getKey(), 'group' => 'notifications',
+            'setting_key' => 'events.order.processing.customer.email.enabled', 'setting_value' => '1',
+        ]);
+        $this->assertDatabaseMissing('shop_settings', ['shop_id' => $shopB->getKey(), 'group' => 'notifications']);
+
+        $resolver->setDefault('order.confirmed.customer', 'email', false);
+        $resolver->setDefault('order.processing.customer', 'email', true);
+        $this->assertFalse($resolver->enabled($message('order.confirmed.customer', $shopA)));
+        $this->assertTrue($resolver->enabled($message('order.processing.customer', $shopA)));
+        $this->assertFalse($resolver->enabled($message('order.confirmed.customer', $shopB)));
+        $this->assertTrue($resolver->enabled($message('order.processing.customer', $shopB)));
+
+        $this->actingAs($merchant->user)->withSession($session)
+            ->get(route('merchant.notification-settings.edit'))
+            ->assertSee('<option value="on" selected>ON</option>', false)
+            ->assertSee('<option value="off" selected>OFF</option>', false);
+
+        $this->actingAs($merchant->user)->withSession($session)
+            ->put(route('merchant.notification-settings.update'), [
+                'email' => ['additional_to' => '', 'cc' => '', 'bcc' => ''],
+                'notification_preferences' => [
+                    'order.confirmed.customer' => 'default',
+                    'order.processing.customer' => 'default',
+                ],
+            ])->assertSessionHas('success');
+        $this->assertDatabaseMissing('shop_settings', [
+            'shop_id' => $shopA->getKey(), 'group' => 'notifications',
+            'setting_key' => 'events.order.confirmed.customer.email.enabled',
+        ]);
+        $this->assertDatabaseMissing('shop_settings', [
+            'shop_id' => $shopA->getKey(), 'group' => 'notifications',
+            'setting_key' => 'events.order.processing.customer.email.enabled',
+        ]);
+        $this->assertFalse($resolver->enabled($message('order.confirmed.customer', $shopA)));
+        $this->assertTrue($resolver->enabled($message('order.processing.customer', $shopA)));
+
+        $resolver->setDefault('order.confirmed.customer', 'email', true);
+        $resolver->setDefault('order.processing.customer', 'email', false);
+        $this->assertTrue($resolver->enabled($message('order.confirmed.customer', $shopA)));
+        $this->assertFalse($resolver->enabled($message('order.processing.customer', $shopA)));
+    }
+
+    public function test_arbitrary_mandatory_and_non_customer_preferences_are_rejected(): void
+    {
+        [$merchant, $shop] = $this->merchantShop('Preferences', 'preferences@example.test');
+        $this->merchantRole($merchant->user);
+
+        foreach (['order.cancelled.customer', 'order.new.merchant', 'made.up.event'] as $key) {
+            $this->actingAs($merchant->user)->withSession(['active_shop_id' => $shop->getKey()])
+                ->put(route('merchant.notification-settings.update'), [
+                    'email' => ['additional_to' => '', 'cc' => '', 'bcc' => ''],
+                    'notification_preferences' => [$key => 'off'],
+                ])->assertSessionHasErrors('notification_preferences');
+        }
+
+        $this->assertDatabaseMissing('shop_settings', ['shop_id' => $shop->getKey(), 'group' => 'notifications']);
     }
 
     public function test_operational_email_uses_primary_additional_to_cc_and_bcc_once(): void
