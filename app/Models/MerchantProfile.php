@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Traits\HasUuid;
 use App\Services\Merchant\MerchantSettingsInitializer;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -59,6 +60,13 @@ class MerchantProfile extends Model
     public function getRouteKeyName(): string
     {
         return 'uuid';
+    }
+
+    public function scopeStorefrontVisible(Builder $query): Builder
+    {
+        return $query
+            ->where('status', 'active')
+            ->where('verification_status', 'approved');
     }
 
     public function user(): BelongsTo

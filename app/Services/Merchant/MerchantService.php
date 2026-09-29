@@ -207,9 +207,7 @@ class MerchantService
      */
     public function create(array $data, ?int $actorId): MerchantProfile
     {
-        $merchantRoleId = $this->merchantRoleId();
-
-        return DB::transaction(function () use ($data, $actorId, $merchantRoleId): MerchantProfile {
+        return DB::transaction(function () use ($data, $actorId): MerchantProfile {
             $user = new User;
             $user->forceFill([
                 'name' => $data['name'],
@@ -220,28 +218,47 @@ class MerchantService
                 'registration_source' => UserRegistrationSource::ADMIN->value,
             ])->save();
 
-            $merchant = MerchantProfile::create([
-                ...$this->merchantAttributes($data),
-                ...$this->verificationAttributes($data, $actorId),
-                'user_id' => $user->getKey(),
-                'created_by' => $actorId,
-                'updated_by' => $actorId,
-            ]);
+            return $this->createMerchantProfileForUser($user, $data, $actorId);
+        });
+    }
 
-            DB::table('auth_user_roles')->updateOrInsert(
-                [
-                    'user_id' => $user->getKey(),
-                    'role_id' => $merchantRoleId,
-                ],
-                [
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ],
-            );
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function registerStorefront(array $data, ?User $existingUser = null): MerchantProfile
+    {
+        return DB::transaction(function () use ($data, $existingUser): MerchantProfile {
+            $user = $existingUser;
 
-            MerchantAccountCreated::dispatch($merchant->load('user'), "merchant.account_created:{$merchant->uuid}");
+            if (! $user instanceof User) {
+                $user = new User;
+                $user->forceFill([
+                    'name' => $data['name'],
+                    'email' => Str::lower($data['email']),
+                    'mobile' => $this->nullable($data['mobile'] ?? null),
+                    'password' => Hash::make($data['password']),
+                    'status' => 'active',
+                    'registration_source' => UserRegistrationSource::STOREFRONT->value,
+                ])->save();
+            }
 
-            return $merchant;
+            if (MerchantProfile::withTrashed()->where('user_id', $user->getKey())->exists()) {
+                throw ValidationException::withMessages([
+                    'email' => 'A merchant account already exists for this user.',
+                ]);
+            }
+
+            $merchantData = [
+                'business_name' => $data['business_name'],
+                'business_type' => $data['business_type'],
+                'contact_person_name' => $data['name'],
+                'contact_email' => Str::lower($data['email']),
+                'contact_mobile' => $this->nullable($data['mobile'] ?? null),
+                'verification_status' => MerchantVerificationStatus::PENDING->value,
+                'status' => MerchantStatus::ACTIVE->value,
+            ];
+
+            return $this->createMerchantProfileForUser($user, $merchantData, $user->getKey());
         });
     }
 
@@ -412,6 +429,35 @@ class MerchantService
         }
 
         return $attributes;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function createMerchantProfileForUser(User $user, array $data, ?int $actorId): MerchantProfile
+    {
+        $merchant = MerchantProfile::create([
+            ...$this->merchantAttributes($data),
+            ...$this->verificationAttributes($data, $actorId),
+            'user_id' => $user->getKey(),
+            'created_by' => $actorId,
+            'updated_by' => $actorId,
+        ]);
+
+        DB::table('auth_user_roles')->updateOrInsert(
+            [
+                'user_id' => $user->getKey(),
+                'role_id' => $this->merchantRoleId(),
+            ],
+            [
+                'updated_at' => now(),
+                'created_at' => now(),
+            ],
+        );
+
+        MerchantAccountCreated::dispatch($merchant->load('user'), "merchant.account_created:{$merchant->uuid}");
+
+        return $merchant;
     }
 
     /**

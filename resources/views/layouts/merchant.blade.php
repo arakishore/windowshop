@@ -26,6 +26,7 @@
             @endif
 
             @include('partials.flash-message')
+            @include('merchant.partials.account-status-warning')
 
             <!-- Content area -->
             <div class="content">

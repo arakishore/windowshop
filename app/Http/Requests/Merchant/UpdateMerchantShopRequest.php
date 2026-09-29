@@ -2,14 +2,18 @@
 
 namespace App\Http\Requests\Merchant;
 
+use App\Http\Requests\Merchant\Concerns\ResolvesMerchantShopPostalCode;
 use App\Models\Shop;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class UpdateMerchantShopRequest extends FormRequest
 {
+    use ResolvesMerchantShopPostalCode;
+
     public function authorize(): bool
     {
         return true;
@@ -25,6 +29,12 @@ class UpdateMerchantShopRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:150'],
+            'audience_ids' => ['nullable', 'array'],
+            'audience_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('shop_audiences', 'id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
             'short_description' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -63,6 +73,7 @@ class UpdateMerchantShopRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $this->validateMerchantShopPostalCode($validator);
             $countryId = $this->integer('country_id') ?: null;
             $stateId = $this->integer('state_id') ?: null;
             $cityId = $this->integer('city_id') ?: null;
@@ -93,6 +104,29 @@ class UpdateMerchantShopRequest extends FormRequest
             }
 
             $shop = $this->route('shop');
+            $currentAudienceIds = $shop instanceof Shop
+                ? $shop->audiences()->pluck('shop_audiences.id')->map(fn ($id) => (int) $id)->all()
+                : [];
+            $selectedAudienceIds = collect(Arr::wrap($this->input('audience_ids', [])))
+                ->map(fn ($id) => (int) $id)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            $newAudienceIds = array_values(array_diff($selectedAudienceIds, $currentAudienceIds));
+
+            if ($newAudienceIds !== []) {
+                $activeAudienceCount = DB::table('shop_audiences')
+                    ->whereIn('id', $newAudienceIds)
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')
+                    ->count();
+
+                if ($activeAudienceCount !== count($newAudienceIds)) {
+                    $validator->errors()->add('audience_ids', 'Newly selected shop audiences must be active.');
+                }
+            }
+
             $currentStatus = $shop instanceof Shop ? (string) $shop->status : null;
             $requestedStatus = $this->input('status');
 
@@ -123,6 +157,8 @@ class UpdateMerchantShopRequest extends FormRequest
             'name' => $this->normalizeString('name'),
             'status' => $this->normalizeString('status'),
         ]);
+
+        $this->resolveMerchantShopPostalCode();
     }
 
     private function normalizeLower(string $key): ?string

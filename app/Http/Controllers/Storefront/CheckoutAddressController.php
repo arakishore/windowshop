@@ -118,8 +118,6 @@ class CheckoutAddressController extends Controller
 
     public function postalCode(Request $request, string $postalCode): JsonResponse
     {
-        $this->customerOrAbort($request);
-
         return response()->json(
             $this->postalLookup->lookupDefaultPostalCode($postalCode, $this->cartPage->currentCart($request))
         );

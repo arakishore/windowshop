@@ -12,6 +12,7 @@ use App\Models\Shop;
 use App\Models\ShopAudience;
 use App\Services\Image\ImageVariantService;
 use App\Services\Merchant\MerchantService;
+use App\Services\Shop\ShopDescriptionGuidanceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -27,6 +28,7 @@ class MerchantShopController extends Controller
     public function __construct(
         private readonly MerchantService $merchantService,
         private readonly ImageVariantService $imageVariantService,
+        private readonly ShopDescriptionGuidanceService $descriptionGuidance,
     ) {
     }
 
@@ -278,20 +280,22 @@ class MerchantShopController extends Controller
 
         $countryId = (int) old('country_id', $shop?->country_id ?? $defaultLocation['country_id']);
         $stateId = (int) old('state_id', $shop?->state_id ?? $defaultLocation['state_id']);
+        $categories = ProductCategory::query()
+            ->where(function ($query) use ($shop): void {
+                $query->whereNull('parent_id')
+                    ->where('status', 'active');
+
+                if ($shop?->root_product_category_id) {
+                    $query->orWhere('id', $shop->root_product_category_id);
+                }
+            })
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
 
         return [
-            'categories' => ProductCategory::query()
-                ->where(function ($query) use ($shop): void {
-                    $query->whereNull('parent_id')
-                        ->where('status', 'active');
-
-                    if ($shop?->root_product_category_id) {
-                        $query->orWhere('id', $shop->root_product_category_id);
-                    }
-                })
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get(),
+            'categories' => $categories,
+            ...$this->descriptionGuidance->forShopTypes($categories),
             'audiences' => ShopAudience::query()
                 ->where(function ($query) use ($shop): void {
                     $query->where('status', 'active');

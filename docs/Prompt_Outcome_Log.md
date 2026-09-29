@@ -12,6 +12,224 @@ Use it as a running project memory so we can quickly see:
 - what tests or checks were run
 
 Add new entries at the top, newest first, with local time.
+
+## 2026-09-28 23:15 IST - Storefront Merchant Registration — Phase 1 Public Registration Foundation
+
+### Topic
+Implemented the first public storefront merchant-registration flow for new Users and authenticated existing Customers while preserving the frozen shared-identity, access, suspension, and publication rules.
+
+### Implementation Objective
+Provide a public `Sell on {marketplace}` registration entry point that creates or reuses the canonical User, creates one MerchantProfile, assigns the merchant role, initializes existing merchant defaults, and gives the pending merchant immediate panel access without exposing unapproved content publicly.
+
+### Existing Architecture Reused
+- `users`, `merchant_profiles`, `auth_roles`, and `auth_user_roles`; the shared `web` authentication session; `MerchantService`; MerchantProfile model initialization hooks; `MerchantAccountCreated`; and the existing notification listener/manager.
+- Existing `SystemSettingService` view composition supplies the marketplace name, and existing Merchant Panel/shop-context services remain the operational foundation.
+
+### Important Implementation Decisions
+- Added public `GET/POST /sell` and authenticated `/sell/success` routes with a focused storefront form and success page.
+- Refactored MerchantService account creation so admin creation keeps its existing behavior while storefront registration shares MerchantProfile creation, role assignment, defaults, transaction handling, and after-commit event dispatch.
+- New applicants receive a User with `registration_source = storefront`, an active MerchantProfile, and pending verification. Submitted account/verification status fields are ignored.
+- Authenticated existing Users are upgraded in place: their User ID, password, Customer profile/role, and unrelated data are preserved. Existing or soft-deleted MerchantProfiles cannot be duplicated.
+- Anonymous registration cannot attach merchant access to an existing email; it returns a sign-in-required validation message and creates no MerchantProfile.
+- Pending, rejected, inactive, and suspended merchants can authenticate. Suspended merchants can view status information, while merchant middleware blocks non-safe HTTP methods server-side.
+- Added a reusable Merchant Panel warning for pending, submitted, rejected, inactive, and suspended/non-public states, including escaped rejection reasons when present.
+
+### Visibility / Authentication Changes
+- Added `MerchantProfile::scopeStorefrontVisible()` requiring account `active` and verification `approved`.
+- Applied the centralized eligibility scope to storefront shop discovery/profile lookup, product lists/details/filters, wishlists, and customer product-history loading. Existing shop/product publication requirements still apply.
+- Updated merchant authentication and context resolution so inactive and suspended merchant account statuses are login-capable as frozen; verification status `suspended` retains its existing block because that legacy state was not included in the frozen login-status list.
+
+### Changed Areas
+- Registration: storefront controller, FormRequest, routes, registration/success views, footer entry point, and storefront registration tests.
+- Merchant domain/access: registration source enum, MerchantService, authentication/account/shop-context services, merchant role middleware, layout warning partial, and merchant auth tests.
+- Publication: MerchantProfile visibility scope, storefront product/shop/customer/wishlist queries, and storefront visibility regression test.
+
+### Tests / Verification
+- Registration, merchant auth, and storefront product visibility: 64 passed, 431 assertions.
+- Notification business-event wiring: 13 passed, 50 assertions.
+- Route inspection confirmed all three merchant-registration routes.
+- `php artisan view:clear` and `php artisan view:cache` passed.
+- The existing `StorefrontCustomerAuthPagesTest` was run: 3 tests passed and 1 unrelated pre-existing copy assertion failed because it expects `Phone Number`/`Confirm password:` while the existing customer registration template renders `Mobile Number`/`Confirm Password`. No customer-auth code or copy was changed for that failure.
+- Browser verification was attempted, but no in-app or Chrome browser was exposed to the browser-control environment. No live registration records were created.
+
+### Deferred / Known Remaining Gaps
+- Subscription plans, Merchant Staff, staff permissions/assignments, KYC/document uploads, detailed approval workflow redesign, and staff-specific POS remain deferred.
+- Suspension writes are blocked centrally by HTTP method; a later authorization phase should replace/augment this coarse gate with explicit capability policies and review any mutation incorrectly exposed through safe HTTP methods.
+- Verification status `suspended` remains a separate legacy access block pending an explicit business decision.
+- Desktop/mobile browser completion of new-user and existing-customer registration remains a manual verification item because browser tooling was unavailable.
+
+### Previous Decision Status
+Implements the 2026-09-28 Phase 0 recommendations and the subsequently frozen Merchant Access & Visibility and Shared Identity rules. It does not supersede those entries or introduce Staff/subscription decisions. Public visibility now enforces the authoritative rule: Merchant Active + Verification Approved + Shop Active + normal product publication requirements.
+
+## 2026-09-28 22:49 IST - Storefront Merchant Registration — Staff Membership & Email Identity Rules Frozen
+
+### Topic
+Documentation-only extension of the frozen Merchant Staff principles covering email identity, multi-merchant memberships, shop scope, direct staff creation, User reuse, notifications, removal, and suspension scope.
+
+### Decision Being Resolved
+How should staff identity and independently scoped merchant relationships behave when one User may work for multiple Merchants and access one or more Shops within each relationship?
+
+### Relevant Existing Architecture
+- `users` is the canonical authentication identity, email is already a unique login identifier, and `auth_user_roles` supports multiple global roles per User.
+- The prior investigation found no Merchant Staff membership model or shop-assignment mechanism. Current merchant context resolves only the User's owned MerchantProfile, so these rules describe required future behavior rather than existing capability.
+
+### Frozen Decisions
+- One email identifies one canonical WindowShop User with one credential set and zero or more Customer, Merchant Owner, or merchant-specific Staff contexts. Usernames will not be introduced for these contexts.
+- One User may be staff for multiple Merchants, but each membership belongs to exactly one Merchant and is independently scoped.
+- Each membership must support assignment to one or more Shops owned by that Merchant and must never authorize another Merchant's Shop.
+- Context selection must distinguish Customer and each merchant-specific Staff workspace without reauthentication; the selected Merchant/Shop authority must be revalidated server-side.
+- Merchants add staff directly. There is no accept/decline or pending employee-acceptance workflow.
+- An existing email reuses the canonical User and preserves all existing contexts and memberships. A new email may provision one User, but the Merchant must not know or control the employee's permanent password.
+- Creating staff access sends an informational account email, not an acceptance request. New-User communication must support a future secure credential-setup process.
+- Removing or disabling staff affects only the selected Merchant membership and preserves the User, Customer context, other Merchant memberships, and unrelated roles/contexts.
+- Merchant suspension blocks owner and staff operations only for that Merchant; Customer and other Merchant Staff contexts remain independently available. Enforcement remains server-side.
+
+### Affected Future Areas
+- Staff membership and shop-assignment domain modeling, identity lookup/reuse, direct staff creation, workspace discovery and switching, merchant-scoped authorization, membership removal, suspension enforcement, account communications, and staff-aware POS access.
+- Authentication and context services must resolve a specific authorized membership rather than infer staff authority from a global role or owned MerchantProfile.
+
+### Risks / Dependencies
+- Email-based User reuse requires secure identity matching and account-recovery/setup controls to prevent takeover or disclosure of existing accounts.
+- Merchant and Shop identifiers stored in session must be revalidated against the selected active membership on every request.
+- Membership removal or merchant suspension must invalidate that context's authority without affecting independent contexts or other memberships.
+- Shop assignment must enforce that every assigned Shop belongs to the membership's Merchant.
+
+### Items Intentionally Deferred
+Actual tables/schema, membership status values and lifecycle, staff role names, detailed permissions, direct-versus-role permissions, shop-assignment storage, selector UI, context persistence, new-User password setup, exact notification wording, and staff-specific POS permissions remain pending. No choices for these items are made here.
+
+### Previous Decision Status
+Extends, and does not replace, the 2026-09-28 Shared Identity, Profile Switching & Merchant Staff Principles. It confirms canonical User reuse and server-authorized context switching, freezes multi-Merchant membership and direct staff creation, and narrows the earlier unresolved staff-creation approach by explicitly excluding an acceptance workflow. The earlier visibility and merchant-suspension decisions remain authoritative.
+
+## 2026-09-28 22:36 IST - Storefront Merchant Registration — Shared Identity, Profile Switching & Merchant Staff Principles
+
+### Topic
+Documentation of frozen shared-identity and profile-context rules, plus an investigation of the existing Merchant Staff, role, permission, shop-context, and POS authorization architecture.
+
+### Question / Decision Resolved
+How should Customer, Merchant Owner, and Merchant Staff identities and contexts coexist, and what staff/membership capabilities already exist before detailed staff permissions are designed?
+
+### Relevant Existing Implementation
+- `users` is the canonical identity. `auth_user_roles` is a unique User/role pivot and can assign multiple global roles to one User; `auth_roles`, `auth_permissions`, and `auth_role_permissions` provide generic global role/permission storage.
+- Seeded roles are only `super_admin`, `admin`, `merchant`, and `customer`. No owner, manager, cashier, inventory, order-manager, employee, merchant-staff, or shop-staff role is defined.
+- `User` has one `merchantProfile` and one `customer`; `merchant_profiles.user_id` is unique. This supports one Customer and one owned MerchantProfile on the same User, but not staff membership.
+- Merchant authentication and middleware require the global `merchant` role and resolve the MerchantProfile directly by the authenticated User's `user_id`. `MerchantShopContextService` then selects only active shops owned by that MerchantProfile and stores `merchant_id`, `active_role_id`, and `active_shop_id` in session.
+- Storefront customer context already uses `active_role_id` to distinguish Customer from back-office roles. This is partial context infrastructure, not a complete profile selector/switching flow.
+- Merchant and POS routes use the same `auth`, `merchant.role`, and (for shop operations) `merchant.active_shop` middleware. POS has no separate employee identity or authorization mechanism.
+
+### Merchant Staff Investigation Findings
+- **Existing:** shared Users; multi-role assignment; global role/permission tables; merchant ownership through `merchant_profiles.user_id`; owned-shop selection; session keys for active role/shop; merchant/shop ownership scoping in middleware, services, controllers, and requests.
+- **Partial:** generic permissions can be seeded and attached to a global role (currently demonstrated for merchant cancellation-reason permissions), but no general merchant-route permission middleware, policy/gate layer, per-user permissions, or staff-aware enforcement was found.
+- **Missing:** no Merchant Staff/Shop Staff table, model, relationship, service, controller, request, route, UI, status/lifecycle, invitation flow, tests, or merchant/shop membership pivot. Therefore there is no current owner-vs-staff distinction, no staff-to-merchant/shop assignment, no multiple-shop staff membership, and no User membership in multiple merchants.
+- Current code cannot represent Customer + Merchant Staff or Customer + Merchant Owner + staff of another merchant without new membership/context modeling. Assigning the global `merchant` role alone is insufficient because access resolution still requires that User's own unique MerchantProfile.
+- POS has no cashier/employee/manager access model and currently executes as the merchant-profile owner context.
+- A suspended merchant cannot use current merchant routes because authentication/context resolution rejects inactive/suspended profiles. No staff bypass exists today because staff does not exist; future staff resolution could create a bypass unless it checks the parent merchant status on every request and mutation.
+
+### Frozen Decisions
+- Reuse one User and credentials across Customer, Merchant Owner, and Merchant Staff relationships; preserve existing roles/profiles when adding another context and reject duplicate merchant registration for an existing MerchantProfile.
+- Multi-role Users must select and switch authorized contexts without logout; switching is context selection, not impersonation, and requires server-side authorization.
+- Merchant Staff has its own User and membership/permission-based access but does not automatically receive a MerchantProfile.
+- Removing/disabling staff affects only that merchant/shop access, not the User or independent Customer context. Exact staff lifecycle/status storage remains pending.
+- Merchant suspension blocks owner and staff operational mutations for that merchant, but not authentication or independent contexts. Enforcement must be server-side.
+
+### Affected Future Areas
+- Registration identity matching and reuse, duplicate-merchant prevention, role/profile attachment, account recovery, and collision handling.
+- Context discovery, selection, switching, session state, redirects, navigation, and cross-context logout/session behavior.
+- New staff membership and shop-assignment domain modeling; merchant-scoped roles/permissions; invitations and staff lifecycle.
+- `MerchantAuthenticationService`, `EnsureMerchantRole`, `EnsureMerchantActiveShop`, `MerchantShopContextService`, merchant routes/controllers/requests/services, POS, policies/middleware, and tests.
+
+### Risks / Dependencies
+- Identity matching must avoid both duplicate Users and unsafe account linking/account takeover.
+- `active_role_id`, `merchant_id`, and `active_shop_id` are session values and must never be trusted without revalidating current User membership, role, merchant status, shop assignment, and permission on each request.
+- Global `auth_roles` alone cannot express merchant-scoped or shop-scoped staff authority; assigning the existing `merchant` role to staff would incorrectly imply owner resolution and broad access.
+- Current merchant profile updates/deletion also update or delete the underlying User, which conflicts with preserving independent Customer/staff contexts and will require later implementation review.
+- Current merchant login rejects inactive/suspended merchants, conflicting with the previously frozen login rule. Current publication queries also require the previously identified approval-gate review.
+- Suspension enforcement must cover every merchant mutation surface, including shops, products, inventory/pricing, promotions, orders, POS, settings, customers, banners, collections, catalogue requests, and other future write endpoints.
+
+### Previous Decision Status
+Builds on the 2026-09-28 Phase 0 investigation and Merchant Access & Visibility frozen rules. It confirms the shared User/role architecture and the separation of authentication from merchant operational authorization. It resolves the previously pending existing-customer-to-merchant direction in favor of User reuse while leaving identity-proofing mechanics, context UI/session persistence, and detailed staff role/permission/lifecycle design pending. It does not supersede the public-visibility or suspended-merchant rules; staff inherits the merchant suspension restriction.
+
+## 2026-09-28 22:28 IST - Storefront Merchant Registration — Merchant Access & Visibility Rules Frozen
+
+### Topic
+Documentation-only decision freeze for merchant login, pre-approval store preparation, suspension restrictions, and public storefront visibility.
+
+### Question / Decision Resolved
+Which merchant account and verification states permit login and merchant activity, and which mandatory conditions make merchant shops and products eligible for public visibility?
+
+### Relevant Existing Implementation
+- Phase 0 confirmed that merchants use the shared `users` identity and merchant role, with account status and verification status stored separately on `merchant_profiles`.
+- Existing authentication rejects some merchant statuses, and storefront publication checks do not consistently require verification status `approved`; implementation therefore does not yet fully match these frozen rules.
+- Merchant lifecycle and rejection-reason information already exists and can support future Merchant Panel status messaging.
+
+### Frozen Decisions
+- A merchant with valid credentials may log in when account status is `active`, `inactive`, or `suspended`, regardless of verification status (`pending`, `submitted`, `approved`, or `rejected`), provided the user/account exists.
+- Non-suspended merchants may prepare and manage their store before approval unless an independent existing authorization or business rule prevents a specific action.
+- `pending`, `submitted`, `rejected`, and `inactive` must not automatically be treated as suspension. Account status and verification status remain separate.
+- The Merchant Panel must prominently explain non-public states; rejected merchants should see the existing rejection reason where available. Exact wording/design remains pending.
+
+### Public Visibility Rule
+Public storefront eligibility requires: Merchant account `active` AND verification `approved` AND shop `active` AND all normal product visibility/publication requirements. Login or content creation alone does not make a shop or product public.
+
+### Suspended-Account Rule
+A suspended merchant may log in and view account-status information, but must not perform merchant operational mutations. Future implementation must enforce this server-side across applicable shop, product, inventory, pricing, promotion, order-processing, and operational-settings actions; UI hiding alone is insufficient. Suspended merchant content is not public.
+
+### Affected Future Areas / Files / Services / Tables
+- Authentication and authorization: merchant authentication service, merchant middleware/policies, merchant routes/controllers, and server-side mutation enforcement.
+- Publication: storefront shop/product queries and services that determine public visibility.
+- Merchant UI: panel layout/dashboard status warnings and rejection/suspension guidance.
+- Data and tests: `merchant_profiles` account/verification fields, shops/products, rejection metadata, merchant authentication/activity tests, and storefront visibility tests.
+
+### Risks / Dependencies
+- Current authentication and publication behavior may require coordinated changes so login remains available while suspended operations are blocked and all public queries require approval.
+- Every mutating merchant endpoint needs consistent server-side suspension enforcement; partial coverage would create an authorization gap.
+- Exact status-warning UI and wording remain implementation decisions. Independent restrictions on inactive or other non-suspended merchants must be identified without treating those states as suspension.
+
+### Previous Decision Status
+Builds on the 2026-09-28 Phase 0 architecture investigation and does not replace that entry. It confirms the shared identity and separate account/verification status architecture. It supersedes the earlier proposed Merchant Approval statement in `docs/17_Business_Rules.md` that new merchants cannot transact until approval, and supersedes any assumption that active merchant/shop status alone permits public visibility. The authoritative frozen rule is: Merchant Active + Verification Approved + Shop Active + normal product visibility requirements. No application behavior was changed in this documentation task.
+
+## 2026-09-28 20:26 IST - Storefront Merchant Registration — Phase 0 Architecture Investigation
+
+### Topic
+Investigation only: assess the existing merchant onboarding, approval, shop, authentication, notification, and storefront foundations before implementing public merchant registration.
+
+### Question Investigated
+What merchant lifecycle currently exists from account creation through admin review and shop access, and which existing components can be reused safely for storefront self-registration?
+
+### Relevant Existing Implementation Found
+- Merchants use the shared `users` identity plus an active `merchant` assignment in `auth_user_roles`/`auth_roles` and a one-to-one `merchant_profiles` record; shops are separate one-to-many `shops` records.
+- Admin merchant creation is implemented by `Admin\MerchantController`, `StoreMerchantRequest`, and `MerchantService::create()`. It transactionally creates the user/profile, assigns the merchant role, initializes merchant settings and availability statuses through model hooks, and dispatches `MerchantAccountCreated` after commit. It does not create an address or shop.
+- Merchant login/access uses the normal web guard with `MerchantAuthenticationService`, `EnsureMerchantRole`, and the `/merchant/*` routes. Customer and merchant roles can use the same user/authentication architecture.
+- Shop creation is a later, independent operation. Merchant-panel creation uses `MerchantShopService::createShop()`; admin shop persistence remains embedded separately in `Admin\MerchantShopController::saveShop()`.
+- Merchant lifecycle notifications already exist for account created, approved, rejected, suspended, and reactivated through `MerchantAccountCreated`, `MerchantLifecycleChanged`, `DispatchBusinessNotifications`, and the notification template/manager infrastructure.
+
+### Findings
+- No public merchant registration/application route, controller, request, service, view, invitation flow, or storefront "Sell on WindowShop"/merchant-login entry point currently exists. Public `/register` is customer-only.
+- Merchant account status (`active`, `inactive`, `suspended`) and verification status (`pending`, `submitted`, `approved`, `rejected`, `suspended`) are independent admin-editable fields; there are no dedicated transition actions or enforced approval state machine.
+- Approval is not currently an access gate: an active merchant with the merchant role may log in unless verification is `suspended`. Storefront shop/product visibility generally checks active merchant/shop status but does not consistently require verification `approved`.
+- Existing stored merchant data covers owner/contact details, business/legal name, business type, GST number, shop-license/FSSAI boolean flags, lifecycle metadata, and a separately managed business address. Shops support type/category, name, contacts, address/location, website, logo/banner, audiences, status, and generated unique slug.
+- No PAN field or merchant document upload/review model, table, service, or admin UI exists; GST/shop-license/FSSAI evidence is not stored as documents.
+- Existing tests cover merchant login/access, role and status rejection, merchant shop management, default initialization, and lifecycle notification wiring, but not public merchant registration or document review.
+
+### Decision / Recommendation
+- Reuse the shared `users` + roles + `merchant_profiles` authentication model; do not introduce a separate merchant guard or identity store.
+- Extract/adapt a shared merchant-account creation operation from `MerchantService::create()` so admin creation and future public registration share transaction, role assignment, defaults, and after-commit notification behavior while supplying different source/initial-state policies.
+- Reuse the existing lifecycle notification infrastructure and `MerchantShopService`; avoid duplicating merchant or shop creation logic. Consider consolidating the currently duplicated admin shop persistence before extending onboarding.
+- Pending decisions, not frozen by this investigation: whether pending/rejected applicants may access the merchant panel; whether the first shop is created during application or after approval; whether approval gates login, shop publication, or both; existing-customer-to-merchant upgrade behavior; required registration fields/documents; rejection resubmission rules; and the exact initial account/verification states.
+
+### Affected Files / Services / Tables
+- Routes/UI: `routes/web.php`, `routes/merchant.php`, `resources/views/admin/merchants/*`, `resources/views/merchant/auth/login.blade.php`, `resources/views/merchant/shops/*`, and storefront header/footer/mobile-menu views.
+- Core classes: `App\Models\User`, `MerchantProfile`, `MerchantAddress`, `Shop`; `App\Services\Merchant\MerchantService`, `MerchantAuthenticationService`, `MerchantShopService`, `MerchantShopContextService`; admin/merchant merchant and shop controllers/requests; merchant lifecycle events/listener and notification services.
+- Tables: `users`, `auth_roles`, `auth_user_roles`, `merchant_profiles`, `merchant_addresses`, `merchant_settings`, `product_availability_statuses`, `shops`, `shop_settings`, and notification template/delivery tables.
+- Tests reviewed: `MerchantAuthTest`, `MerchantSettingsFoundationTest`, `NotificationBusinessEventWiringTest`, and shop initialization/management suites.
+
+### Risks / Dependencies
+- Duplicated account creation could omit role assignment, default initialization, transaction boundaries, or notifications; duplicated shop logic could diverge further between admin and merchant flows.
+- Treating `approved` as an existing login/publication gate would be incorrect and could expose pending/rejected merchants or shops unless a consistent policy is deliberately implemented.
+- Multi-role users require an explicit identity/role activation policy. Document requirements would need new storage and review architecture if selected.
+
+### Previous Decision Status
+No earlier storefront merchant-registration architecture decision was found in this log. This entry records the Phase 0 findings and recommendations only; it confirms the existing shared-user/role architecture and does not change or supersede any prior decision.
+
 ## 2026-09-03
 Phase 3D — Coupon Promotion Runtime
 INVESTIGATION ONLY
@@ -4100,3 +4318,47 @@ Add a separate configurable Footer Logo: new global system setting marketplace.f
 - Neighbour suites passed: StorefrontMarketplaceLogoTest, AdminMarketplaceLogoSettingsTest, AdminSystemSettingManagementTest, StorefrontContactPageTest (22 tests, 116 assertions).
 - git diff --check clean.
 - Playwright browser verification NOT performed (browser instance locked by another session); needs manual check of Admin Settings Marketplace tab and storefront footer.
+## 2026-09-29 16:47 +05:30 - Merchant Shop Shared Postal Resolution and Audience Assignment
+
+Goal: Make Merchant Shop create/edit reuse the existing customer/checkout postal-code source of truth and expose the existing Admin-supported shop audiences without creating parallel implementations.
+
+Decisions and outcome:
+
+- Merchant Shop India PIN handling reuses `CheckoutPostalCodeLookupService` and the existing `storefront.checkout.postal-code.show` endpoint. The shared lookup response now also exposes resolved `loc_*` IDs and `postal_codes` latitude/longitude when available.
+- Merchant server-side requests call the same lookup service, validate India PINs against active `postal_codes`, and normalize country/state/city/coordinates from that result. Non-India submissions retain the existing manual international location behavior.
+- Audience values remain owned by `shop_audiences`; assignment continues through the existing `Shop::audiences()` many-to-many relationship and unique `shop_audience_map` pivot.
+- Merchant forms load active audiences (plus already-selected inactive values on edit), use the same validation policy as Admin, and sync selections inside the existing shop create/update transactions.
+- Storefront audience filtering already consumes the same relationship; no storefront changes or migration were required.
+
+Key files/services/tables: `CheckoutPostalCodeLookupService`, Merchant shop form requests/service/views, `postal_codes`, `loc_countries`, `loc_states`, `loc_cities`, `shop_audiences`, `shop_audience_map`.
+
+Verification: focused Merchant feature coverage verifies multiple-audience create, edit display and add/remove sync, invalid audience rejection, existing ownership enforcement, and PIN-derived India location/coordinates. Admin behavior was not changed.
+
+## 2026-09-29 17:10 +05:30 - Merchant Shop Suggested Description UX
+
+Goal: Give merchants optional predefined writing assistance for Shop Short Description and Description without changing persisted shop data automatically.
+
+Decisions and outcome:
+
+- Suggestions are centralized in `config/shop_description_guidance.php` and keyed by the stable slug of an active root `ProductCategory`.
+- `MerchantShopService::formData()` exposes only configured suggestions that match currently active root Shop Types, preventing child-category or inactive-category use.
+- Merchant Create/Edit share one compact Blade component. Selecting a Shop Type only shows or changes the available guidance; it never changes either description field.
+- Clicking `Use suggested description` fills the existing fields. If either field already contains text, explicit Bootbox confirmation is required before both are replaced.
+- Audience does not alter suggestions in V1. Submitted descriptions continue through the existing create/update flow without new columns, template IDs, migrations, AI, or external APIs.
+
+Verification: `MerchantAuthTest` passed with 32 tests and 144 assertions; Blade compilation and `git diff --check` passed. Browser verification was unavailable because this session exposed no browser surface.
+
+## 2026-09-29 18:21 +05:30 - Shared Admin and Merchant Shop Description Guidance
+
+Goal: Make the existing optional Shop Type description suggestions available on Admin Shop Create/Edit without introducing a second implementation.
+
+Decisions and outcome:
+
+- `ShopDescriptionGuidanceService` is now the shared resolver for configured suggestions and canonical root-category slug keys, including database slugs with an ID suffix such as `apparel-1`.
+- Admin and Merchant forms use the same `config/shop_description_guidance.php` source and the same Blade/JavaScript guidance component.
+- Only active root Shop Types expose configured suggestions. Selecting a type does not modify descriptions; applying a suggestion remains an explicit action and existing text still requires confirmation before replacement.
+- Shop Type and description persistence were not changed. No schema change or migration was required.
+
+Key files/services: `ShopDescriptionGuidanceService`, `MerchantShopService`, `Admin\MerchantShopController`, and the shared description-guidance Blade component.
+
+Verification: Admin rendered-DOM contract test passed with 6 assertions; `MerchantAuthTest` passed with 33 tests and 159 assertions; PHP lint, Blade compilation, and `git diff --check` passed. Live Admin interaction could not be exercised because the available browser session had Merchant access and correctly received HTTP 403 from Admin routes.

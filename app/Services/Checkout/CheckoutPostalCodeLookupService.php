@@ -21,7 +21,7 @@ class CheckoutPostalCodeLookupService
     }
 
     /**
-     * @return array{valid: bool, postal_code: string, city: ?string, state: ?string, shipping_enabled: bool, shop_availability: array<int, array<string, mixed>>, message?: string}
+     * @return array{valid: bool, postal_code: string, country_id: ?int, state_id: ?int, city_id: ?int, city: ?string, state: ?string, latitude: ?string, longitude: ?string, shipping_enabled: bool, shop_availability: array<int, array<string, mixed>>, message?: string}
      */
     public function lookupDefaultPostalCode(string $postalCode, ?Cart $cart = null): array
     {
@@ -31,8 +31,13 @@ class CheckoutPostalCodeLookupService
             return [
                 'valid' => false,
                 'postal_code' => trim($postalCode),
+                'country_id' => null,
+                'state_id' => null,
+                'city_id' => null,
                 'city' => null,
                 'state' => null,
+                'latitude' => null,
+                'longitude' => null,
                 'shipping_enabled' => false,
                 'shop_availability' => [],
                 'message' => 'Postal-code lookup is not available for the storefront default country yet.',
@@ -43,7 +48,7 @@ class CheckoutPostalCodeLookupService
     }
 
     /**
-     * @return array{valid: bool, postal_code: string, city: ?string, state: ?string, shipping_enabled: bool, shop_availability: array<int, array<string, mixed>>, message?: string}
+     * @return array{valid: bool, postal_code: string, country_id: ?int, state_id: ?int, city_id: ?int, city: ?string, state: ?string, latitude: ?string, longitude: ?string, shipping_enabled: bool, shop_availability: array<int, array<string, mixed>>, message?: string}
      */
     public function lookupIndiaPin(string $postalCode, ?Cart $cart = null): array
     {
@@ -66,12 +71,18 @@ class CheckoutPostalCodeLookupService
 
         $selected = $rows->first();
         $shippingEnabled = $rows->contains(fn (PostalCode $row): bool => (bool) $row->shipping_enabled);
+        $location = $this->resolveLocationNames($selected?->state, $selected?->district);
 
         return [
             'valid' => true,
             'postal_code' => $postalCode,
+            'country_id' => $location['country_id'],
+            'state_id' => $location['state_id'],
+            'city_id' => $location['city_id'],
             'city' => $selected?->district,
             'state' => $selected?->state,
+            'latitude' => $selected?->latitude === null ? null : (string) $selected->latitude,
+            'longitude' => $selected?->longitude === null ? null : (string) $selected->longitude,
             'shipping_enabled' => $shippingEnabled,
             'shop_availability' => $this->shopAvailability($postalCode, $cart),
         ];
@@ -83,32 +94,11 @@ class CheckoutPostalCodeLookupService
     public function resolveIndiaAddressLocation(string $postalCode): array
     {
         $lookup = $this->lookupIndiaPin($postalCode);
-        $country = $this->countries->defaultCountry();
-        $state = null;
-        $city = null;
-
-        if ($lookup['valid'] && $this->countries->isIndia($country) && $lookup['state']) {
-            $state = LocState::query()
-                ->where('country_id', $country->getKey())
-                ->where('name', $lookup['state'])
-                ->where('status', true)
-                ->whereNull('deleted_at')
-                ->first();
-        }
-
-        if ($state instanceof LocState && $lookup['city']) {
-            $city = LocCity::query()
-                ->where('country_id', $country->getKey())
-                ->where('state_id', $state->getKey())
-                ->where('name', $lookup['city'])
-                ->whereNull('deleted_at')
-                ->first();
-        }
 
         return [
-            'country_id' => $country?->getKey(),
-            'state_id' => $state?->getKey(),
-            'city_id' => $city?->getKey(),
+            'country_id' => $lookup['country_id'],
+            'state_id' => $lookup['state_id'],
+            'city_id' => $lookup['city_id'],
             'city_text' => $lookup['city'],
             'state_text' => $lookup['state'],
         ];
@@ -122,6 +112,17 @@ class CheckoutPostalCodeLookupService
     public function defaultCountryIsIndia(): bool
     {
         return $this->countries->isIndia($this->countries->defaultCountry());
+    }
+
+    public function countryIsIndia(?int $countryId): bool
+    {
+        if ($countryId === null) {
+            return false;
+        }
+
+        $country = LocCountry::query()->find($countryId);
+
+        return $country instanceof LocCountry && $this->countries->isIndia($country);
     }
 
     /**
@@ -168,18 +169,57 @@ class CheckoutPostalCodeLookupService
     }
 
     /**
-     * @return array{valid: false, postal_code: string, city: null, state: null, shipping_enabled: false, shop_availability: array<int, mixed>, message: string}
+     * @return array{valid: false, postal_code: string, country_id: null, state_id: null, city_id: null, city: null, state: null, latitude: null, longitude: null, shipping_enabled: false, shop_availability: array<int, mixed>, message: string}
      */
     private function invalid(string $postalCode): array
     {
         return [
             'valid' => false,
             'postal_code' => $postalCode,
+            'country_id' => null,
+            'state_id' => null,
+            'city_id' => null,
             'city' => null,
             'state' => null,
+            'latitude' => null,
+            'longitude' => null,
             'shipping_enabled' => false,
             'shop_availability' => [],
             'message' => 'Please enter a valid Indian PIN code.',
+        ];
+    }
+
+    /**
+     * @return array{country_id: ?int, state_id: ?int, city_id: ?int}
+     */
+    private function resolveLocationNames(?string $stateName, ?string $cityName): array
+    {
+        $country = $this->countries->defaultCountry();
+        $state = null;
+        $city = null;
+
+        if ($this->countries->isIndia($country) && $stateName) {
+            $state = LocState::query()
+                ->where('country_id', $country->getKey())
+                ->where('name', $stateName)
+                ->where('status', true)
+                ->whereNull('deleted_at')
+                ->first();
+        }
+
+        if ($state instanceof LocState && $cityName) {
+            $city = LocCity::query()
+                ->where('country_id', $country->getKey())
+                ->where('state_id', $state->getKey())
+                ->where('name', $cityName)
+                ->whereNull('deleted_at')
+                ->first();
+        }
+
+        return [
+            'country_id' => $country?->getKey(),
+            'state_id' => $state?->getKey(),
+            'city_id' => $city?->getKey(),
         ];
     }
 }

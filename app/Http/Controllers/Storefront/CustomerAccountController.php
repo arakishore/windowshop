@@ -365,11 +365,11 @@ class CustomerAccountController extends Controller
                     'storefrontCardVariant:id,product_id,mrp,selling_price,stock_quantity,allow_backorder,is_default,status,is_sellable',
                 ])
                 ->where('products.status', 'active')
-                ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active'))
+                ->whereHas('merchant', fn (Builder $query) => $query->storefrontVisible())
                 ->whereHas('shop', fn (Builder $query) => $query
                     ->where('status', 'active')
                     ->whereColumn('shops.merchant_id', 'products.merchant_id')
-                    ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active')))
+                    ->whereHas('merchant', fn (Builder $query) => $query->storefrontVisible()))
                 ->whereExists($defaultVariantId)])
             ->where('customer_id', $customer->getKey())
             ->latest()

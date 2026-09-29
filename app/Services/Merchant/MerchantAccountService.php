@@ -14,7 +14,6 @@ class MerchantAccountService
     public function merchantForUser(User $user): MerchantProfile
     {
         $merchant = $user->merchantProfile()
-            ->where('status', 'active')
             ->whereNull('deleted_at')
             ->first();
 
@@ -24,7 +23,7 @@ class MerchantAccountService
     }
 
     /**
-     * @param array{name: string, email: string, mobile: string} $data
+     * @param  array{name: string, email: string, mobile: string}  $data
      */
     public function updateProfile(User $user, MerchantProfile $merchant, array $data): void
     {
@@ -44,7 +43,7 @@ class MerchantAccountService
     }
 
     /**
-     * @param array{current_password: string, password: string} $data
+     * @param  array{current_password: string, password: string}  $data
      *
      * @throws ValidationException
      */
@@ -68,7 +67,7 @@ class MerchantAccountService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function updateDetails(User $user, MerchantProfile $merchant, array $data): void
     {
