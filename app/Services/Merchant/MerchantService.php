@@ -258,7 +258,7 @@ class MerchantService
                 'status' => MerchantStatus::ACTIVE->value,
             ];
 
-            return $this->createMerchantProfileForUser($user, $merchantData, $user->getKey());
+            return $this->createMerchantProfileForUser($user, $merchantData, $user->getKey(), true);
         });
     }
 
@@ -434,7 +434,7 @@ class MerchantService
     /**
      * @param  array<string, mixed>  $data
      */
-    private function createMerchantProfileForUser(User $user, array $data, ?int $actorId): MerchantProfile
+    private function createMerchantProfileForUser(User $user, array $data, ?int $actorId, bool $storefrontRegistration = false): MerchantProfile
     {
         $merchant = MerchantProfile::create([
             ...$this->merchantAttributes($data),
@@ -455,7 +455,11 @@ class MerchantService
             ],
         );
 
-        MerchantAccountCreated::dispatch($merchant->load('user'), "merchant.account_created:{$merchant->uuid}");
+        MerchantAccountCreated::dispatch(
+            $merchant->load('user'),
+            "merchant.account_created:{$merchant->uuid}",
+            $storefrontRegistration,
+        );
 
         return $merchant;
     }

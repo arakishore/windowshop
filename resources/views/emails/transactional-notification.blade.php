@@ -28,6 +28,11 @@
         @else
             <h1 style="font-size:24px;line-height:1.3;margin:0 0 18px">{{ $notificationSubject }}</h1>
             <div style="font-size:15px;line-height:1.65">{!! nl2br(e($displayBody)) !!}</div>
+            @if(! empty($notificationAction['label']) && ! empty($notificationAction['url']))
+                <div style="margin-top:24px">
+                    <a href="{{ $notificationAction['url'] }}" style="display:inline-block;padding:11px 18px;border-radius:6px;background:#212529;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none">{{ $notificationAction['label'] }}</a>
+                </div>
+            @endif
         @endif
     </div>
     @if($showFooter)

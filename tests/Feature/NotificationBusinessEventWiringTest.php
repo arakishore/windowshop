@@ -13,9 +13,15 @@ use App\Listeners\DispatchBusinessNotifications;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\User;
+use App\Notifications\Contracts\NotificationChannel;
+use App\Notifications\DeliveryResult;
+use App\Notifications\NotificationChannelRegistry;
+use App\Notifications\NotificationMessage;
 use App\Services\Merchant\MerchantService;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\Notification\AdditionalMerchantRecipientService;
+use App\Services\Notification\AdminNotificationRecipientResolver;
+use App\Services\Notification\EmailConfigurationService;
 use App\Services\Order\OrderStatusService;
 use App\Services\Promotion\Redemptions\CouponRedemptionService;
 use Illuminate\Database\Schema\Blueprint;
@@ -45,6 +51,7 @@ class NotificationBusinessEventWiringTest extends TestCase
             $table->string('mobile')->nullable();
             $table->string('password')->nullable();
             $table->string('status')->default('active');
+            $table->string('registration_source')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -212,6 +219,132 @@ class NotificationBusinessEventWiringTest extends TestCase
 
         $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'merchant.account_created', 'channel' => 'email', 'destination' => 'primary@example.test']);
         $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'merchant.account_created', 'destination' => 'operations@example.test']);
+    }
+
+    public function test_storefront_merchant_registration_notifies_each_active_admin_once(): void
+    {
+        $merchant = $this->merchant();
+        $merchant->user()->update(['registration_source' => 'storefront']);
+        $adminId = $this->user('Admin', 'admin@example.test', '9000000002');
+        $roleId = DB::table('auth_roles')->insertGetId(['slug' => 'admin', 'status' => 'active']);
+        DB::table('auth_user_roles')->insert(['user_id' => $adminId, 'role_id' => $roleId]);
+        $event = new MerchantAccountCreated($merchant, 'public-merchant-registration', true);
+
+        app(DispatchBusinessNotifications::class)->merchantAccountCreated($event);
+        app(DispatchBusinessNotifications::class)->merchantAccountCreated($event);
+
+        $this->assertDatabaseHas('notification_delivery_logs', [
+            'notification_key' => 'merchant.registered.admin',
+            'recipient_type' => 'admin',
+            'recipient_id' => $adminId,
+            'merchant_id' => $merchant->getKey(),
+            'related_type' => 'merchant',
+            'related_id' => $merchant->uuid,
+            'channel' => 'email',
+            'destination' => 'admin@example.test',
+        ]);
+        $this->assertSame(1, DB::table('notification_delivery_logs')->where('notification_key', 'merchant.registered.admin')->count());
+
+        $log = DB::table('notification_delivery_logs')->where('notification_key', 'merchant.registered.admin')->first();
+        $metadata = json_decode((string) $log->metadata, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('Review Merchant', data_get($metadata, 'action.label'));
+        $this->assertSame(route('admin.merchants.show', $merchant), data_get($metadata, 'action.url'));
+        $this->assertDatabaseHas('notification_delivery_logs', [
+            'notification_key' => 'merchant.account_created',
+            'destination' => 'primary@example.test',
+        ]);
+    }
+
+    public function test_admin_created_merchant_does_not_send_storefront_admin_notification(): void
+    {
+        $merchant = $this->merchant();
+        $adminId = $this->user('Admin', 'admin@example.test', '9000000002');
+        $roleId = DB::table('auth_roles')->insertGetId(['slug' => 'admin', 'status' => 'active']);
+        DB::table('auth_user_roles')->insert(['user_id' => $adminId, 'role_id' => $roleId]);
+
+        app(DispatchBusinessNotifications::class)->merchantAccountCreated(new MerchantAccountCreated($merchant, 'admin-created-merchant'));
+
+        $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'merchant.registered.admin']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'merchant.account_created']);
+    }
+
+    public function test_central_admin_email_overrides_role_account_email_for_storefront_registration(): void
+    {
+        $merchant = $this->merchant();
+        $adminId = $this->user('Admin', 'admin-login@example.test', '9000000002');
+        $roleId = DB::table('auth_roles')->insertGetId(['slug' => 'admin', 'status' => 'active']);
+        DB::table('auth_user_roles')->insert(['user_id' => $adminId, 'role_id' => $roleId]);
+        app(EmailConfigurationService::class)->save(['admin_notification_email' => 'Notifications@Example.test']);
+
+        $this->assertSame(
+            [['id' => null, 'destination' => 'notifications@example.test']],
+            app(AdminNotificationRecipientResolver::class)->forChannel('email'),
+        );
+
+        app(DispatchBusinessNotifications::class)->merchantAccountCreated(
+            new MerchantAccountCreated($merchant, 'central-admin-merchant-registration', true),
+        );
+
+        $this->assertDatabaseHas('notification_delivery_logs', [
+            'notification_key' => 'merchant.registered.admin',
+            'destination' => 'notifications@example.test',
+        ]);
+        $this->assertDatabaseMissing('notification_delivery_logs', [
+            'notification_key' => 'merchant.registered.admin',
+            'destination' => 'admin-login@example.test',
+        ]);
+    }
+
+    public function test_blank_central_admin_email_falls_back_to_distinct_valid_active_admin_accounts(): void
+    {
+        $adminId = $this->user('Admin', 'Admin@Example.test', '9000000002');
+        $superAdminId = $this->user('Super Admin', 'super@example.test', '9000000003');
+        $duplicateId = $this->user('Duplicate Admin', 'admin@example.test', '9000000004');
+        $invalidId = $this->user('Invalid Admin', 'not-an-email', '9000000005');
+        $adminRoleId = DB::table('auth_roles')->insertGetId(['slug' => 'admin', 'status' => 'active']);
+        $superRoleId = DB::table('auth_roles')->insertGetId(['slug' => 'super_admin', 'status' => 'active']);
+        foreach ([[$adminId, $adminRoleId], [$superAdminId, $superRoleId], [$duplicateId, $adminRoleId], [$invalidId, $adminRoleId]] as [$userId, $roleId]) {
+            DB::table('auth_user_roles')->insert(['user_id' => $userId, 'role_id' => $roleId]);
+        }
+
+        $this->assertSame(
+            ['admin@example.test', 'super@example.test'],
+            collect(app(AdminNotificationRecipientResolver::class)->forChannel('email'))->pluck('destination')->sort()->values()->all(),
+        );
+    }
+
+    public function test_storefront_merchant_notification_failure_is_logged_without_throwing(): void
+    {
+        $merchant = $this->merchant();
+        $adminId = $this->user('Admin', 'admin@example.test', '9000000002');
+        $roleId = DB::table('auth_roles')->insertGetId(['slug' => 'admin', 'status' => 'active']);
+        DB::table('auth_user_roles')->insert(['user_id' => $adminId, 'role_id' => $roleId]);
+        $this->app->instance(NotificationChannelRegistry::class, new NotificationChannelRegistry([
+            new class implements NotificationChannel
+            {
+                public function name(): string
+                {
+                    return 'email';
+                }
+
+                public function send(NotificationMessage $message): DeliveryResult
+                {
+                    return DeliveryResult::failed('Simulated transport failure');
+                }
+            },
+        ]));
+
+        app(DispatchBusinessNotifications::class)->merchantAccountCreated(
+            new MerchantAccountCreated($merchant, 'failed-public-merchant-notification', true),
+        );
+
+        $this->assertDatabaseHas('notification_delivery_logs', [
+            'notification_key' => 'merchant.registered.admin',
+            'destination' => 'admin@example.test',
+            'status' => DeliveryResult::FAILED,
+            'error_summary' => 'Simulated transport failure',
+        ]);
+        $this->assertTrue($merchant->fresh()->exists);
     }
 
     public function test_after_commit_domain_event_is_not_processed_when_transaction_rolls_back(): void

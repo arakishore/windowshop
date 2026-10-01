@@ -67,7 +67,7 @@ class StorefrontMerchantRegistrationTest extends TestCase
         ]);
         $this->assertGreaterThan(0, DB::table('merchant_settings')->where('merchant_id', $merchant->getKey())->count());
         $this->assertGreaterThan(0, DB::table('product_availability_statuses')->where('merchant_id', $merchant->getKey())->count());
-        Event::assertDispatched(MerchantAccountCreated::class, fn ($event): bool => $event->merchant->is($merchant));
+        Event::assertDispatched(MerchantAccountCreated::class, fn ($event): bool => $event->merchant->is($merchant) && $event->storefrontRegistration);
     }
 
     public function test_authenticated_customer_is_upgraded_without_changing_identity_or_password(): void
@@ -111,10 +111,13 @@ class StorefrontMerchantRegistrationTest extends TestCase
         $this->assertSame($originalPassword, $user->fresh()->password);
         $this->assertDatabaseHas('auth_user_roles', ['user_id' => $user->getKey(), 'role_id' => $this->roleId('customer')]);
         $this->assertDatabaseHas('auth_user_roles', ['user_id' => $user->getKey(), 'role_id' => $this->roleId('merchant')]);
+        Event::assertDispatchedTimes(MerchantAccountCreated::class, 1);
+        Event::assertDispatched(MerchantAccountCreated::class, fn ($event): bool => $event->storefrontRegistration);
     }
 
     public function test_anonymous_existing_email_cannot_upgrade_account(): void
     {
+        Event::fake([MerchantAccountCreated::class]);
         $user = User::query()->create([
             'name' => 'Protected User',
             'email' => 'seller@example.test',
@@ -135,6 +138,7 @@ class StorefrontMerchantRegistrationTest extends TestCase
             ->assertSessionHasErrors(['email' => 'An account already exists with this email. Sign in to continue merchant registration.']);
 
         $this->assertDatabaseCount('merchant_profiles', 0);
+        Event::assertNotDispatched(MerchantAccountCreated::class);
 
         $this->post(route('storefront.login.store'), [
             'email' => 'seller@example.test',

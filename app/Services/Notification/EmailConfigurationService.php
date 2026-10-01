@@ -40,6 +40,7 @@ class EmailConfigurationService
             'from_name' => (string) $this->settings->get(self::GROUP, 'from_name', ''),
             'from_email' => (string) $this->settings->get(self::GROUP, 'from_email', ''),
             'reply_to' => (string) $this->settings->get(self::GROUP, 'reply_to', ''),
+            'admin_notification_email' => (string) $this->settings->get(self::GROUP, 'admin_notification_email', ''),
             'password_configured' => $this->passwordConfigured(),
             'branding.logo_path' => (string) $this->settings->get(self::GROUP, 'branding.logo_path', ''),
             'branding.show_name' => (bool) $this->settings->get(self::GROUP, 'branding.show_name', true),
@@ -72,6 +73,7 @@ class EmailConfigurationService
             'from_name' => AdminSetting::TYPE_STRING,
             'from_email' => AdminSetting::TYPE_STRING,
             'reply_to' => AdminSetting::TYPE_STRING,
+            'admin_notification_email' => AdminSetting::TYPE_STRING,
         ];
 
         foreach ($types as $key => $type) {

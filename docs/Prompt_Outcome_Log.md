@@ -13,6 +13,63 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-01 - Central Admin Operational Notification Email
+
+Supersedes: the Admin recipient-resolution portion of `2026-10-01 - Admin Notification for Public Merchant Registration`.
+
+### Goal
+Separate the primary recipient for WindowShop administrative/operational email from Admin login-account email addresses while preserving backward compatibility.
+
+### Decision
+- `notifications.email.admin_notification_email` in the existing `admin_settings` table is the optional central primary `To` address for Admin-facing email events.
+- When the central address is blank, `AdminNotificationRecipientResolver` retains its active Admin/Super Admin account-email fallback. Invalid and duplicate fallback email addresses are excluded.
+- The setting affects every event already using `AdminNotificationRecipientResolver`, currently `merchant.registered.admin` and `order.new.admin`; customer and merchant recipient policies are unchanged.
+- Template-level CC/BCC remains the only CC/BCC mechanism and continues to deduplicate against the primary `To` address.
+- No default or placeholder is seeded. Existing installations continue using role-based recipients until an administrator configures the setting.
+
+### Implementation Outcome
+- Added the Admin Notification Email field to Admin > Email Notifications with nullable email validation.
+- Extended `EmailConfigurationService` persistence without adding a table or migration.
+- Updated the resolver to prefer the configured central email only for the email channel and retain the existing role-based lookup as fallback.
+
+### Verification
+- Email delivery/settings, Admin notification management, business-event wiring, notification catalogue/template, and storefront merchant-registration suites: 55 tests passed, 415 assertions.
+
+## 2026-10-01 - Admin Notification for Public Merchant Registration
+
+### Goal
+Notify active WindowShop Admin and Super Admin users by email when a merchant profile is successfully created through the public storefront merchant-registration flow, without changing existing merchant/customer notifications or registration behavior.
+
+### Important Decisions
+- Added the distinct mandatory email event `merchant.registered.admin`; the existing `merchant.account_created` event remains the merchant-facing acknowledgement.
+- `MerchantAccountCreated` now records whether creation originated from the storefront. Only that explicit origin triggers the Admin notification, so Admin-created merchants do not generate the public-registration alert.
+- Admin recipients continue to come from `AdminNotificationRecipientResolver`: active Users assigned an active `admin` or `super_admin` role. No email address is hardcoded.
+- Delivery remains after the merchant transaction commits and uses `NotificationManager`, the existing email channel, preferences, idempotent delivery claims, and delivery logging. A failed delivery is logged and does not remove or invalidate the merchant.
+- The editable seeded template includes merchant identity/status details and links its `Review Merchant` action to the existing `admin.merchants.show` route.
+- Added generic optional action-button rendering to the existing transactional email layout; template values and action attributes remain escaped by Blade.
+
+### Implementation Outcome
+- New and existing-customer storefront registrations send one Admin notification per resolved Admin recipient.
+- Validation failures, duplicate merchants, failed registration transactions, and Admin-created merchants do not send this Admin event.
+- Existing merchant registration acknowledgement behavior is unchanged.
+
+### Key Files
+- `app/Events/MerchantAccountCreated.php`
+- `app/Services/Merchant/MerchantService.php`
+- `app/Listeners/DispatchBusinessNotifications.php`
+- `config/notification_events.php`
+- `app/Services/Notification/NotificationTemplateDefaults.php`
+- `app/Notifications/Channels/EmailChannel.php`
+- `app/Mail/TransactionalNotificationMail.php`
+- `resources/views/emails/transactional-notification.blade.php`
+- notification and merchant-registration feature tests
+
+### Verification
+- Focused merchant-registration, business-event wiring, notification catalogue/template, and real email-delivery suites: 46 tests passed, 314 assertions.
+- Admin notification-management regression suite: 6 tests passed, 86 assertions.
+- `php artisan route:list`, PHP syntax checks, and `git diff --check` passed.
+- No migration was required. Existing installations must run `php artisan db:seed --class=NotificationTemplateSeeder` to insert the new editable templates.
+
 ## 2026-09-28 23:15 IST - Storefront Merchant Registration — Phase 1 Public Registration Foundation
 
 ### Topic
