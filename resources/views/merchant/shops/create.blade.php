@@ -27,7 +27,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('merchant.shops.store') }}" enctype="multipart/form-data">
+    <form method="POST" action="{{ route('merchant.shops.store') }}" enctype="multipart/form-data" data-shop-location-form data-postal-code-url-template="{{ route('storefront.checkout.postal-code.show', ['postalCode' => '__PIN__']) }}" data-india-country-id="{{ $defaultLocation['country_id'] }}">
         @csrf
 
         <div class="row g-3">
@@ -40,12 +40,27 @@
                             <select id="root_product_category_id" name="root_product_category_id" class="form-select @error('root_product_category_id') is-invalid @enderror" required>
                                 <option value="">Select shop type</option>
                                 @foreach($shopTypes as $shopType)
-                                    <option value="{{ $shopType->id }}" @selected((string) $selectedShopTypeId === (string) $shopType->id)>
+                                    <option value="{{ $shopType->id }}" data-description-suggestion-key="{{ $descriptionSuggestionKeys[$shopType->id] ?? '' }}" @selected((string) $selectedShopTypeId === (string) $shopType->id)>
                                         {{ $shopType->name }}
                                     </option>
                                 @endforeach
                             </select>
                             @error('root_product_category_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label d-block">Audience</label>
+                            <div class="form-text mb-2">Select who your shop mainly sells for.</div>
+                            <div class="d-flex flex-wrap gap-3">
+                                @foreach($audiences as $audience)
+                                    <div class="form-check">
+                                        <input id="audience_{{ $audience->id }}" name="audience_ids[]" type="checkbox" value="{{ $audience->id }}" class="form-check-input @error('audience_ids') is-invalid @enderror @error('audience_ids.*') is-invalid @enderror" @checked(in_array((int) $audience->id, $selectedAudienceIds, true))>
+                                        <label for="audience_{{ $audience->id }}" class="form-check-label">{{ $audience->name }}</label>
+                                    </div>
+                                @endforeach
+                            </div>
+                            @error('audience_ids')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                            @error('audience_ids.*')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                         </div>
 
                         <div class="mb-3">
@@ -65,6 +80,11 @@
                             <textarea id="description" name="description" rows="5" class="form-control @error('description') is-invalid @enderror">{{ old('description') }}</textarea>
                             @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
+
+                        @include('merchant.shops.partials.description-guidance', [
+                            'initialSuggestionKey' => $descriptionSuggestionKeys[(int) $selectedShopTypeId] ?? null,
+                            'initialSuggestionLabel' => $shopTypes->firstWhere('id', (int) $selectedShopTypeId)?->name,
+                        ])
                     </div>
                 </div>
             </div>
@@ -137,7 +157,8 @@
 
                             <div class="col-md-6">
                                 <label for="pincode" class="form-label">Pincode</label>
-                                <input id="pincode" name="pincode" type="text" value="{{ old('pincode') }}" class="form-control @error('pincode') is-invalid @enderror">
+                                <input id="pincode" name="pincode" type="text" value="{{ old('pincode') }}" class="form-control @error('pincode') is-invalid @enderror" data-shop-postal-code>
+                                <div class="form-text" data-shop-postal-feedback>For India, entering a valid PIN fills Country, State, City and coordinates.</div>
                                 @error('pincode')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
 
@@ -253,6 +274,7 @@
 @endsection
 
 @push('scripts')
+    @include('merchant.shops.partials.location-script')
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const setupImagePreview = function (inputId, previewId, placeholderId) {

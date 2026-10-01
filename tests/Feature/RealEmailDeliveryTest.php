@@ -93,6 +93,47 @@ class RealEmailDeliveryTest extends TestCase
         Mail::assertSent(TransactionalNotificationMail::class, fn (TransactionalNotificationMail $mail): bool => $mail->brandName === 'WindowShop');
     }
 
+    public function test_admin_merchant_registration_email_renders_business_details_and_review_action(): void
+    {
+        Mail::fake();
+        $this->configure();
+        $message = new NotificationMessage(
+            'merchant.registered.admin',
+            'admin',
+            'email',
+            'admin@example.test',
+            context: [
+                'business_name' => 'Public Seller Store',
+                'owner_name' => 'Public Seller',
+                'email' => 'seller@example.test',
+                'mobile' => '9876543210',
+                'registration_datetime' => '01 Oct 2026, 10:30 AM',
+                'verification_status' => 'pending',
+                'registration_source' => 'storefront',
+                'review_merchant_url' => 'https://windowshop.test/admin/merchants/example',
+            ],
+            metadata: ['action' => ['label' => 'Review Merchant', 'url' => 'https://windowshop.test/admin/merchants/example']],
+        );
+
+        $this->assertSame(DeliveryResult::SENT, app(EmailChannel::class)->send($message)->status);
+
+        Mail::assertSent(TransactionalNotificationMail::class, function (TransactionalNotificationMail $mail): bool {
+            $html = $mail->render();
+
+            return $mail->hasTo('admin@example.test')
+                && $mail->notificationSubject === 'New Merchant Registration - Public Seller Store'
+                && str_contains($html, 'Public Seller Store')
+                && str_contains($html, 'Public Seller')
+                && str_contains($html, 'seller@example.test')
+                && str_contains($html, '9876543210')
+                && str_contains($html, '01 Oct 2026, 10:30 AM')
+                && str_contains($html, 'pending')
+                && str_contains($html, 'storefront')
+                && str_contains($html, 'Review Merchant')
+                && str_contains($html, 'https://windowshop.test/admin/merchants/example');
+        });
+    }
+
     public function test_transport_exception_returns_failed_without_exposing_credentials(): void
     {
         $configuration = Mockery::mock(EmailConfigurationService::class);
@@ -155,15 +196,30 @@ class RealEmailDeliveryTest extends TestCase
         Mail::fake();
         $admin = $this->admin();
 
-        $this->actingAs($admin)->get(route('admin.email-settings.edit'))->assertOk()->assertDontSee('first-secret');
+        $this->actingAs($admin)->get(route('admin.email-settings.edit'))
+            ->assertOk()
+            ->assertDontSee('first-secret')
+            ->assertSee('Admin Notification Email')
+            ->assertSee('Primary email address for WindowShop administrative and operational notifications.');
         $this->actingAs($admin)->put(route('admin.email-settings.update'), ['enabled' => 1, 'smtp' => ['host' => '', 'port' => 70000, 'encryption' => 'bad']])->assertSessionHasErrors(['smtp.host', 'smtp.port', 'smtp.encryption']);
         $this->actingAs($admin)->put(route('admin.email-settings.update'), [
             'enabled' => 1,
             'smtp' => ['host' => 'smtp.example.test', 'port' => 587, 'encryption' => 'tls', 'username' => 'mailer', 'password' => 'admin-secret'],
             'from_name' => 'WindowShop Mail', 'from_email' => 'sender@example.test', 'reply_to' => 'reply@example.test',
+            'admin_notification_email' => 'notifications@example.test',
         ])->assertSessionHas('success');
         $this->assertSame('smtp.example.test', app(EmailConfigurationService::class)->values()['host']);
+        $this->assertSame('notifications@example.test', app(EmailConfigurationService::class)->values()['admin_notification_email']);
         $this->assertSame('admin-secret', app(EmailConfigurationService::class)->decryptedPassword());
+        $this->actingAs($admin)->get(route('admin.email-settings.edit'))
+            ->assertOk()
+            ->assertSee('value="notifications@example.test"', false);
+        $this->actingAs($admin)->put(route('admin.email-settings.update'), [
+            'enabled' => 0,
+            'smtp' => ['encryption' => 'tls'],
+            'admin_notification_email' => 'not-an-email',
+        ])->assertSessionHasErrors('admin_notification_email');
+        $this->assertSame('notifications@example.test', app(EmailConfigurationService::class)->values()['admin_notification_email']);
         $this->actingAs($admin)->post(route('admin.email-settings.test'), ['test_recipient' => 'invalid'])->assertSessionHasErrors('test_recipient');
         $this->actingAs($admin)->post(route('admin.email-settings.test'), ['test_recipient' => 'test@example.test'])->assertSessionHas('success');
         Mail::assertSent(TransactionalNotificationMail::class, fn (TransactionalNotificationMail $mail): bool => $mail->hasTo('test@example.test'));

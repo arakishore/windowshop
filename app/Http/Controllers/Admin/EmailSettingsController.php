@@ -41,6 +41,7 @@ class EmailSettingsController extends Controller
             'from_name' => $data['from_name'] ?? null,
             'from_email' => $data['from_email'] ?? null,
             'reply_to' => $data['reply_to'] ?? null,
+            'admin_notification_email' => $data['admin_notification_email'] ?? null,
         ];
 
         if ($request->hasAny(['branding', 'footer'])) {
@@ -116,6 +117,7 @@ class EmailSettingsController extends Controller
             'from_name' => [Rule::requiredIf($enabled), 'nullable', 'string', 'max:255'],
             'from_email' => [Rule::requiredIf($enabled), 'nullable', 'email:rfc', 'max:255'],
             'reply_to' => ['nullable', 'email:rfc', 'max:255'],
+            'admin_notification_email' => ['nullable', 'email:rfc', 'max:255'],
             'email_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg', 'max:2048'],
             'remove_email_logo' => ['nullable', 'boolean'],
             'branding.show_name' => ['nullable', 'boolean'],

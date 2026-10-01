@@ -5,6 +5,7 @@ namespace App\Enums;
 enum UserRegistrationSource: string
 {
     case WEB = 'web';
+    case STOREFRONT = 'storefront';
     case MOBILE_APP = 'mobile_app';
     case POS = 'pos';
     case MERCHANT = 'merchant';
@@ -16,6 +17,7 @@ enum UserRegistrationSource: string
     {
         return match ($this) {
             self::WEB => 'WindowShop Website',
+            self::STOREFRONT => 'Storefront Merchant Registration',
             self::MOBILE_APP => 'WindowShop Mobile App',
             self::POS => 'Merchant POS',
             self::MERCHANT => 'Merchant Panel',

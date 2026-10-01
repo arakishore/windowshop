@@ -4,8 +4,8 @@ namespace App\Services\Storefront;
 
 use App\Models\Product;
 use App\Models\ProductAvailabilityStatus;
-use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductCategory;
+use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductReview;
 use App\Models\ProductVariant;
 use App\Models\Shop;
@@ -15,9 +15,9 @@ use App\Services\System\SystemSettingService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\JoinClause;
-use Illuminate\Support\Str;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ProductListingService
 {
@@ -34,8 +34,7 @@ class ProductListingService
         private readonly StorefrontUrlService $urls,
         private readonly StorefrontProductPolicyPresenter $policyPresenter,
         private readonly ProductPromotionPresenter $promotionPresenter,
-    ) {
-    }
+    ) {}
 
     public function marketplaceProducts(int $perPage = self::PER_PAGE): LengthAwarePaginator
     {
@@ -46,7 +45,7 @@ class ProductListingService
     }
 
     /**
-     * @param array<int, int> $shopIds
+     * @param  array<int, int>  $shopIds
      * @return Collection<int, array<string, mixed>>
      */
     public function newestProductsForShopIds(array $shopIds, int $limit = 8): Collection
@@ -88,7 +87,7 @@ class ProductListingService
     }
 
     /**
-     * @param array<int, int> $productIds
+     * @param  array<int, int>  $productIds
      */
     public function shopProductsByIds(Shop $shop, array $productIds, array $filters = [], int $perPage = self::PER_PAGE): LengthAwarePaginator
     {
@@ -103,7 +102,7 @@ class ProductListingService
     }
 
     /**
-     * @param array<int, int> $productIds
+     * @param  array<int, int>  $productIds
      * @return array{products: Collection<int, array<string, mixed>>, total: int}
      */
     public function shopProductPreviewByIds(Shop $shop, array $productIds, int $limit = self::PER_PAGE): array
@@ -166,7 +165,7 @@ class ProductListingService
             ->select('id', 'merchant_id', 'name', 'slug', 'status')
             ->whereIn('id', $shopIds->all())
             ->where('status', 'active')
-            ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active'))
+            ->whereHas('merchant', fn (Builder $query) => $query->storefrontVisible())
             ->orderBy('name')
             ->get();
     }
@@ -237,8 +236,8 @@ class ProductListingService
     }
 
     /**
-     * @param array<int, int>|null $categoryIds
-     * @param array{attributes?: array<int, array<int, int>>, price_min?: float|null, price_max?: float|null, discount_min?: int|null, search?: string, shops?: array<int, int>, sort?: string} $filters
+     * @param  array<int, int>|null  $categoryIds
+     * @param  array{attributes?: array<int, array<int, int>>, price_min?: float|null, price_max?: float|null, discount_min?: int|null, search?: string, shops?: array<int, int>, sort?: string}  $filters
      */
     private function storefrontQuery(?array $categoryIds = null, array $filters = []): Builder
     {
@@ -307,11 +306,11 @@ class ProductListingService
             ->when(($filters['shops'] ?? []) !== [], fn (Builder $query) => $query->whereIn('products.shop_id', $filters['shops']))
             ->when(($filters['attributes'] ?? []) !== [], fn (Builder $query) => $this->applyAttributeFilters($query, $filters['attributes']))
             ->when($this->hasPriceFilters($filters), fn (Builder $query) => $this->applyPriceFilters($query, $filters))
-            ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active'))
+            ->whereHas('merchant', fn (Builder $query) => $query->storefrontVisible())
             ->whereHas('shop', fn (Builder $query) => $query
                 ->where('status', 'active')
                 ->whereColumn('shops.merchant_id', 'products.merchant_id')
-                ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active')))
+                ->whereHas('merchant', fn (Builder $query) => $query->storefrontVisible()))
             ->whereExists($defaultVariantId)
             ->when(($filters['sort'] ?? 'popularity') === 'popularity', fn (Builder $query) => $this->locationSorter->apply(
                 $query,
@@ -373,16 +372,16 @@ class ProductListingService
                     ]),
             ])
             ->where('products.status', 'active')
-            ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active'))
+            ->whereHas('merchant', fn (Builder $query) => $query->storefrontVisible())
             ->whereHas('shop', fn (Builder $query) => $query
                 ->where('status', 'active')
                 ->whereColumn('shops.merchant_id', 'products.merchant_id')
-                ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active')))
+                ->whereHas('merchant', fn (Builder $query) => $query->storefrontVisible()))
             ->whereExists($defaultVariantId);
     }
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      * @return array{attributes: array<int, array<int, int>>, categories: array<int, int>, price_min: float|null, price_max: float|null, discount_min: int|null, search: string, shops: array<int, int>, sort: string}
      */
     private function sanitizeListingFilters(array $filters): array
@@ -405,7 +404,7 @@ class ProductListingService
     }
 
     /**
-     * @param array<mixed> $values
+     * @param  array<mixed>  $values
      * @return array<int, int>
      */
     private function sanitizeIdList(array $values): array
@@ -435,7 +434,7 @@ class ProductListingService
     }
 
     /**
-     * @param array<mixed> $attributeFilters
+     * @param  array<mixed>  $attributeFilters
      * @return array<int, array<int, int>>
      */
     private function sanitizeAttributeFilters(array $attributeFilters): array
@@ -472,7 +471,7 @@ class ProductListingService
     }
 
     /**
-     * @param array<int, array<int, int>> $attributeFilters
+     * @param  array<int, array<int, int>>  $attributeFilters
      */
     private function applyAttributeFilters(Builder $query, array $attributeFilters): void
     {
@@ -492,7 +491,7 @@ class ProductListingService
     }
 
     /**
-     * @param array{price_min: float|null, price_max: float|null, discount_min: int|null} $filters
+     * @param  array{price_min: float|null, price_max: float|null, discount_min: int|null}  $filters
      */
     private function hasPriceFilters(array $filters): bool
     {
@@ -502,7 +501,7 @@ class ProductListingService
     }
 
     /**
-     * @param array{price_min: float|null, price_max: float|null, discount_min: int|null} $filters
+     * @param  array{price_min: float|null, price_max: float|null, discount_min: int|null}  $filters
      */
     private function applyPriceFilters(Builder $query, array $filters): void
     {

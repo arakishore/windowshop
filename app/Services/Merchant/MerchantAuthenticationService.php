@@ -4,6 +4,7 @@ namespace App\Services\Merchant;
 
 use App\Enums\MerchantStatus;
 use App\Models\MerchantProfile;
+use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ use Illuminate\Validation\ValidationException;
 class MerchantAuthenticationService
 {
     /**
-     * @param array{login: string, password: string} $credentials
+     * @param  array{login: string, password: string}  $credentials
      * @return array{user: User, merchant: MerchantProfile}
      *
      * @throws ValidationException
@@ -44,11 +45,10 @@ class MerchantAuthenticationService
             ]);
         }
 
-        $authenticated = $this->isActiveUserRecord($candidate)
+        $authenticated = $this->isUsableUserRecord($candidate)
             && Auth::attempt([
                 $field => $identifier,
                 'password' => $credentials['password'],
-                'status' => 'active',
             ], $remember);
 
         if (! $authenticated) {
@@ -96,14 +96,13 @@ class MerchantAuthenticationService
 
         return MerchantProfile::query()
             ->where('user_id', $user->getKey())
-            ->where('status', MerchantStatus::ACTIVE->value)
             ->whereNull('deleted_at')
             ->where('verification_status', '!=', 'suspended')
             ->first();
     }
 
     /**
-     * @return Collection<int, \App\Models\Shop>
+     * @return Collection<int, Shop>
      */
     public function activeShopsForMerchant(MerchantProfile $merchant): Collection
     {
@@ -209,11 +208,11 @@ class MerchantAuthenticationService
             ->first();
     }
 
-    private function isActiveUserRecord(?object $user): bool
+    private function isUsableUserRecord(?object $user): bool
     {
         return $user !== null
             && $user->deleted_at === null
-            && $user->status === 'active';
+            && $user->status !== 'deleted';
     }
 
     private function hasMerchantRole(int $userId): bool

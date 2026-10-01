@@ -5,7 +5,9 @@ namespace App\Services\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\ProductCategory;
 use App\Models\Shop;
+use App\Models\ShopAudience;
 use App\Services\Image\ImageVariantService;
+use App\Services\Shop\ShopDescriptionGuidanceService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +21,7 @@ class MerchantShopService
     public function __construct(
         private readonly MerchantService $merchantService,
         private readonly ImageVariantService $imageVariantService,
+        private readonly ShopDescriptionGuidanceService $descriptionGuidance,
     ) {
     }
 
@@ -47,14 +50,31 @@ class MerchantShopService
         $defaultLocation = $this->merchantService->defaultBusinessLocation();
         $countryId = (int) old('country_id', $shop?->country_id ?? $defaultLocation['country_id']);
         $stateId = (int) old('state_id', $shop?->state_id ?? $defaultLocation['state_id']);
+        $shopTypes = ProductCategory::query()
+            ->whereNull('parent_id')
+            ->where('status', 'active')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
 
         return [
-            'shopTypes' => ProductCategory::query()
-                ->whereNull('parent_id')
-                ->where('status', 'active')
+            'shopTypes' => $shopTypes,
+            ...$this->descriptionGuidance->forShopTypes($shopTypes),
+            'audiences' => ShopAudience::query()
+                ->where(function ($query) use ($shop): void {
+                    $query->where('status', 'active');
+
+                    if ($shop?->exists) {
+                        $query->orWhereIn('id', $shop->audiences()->select('shop_audiences.id'));
+                    }
+                })
+                ->whereNull('deleted_at')
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
+            'selectedAudienceIds' => collect(old('audience_ids', $shop?->audiences()->pluck('shop_audiences.id')->all() ?? []))
+                ->map(fn ($id) => (int) $id)
+                ->all(),
             'countries' => $this->merchantService->activeCountries(),
             'states' => $countryId ? $this->merchantService->activeStates($countryId) : collect(),
             'cities' => $countryId && $stateId ? $this->merchantService->citiesForState($countryId, $stateId) : collect(),
@@ -106,6 +126,8 @@ class MerchantShopService
             if ($paths !== []) {
                 $shop->forceFill($paths)->save();
             }
+
+            $shop->audiences()->sync($data['audience_ids'] ?? []);
 
             return $shop;
         });
@@ -170,6 +192,8 @@ class MerchantShopService
                 ])->save();
             }
 
+            $shop->audiences()->sync($data['audience_ids'] ?? []);
+
             return $shop;
         });
     }
@@ -230,4 +254,5 @@ class MerchantShopService
 
         return $value === '' ? null : $value;
     }
+
 }

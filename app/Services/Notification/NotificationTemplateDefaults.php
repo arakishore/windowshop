@@ -40,6 +40,11 @@ class NotificationTemplateDefaults
                 'email' => "Hello {{ merchant_name }},\n\nYour merchant account on {{ marketplace_name }} has been created successfully.\n\nWe will keep you informed about changes to your account status.",
                 'short' => '{{ marketplace_name }}: Your merchant account has been created successfully.',
             ],
+            'merchant.registered.admin' => [
+                'subject' => 'New Merchant Registration - {{ business_name }}',
+                'email' => "New Merchant Registration\n\nA new merchant has registered on {{ marketplace_name }} and is awaiting review.\n\nBusiness Name: {{ business_name }}\nOwner Name: {{ owner_name }}\nEmail: {{ email }}\nMobile: {{ mobile }}\nRegistration Date/Time: {{ registration_datetime }}\nVerification Status: {{ verification_status }}\nRegistration Source: {{ registration_source }}\n\nReview Merchant: {{ review_merchant_url }}",
+                'short' => 'New merchant registration: {{ business_name }} is awaiting review.',
+            ],
             'merchant.approved' => [
                 'subject' => 'Merchant account approved — {{ marketplace_name }}',
                 'email' => "Hello {{ merchant_name }},\n\nYour merchant account verification on {{ marketplace_name }} has been approved.",

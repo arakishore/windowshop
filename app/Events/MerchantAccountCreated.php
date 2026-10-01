@@ -10,5 +10,9 @@ final class MerchantAccountCreated implements ShouldDispatchAfterCommit
 {
     use Dispatchable;
 
-    public function __construct(public readonly MerchantProfile $merchant, public readonly string $occurrenceId) {}
+    public function __construct(
+        public readonly MerchantProfile $merchant,
+        public readonly string $occurrenceId,
+        public readonly bool $storefrontRegistration = false,
+    ) {}
 }

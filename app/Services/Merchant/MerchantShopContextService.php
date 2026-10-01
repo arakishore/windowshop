@@ -13,7 +13,6 @@ class MerchantShopContextService
     public function activeMerchantForUser(User $user): ?MerchantProfile
     {
         return $user->merchantProfile()
-            ->where('status', 'active')
             ->whereNull('deleted_at')
             ->where('verification_status', '!=', 'suspended')
             ->first();
@@ -44,7 +43,7 @@ class MerchantShopContextService
     }
 
     /**
-     * @param Collection<int, Shop> $shops
+     * @param  Collection<int, Shop>  $shops
      */
     public function resolveActiveShop(Collection $shops, mixed $sessionShopId): ?Shop
     {

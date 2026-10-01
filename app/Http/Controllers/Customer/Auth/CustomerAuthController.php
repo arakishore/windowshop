@@ -68,7 +68,7 @@ class CustomerAuthController extends Controller
                 ->with('error', 'Your cart is empty.');
         }
 
-        return redirect($this->redirectAfterAuth($request));
+        return redirect()->intended($this->redirectAfterAuth($request));
     }
 
     public function register(Request $request): RedirectResponse
