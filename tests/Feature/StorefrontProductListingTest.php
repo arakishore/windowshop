@@ -8,9 +8,9 @@ use App\Models\PostalCode;
 use App\Models\Product;
 use App\Models\ProductAttributeGroup;
 use App\Models\ProductAttributeGroupValue;
-use App\Models\ProductCategoryAttributeGroup;
-use App\Models\ProductCategory;
 use App\Models\ProductAvailabilityStatus;
+use App\Models\ProductCategory;
+use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductImage;
 use App\Models\ProductReturnPolicy;
 use App\Models\ProductVariant;
@@ -428,7 +428,7 @@ class StorefrontProductListingTest extends TestCase
         $this->assertStringContainsString('data-product-availability-display>In Stock', $content);
         $this->assertStringNotContainsString('data-stock-limit="5"', $content);
         $this->assertStringNotContainsString('max="5"', $content);
-        $this->assertStringContainsString("quantityValue() <= stock", $content);
+        $this->assertStringContainsString('quantityValue() <= stock', $content);
     }
 
     public function test_product_detail_backorder_with_zero_stock_initially_displays_backorder(): void
@@ -585,7 +585,6 @@ class StorefrontProductListingTest extends TestCase
             ->assertRedirect($this->categoryUrl($shirts));
     }
 
-
     public function test_product_detail_rejects_inactive_or_unavailable_products(): void
     {
         $fixture = $this->fixture();
@@ -680,7 +679,7 @@ class StorefrontProductListingTest extends TestCase
         ]);
         $fixture['category']->forceFill([
             'meta_title' => "Women's T-Shirts Online",
-            'meta_description' => "Deals & styles from nearby shops.",
+            'meta_description' => 'Deals & styles from nearby shops.',
         ])->save();
 
         $content = $this->get(route('storefront.category.child.show', [$fixture['root']->slug, $fixture['category']->slug]))
@@ -895,6 +894,24 @@ class StorefrontProductListingTest extends TestCase
             ->assertSee('Paged Location Far Product 12');
     }
 
+    public function test_unapproved_merchant_products_are_not_publicly_visible(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Pending Merchant Hidden Product');
+        $this->variant($product);
+        $fixture['merchant']->update(['verification_status' => 'pending']);
+
+        $this->get(route('storefront.products'))
+            ->assertOk()
+            ->assertDontSee('Pending Merchant Hidden Product');
+
+        $this->get(route('storefront.product.show', $product->slug))
+            ->assertNotFound();
+
+        $this->get(route('storefront.stores.show', $fixture['shop']->slug))
+            ->assertNotFound();
+    }
+
     /**
      * @return array{merchant: MerchantProfile, shop: Shop, root: ProductCategory, category: ProductCategory}
      */
@@ -954,8 +971,8 @@ class StorefrontProductListingTest extends TestCase
     }
 
     /**
-     * @param array{merchant: MerchantProfile, shop: Shop, root: ProductCategory, category: ProductCategory} $fixture
-     * @param array<string, mixed> $overrides
+     * @param  array{merchant: MerchantProfile, shop: Shop, root: ProductCategory, category: ProductCategory}  $fixture
+     * @param  array<string, mixed>  $overrides
      */
     private function product(array $fixture, string $name, string $status = 'active', array $overrides = []): Product
     {
@@ -1019,7 +1036,7 @@ class StorefrontProductListingTest extends TestCase
     }
 
     /**
-     * @param array<int, string> $values
+     * @param  array<int, string>  $values
      */
     private function attributeGroup(string $name, array $values): ProductAttributeGroup
     {

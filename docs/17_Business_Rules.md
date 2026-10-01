@@ -6,12 +6,118 @@ This is the canonical register for approved WindowShop business behavior. Each r
 
 ## Merchant Approval
 
-**Initial policy: Proposed**
+**Initial policy: Proposed; superseded on 2026-09-28 by Merchant Access, Verification and Storefront Visibility below.**
 
 - New merchants cannot transact until required verification and approval are complete.
 - Approval, rejection, suspension, and reactivation require an authorized actor and audit event.
 - Rejection and suspension require a safe internal reason.
 - Merchant staff access depends on both staff and merchant status.
+
+## Merchant Access, Verification and Storefront Visibility
+
+**Current policy: Approved on 2026-09-28**
+
+Merchant account status and verification status are separate concepts. Verification approval controls public storefront eligibility; it is not a prerequisite for merchant login or pre-publication store preparation.
+
+### Login and Store Preparation
+
+- A merchant may log in with valid credentials while the merchant account status is `active`, `inactive`, or `suspended`, and while verification status is `pending`, `submitted`, `approved`, or `rejected`, provided the user/account still exists.
+- A non-suspended merchant may immediately prepare and manage the business before approval, including shops, products, images, pricing, inventory, applicable shop settings, and promotions/offers where otherwise permitted.
+- `pending`, `submitted`, `rejected`, and `inactive` are not suspension states. Unless an independent authorization or business rule applies, they do not prevent merchant preparation or management activity.
+- Rejection does not imply suspension, and merchant account status remains independent from verification status.
+
+### Public Storefront Visibility
+
+A shop or product is eligible for public storefront visibility only when every applicable condition is satisfied:
+
+```text
+Merchant account status = Active
+AND Merchant verification status = Approved
+AND Shop status = Active
+AND normal product visibility/publication requirements pass
+= eligible for storefront visibility
+```
+
+Merchant login, shop creation, or product creation alone never makes content public. An inactive or suspended merchant, a merchant whose verification is pending, submitted, or rejected, an inactive shop, or a product that fails normal publication rules is not publicly visible.
+
+### Merchant Panel Status Warning
+
+- The Merchant Panel must prominently explain the actual status when merchant/shop/product content is not publicly visible, including `pending`, `submitted`, `rejected`, `inactive`, and `suspended` states.
+- Rejection messaging should use the existing rejection reason when available.
+- Exact warning wording and visual design remain implementation decisions and are not frozen here.
+
+### Suspended Merchant Restriction
+
+- A suspended merchant may log in and view the Merchant Panel and account-status information.
+- The panel must show a clear suspension message with appropriate contact-admin/support guidance.
+- A suspended merchant must not perform operational activity. Server-side authorization must block applicable mutations, including shop, product, inventory, pricing, promotion/offer, order-processing, and operational-settings actions.
+- Hiding or disabling UI controls is not sufficient enforcement.
+- Suspended merchant shops and products are not publicly visible.
+
+### Decision Matrix
+
+| Merchant Account | Verification | Login | Merchant Activity | Public Visibility |
+|---|---|---|---|---|
+| Active | Approved | Yes | Yes | Yes, subject to Active Shop and normal product rules |
+| Active | Pending | Yes | Yes | No |
+| Active | Submitted | Yes | Yes | No |
+| Active | Rejected | Yes | Yes | No |
+| Inactive | Any | Yes | Yes* | No |
+| Suspended | Any | Yes | No operational activity | No |
+
+\* Subject to independent existing authorization or business restrictions; `inactive` must not automatically be treated as `suspended`.
+
+Implementation must enforce suspension restrictions and storefront publication eligibility server-side. Authentication, middleware, publication queries, Merchant Panel warnings, and tests may require later changes; this documentation decision does not implement them.
+
+## Shared Identity, Profile Context and Merchant Staff Principles
+
+**Current policy: Approved on 2026-09-28**
+
+### Shared User Identity
+
+- `users` remains the canonical authentication identity for customers, merchant owners, and merchant staff. A new role or relationship must not create a duplicate User where the person can be safely matched to an existing identity.
+- Email remains the login identity for Customers, Merchant Owners, and Merchant Staff. WindowShop must not introduce separate usernames for these contexts.
+- One email maps to one canonical User, one set of credentials, and zero or more authorized application contexts.
+- One User may hold multiple authorized roles/relationships, including Customer + Merchant Owner or Customer + Merchant Staff, where supported by the domain relationship.
+- An existing Customer who registers as a Merchant must retain the Customer role/profile and credentials, receive the Merchant role/profile relationship on the same User, and must not receive a second User record.
+- A User who already has a Merchant account/profile must not receive a duplicate merchant registration.
+
+### Authentication and Profile Context
+
+- One authenticated account may expose multiple authorized contexts: Customer, Merchant Owner, and Merchant Staff.
+- A multi-role User must be able to select and switch among authorized contexts without logging out or authenticating as another User.
+- Every context selection or switch must be authorized server-side against the User's current roles and domain relationships.
+- The exact profile-selector UI and whether/how the current or last context is remembered in session are not yet frozen.
+
+### Merchant Owner and Merchant Staff
+
+- Merchant Owner and Merchant Staff are different concepts. The owner controls the merchant account with full merchant authority, subject to WindowShop/admin restrictions.
+- Merchant Staff uses the staff member's own User identity and a merchant/shop relationship with permission-based operational access.
+- Staff membership alone must not create a `MerchantProfile` for the staff User.
+- A staff User may independently retain a Customer context. Removing or disabling staff access must block only that merchant/shop relationship, not delete or disable the User or Customer access.
+- One User may hold separate Merchant Staff memberships for multiple Merchants. Each membership belongs to exactly one Merchant and must remain independently scoped for authorization, permissions, suspension, removal, shop assignment, and context switching.
+- Within one membership, staff must be assignable to one or more Shops owned by that membership's Merchant. A membership must never grant access to another Merchant's Shop.
+- Removing or disabling one membership must preserve the canonical User, Customer context, other staff memberships, and every unrelated authorized context.
+
+### Staff Creation and Existing Users
+
+- Merchants create or assign staff directly; staff access does not require an accept/decline or pending-acceptance workflow.
+- Staff creation must check the submitted email against canonical Users. If it exists, WindowShop reuses that User and preserves all existing valid profiles, memberships, roles, and contexts before adding the independently scoped membership.
+- If the email does not exist, WindowShop may provision one new canonical User. The Merchant must not know or control the employee's permanent password.
+- Creating staff access sends an informational account email stating that access was created for the Merchant. For a new User, that communication must support a future secure credential-setup process; exact setup mechanics and email wording remain pending.
+
+### Staff Workspace Context
+
+- Context selection must distinguish Customer, Merchant Owner, and each merchant-specific Staff membership. For example, one authenticated User may select Customer, Merchant A Staff, or Merchant B Staff without authenticating as another account.
+- The selected context determines the active Merchant and permitted Shop authority and must be revalidated server-side.
+- Exact selector UI and session/last-context persistence remain pending.
+- Detailed database design, membership statuses and lifecycle, staff role names, permission matrix, direct-versus-role permissions, shop-assignment storage, credential-setup mechanism, notification copy, and staff-specific POS permissions remain pending design decisions.
+
+### Merchant Suspension Inheritance
+
+- Merchant Staff must not bypass a merchant suspension. When a Merchant is suspended, operational access for the owner and all staff associated with that merchant must be blocked server-side.
+- Merchant suspension is scoped to that Merchant. Owner and staff Users may still authenticate and use independent authorized contexts, including Customer and staff memberships for other Merchants, while the suspended merchant context is restricted.
+- Suspension enforcement must be based on the selected merchant relationship/context as well as the User identity; UI hiding alone is insufficient.
 
 ## Shop And Category Rules
 

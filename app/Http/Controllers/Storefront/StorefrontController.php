@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers\Storefront;
 
-use App\Http\Controllers\Controller;
 use App\Enums\BannerPosition;
+use App\Http\Controllers\Controller;
 use App\Models\CmsPage;
 use App\Models\PostalCode;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Promotion;
 use App\Models\Shop;
-use App\Models\ShopPage;
 use App\Models\ShopAudience;
+use App\Models\ShopPage;
 use App\Models\WishlistItem;
 use App\Services\Banner\BannerService;
 use App\Services\Cart\CartPageService;
@@ -20,12 +20,12 @@ use App\Services\Delivery\ShopDeliveryServiceabilityService;
 use App\Services\Merchant\ShopPageContent;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\NavigationService;
-use App\Services\Storefront\ProductLocationSorter;
 use App\Services\Storefront\ProductListingService;
+use App\Services\Storefront\ProductLocationSorter;
 use App\Services\Storefront\ShopOfferProductService;
 use App\Services\Storefront\ShopPromotionPresenter;
-use App\Services\Storefront\StorefrontCustomerContext;
 use App\Services\Storefront\StorefrontCountryResolver;
+use App\Services\Storefront\StorefrontCustomerContext;
 use App\Services\Storefront\StorefrontUrlService;
 use App\Services\System\SystemSettingService;
 use Illuminate\Http\JsonResponse;
@@ -178,7 +178,7 @@ class StorefrontController extends Controller
                 'country:id,name',
             ])
             ->where('status', 'active')
-            ->whereHas('merchant', fn ($query) => $query->where('status', 'active'));
+            ->whereHas('merchant', fn ($query) => $query->storefrontVisible());
     }
 
     private function applyStoreLocationScope($query, string $district, string $state): void
@@ -593,11 +593,11 @@ class StorefrontController extends Controller
             ->with(['shop:id,merchant_id,name,status,pincode'])
             ->where('slug', $slug)
             ->where('status', 'active')
-            ->whereHas('merchant', fn ($query) => $query->where('status', 'active'))
+            ->whereHas('merchant', fn ($query) => $query->storefrontVisible())
             ->whereHas('shop', fn ($query) => $query
                 ->where('status', 'active')
                 ->whereColumn('shops.merchant_id', 'products.merchant_id')
-                ->whereHas('merchant', fn ($query) => $query->where('status', 'active')))
+                ->whereHas('merchant', fn ($query) => $query->storefrontVisible()))
             ->firstOrFail();
 
         $requestedPostalCode = (string) $validator->validated()['postal_code'];
@@ -800,7 +800,7 @@ class StorefrontController extends Controller
     }
 
     /**
-     * @param iterable<int, array<string, mixed>> $products
+     * @param  iterable<int, array<string, mixed>>  $products
      * @return array<int, int>
      */
     private function wishlistedProductIds(Request $request, iterable $products): array
@@ -984,7 +984,7 @@ class StorefrontController extends Controller
         return Shop::query()
             ->where('slug', $slug)
             ->where('status', 'active')
-            ->whereHas('merchant', fn ($query) => $query->where('status', 'active'))
+            ->whereHas('merchant', fn ($query) => $query->storefrontVisible())
             ->firstOrFail();
     }
 
@@ -1240,5 +1240,4 @@ class StorefrontController extends Controller
 
         return null;
     }
-
 }

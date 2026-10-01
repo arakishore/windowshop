@@ -40,7 +40,7 @@
                         <select id="root_product_category_id" name="root_product_category_id" class="form-select @error('root_product_category_id') is-invalid @enderror" required>
                             <option value="">Select shop type</option>
                             @foreach($categories as $category)
-                                <option value="{{ $category->id }}" @selected((int) old('root_product_category_id', $shop?->root_product_category_id) === (int) $category->id)>
+                                <option value="{{ $category->id }}" data-description-suggestion-key="{{ $descriptionSuggestionKeys[$category->id] ?? '' }}" @selected((int) old('root_product_category_id', $shop?->root_product_category_id) === (int) $category->id)>
                                     {{ $category->name }}{{ $category->status !== 'active' ? ' (Inactive)' : '' }}
                                 </option>
                             @endforeach
@@ -74,6 +74,13 @@
                         <label for="description" class="form-label">Description</label>
                         <textarea id="description" name="description" rows="4" class="form-control @error('description') is-invalid @enderror">{{ old('description', $shop?->description) }}</textarea>
                         @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="col-12">
+                        @include('merchant.shops.partials.description-guidance', [
+                            'initialSuggestionKey' => $descriptionSuggestionKeys[(int) old('root_product_category_id', $shop?->root_product_category_id)] ?? null,
+                            'initialSuggestionLabel' => $categories->firstWhere('id', (int) old('root_product_category_id', $shop?->root_product_category_id))?->name,
+                        ])
                     </div>
                 </div>
             </div>

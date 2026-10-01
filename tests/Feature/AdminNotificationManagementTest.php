@@ -126,6 +126,47 @@ class AdminNotificationManagementTest extends TestCase
         ])->assertSessionHasErrors('email_cc');
     }
 
+    public function test_admin_event_keeps_template_cc_bcc_and_deduplicates_primary_recipient(): void
+    {
+        Mail::fake();
+        $admin = $this->admin();
+        $template = $this->template('merchant.registered.admin', 'email');
+        $this->actingAs($admin)->put(route('admin.notification-templates.update', $template), [
+            'subject' => $template->subject,
+            'body' => $template->body,
+            'email_cc' => 'review@example.test, admin@example.test',
+            'email_bcc' => 'audit@example.test, review@example.test, admin@example.test',
+            'is_active' => 1,
+        ])->assertSessionHas('success');
+        $this->configureEmail();
+
+        $result = app(EmailChannel::class)->send(new NotificationMessage(
+            'merchant.registered.admin',
+            'admin',
+            'email',
+            'admin@example.test',
+            context: [
+                'business_name' => 'Business',
+                'owner_name' => 'Owner',
+                'email' => 'owner@example.test',
+                'mobile' => '9876543210',
+                'registration_datetime' => '01 Oct 2026, 10:30 AM',
+                'verification_status' => 'pending',
+                'registration_source' => 'storefront',
+                'review_merchant_url' => 'https://example.test/admin/merchants/example',
+            ],
+        ));
+
+        $this->assertSame(DeliveryResult::SENT, $result->status);
+        Mail::assertSent(TransactionalNotificationMail::class, function (TransactionalNotificationMail $mail): bool {
+            $envelope = $mail->envelope();
+
+            return $mail->hasTo('admin@example.test')
+                && collect($envelope->cc)->pluck('address')->all() === ['review@example.test']
+                && collect($envelope->bcc)->pluck('address')->all() === ['audit@example.test'];
+        });
+    }
+
     public function test_preview_uses_safe_real_layout_without_sending_or_logging(): void
     {
         Mail::fake();

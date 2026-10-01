@@ -18,8 +18,7 @@ class WishlistController extends Controller
 {
     public function __construct(
         private readonly StorefrontCustomerContext $customerContext,
-    ) {
-    }
+    ) {}
 
     public function store(Request $request, Product $product): JsonResponse|RedirectResponse
     {
@@ -85,11 +84,11 @@ class WishlistController extends Controller
         $exists = Product::query()
             ->whereKey($product->getKey())
             ->where('products.status', 'active')
-            ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active'))
+            ->whereHas('merchant', fn (Builder $query) => $query->storefrontVisible())
             ->whereHas('shop', fn (Builder $query) => $query
                 ->where('status', 'active')
                 ->whereColumn('shops.merchant_id', 'products.merchant_id')
-                ->whereHas('merchant', fn (Builder $query) => $query->where('status', 'active')))
+                ->whereHas('merchant', fn (Builder $query) => $query->storefrontVisible()))
             ->whereExists($defaultVariantId)
             ->exists();
 

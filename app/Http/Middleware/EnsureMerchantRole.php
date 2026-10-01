@@ -6,14 +6,14 @@ use App\Models\User;
 use App\Services\Merchant\MerchantAuthenticationService;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\View;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureMerchantRole
 {
     public function __construct(
         private readonly MerchantAuthenticationService $merchantAuthenticationService,
-    ) {
-    }
+    ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -28,6 +28,12 @@ class EnsureMerchantRole
         abort_unless($merchant !== null, 403);
 
         $request->session()->put('merchant_id', $merchant->getKey());
+
+        View::share('merchantAccessStatus', $merchant);
+
+        if ($merchant->status === 'suspended' && ! $request->isMethodSafe()) {
+            abort(403, 'Merchant operations are restricted while this account is suspended.');
+        }
 
         return $next($request);
     }

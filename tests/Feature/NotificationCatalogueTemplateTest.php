@@ -85,8 +85,9 @@ class NotificationCatalogueTemplateTest extends TestCase
     {
         $keys = app(NotificationEventCatalogue::class)->all()->keys()->all();
 
-        $this->assertCount(27, $keys);
+        $this->assertCount(28, $keys);
         $this->assertContains('customer.registered', $keys);
+        $this->assertContains('merchant.registered.admin', $keys);
         $this->assertContains('order.ready_for_dispatch.customer', $keys);
         $this->assertContains('order.message.customer', $keys);
         $this->assertNotContains('order.pending.customer', $keys);
@@ -101,6 +102,9 @@ class NotificationCatalogueTemplateTest extends TestCase
         $this->assertTrue($catalogue->find('order.cancelled.customer')->mandatory('email'));
         $this->assertSame('auto_after_delivered', $catalogue->find('order.completed.customer')->policy['suppress_when']);
         $this->assertSame('order_snapshot', $catalogue->find('order.placed.customer')->contactSource);
+        $this->assertSame('admin', $catalogue->find('merchant.registered.admin')->audience);
+        $this->assertSame('global', $catalogue->find('merchant.registered.admin')->preferenceScope);
+        $this->assertTrue($catalogue->find('merchant.registered.admin')->mandatory('email'));
     }
 
     public function test_merchant_lifecycle_and_operational_events_have_distinct_recipient_policies(): void
@@ -113,6 +117,7 @@ class NotificationCatalogueTemplateTest extends TestCase
 
         $this->assertSame(RecipientContactSource::MERCHANT_PRIMARY_PLUS_ADDITIONAL, $catalogue->find('order.new.merchant')->contactSource);
         $this->assertSame(RecipientContactSource::MERCHANT_PRIMARY_PLUS_ADDITIONAL, $catalogue->find('payment.upi_submitted.merchant')->contactSource);
+        $this->assertSame('admin', $catalogue->find('merchant.registered.admin')->contactSource);
     }
 
     public function test_order_message_is_catalogued_as_per_message_opt_in(): void

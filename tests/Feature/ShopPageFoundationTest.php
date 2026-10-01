@@ -60,6 +60,22 @@ class ShopPageFoundationTest extends TestCase
         $this->assertStandardPages($shop);
     }
 
+    public function test_admin_shop_create_uses_shared_description_guidance_contract(): void
+    {
+        [$admin] = $this->fixture('super_admin');
+        [, $merchant, $category] = $this->fixture('merchant');
+        $category->update(['name' => 'Apparel', 'slug' => 'apparel-'.$category->getKey()]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.merchants.shops.create', $merchant))
+            ->assertOk()
+            ->assertSee('Use suggested description')
+            ->assertSee('value="'.$category->getKey().'" data-description-suggestion-key="apparel"', false)
+            ->assertSee('data-description-suggestions', false)
+            ->assertSee('{"apparel":{"short_description"', false)
+            ->assertSee("option.getAttribute('data-description-suggestion-key')", false);
+    }
+
     public function test_initializer_is_idempotent_and_preserves_existing_content(): void
     {
         $shop = $this->shopFixture();

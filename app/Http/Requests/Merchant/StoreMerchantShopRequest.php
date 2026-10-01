@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Merchant;
 
+use App\Http\Requests\Merchant\Concerns\ResolvesMerchantShopPostalCode;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -9,6 +10,8 @@ use Illuminate\Validation\Validator;
 
 class StoreMerchantShopRequest extends FormRequest
 {
+    use ResolvesMerchantShopPostalCode;
+
     public function authorize(): bool
     {
         return true;
@@ -28,6 +31,14 @@ class StoreMerchantShopRequest extends FormRequest
                 'integer',
                 Rule::exists('product_categories', 'id')->where(fn ($query) => $query
                     ->whereNull('parent_id')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
+            'audience_ids' => ['nullable', 'array'],
+            'audience_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('shop_audiences', 'id')->where(fn ($query) => $query
                     ->where('status', 'active')
                     ->whereNull('deleted_at')),
             ],
@@ -68,6 +79,7 @@ class StoreMerchantShopRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $this->validateMerchantShopPostalCode($validator);
             $countryId = $this->integer('country_id') ?: null;
             $stateId = $this->integer('state_id') ?: null;
             $cityId = $this->integer('city_id') ?: null;
@@ -108,6 +120,8 @@ class StoreMerchantShopRequest extends FormRequest
             'name' => $this->normalizeString('name'),
             'status' => $this->normalizeString('status'),
         ]);
+
+        $this->resolveMerchantShopPostalCode();
     }
 
     private function normalizeLower(string $key): ?string

@@ -74,6 +74,7 @@
                                             up</a></li>
                                     <li><a href="{{ route('storefront.account') }}" class="cl-text-3 link">My Account</a></li>
                                     <li><a href="{{ route('storefront.account.wishlist') }}" class="cl-text-3 link">Wish List</a></li>
+                                    <li><a href="{{ route('storefront.merchant-register') }}" class="cl-text-3 link">Sell on {{ $marketplaceName }}</a></li>
                                 </ul>
                             </div>
                         </div>

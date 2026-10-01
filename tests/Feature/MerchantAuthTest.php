@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -68,7 +69,7 @@ class MerchantAuthTest extends TestCase
         $userId = $this->createMerchantUser(email: 'dashboard@example.test');
         $this->createShopForMerchantUser($userId, 'Vana Clothing', 'Nashik');
 
-        $this->actingAs(\App\Models\User::findOrFail($userId));
+        $this->actingAs(User::findOrFail($userId));
 
         $response = $this->get('/merchant/dashboard');
 
@@ -87,7 +88,7 @@ class MerchantAuthTest extends TestCase
         $secondShopId = $this->createShopForMerchantUser($userId, 'Urban Fits', 'Pune');
 
         $this
-            ->actingAs(\App\Models\User::findOrFail($userId))
+            ->actingAs(User::findOrFail($userId))
             ->withSession(['active_shop_id' => $firstShopId])
             ->post('/merchant/active-shop', [
                 'shop_id' => $secondShopId,
@@ -111,7 +112,7 @@ class MerchantAuthTest extends TestCase
         $this->createShopForMerchantUser($userId, 'Owner Studio', 'Nashik');
         $this->createShopForMerchantUser($otherUserId, 'Hidden Studio', 'Pune');
 
-        $response = $this->actingAs(\App\Models\User::findOrFail($userId))->get('/merchant/shops');
+        $response = $this->actingAs(User::findOrFail($userId))->get('/merchant/shops');
 
         $response->assertOk();
         $response->assertSee('Owner Studio');
@@ -122,15 +123,33 @@ class MerchantAuthTest extends TestCase
     public function test_merchant_can_open_add_shop_form(): void
     {
         $userId = $this->createMerchantUser(email: 'add-shop-form@example.test');
-        $this->rootProductCategoryId('Apparel');
+        $rootId = $this->rootProductCategoryId('Apparel');
+        DB::table('product_categories')->where('id', $rootId)->update(['slug' => 'apparel-'.$rootId]);
+        DB::table('product_categories')->insert([
+            'uuid' => (string) Str::uuid(),
+            'parent_id' => $rootId,
+            'name' => 'Child Guidance Test',
+            'slug' => 'child-guidance-test',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
-        $this->actingAs(\App\Models\User::findOrFail($userId))
+        $this->actingAs(User::findOrFail($userId))
             ->get('/merchant/shops/create')
             ->assertOk()
             ->assertSee('Add Shop')
             ->assertSee('Shop Type')
             ->assertSee('Status')
-            ->assertSee('Apparel');
+            ->assertSee('Apparel')
+            ->assertSee('Use suggested description')
+            ->assertSee('value="'.$rootId.'" data-description-suggestion-key="apparel"', false)
+            ->assertSee('data-description-suggestions', false)
+            ->assertSee('{"apparel":{"short_description"', false)
+            ->assertSee('data-use-description-suggestion disabled', false)
+            ->assertSee("option.getAttribute('data-description-suggestion-key')", false)
+            ->assertSee("shopType.addEventListener('change', refreshGuidance)", false)
+            ->assertDontSee('Child Guidance Test');
     }
 
     public function test_merchant_can_submit_shop_for_review(): void
@@ -163,11 +182,12 @@ class MerchantAuthTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->actingAs(\App\Models\User::findOrFail($userId))
+        $this->actingAs(User::findOrFail($userId))
             ->post('/merchant/shops', [
                 'root_product_category_id' => $categoryId,
                 'name' => 'Merchant Added Shop',
                 'short_description' => 'New branch',
+                'description' => 'Merchant-authored description that must be saved unchanged.',
                 'email' => ' NEW-SHOP@EXAMPLE.TEST ',
                 'mobile' => ' 9000000444 ',
                 'address_line_1' => 'College Road',
@@ -188,9 +208,185 @@ class MerchantAuthTest extends TestCase
             'slug' => 'merchant-added-shop',
             'email' => 'new-shop@example.test',
             'mobile' => '9000000444',
+            'short_description' => 'New branch',
+            'description' => 'Merchant-authored description that must be saved unchanged.',
             'status' => 'inactive',
             'created_by' => $userId,
         ]);
+    }
+
+    public function test_edit_shop_guidance_preserves_existing_descriptions_without_user_action(): void
+    {
+        $userId = $this->createMerchantUser(email: 'description-guidance-edit@example.test');
+        $shopId = $this->createShopForMerchantUser($userId, 'Described Shop', 'Nashik');
+        DB::table('shops')->where('id', $shopId)->update([
+            'short_description' => 'Existing merchant short description.',
+            'description' => 'Existing merchant long description.',
+        ]);
+
+        $this->actingAs(User::findOrFail($userId))
+            ->get('/merchant/shops/'.$this->shopUuid($shopId).'/edit')
+            ->assertOk()
+            ->assertSee('Existing merchant short description.')
+            ->assertSee('Existing merchant long description.')
+            ->assertSee('Use suggested description');
+
+        $this->assertDatabaseHas('shops', [
+            'id' => $shopId,
+            'short_description' => 'Existing merchant short description.',
+            'description' => 'Existing merchant long description.',
+        ]);
+    }
+
+    public function test_merchant_can_create_shop_with_multiple_audiences(): void
+    {
+        $userId = $this->createMerchantUser(email: 'shop-audiences-create@example.test');
+        $categoryId = $this->rootProductCategoryId('Apparel');
+        $womenId = $this->shopAudienceId('Women');
+        $unisexId = $this->shopAudienceId('Unisex');
+
+        $this->actingAs(User::findOrFail($userId))
+            ->post('/merchant/shops', [
+                'root_product_category_id' => $categoryId,
+                'name' => 'Audience Shop',
+                'address_line_1' => 'Main Road',
+                'audience_ids' => [$womenId, $unisexId],
+                'status' => 'active',
+            ])
+            ->assertRedirect()
+            ->assertSessionDoesntHaveErrors();
+
+        $shopId = (int) DB::table('shops')->where('name', 'Audience Shop')->value('id');
+        $this->assertEqualsCanonicalizing(
+            [$womenId, $unisexId],
+            DB::table('shop_audience_map')->where('shop_id', $shopId)->pluck('audience_id')->map(fn ($id) => (int) $id)->all(),
+        );
+    }
+
+    public function test_merchant_edit_displays_and_syncs_saved_audiences(): void
+    {
+        $userId = $this->createMerchantUser(email: 'shop-audiences-edit@example.test');
+        $shopId = $this->createShopForMerchantUser($userId, 'Audience Edit Shop', 'Nashik');
+        $shopUuid = $this->shopUuid($shopId);
+        $womenId = $this->shopAudienceId('Women');
+        $menId = $this->shopAudienceId('Men');
+        $kidsId = $this->shopAudienceId('Kids');
+        DB::table('shop_audience_map')->insert(['shop_id' => $shopId, 'audience_id' => $womenId, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs(User::findOrFail($userId))
+            ->get("/merchant/shops/{$shopUuid}/edit")
+            ->assertOk()
+            ->assertSee('Audience')
+            ->assertSee('value="'.$womenId.'"', false)
+            ->assertSee('checked', false);
+
+        $shop = DB::table('shops')->where('id', $shopId)->first();
+        $this->put("/merchant/shops/{$shopUuid}", [
+            'name' => 'Audience Edit Shop',
+            'address_line_1' => 'Main Road',
+            'country_id' => $shop->country_id,
+            'state_id' => $shop->state_id,
+            'city_id' => $shop->city_id,
+            'audience_ids' => [$menId, $kidsId],
+        ])->assertRedirect()->assertSessionDoesntHaveErrors();
+
+        $this->assertEqualsCanonicalizing(
+            [$menId, $kidsId],
+            DB::table('shop_audience_map')->where('shop_id', $shopId)->pluck('audience_id')->map(fn ($id) => (int) $id)->all(),
+        );
+    }
+
+    public function test_merchant_shop_rejects_invalid_audience_id(): void
+    {
+        $userId = $this->createMerchantUser(email: 'shop-audiences-invalid@example.test');
+
+        $this->actingAs(User::findOrFail($userId))
+            ->from('/merchant/shops/create')
+            ->post('/merchant/shops', [
+                'root_product_category_id' => $this->rootProductCategoryId('Apparel'),
+                'name' => 'Invalid Audience Shop',
+                'address_line_1' => 'Main Road',
+                'audience_ids' => [999999],
+                'status' => 'active',
+            ])
+            ->assertRedirect('/merchant/shops/create')
+            ->assertSessionHasErrors('audience_ids.0');
+    }
+
+    public function test_india_shop_pin_reuses_postal_master_location_and_coordinates(): void
+    {
+        $userId = $this->createMerchantUser(email: 'shop-postal@example.test');
+        $existingShopId = $this->createShopForMerchantUser($userId, 'Location Seed Shop', 'Nashik');
+        $location = DB::table('shops')->where('id', $existingShopId)->first();
+        DB::table('postal_codes')->insert([
+            'source_key' => sha1('422009-test'),
+            'office_name' => 'Nashik Test Office',
+            'postal_code' => '422009',
+            'shipping_enabled' => true,
+            'district' => 'Nashik',
+            'state' => 'Maharashtra',
+            'latitude' => '19.9975000',
+            'longitude' => '73.7898000',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs(User::findOrFail($userId))
+            ->post('/merchant/shops', [
+                'root_product_category_id' => $this->rootProductCategoryId('Apparel'),
+                'name' => 'PIN Resolved Shop',
+                'address_line_1' => 'College Road',
+                'country_id' => $location->country_id,
+                'pincode' => '422009',
+                'status' => 'active',
+            ])
+            ->assertRedirect()
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertDatabaseHas('shops', [
+            'name' => 'PIN Resolved Shop',
+            'country_id' => $location->country_id,
+            'state_id' => $location->state_id,
+            'city_id' => $location->city_id,
+            'pincode' => '422009',
+            'latitude' => '19.9975000',
+            'longitude' => '73.7898000',
+        ]);
+    }
+
+    public function test_merchant_can_use_shared_checkout_postal_code_lookup(): void
+    {
+        $userId = $this->createMerchantUser(email: 'shop-postal-lookup@example.test');
+        $existingShopId = $this->createShopForMerchantUser($userId, 'Lookup Seed Shop', 'Nashik');
+        $location = DB::table('shops')->where('id', $existingShopId)->first();
+
+        DB::table('postal_codes')->insert([
+            'source_key' => sha1('422009-merchant-lookup-test'),
+            'office_name' => 'Nashik Lookup Office',
+            'postal_code' => '422009',
+            'shipping_enabled' => true,
+            'district' => 'Nashik',
+            'state' => 'Maharashtra',
+            'latitude' => '19.9975000',
+            'longitude' => '73.7898000',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs(User::findOrFail($userId))
+            ->getJson(route('storefront.checkout.postal-code.show', '422009'))
+            ->assertOk()
+            ->assertJsonPath('valid', true)
+            ->assertJsonPath('postal_code', '422009')
+            ->assertJsonPath('country_id', $location->country_id)
+            ->assertJsonPath('state_id', $location->state_id)
+            ->assertJsonPath('city_id', $location->city_id)
+            ->assertJsonPath('city', 'Nashik')
+            ->assertJsonPath('state', 'Maharashtra')
+            ->assertJsonPath('latitude', '19.9975000')
+            ->assertJsonPath('longitude', '73.7898000');
     }
 
     public function test_merchant_cannot_open_or_update_another_merchants_shop(): void
@@ -200,7 +396,7 @@ class MerchantAuthTest extends TestCase
         $otherShopId = $this->createShopForMerchantUser($otherUserId, 'Other Merchant Shop', 'Pune');
         $otherShopUuid = $this->shopUuid($otherShopId);
 
-        $this->actingAs(\App\Models\User::findOrFail($userId));
+        $this->actingAs(User::findOrFail($userId));
 
         $this->get("/merchant/shops/{$otherShopUuid}")->assertNotFound();
         $this->put("/merchant/shops/{$otherShopUuid}", [
@@ -215,7 +411,7 @@ class MerchantAuthTest extends TestCase
         $shopId = $this->createShopForMerchantUser($userId, 'Active Candidate', 'Nashik');
         $shopUuid = $this->shopUuid($shopId);
 
-        $this->actingAs(\App\Models\User::findOrFail($userId))
+        $this->actingAs(User::findOrFail($userId))
             ->post("/merchant/shops/{$shopUuid}/activate")
             ->assertRedirect()
             ->assertSessionHas('success', 'Now managing "Active Candidate - Nashik".');
@@ -230,7 +426,7 @@ class MerchantAuthTest extends TestCase
         $shopId = $this->createShopForMerchantUser($userId, 'Inactive Candidate', 'Nashik', 'inactive');
         $shopUuid = $this->shopUuid($shopId);
 
-        $this->actingAs(\App\Models\User::findOrFail($userId))
+        $this->actingAs(User::findOrFail($userId))
             ->post("/merchant/shops/{$shopUuid}/activate")
             ->assertStatus(422);
 
@@ -244,7 +440,7 @@ class MerchantAuthTest extends TestCase
         $shopUuid = $this->shopUuid($shopId);
         $shop = DB::table('shops')->where('id', $shopId)->first();
 
-        $this->actingAs(\App\Models\User::findOrFail($userId))
+        $this->actingAs(User::findOrFail($userId))
             ->withSession(['active_shop_id' => $shopId, 'active_shop_name' => 'Old Shop Name - Nashik'])
             ->put("/merchant/shops/{$shopUuid}", [
                 'name' => 'New Shop Name',
@@ -279,7 +475,7 @@ class MerchantAuthTest extends TestCase
         $currentShopUuid = $this->shopUuid($currentShopId);
         $shop = DB::table('shops')->where('id', $currentShopId)->first();
 
-        $this->actingAs(\App\Models\User::findOrFail($userId))
+        $this->actingAs(User::findOrFail($userId))
             ->withSession(['active_shop_id' => $currentShopId, 'active_shop_name' => 'Beta Shop - Nashik'])
             ->put("/merchant/shops/{$currentShopUuid}", [
                 'name' => 'Beta Shop',
@@ -307,7 +503,7 @@ class MerchantAuthTest extends TestCase
         $shopUuid = $this->shopUuid($shopId);
         $shop = DB::table('shops')->where('id', $shopId)->first();
 
-        $this->actingAs(\App\Models\User::findOrFail($userId))
+        $this->actingAs(User::findOrFail($userId))
             ->withSession(['active_shop_id' => $shopId, 'active_shop_name' => 'Only Shop - Nashik'])
             ->put("/merchant/shops/{$shopUuid}", [
                 'name' => 'Only Shop',
@@ -335,7 +531,7 @@ class MerchantAuthTest extends TestCase
         $shopUuid = $this->shopUuid($shopId);
         $shop = DB::table('shops')->where('id', $shopId)->first();
 
-        $this->actingAs(\App\Models\User::findOrFail($userId))
+        $this->actingAs(User::findOrFail($userId))
             ->from("/merchant/shops/{$shopUuid}/edit")
             ->put("/merchant/shops/{$shopUuid}", [
                 'name' => 'Protected Shop',
@@ -360,7 +556,7 @@ class MerchantAuthTest extends TestCase
         $shopId = $this->createShopForMerchantUser($userId, 'Validation Shop', 'Nashik');
         $shopUuid = $this->shopUuid($shopId);
 
-        $this->actingAs(\App\Models\User::findOrFail($userId))
+        $this->actingAs(User::findOrFail($userId))
             ->from("/merchant/shops/{$shopUuid}/edit")
             ->put("/merchant/shops/{$shopUuid}", [
                 'name' => '',
@@ -373,7 +569,7 @@ class MerchantAuthTest extends TestCase
     public function test_authenticated_merchant_can_update_profile(): void
     {
         $userId = $this->createMerchantUser(email: 'profile@example.test', mobile: '9000000001');
-        $this->actingAs(\App\Models\User::findOrFail($userId));
+        $this->actingAs(User::findOrFail($userId));
 
         $this->put('/merchant/profile', [
             'name' => 'Updated Merchant',
@@ -398,7 +594,7 @@ class MerchantAuthTest extends TestCase
     {
         $this->createUser(email: 'taken@example.test', mobile: '9000000010');
         $userId = $this->createMerchantUser(email: 'unique@example.test', mobile: '9000000011');
-        $this->actingAs(\App\Models\User::findOrFail($userId));
+        $this->actingAs(User::findOrFail($userId));
 
         $this->from('/merchant/profile')->put('/merchant/profile', [
             'name' => 'Unique Merchant',
@@ -411,7 +607,7 @@ class MerchantAuthTest extends TestCase
     public function test_merchant_can_update_unverified_merchant_details(): void
     {
         $userId = $this->createMerchantUser(email: 'details@example.test', verificationStatus: 'pending');
-        $this->actingAs(\App\Models\User::findOrFail($userId));
+        $this->actingAs(User::findOrFail($userId));
 
         $this->put('/merchant/details', [
             'business_name' => 'Updated Business',
@@ -444,7 +640,7 @@ class MerchantAuthTest extends TestCase
     public function test_merchant_details_reject_invalid_gst(): void
     {
         $userId = $this->createMerchantUser(email: 'invalid-gst@example.test', verificationStatus: 'pending');
-        $this->actingAs(\App\Models\User::findOrFail($userId));
+        $this->actingAs(User::findOrFail($userId));
 
         $this->from('/merchant/details')->put('/merchant/details', [
             'business_name' => 'GST Test',
@@ -456,7 +652,7 @@ class MerchantAuthTest extends TestCase
     public function test_verified_merchant_cannot_edit_locked_details(): void
     {
         $userId = $this->createMerchantUser(email: 'verified-details@example.test', verificationStatus: 'approved');
-        $this->actingAs(\App\Models\User::findOrFail($userId));
+        $this->actingAs(User::findOrFail($userId));
 
         $this->from('/merchant/details')->put('/merchant/details', [
             'business_name' => 'Allowed Business Name',
@@ -473,7 +669,7 @@ class MerchantAuthTest extends TestCase
     {
         $userId = $this->createUser(email: 'not-merchant-details@example.test');
 
-        $this->actingAs(\App\Models\User::findOrFail($userId));
+        $this->actingAs(User::findOrFail($userId));
 
         $this->get('/merchant/details')->assertForbidden();
         $this->put('/merchant/details', [
@@ -484,7 +680,7 @@ class MerchantAuthTest extends TestCase
     public function test_wrong_current_password_is_rejected(): void
     {
         $userId = $this->createMerchantUser(email: 'wrong-password@example.test');
-        $this->actingAs(\App\Models\User::findOrFail($userId));
+        $this->actingAs(User::findOrFail($userId));
 
         $this->from('/merchant/change-password')->put('/merchant/change-password', [
             'current_password' => 'incorrect',
@@ -497,7 +693,7 @@ class MerchantAuthTest extends TestCase
     public function test_merchant_can_change_password(): void
     {
         $userId = $this->createMerchantUser(email: 'change-password@example.test');
-        $user = \App\Models\User::findOrFail($userId);
+        $user = User::findOrFail($userId);
         $this->actingAs($user);
 
         $this->put('/merchant/change-password', [
@@ -515,13 +711,13 @@ class MerchantAuthTest extends TestCase
     {
         $userId = $this->createUser(email: 'not-merchant-profile@example.test');
 
-        $this->actingAs(\App\Models\User::findOrFail($userId));
+        $this->actingAs(User::findOrFail($userId));
 
         $this->get('/merchant/profile')->assertForbidden();
         $this->get('/merchant/change-password')->assertForbidden();
     }
 
-    public function test_inactive_user_cannot_login_as_merchant(): void
+    public function test_inactive_merchant_can_login_under_frozen_access_rule(): void
     {
         $this->createMerchantUser(email: 'inactive@example.test', userStatus: 'inactive');
 
@@ -530,18 +726,16 @@ class MerchantAuthTest extends TestCase
             'password' => 'password',
         ]);
 
-        $response->assertRedirect(route('merchant.login'));
-        $response->assertSessionHasErrors('login');
-        $this->assertGuest();
+        $response->assertRedirect(route('merchant.dashboard'));
+        $this->assertAuthenticated();
         $this->assertDatabaseHas('auth_user_login_history', [
             'email' => 'inactive@example.test',
             'guard_name' => 'merchant_web',
-            'status' => 'failed',
-            'failure_reason' => 'inactive_user',
+            'status' => 'success',
         ]);
     }
 
-    public function test_suspended_merchant_profile_cannot_login(): void
+    public function test_suspended_merchant_profile_can_login_under_frozen_access_rule(): void
     {
         $this->createMerchantUser(email: 'suspended@example.test', merchantStatus: 'suspended');
 
@@ -550,14 +744,12 @@ class MerchantAuthTest extends TestCase
             'password' => 'password',
         ]);
 
-        $response->assertRedirect(route('merchant.login'));
-        $response->assertSessionHasErrors('login');
-        $this->assertGuest();
+        $response->assertRedirect(route('merchant.dashboard'));
+        $this->assertAuthenticated();
         $this->assertDatabaseHas('auth_user_login_history', [
             'email' => 'suspended@example.test',
             'guard_name' => 'merchant_web',
-            'status' => 'blocked',
-            'failure_reason' => 'suspended_merchant',
+            'status' => 'success',
         ]);
     }
 
@@ -731,6 +923,21 @@ class MerchantAuthTest extends TestCase
             ?? DB::table('product_categories')->insertGetId([
                 'uuid' => (string) Str::uuid(),
                 'parent_id' => null,
+                'name' => $name,
+                'slug' => $slug,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
+    }
+
+    private function shopAudienceId(string $name): int
+    {
+        $slug = Str::slug($name);
+
+        return (int) (DB::table('shop_audiences')->where('slug', $slug)->value('id')
+            ?? DB::table('shop_audiences')->insertGetId([
+                'uuid' => (string) Str::uuid(),
                 'name' => $name,
                 'slug' => $slug,
                 'status' => 'active',

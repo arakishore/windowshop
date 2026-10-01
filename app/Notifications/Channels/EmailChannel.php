@@ -95,6 +95,7 @@ class EmailChannel implements NotificationChannel
                 $bcc,
                 $this->configuration->presentation(),
                 $orderEmail,
+                data_get($message->metadata, 'action'),
             ), $toRecipients);
 
             return DeliveryResult::sent(ProviderMode::WINDOWSHOP, 'laravel-mail');

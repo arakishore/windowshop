@@ -65,6 +65,20 @@
 </div>
 
 <div class="card">
+    <div class="card-header"><h5 class="mb-0">Admin Notifications</h5></div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-8">
+                <label for="admin_notification_email" class="form-label">Admin Notification Email</label>
+                <input id="admin_notification_email" name="admin_notification_email" type="email" value="{{ old('admin_notification_email', $emailSettings['admin_notification_email']) }}" class="form-control @error('admin_notification_email') is-invalid @enderror">
+                @error('admin_notification_email')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                <div class="form-text">Primary email address for WindowShop administrative and operational notifications.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
     <div class="card-header"><h5 class="mb-0">Email Branding &amp; Footer</h5></div>
     <div class="card-body">
         <h6>Branding</h6>

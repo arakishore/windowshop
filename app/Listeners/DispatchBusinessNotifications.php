@@ -40,6 +40,10 @@ class DispatchBusinessNotifications
     public function merchantAccountCreated(MerchantAccountCreated $event): void
     {
         $this->merchantLifecycle('merchant.account_created', $event->merchant, $event->occurrenceId);
+
+        if ($event->storefrontRegistration) {
+            $this->storefrontMerchantRegisteredAdmin($event->merchant, $event->occurrenceId);
+        }
     }
 
     public function merchantLifecycleChanged(MerchantLifecycleChanged $event): void
@@ -108,6 +112,38 @@ class DispatchBusinessNotifications
         $this->dispatchToDestinations($key, 'merchant', $occurrenceId, $this->merchantDestinations($merchant, false), $merchant->user_id, merchantId: (int) $merchant->getKey(), relatedType: 'merchant', relatedId: $merchant->uuid, context: [
             'merchant_name' => $merchant->contact_person_name ?: $merchant->user?->name,
         ]);
+    }
+
+    private function storefrontMerchantRegisteredAdmin(MerchantProfile $merchant, string $occurrenceId): void
+    {
+        $merchant->loadMissing('user');
+        $reviewUrl = route('admin.merchants.show', $merchant);
+        $context = [
+            'business_name' => $merchant->business_name,
+            'owner_name' => $merchant->contact_person_name ?: $merchant->user?->name,
+            'email' => $merchant->contact_email ?: $merchant->user?->email,
+            'mobile' => $merchant->contact_mobile ?: $merchant->user?->mobile,
+            'registration_datetime' => $merchant->created_at?->timezone(config('app.timezone'))->format('d M Y, h:i A'),
+            'verification_status' => $merchant->verification_status,
+            'registration_source' => $merchant->user?->registration_source,
+            'review_merchant_url' => $reviewUrl,
+        ];
+
+        foreach ($this->adminRecipients->forChannel(NotificationChannelName::EMAIL) as $recipient) {
+            $this->notifications->send(new NotificationMessage(
+                'merchant.registered.admin',
+                'admin',
+                NotificationChannelName::EMAIL,
+                $recipient['destination'],
+                $recipient['id'],
+                merchantId: (int) $merchant->getKey(),
+                relatedType: 'merchant',
+                relatedId: $merchant->uuid,
+                occurrenceId: $occurrenceId,
+                context: $context,
+                metadata: ['action' => ['label' => 'Review Merchant', 'url' => $reviewUrl]],
+            ));
+        }
     }
 
     private function customerOrder(string $key, Order $order, string $occurrenceId, array $context): void
