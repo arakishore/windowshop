@@ -36,6 +36,10 @@ class StorefrontMerchantRegistrationTest extends TestCase
 
     public function test_public_merchant_registration_page_renders(): void
     {
+        $this->assertSame(url('/merchant-registration'), route('storefront.merchant-register'));
+        $this->assertSame(url('/merchant-registration'), route('storefront.merchant-register.store'));
+        $this->assertSame(url('/merchant-registration/success'), route('storefront.merchant-register.success'));
+
         $this->get(route('storefront.merchant-register'))
             ->assertOk()
             ->assertSee('Sell on')

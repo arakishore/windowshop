@@ -69,9 +69,9 @@ Route::post('/login', [CustomerAuthController::class, 'login'])->name('storefron
 Route::post('/logout', [CustomerAuthController::class, 'logout'])->name('storefront.logout');
 Route::get('/register', [StorefrontController::class, 'register'])->name('storefront.register');
 Route::post('/register', [CustomerAuthController::class, 'register'])->name('storefront.register.store');
-Route::get('/sell', [MerchantRegistrationController::class, 'create'])->name('storefront.merchant-register');
-Route::post('/sell', [MerchantRegistrationController::class, 'store'])->name('storefront.merchant-register.store');
-Route::get('/sell/success', [MerchantRegistrationController::class, 'success'])
+Route::get('/merchant-registration', [MerchantRegistrationController::class, 'create'])->name('storefront.merchant-register');
+Route::post('/merchant-registration', [MerchantRegistrationController::class, 'store'])->name('storefront.merchant-register.store');
+Route::get('/merchant-registration/success', [MerchantRegistrationController::class, 'success'])
     ->middleware(['auth', 'merchant.role'])
     ->name('storefront.merchant-register.success');
 Route::get('/account', [CustomerAccountController::class, 'dashboard'])->name('storefront.account');
