@@ -4,8 +4,8 @@
     $singleImage = fn(string $image): string => $image;
     $productMetaTitle = $product['meta_title'].' | '.$marketplaceName;
     $productMetaDescription = rtrim($product['meta_description'], '.').' on '.$marketplaceName.'.';
-    $selectedColor = $product['colors'][0]['name'] ?? '';
-    $selectedSize = $product['sizes'][0]['name'] ?? '';
+    $selectedColor = $product['selected_color'];
+    $selectedSize = $product['selected_size'];
     $deliveryCheck = session('delivery_check');
     $deliveryCheck = is_array($deliveryCheck) && ($deliveryCheck['product_slug'] ?? null) === $product['slug'] ? $deliveryCheck : null;
     $deliveryCheckError = $errors->getBag('deliveryCheck')->first('postal_code');
@@ -193,8 +193,9 @@
                                         </div>
                                         <div class="variant-picker-values">
                                             @foreach ($product['colors'] as $color)
-                                                <div class="hover-tooltip tooltip-bot color-btn {{ $loop->first ? 'active' : '' }}"
-                                                    data-color="{{ $color['name'] }}">
+                                                <div class="hover-tooltip tooltip-bot color-btn {{ $color['name'] === $selectedColor ? 'active' : '' }}"
+                                                    data-color="{{ $color['name'] }}"
+                                                    data-color-value-id="{{ $color['value_id'] }}">
                                                     <span class="swatch-value rounded-circle border"
                                                         style="display: block; width: 34px; height: 34px; background: {{ $color['hex'] ?: '#f3f4f6' }};"></span>
                                                     <span class="tooltip">{{ $color['name'] }}</span>
@@ -220,7 +221,7 @@
                                         </div>
                                         <div class="variant-picker-values">
                                             @foreach ($product['sizes'] as $size)
-                                                <span class="size-btn {{ $loop->first ? 'active' : '' }}"
+                                                <span class="size-btn {{ $size['name'] === $selectedSize ? 'active' : '' }}"
                                                     data-size="{{ $size['name'] }}"
                                                     data-price="{{ $size['raw_price'] }}"
                                                     data-price-label="{{ $size['price'] }}"
@@ -432,7 +433,7 @@
                                                 data-availability-label="{{ $size['availability_label'] }}"
                                                 data-availability-message="{{ $size['availability_message'] }}"
                                                 @if ($size['stock_limit'] !== null) data-stock-limit="{{ $size['stock_limit'] }}" @endif
-                                                {{ $loop->first ? 'selected' : '' }}>{{ $size['name'] }}</option>
+                                                {{ $size['name'] === $selectedSize ? 'selected' : '' }}>{{ $size['name'] }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -814,9 +815,26 @@
     <script src="{{ asset('assets/storefront/js/plugin/drift.min.js') }}"></script>
     <script src="{{ asset('assets/storefront/js/plugin/photoswipe-lightbox.umd.min.js') }}"></script>
     <script src="{{ asset('assets/storefront/js/plugin/photoswipe.umd.min.js') }}"></script>
+    <script src="{{ asset('assets/storefront/js/product-gallery.js') }}"></script>
     <script src="{{ asset('assets/storefront/js/zoom.js') }}"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const productGalleryImages = @json($product['gallery_images']);
+
+            document.querySelectorAll('.tf-product-info-list .color-btn[data-color-value-id]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const selectedValueId = Number.parseInt(button.dataset.colorValueId, 10);
+                    const orderedImages = window.orderProductGalleryImages(productGalleryImages, selectedValueId);
+
+                    if (orderedImages.length > 0 && typeof window.updateProductGallery === 'function') {
+                        window.updateProductGallery(
+                            orderedImages.map((image) => image.url),
+                            button.dataset.color || '',
+                        );
+                    }
+                });
+            });
+
             const reviewLink = document.querySelector('[data-review-summary-link]');
             const reviewPanel = document.getElementById('customer-reviews');
 

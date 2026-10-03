@@ -43,6 +43,47 @@ if ($(".product-thumbs-slider").length > 0) {
         },
     });
 
+    window.updateProductGallery = function (images, color) {
+        if (!Array.isArray(images) || images.length === 0) return;
+
+        var absoluteUrl = function (url) {
+            return new URL(url, document.baseURI).href;
+        };
+        var slidesByImageUrl = function (wrapper) {
+            return new Map(Array.from(wrapper.children).map(function (slide) {
+                var image = slide.querySelector("img");
+
+                return [image ? absoluteUrl(image.src) : "", slide];
+            }));
+        };
+        var mainSlidesByUrl = slidesByImageUrl(main.wrapperEl);
+        var thumbnailSlidesByUrl = slidesByImageUrl(thumbs.wrapperEl);
+        var orderedMainSlides = images.map(function (url) {
+            return mainSlidesByUrl.get(absoluteUrl(url));
+        }).filter(Boolean);
+        var orderedThumbnailSlides = images.map(function (url) {
+            return thumbnailSlidesByUrl.get(absoluteUrl(url));
+        }).filter(Boolean);
+
+        if (orderedMainSlides.length !== main.wrapperEl.children.length
+            || orderedThumbnailSlides.length !== thumbs.wrapperEl.children.length) return;
+
+        orderedMainSlides.forEach(function (slide) {
+            slide.dataset.color = color;
+        });
+        main.wrapperEl.append(...orderedMainSlides);
+        thumbs.wrapperEl.append(...orderedThumbnailSlides);
+        main.recalcSlides();
+        thumbs.recalcSlides();
+        thumbs.update();
+        main.update();
+        main.slideTo(0, 0, false);
+        thumbs.slideTo(0, 0, false);
+
+        var stickyImage = document.querySelector(".tf-sticky-atc-product .prd_img img");
+        if (stickyImage) stickyImage.src = images[0];
+    };
+
     const modelViewer = document.querySelector(".slide-3d");
     if (modelViewer) {
         modelViewer.addEventListener("mouseenter", () => {
