@@ -12,6 +12,7 @@ use App\Services\Notification\NotificationPreferenceResolver;
 use App\Services\Notification\NotificationTemplateRenderer;
 use App\Services\Notification\NotificationTemplateService;
 use Database\Seeders\NotificationTemplateSeeder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
@@ -23,7 +24,7 @@ class NotificationCatalogueTemplateTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['notification_templates', 'shop_settings', 'merchant_settings', 'admin_settings', 'system_settings'] as $table) {
+        foreach (['notification_templates', 'shop_settings', 'merchant_settings', 'system_settings', 'system_setting_groups'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -47,21 +48,27 @@ class NotificationCatalogueTemplateTest extends TestCase
             $table->timestamps();
             $table->unique(['shop_id', 'group', 'setting_key']);
         });
-        Schema::create('admin_settings', function (Blueprint $table): void {
+        Schema::create('system_setting_groups', function (Blueprint $table): void {
             $table->id();
-            $table->string('group');
-            $table->string('setting_key');
-            $table->longText('setting_value')->nullable();
-            $table->string('setting_type')->default('string');
+            $table->uuid('uuid')->nullable()->unique();
+            $table->string('name');
+            $table->string('slug')->unique();
+            $table->unsignedInteger('sort_order')->default(0);
+            $table->string('status')->default('active');
             $table->timestamps();
-            $table->unique(['group', 'setting_key']);
+            $table->softDeletes();
         });
         Schema::create('system_settings', function (Blueprint $table): void {
             $table->id();
             $table->uuid('uuid')->nullable();
+            $table->unsignedBigInteger('group_id')->nullable();
             $table->string('key')->unique();
+            $table->string('label')->nullable();
             $table->longText('value')->nullable();
             $table->string('value_type')->default('string');
+            $table->boolean('is_public')->default(false);
+            $table->boolean('is_encrypted')->default(false);
+            $table->unsignedInteger('sort_order')->default(0);
             $table->string('status')->default('active');
             $table->timestamps();
             $table->softDeletes();
@@ -197,6 +204,35 @@ class NotificationCatalogueTemplateTest extends TestCase
         $this->assertSame(['copy@example.test'], data_get($template->fresh()->metadata, 'email.cc'));
         $this->assertSame(['hidden@example.test'], data_get($template->fresh()->metadata, 'email.bcc'));
         $this->assertFalse($template->fresh()->is_active);
+        $this->assertDatabaseCount('notification_templates', $expected);
+    }
+
+    public function test_seeder_generates_and_preserves_unique_uuids_when_model_events_are_disabled(): void
+    {
+        Model::withoutEvents(fn () => $this->seed(NotificationTemplateSeeder::class));
+
+        $expected = app(NotificationEventCatalogue::class)->all()->sum(fn ($event): int => count($event->channels));
+        $templates = NotificationTemplate::query()->get();
+
+        $this->assertCount($expected, $templates);
+        $this->assertTrue($templates->every(fn (NotificationTemplate $template): bool => filled($template->uuid)));
+        $this->assertCount($expected, $templates->pluck('uuid')->unique());
+
+        $template = $templates->firstWhere('channel', NotificationChannelName::EMAIL);
+        $uuid = $template->uuid;
+        $template->update([
+            'subject' => 'Admin-customized subject',
+            'body' => 'Admin-customized body',
+            'is_active' => false,
+        ]);
+
+        Model::withoutEvents(fn () => $this->seed(NotificationTemplateSeeder::class));
+
+        $template->refresh();
+        $this->assertSame($uuid, $template->uuid);
+        $this->assertSame('Admin-customized subject', $template->subject);
+        $this->assertSame('Admin-customized body', $template->body);
+        $this->assertFalse($template->is_active);
         $this->assertDatabaseCount('notification_templates', $expected);
     }
 

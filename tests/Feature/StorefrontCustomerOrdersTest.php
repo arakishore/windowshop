@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Events\OrderStatusChanged;
-use App\Models\AdminSetting;
 use App\Models\Customer;
 use App\Models\CustomerCancellationReason;
 use App\Models\DirectMerchantUpiAttempt;
@@ -25,7 +24,9 @@ use App\Models\ProductReview;
 use App\Models\ProductReviewImage;
 use App\Models\ProductVariant;
 use App\Models\Shop;
+use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\System\SystemSettingService;
 use Database\Seeders\OrderStatusSeeder;
 use Database\Seeders\PaymentStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -64,7 +65,7 @@ class StorefrontCustomerOrdersTest extends TestCase
         $this->seed(OrderStatusSeeder::class);
         $this->seed(PaymentStatusSeeder::class);
         $this->currencySetting('symbol', 'INR ');
-        $this->currencySetting('decimal_places', '2', AdminSetting::TYPE_INTEGER);
+        $this->currencySetting('decimal_places', '2', SystemSetting::TYPE_INTEGER);
         $this->currencySetting('thousands_separator', ',');
         $this->currencySetting('decimal_separator', '.');
         $this->currencySetting('symbol_position', 'before');
@@ -1570,11 +1571,12 @@ class StorefrontCustomerOrdersTest extends TestCase
         ]);
     }
 
-    private function currencySetting(string $key, string $value, string $type = AdminSetting::TYPE_STRING): void
+    private function currencySetting(string $key, string $value, string $type = SystemSetting::TYPE_STRING): void
     {
-        AdminSetting::query()->updateOrCreate(
-            ['group' => 'currency', 'setting_key' => $key],
-            ['setting_value' => $value, 'setting_type' => $type],
+        app(SystemSettingService::class)->setRegionalCurrency(
+            'currency',
+            $key,
+            $type === SystemSetting::TYPE_INTEGER ? (int) $value : $value,
         );
     }
 

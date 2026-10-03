@@ -34,16 +34,9 @@ class NotificationFoundationTest extends TestCase
 
         Schema::dropIfExists('notification_delivery_logs');
         Schema::dropIfExists('merchant_settings');
-        Schema::dropIfExists('admin_settings');
-        Schema::create('admin_settings', function (Blueprint $table): void {
-            $table->id();
-            $table->string('group', 50);
-            $table->string('setting_key');
-            $table->longText('setting_value')->nullable();
-            $table->string('setting_type', 30)->default('string');
-            $table->timestamps();
-            $table->unique(['group', 'setting_key']);
-        });
+        Schema::dropIfExists('system_settings');
+        Schema::dropIfExists('system_setting_groups');
+        $this->createSystemSettingsTables();
         Schema::create('merchant_settings', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('merchant_id');
@@ -75,6 +68,35 @@ class NotificationFoundationTest extends TestCase
             $table->timestamp('sent_at')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
+        });
+    }
+
+    private function createSystemSettingsTables(): void
+    {
+        Schema::create('system_setting_groups', function (Blueprint $table): void {
+            $table->id();
+            $table->uuid('uuid')->nullable()->unique();
+            $table->string('name');
+            $table->string('slug')->unique();
+            $table->unsignedInteger('sort_order')->default(0);
+            $table->string('status')->default('active');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+        Schema::create('system_settings', function (Blueprint $table): void {
+            $table->id();
+            $table->uuid('uuid')->nullable()->unique();
+            $table->unsignedBigInteger('group_id')->nullable();
+            $table->string('key')->unique();
+            $table->string('label')->nullable();
+            $table->longText('value')->nullable();
+            $table->string('value_type')->default('string');
+            $table->boolean('is_public')->default(false);
+            $table->boolean('is_encrypted')->default(false);
+            $table->unsignedInteger('sort_order')->default(0);
+            $table->string('status')->default('active');
+            $table->timestamps();
+            $table->softDeletes();
         });
     }
 

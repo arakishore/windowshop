@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminSetting;
 use App\Models\Order;
 use App\Models\OrderComment;
 use App\Services\DateTime\BusinessTimeService;
 use App\Services\DateTime\DateDisplayService;
+use App\Services\System\SystemSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -116,18 +116,10 @@ class TimezoneStandardizationTest extends TestCase
 
     private function regionalTimezone(string $timezone): void
     {
-        AdminSetting::query()->updateOrCreate(
-            ['group' => 'regional', 'setting_key' => 'timezone'],
-            ['setting_value' => $timezone, 'setting_type' => AdminSetting::TYPE_STRING],
-        );
-        AdminSetting::query()->updateOrCreate(
-            ['group' => 'regional', 'setting_key' => 'date_format'],
-            ['setting_value' => 'd-m-Y', 'setting_type' => AdminSetting::TYPE_STRING],
-        );
-        AdminSetting::query()->updateOrCreate(
-            ['group' => 'regional', 'setting_key' => 'time_format'],
-            ['setting_value' => 'h:i A', 'setting_type' => AdminSetting::TYPE_STRING],
-        );
+        $settings = app(SystemSettingService::class);
+        $settings->setRegionalCurrency('regional', 'timezone', $timezone);
+        $settings->setRegionalCurrency('regional', 'date_format', 'd-m-Y');
+        $settings->setRegionalCurrency('regional', 'time_format', 'h:i A');
     }
 
     /**

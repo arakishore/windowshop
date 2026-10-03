@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Mail\TransactionalNotificationMail;
 use App\Models\NotificationTemplate;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Notifications\Channels\EmailChannel;
 use App\Notifications\DeliveryResult;
@@ -15,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use PDO;
 use Tests\TestCase;
@@ -207,7 +209,11 @@ class AdminNotificationManagementTest extends TestCase
             ->assertSee('datatables.min.js')->assertSee('responsive.min.js');
         $this->actingAs($admin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'order.new.admin', 'enabled' => 1])->assertSessionHas('success');
         $this->assertTrue(app(NotificationPreferenceResolver::class)->enabled(new NotificationMessage('order.new.admin', 'admin', 'email')));
-
+        $this->assertDatabaseHas('system_settings', [
+            'key' => 'notifications.events.order.new.admin.email.enabled',
+            'value' => '1',
+            'value_type' => SystemSetting::TYPE_BOOLEAN,
+        ]);
         $resolver = app(NotificationPreferenceResolver::class);
         $this->assertFalse($resolver->defaultEnabled('order.processing.customer', 'email'));
         $this->actingAs($admin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'order.processing.customer', 'enabled' => 1])->assertSessionHas('success');
@@ -220,6 +226,15 @@ class AdminNotificationManagementTest extends TestCase
 
         $nonAdmin = User::query()->create(['name' => 'Merchant', 'email' => 'merchant-rule@example.test', 'password' => Hash::make('password'), 'status' => 'active']);
         $this->actingAs($nonAdmin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'order.processing.customer', 'enabled' => 1])->assertForbidden();
+    }
+
+    public function test_rules_page_read_works_without_legacy_settings_table(): void
+    {
+        Schema::dropIfExists('admin_settings');
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.notification-rules.index'))
+            ->assertOk();
     }
 
     private function template(string $event, string $channel): NotificationTemplate

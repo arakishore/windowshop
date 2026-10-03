@@ -39,7 +39,7 @@ class NotificationBusinessEventWiringTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['notification_delivery_logs', 'order_status_histories', 'shop_settings', 'merchant_settings', 'admin_settings', 'orders', 'shops', 'merchant_profiles', 'auth_user_roles', 'auth_roles', 'users'] as $table) {
+        foreach (['notification_delivery_logs', 'order_status_histories', 'shop_settings', 'merchant_settings', 'system_settings', 'system_setting_groups', 'orders', 'shops', 'merchant_profiles', 'auth_user_roles', 'auth_roles', 'users'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -140,15 +140,7 @@ class NotificationBusinessEventWiringTest extends TestCase
                 $table->unique([$owner, 'group', 'setting_key']);
             });
         }
-        Schema::create('admin_settings', function (Blueprint $table): void {
-            $table->id();
-            $table->string('group');
-            $table->string('setting_key');
-            $table->longText('setting_value')->nullable();
-            $table->string('setting_type')->default('string');
-            $table->timestamps();
-            $table->unique(['group', 'setting_key']);
-        });
+        $this->createSystemSettingsTables();
         Schema::create('notification_delivery_logs', function (Blueprint $table): void {
             $table->id();
             $table->uuid('uuid')->unique();
@@ -170,6 +162,35 @@ class NotificationBusinessEventWiringTest extends TestCase
             $table->timestamp('sent_at')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
+        });
+    }
+
+    private function createSystemSettingsTables(): void
+    {
+        Schema::create('system_setting_groups', function (Blueprint $table): void {
+            $table->id();
+            $table->uuid('uuid')->nullable()->unique();
+            $table->string('name');
+            $table->string('slug')->unique();
+            $table->unsignedInteger('sort_order')->default(0);
+            $table->string('status')->default('active');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+        Schema::create('system_settings', function (Blueprint $table): void {
+            $table->id();
+            $table->uuid('uuid')->nullable()->unique();
+            $table->unsignedBigInteger('group_id')->nullable();
+            $table->string('key')->unique();
+            $table->string('label')->nullable();
+            $table->longText('value')->nullable();
+            $table->string('value_type')->default('string');
+            $table->boolean('is_public')->default(false);
+            $table->boolean('is_encrypted')->default(false);
+            $table->unsignedInteger('sort_order')->default(0);
+            $table->string('status')->default('active');
+            $table->timestamps();
+            $table->softDeletes();
         });
     }
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\SystemSetting;
 use App\Models\SystemSettingGroup;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,6 +15,8 @@ use Illuminate\View\View;
 
 class SystemSettingController extends Controller
 {
+    public function __construct(private readonly SystemSettingService $settings) {}
+
     public function index(Request $request): View
     {
         $filters = [
@@ -29,7 +32,6 @@ class SystemSettingController extends Controller
                 $query->where(function ($query) use ($filters): void {
                     $query->where('key', 'like', '%'.$filters['search'].'%')
                         ->orWhere('label', 'like', '%'.$filters['search'].'%')
-                        ->orWhere('value', 'like', '%'.$filters['search'].'%')
                         ->orWhere('description', 'like', '%'.$filters['search'].'%');
                 });
             })
@@ -72,7 +74,9 @@ class SystemSettingController extends Controller
     {
         abort_if($systemSetting->trashed(), 404);
 
+        $encrypted = $systemSetting->is_encrypted || $systemSetting->value_type === SystemSetting::TYPE_ENCRYPTED;
         $valueRules = match (true) {
+            $encrypted => ['nullable', 'string', 'max:10000'],
             $systemSetting->key === 'contact.support_email' => ['nullable', 'email', 'max:255'],
             str_starts_with($systemSetting->key, 'social.') => ['nullable', 'url:http,https', 'max:2048'],
             in_array($systemSetting->key, ['contact.phone', 'contact.whatsapp'], true) => ['nullable', 'string', 'max:50', 'regex:/^[0-9+()\-\.\s]*$/'],
@@ -90,15 +94,28 @@ class SystemSettingController extends Controller
             'sort_order' => ['required', 'integer', 'min:0'],
             'status' => ['required', Rule::in([SystemSetting::STATUS_ACTIVE, SystemSetting::STATUS_INACTIVE])],
             'is_public' => ['nullable', 'boolean'],
-            'is_encrypted' => ['nullable', 'boolean'],
         ]);
 
-        $data['value'] = $this->normalizeValue($data['value'] ?? null, $data['value_type']);
-        $data['is_public'] = $request->boolean('is_public');
-        $data['is_encrypted'] = $request->boolean('is_encrypted');
-        $data['updated_by'] = Auth::id();
+        $attributes = [
+            'group_id' => $data['group_id'],
+            'label' => $data['label'],
+            'description' => $data['description'] ?? null,
+            'sort_order' => $data['sort_order'],
+            'status' => $data['status'],
+            'is_public' => $encrypted ? false : $request->boolean('is_public'),
+            'updated_by' => Auth::id(),
+        ];
 
-        $systemSetting->forceFill($data)->save();
+        if ($encrypted) {
+            $this->settings->setEncrypted($systemSetting->key, $data['value'] ?? null, $attributes);
+        } else {
+            $this->settings->set(
+                $systemSetting->key,
+                $this->normalizeValue($data['value'] ?? null, $data['value_type']),
+                $data['value_type'],
+                $attributes,
+            );
+        }
 
         return redirect()->route('admin.system-settings.edit', $systemSetting)->with('success', 'System setting updated successfully.');
     }

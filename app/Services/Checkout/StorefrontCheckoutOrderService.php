@@ -11,12 +11,12 @@ use App\Models\Order;
 use App\Models\OrderTotal;
 use App\Models\Shop;
 use App\Models\User;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Cart\CartPageService;
 use App\Services\Merchant\MerchantCustomerService;
 use App\Services\Order\DirectMerchantUpiAttemptService;
 use App\Services\Order\OrderCreationService;
 use App\Services\Promotion\Coupons\CouponSessionStore;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -31,7 +31,7 @@ class StorefrontCheckoutOrderService
         private readonly OrderCreationService $orders,
         private readonly DirectMerchantUpiAttemptService $directUpiAttempts,
         private readonly MerchantCustomerService $merchantCustomers,
-        private readonly AdminSettingsService $adminSettings,
+        private readonly SystemSettingService $systemSettings,
         private readonly CouponSessionStore $couponStore,
         private readonly CheckoutFlowService $checkout,
     ) {}
@@ -134,7 +134,7 @@ class StorefrontCheckoutOrderService
                     ? $this->nullableString($upiReference)
                     : null,
                 'payment_status' => Order::PAYMENT_PENDING,
-                'currency_code' => $this->adminSettings->currencyConfig()['currency'] ?? 'INR',
+                'currency_code' => $this->systemSettings->currencyConfig()['currency'] ?? 'INR',
                 'cash_rounding' => ['method' => 'none', 'applyTo' => []],
                 'amount_paid' => 0,
                 'customer_order_note' => $this->nullableString($customerOrderNote),

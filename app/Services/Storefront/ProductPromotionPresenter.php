@@ -7,10 +7,10 @@ use App\Models\ProductCategory;
 use App\Models\Promotion;
 use App\Models\PromotionReward;
 use App\Models\PromotionTarget;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Promotion\Engine\Data\PromotionLineInput;
 use App\Services\Promotion\Engine\PromotionRepository;
 use App\Services\Promotion\Engine\PromotionTargetMatcher;
+use App\Services\System\SystemSettingService;
 use Illuminate\Support\Collection;
 
 class ProductPromotionPresenter
@@ -23,9 +23,8 @@ class ProductPromotionPresenter
     public function __construct(
         private readonly PromotionRepository $promotions,
         private readonly PromotionTargetMatcher $matcher,
-        private readonly AdminSettingsService $settings,
-    ) {
-    }
+        private readonly SystemSettingService $settings,
+    ) {}
 
     /**
      * @return array{promotion_label: string|null, promotion_text: string|null, promotion_icon: string|null}

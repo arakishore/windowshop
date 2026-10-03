@@ -49,7 +49,10 @@
                     </div>
                     <div class="col-md-8">
                         <label for="value" class="form-label">Value</label>
-                        @if($setting->key === 'contact.support_email')
+                        @if($setting->is_encrypted || $setting->value_type === \App\Models\SystemSetting::TYPE_ENCRYPTED)
+                            <input id="value" name="value" type="password" autocomplete="new-password" value="" class="form-control @error('value') is-invalid @enderror">
+                            <div class="form-text">{{ filled($setting->value) ? 'Configured — leave blank to keep the current secret.' : 'Not configured.' }}</div>
+                        @elseif($setting->key === 'contact.support_email')
                             <input id="value" name="value" type="email" maxlength="255" value="{{ old('value', $setting->value) }}" class="form-control @error('value') is-invalid @enderror">
                         @elseif(str_starts_with($setting->key, 'social.'))
                             <input id="value" name="value" type="url" maxlength="2048" placeholder="https://" value="{{ old('value', $setting->value) }}" class="form-control @error('value') is-invalid @enderror">
@@ -82,13 +85,10 @@
                     </div>
                     <div class="col-md-4 d-flex align-items-end gap-4">
                         <label class="form-check mb-2">
-                            <input name="is_public" value="1" type="checkbox" class="form-check-input" @checked(old('is_public', $setting->is_public))>
+                            <input name="is_public" value="1" type="checkbox" class="form-check-input" @checked(old('is_public', $setting->is_public)) @disabled($setting->is_encrypted || $setting->value_type === \App\Models\SystemSetting::TYPE_ENCRYPTED)>
                             <span class="form-check-label">Public</span>
                         </label>
-                        <label class="form-check mb-2">
-                            <input name="is_encrypted" value="1" type="checkbox" class="form-check-input" @checked(old('is_encrypted', $setting->is_encrypted))>
-                            <span class="form-check-label">Encrypted</span>
-                        </label>
+                        <div class="mb-2"><span class="text-muted">Encryption:</span> {{ ($setting->is_encrypted || $setting->value_type === \App\Models\SystemSetting::TYPE_ENCRYPTED) ? 'Protected' : 'No' }}</div>
                     </div>
                     <div class="col-12">
                         <label for="description" class="form-label">Description</label>

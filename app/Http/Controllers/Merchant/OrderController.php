@@ -9,7 +9,6 @@ use App\Models\OrderComment;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\Shop;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Order\DeliveryCompletionService;
 use App\Services\Order\DirectMerchantUpiPaymentService;
@@ -21,6 +20,7 @@ use App\Services\Order\OrderRefundService;
 use App\Services\Order\OrderReturnExchangeEligibilityService;
 use App\Services\Order\OrderStatusService;
 use App\Services\Order\PickupCompletionService;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -34,7 +34,7 @@ class OrderController extends Controller
 {
     public function __construct(
         private readonly MerchantShopContextService $shopContextService,
-        private readonly AdminSettingsService $adminSettings,
+        private readonly SystemSettingService $systemSettings,
         private readonly OrderStatusService $orderStatusService,
         private readonly OrderInventoryService $orderInventoryService,
         private readonly PickupCompletionService $pickupCompletionService,
@@ -98,7 +98,7 @@ class OrderController extends Controller
             'fulfillmentTypes' => $this->fulfillmentTypes(),
             'sourceLabels' => $this->sourceLabels(),
             'operationalSources' => $operationalSources,
-            'posCurrency' => $this->adminSettings->currencyConfig(),
+            'posCurrency' => $this->systemSettings->currencyConfig(),
             'stockShortages' => $stockShortages,
         ]);
     }
@@ -134,7 +134,7 @@ class OrderController extends Controller
             'paymentMethods' => $this->paymentMethods(),
             'fulfillmentTypes' => $this->fulfillmentTypes(),
             'sourceLabels' => $this->sourceLabels(),
-            'posCurrency' => $this->adminSettings->currencyConfig(),
+            'posCurrency' => $this->systemSettings->currencyConfig(),
             'stockShortage' => $stockShortage,
             'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
             'refundableQuantities' => $this->refundService->refundableQuantities($order),

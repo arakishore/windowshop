@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\AdminSetting;
 use App\Models\SystemSetting;
 use App\Models\SystemSettingGroup;
-use App\Services\Admin\AdminSettingsInitializer;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Marketplace\MarketplaceLogoService;
+use App\Services\System\SystemSettingService;
 use App\Support\CurrencyCatalog;
 use App\Support\TimezoneCatalog;
 use Database\Seeders\MasterData\StorefrontBannerSettingSeeder;
@@ -22,8 +20,7 @@ use Illuminate\View\View;
 class AdminSettingsController extends Controller
 {
     public function __construct(
-        private readonly AdminSettingsInitializer $initializer,
-        private readonly AdminSettingsService $settings,
+        private readonly SystemSettingService $settings,
         private readonly TimezoneCatalog $timezones,
         private readonly CurrencyCatalog $currencies,
         private readonly MarketplaceLogoService $marketplaceLogo,
@@ -31,14 +28,13 @@ class AdminSettingsController extends Controller
 
     public function edit(): View
     {
-        $this->initializer->initialize();
         app(StorefrontBannerSettingSeeder::class)->run();
         $marketplaceLogoSetting = $this->ensureMarketplaceLogoSetting();
         $footerLogoSetting = $this->ensureFooterLogoSetting();
 
         return view('admin.settings.edit', [
-            'defaults' => $this->initializer->defaults(),
-            'settings' => $this->settings->all(),
+            'defaults' => $this->settings->regionalCurrencyDefaults(),
+            'settings' => $this->settings->regionalCurrencyValues(),
             'storefrontBannerMaxPerShop' => SystemSetting::query()
                 ->where('key', 'storefront_banner.max_per_shop')
                 ->value('value') ?? '3',
@@ -62,13 +58,13 @@ class AdminSettingsController extends Controller
 
         $payload = (array) $request->input('settings', []);
 
-        foreach ($this->initializer->defaults() as $group => $definitions) {
+        foreach ($this->settings->regionalCurrencyDefaults() as $group => $definitions) {
             foreach ($definitions as $key => $definition) {
                 $rawValue = $payload[$group][$key] ?? null;
                 $value = $this->normalizeInputValue($rawValue, $definition['type']);
 
                 try {
-                    $this->settings->setTyped($group, $key, $value, $definition['type']);
+                    $this->settings->setRegionalCurrency($group, $key, $value);
                 } catch (\InvalidArgumentException $exception) {
                     throw ValidationException::withMessages([
                         "settings.{$group}.{$key}" => $exception->getMessage(),
@@ -237,10 +233,9 @@ class AdminSettingsController extends Controller
     private function normalizeInputValue(mixed $value, string $type): mixed
     {
         return match ($type) {
-            AdminSetting::TYPE_BOOLEAN => (bool) $value,
-            AdminSetting::TYPE_INTEGER => (int) $value,
-            AdminSetting::TYPE_DECIMAL => (float) $value,
-            AdminSetting::TYPE_JSON => is_string($value) ? json_decode($value ?: 'null', true, 512, JSON_THROW_ON_ERROR) : $value,
+            SystemSetting::TYPE_BOOLEAN => (bool) $value,
+            SystemSetting::TYPE_INTEGER => (int) $value,
+            SystemSetting::TYPE_JSON => is_string($value) ? json_decode($value ?: 'null', true, 512, JSON_THROW_ON_ERROR) : $value,
             default => $value,
         };
     }

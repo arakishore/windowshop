@@ -10,6 +10,7 @@ class NotificationTemplate extends Model
     use HasUuid;
 
     protected $fillable = [
+        'uuid',
         'event_key',
         'channel',
         'subject',

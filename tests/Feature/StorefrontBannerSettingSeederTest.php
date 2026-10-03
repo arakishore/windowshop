@@ -53,7 +53,7 @@ class StorefrontBannerSettingSeederTest extends TestCase
         $this->assertNull($setting->deleted_at);
     }
 
-    public function test_storefront_banner_setting_seeder_is_idempotent_and_recovers_existing_records(): void
+    public function test_storefront_banner_setting_seeder_is_idempotent_and_preserves_configured_value(): void
     {
         $this->seed(StorefrontBannerSettingSeeder::class);
 
@@ -69,8 +69,6 @@ class StorefrontBannerSettingSeederTest extends TestCase
         ]);
         DB::table('system_settings')->where('id', $setting->id)->update([
             'value' => '9',
-            'status' => 'inactive',
-            'deleted_at' => now(),
         ]);
 
         $this->seed(StorefrontBannerSettingSeeder::class);
@@ -84,7 +82,7 @@ class StorefrontBannerSettingSeederTest extends TestCase
         $this->assertSame($groupUuid, $group->uuid);
         $this->assertSame($settingUuid, $setting->uuid);
         $this->assertSame('Storefront Banner', $group->name);
-        $this->assertSame('3', $setting->value);
+        $this->assertSame('9', $setting->value);
         $this->assertSame('active', $group->status);
         $this->assertSame('active', $setting->status);
         $this->assertNull($group->deleted_at);

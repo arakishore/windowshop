@@ -2,20 +2,18 @@
 
 namespace App\Services\DateTime;
 
-use App\Services\Admin\AdminSettingsService;
+use App\Services\System\SystemSettingService;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use DateTimeZone;
 
 class BusinessTimeService
 {
-    public function __construct(private readonly AdminSettingsService $settings)
-    {
-    }
+    public function __construct(private readonly SystemSettingService $settings) {}
 
     public function timezoneName(): string
     {
-        $timezone = (string) $this->settings->get('regional', 'timezone', 'Asia/Kolkata');
+        $timezone = (string) $this->settings->regionalConfig()['timezone'];
 
         return in_array($timezone, DateTimeZone::listIdentifiers(), true) ? $timezone : 'UTC';
     }

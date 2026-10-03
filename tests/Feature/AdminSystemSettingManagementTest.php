@@ -4,8 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\SystemSetting;
 use App\Models\User;
-use Database\Seeders\MasterData\StorefrontBannerSettingSeeder;
+use App\Services\System\SystemSettingService;
 use Database\Seeders\MasterData\PublicContactSettingSeeder;
+use Database\Seeders\MasterData\StorefrontBannerSettingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -141,6 +142,53 @@ class AdminSystemSettingManagementTest extends TestCase
 
         $this->actingAs($merchant)->get(route('admin.system-settings.edit', $setting))->assertForbidden();
         $this->actingAs($merchant)->put(route('admin.system-settings.update', $setting), $this->payload($setting, '+91 98765 43210'))->assertForbidden();
+    }
+
+    public function test_encrypted_setting_is_masked_and_blank_admin_update_preserves_secret(): void
+    {
+        $admin = $this->userWithRole('admin');
+        $setting = app(SystemSettingService::class)->setEncrypted('test.smtp.password', 'never-render-this-secret', [
+            'label' => 'Test SMTP Password',
+        ]);
+        $ciphertext = $setting->getRawOriginal('value');
+
+        $this->actingAs($admin)
+            ->get(route('admin.system-settings.index', ['search' => 'test.smtp.password']))
+            ->assertOk()
+            ->assertSee('Configured')
+            ->assertDontSee('never-render-this-secret');
+
+        $this->actingAs($admin)
+            ->get(route('admin.system-settings.index', ['search' => 'never-render-this-secret']))
+            ->assertOk()
+            ->assertDontSee('test.smtp.password');
+
+        $this->actingAs($admin)
+            ->get(route('admin.system-settings.edit', $setting))
+            ->assertOk()
+            ->assertSee('Configured — leave blank to keep the current secret.')
+            ->assertDontSee('never-render-this-secret')
+            ->assertDontSee($ciphertext);
+
+        $this->actingAs($admin)
+            ->put(route('admin.system-settings.update', $setting), [
+                'group_id' => $setting->group_id,
+                'label' => $setting->label,
+                'value' => '',
+                'value_type' => SystemSetting::TYPE_ENCRYPTED,
+                'description' => null,
+                'sort_order' => 0,
+                'status' => SystemSetting::STATUS_ACTIVE,
+                'is_public' => 1,
+                'is_encrypted' => 0,
+            ])
+            ->assertRedirect(route('admin.system-settings.edit', $setting));
+
+        $fresh = $setting->fresh();
+        $this->assertSame($ciphertext, $fresh->getRawOriginal('value'));
+        $this->assertTrue($fresh->is_encrypted);
+        $this->assertFalse($fresh->is_public);
+        $this->assertSame(SystemSetting::TYPE_ENCRYPTED, $fresh->value_type);
     }
 
     private function payload(SystemSetting $setting, ?string $value): array

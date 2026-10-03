@@ -54,7 +54,6 @@
 
 @section('content')
     @php
-        $currency = app(\App\Services\Admin\AdminSettingsService::class)->currencyConfig();
         $money = static function (float|int|string $value) use ($currency): string {
             $amount = number_format((float) $value, (int) ($currency['decimal_places'] ?? 2), (string) ($currency['decimal_separator'] ?? '.'), (string) ($currency['thousands_separator'] ?? ','));
             $symbol = (string) ($currency['symbol'] ?? 'INR ');

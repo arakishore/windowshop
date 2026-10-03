@@ -4,9 +4,9 @@ namespace App\Services\Notification;
 
 use App\Notifications\NotificationChannelName;
 use App\Notifications\NotificationMessage;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Merchant\MerchantSettingsService;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\System\SystemSettingService;
 use InvalidArgumentException;
 
 class NotificationPreferenceResolver
@@ -14,7 +14,7 @@ class NotificationPreferenceResolver
     public function __construct(
         private readonly MerchantSettingsService $merchantSettings,
         private readonly ShopSettingsService $shopSettings,
-        private readonly AdminSettingsService $adminSettings,
+        private readonly SystemSettingService $systemSettings,
         private readonly NotificationEventCatalogue $catalogue,
     ) {}
 
@@ -79,7 +79,7 @@ class NotificationPreferenceResolver
     public function setGlobal(string $eventKey, string $channel, bool $enabled): void
     {
         $this->assertConfigurable($eventKey, $channel, $enabled, 'global');
-        $this->adminSettings->set('notifications', $this->key($eventKey, $channel), $enabled);
+        $this->systemSettings->setNotificationPreference($eventKey, $channel, $enabled);
     }
 
     public function setDefault(string $eventKey, string $channel, bool $enabled): void
@@ -88,7 +88,7 @@ class NotificationPreferenceResolver
         if ($this->catalogue->find($eventKey)?->mandatory($channel)) {
             throw new InvalidArgumentException('Mandatory notification defaults cannot be changed.');
         }
-        $this->adminSettings->set('notifications', $this->key($eventKey, $channel), $enabled);
+        $this->systemSettings->setNotificationPreference($eventKey, $channel, $enabled);
     }
 
     public function defaultEnabled(string $eventKey, string $channel): bool
@@ -101,11 +101,12 @@ class NotificationPreferenceResolver
         if ($definition->mandatory($channel)) {
             return true;
         }
-        $key = $this->key($eventKey, $channel);
 
-        return $this->adminSettings->has('notifications', $key)
-            ? (bool) $this->adminSettings->get('notifications', $key)
-            : $definition->defaultEnabled($channel);
+        return $this->systemSettings->notificationPreference(
+            $eventKey,
+            $channel,
+            $definition->defaultEnabled($channel),
+        );
     }
 
     private function assertConfigurable(string $eventKey, string $channel, bool $enabled, string $scope): void

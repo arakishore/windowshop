@@ -54,10 +54,10 @@ This document tracks the modules and user-facing features currently implemented 
 
 ### Global Admin Settings
 
-- Generic `admin_settings` table with grouped key/value settings
-- `AdminSettingsService`
-- `AdminSettingsInitializer`
-- `AdminSettingsSeeder`
+- Canonical `system_settings` table with grouped, typed key/value settings
+- `SystemSettingService` for canonical reads, writes, typed values, and protected secrets
+- `SystemFoundationSeeder` for non-destructive foundational defaults
+- Global settings use `system_settings` exclusively; merchant and shop settings remain separately scoped
 - Regional settings:
   - Time zone
   - Date format

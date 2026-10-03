@@ -124,28 +124,90 @@ class SystemFoundationSeeder extends Seeder
                 'value' => 'Asia/Kolkata',
                 'sort_order' => 70,
             ],
+            [
+                'group_id' => $groupIds['localization'],
+                'key' => 'regional.date_format',
+                'label' => 'Date Format',
+                'value' => 'd-m-Y',
+                'sort_order' => 80,
+            ],
+            [
+                'group_id' => $groupIds['localization'],
+                'key' => 'regional.time_format',
+                'label' => 'Time Format',
+                'value' => 'h:i A',
+                'sort_order' => 90,
+            ],
+            [
+                'group_id' => $groupIds['localization'],
+                'key' => 'regional.financial_year_start_month',
+                'label' => 'Financial Year Start Month',
+                'value' => '4',
+                'value_type' => 'integer',
+                'sort_order' => 100,
+            ],
+            [
+                'group_id' => $groupIds['localization'],
+                'key' => 'currency.symbol',
+                'label' => 'Currency Symbol',
+                'value' => '₹',
+                'sort_order' => 110,
+            ],
+            [
+                'group_id' => $groupIds['localization'],
+                'key' => 'currency.decimal_places',
+                'label' => 'Currency Decimal Places',
+                'value' => '2',
+                'value_type' => 'integer',
+                'sort_order' => 120,
+            ],
+            [
+                'group_id' => $groupIds['localization'],
+                'key' => 'currency.thousands_separator',
+                'label' => 'Currency Thousands Separator',
+                'value' => ',',
+                'sort_order' => 130,
+            ],
+            [
+                'group_id' => $groupIds['localization'],
+                'key' => 'currency.decimal_separator',
+                'label' => 'Currency Decimal Separator',
+                'value' => '.',
+                'sort_order' => 140,
+            ],
+            [
+                'group_id' => $groupIds['localization'],
+                'key' => 'currency.symbol_position',
+                'label' => 'Currency Symbol Position',
+                'value' => 'before',
+                'sort_order' => 150,
+            ],
         ];
 
         foreach ($settings as $setting) {
-            DB::table('system_settings')->updateOrInsert(
-                ['key' => $setting['key']],
-                fn (bool $exists) => [
-                    'group_id' => $setting['group_id'],
-                    'label' => $setting['label'],
+            $existing = DB::table('system_settings')->where('key', $setting['key'])->first();
+            $metadata = [
+                'group_id' => $setting['group_id'],
+                'label' => $setting['label'],
+                'value_type' => $setting['value_type'] ?? 'string',
+                'is_public' => false,
+                'is_encrypted' => false,
+                'sort_order' => $setting['sort_order'],
+                'updated_at' => $now,
+            ];
+
+            if ($existing === null) {
+                DB::table('system_settings')->insert([
+                    ...$metadata,
+                    'uuid' => (string) Str::uuid(),
+                    'key' => $setting['key'],
                     'value' => $setting['value'],
-                    'value_type' => $setting['value_type'] ?? 'string',
-                    'is_public' => false,
-                    'is_encrypted' => false,
-                    'sort_order' => $setting['sort_order'],
                     'status' => 'active',
-                    'deleted_at' => null,
-                    'updated_at' => $now,
-                    ...($exists ? [] : [
-                        'uuid' => (string) Str::uuid(),
-                        'created_at' => $now,
-                    ]),
-                ],
-            );
+                    'created_at' => $now,
+                ]);
+            } else {
+                DB::table('system_settings')->where('id', $existing->id)->update($metadata);
+            }
         }
 
         $this->call(StorefrontBannerSettingSeeder::class);

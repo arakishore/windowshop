@@ -2,11 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminSetting;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\DateTime\DateDisplayService;
+use App\Services\System\SystemSettingService;
 use Carbon\CarbonImmutable;
-use Database\Seeders\AdminSettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PDO;
@@ -32,7 +30,6 @@ class DateDisplayServiceTest extends TestCase
     {
         parent::setUp();
 
-        $this->seed(AdminSettingsSeeder::class);
         $this->app->forgetInstance(DateDisplayService::class);
     }
 
@@ -46,8 +43,8 @@ class DateDisplayServiceTest extends TestCase
 
     public function test_custom_date_and_time_formats_are_used(): void
     {
-        $this->settings()->set('regional', 'date_format', 'd/m/Y');
-        $this->settings()->set('regional', 'time_format', 'H:i');
+        $this->settings()->setRegionalCurrency('regional', 'date_format', 'd/m/Y');
+        $this->settings()->setRegionalCurrency('regional', 'time_format', 'H:i');
         $this->app->forgetInstance(DateDisplayService::class);
 
         $timestamp = CarbonImmutable::parse('2026-01-31 08:35:00', 'UTC');
@@ -57,7 +54,7 @@ class DateDisplayServiceTest extends TestCase
 
     public function test_null_invalid_and_date_only_values_are_handled_safely(): void
     {
-        $this->settings()->set('regional', 'timezone', 'Pacific/Midway');
+        $this->settings()->setRegionalCurrency('regional', 'timezone', 'Pacific/Midway');
         $this->app->forgetInstance(DateDisplayService::class);
 
         $this->assertSame('N/A', app_datetime(null, 'N/A'));
@@ -69,10 +66,7 @@ class DateDisplayServiceTest extends TestCase
 
     public function test_invalid_saved_timezone_falls_back_without_breaking_views(): void
     {
-        AdminSetting::query()
-            ->where('group', 'regional')
-            ->where('setting_key', 'timezone')
-            ->update(['setting_value' => 'Bad/Timezone']);
+        $this->settings()->set('default_timezone', 'Bad/Timezone');
         $this->app->forgetInstance(DateDisplayService::class);
 
         $timestamp = CarbonImmutable::parse('2026-08-01 13:05:00', 'UTC');
@@ -91,12 +85,16 @@ class DateDisplayServiceTest extends TestCase
         app_date('2026-08-04');
 
         $settingsQueries = collect(DB::getQueryLog())
+            ->filter(fn (array $query): bool => str_contains(strtolower($query['query']), 'system_settings'))
+            ->count();
+        $legacyQueries = collect(DB::getQueryLog())
             ->filter(fn (array $query): bool => str_contains(strtolower($query['query']), 'admin_settings'))
             ->count();
 
         DB::disableQueryLog();
 
-        $this->assertSame(1, $settingsQueries);
+        $this->assertSame(4, $settingsQueries);
+        $this->assertSame(0, $legacyQueries);
     }
 
     public function test_receipt_and_order_views_use_the_global_formatter(): void
@@ -111,8 +109,8 @@ class DateDisplayServiceTest extends TestCase
         );
     }
 
-    private function settings(): AdminSettingsService
+    private function settings(): SystemSettingService
     {
-        return app(AdminSettingsService::class);
+        return app(SystemSettingService::class);
     }
 }

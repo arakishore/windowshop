@@ -7,8 +7,9 @@ use App\Models\OrderComment;
 use App\Models\OrderItem;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Order\OrderActivityPresenter;
+use App\Services\System\SystemSettingService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -18,11 +19,10 @@ class CustomerOrderPresenter
     private const FALLBACK_IMAGE = 'assets/storefront/images/no-image-icon.png';
 
     public function __construct(
-        private readonly AdminSettingsService $settings,
+        private readonly SystemSettingService $settings,
         private readonly StorefrontUrlService $urls,
         private readonly OrderActivityPresenter $orderActivityPresenter,
-    ) {
-    }
+    ) {}
 
     public function money(float|int|string|null $value): string
     {
@@ -243,7 +243,7 @@ class CustomerOrderPresenter
     }
 
     /**
-     * @return Collection<int, array{type: string, tone: string, timestamp: \Illuminate\Support\Carbon|null, display_time: string, title: string, description: string|null}>
+     * @return Collection<int, array{type: string, tone: string, timestamp: Carbon|null, display_time: string, title: string, description: string|null}>
      */
     public function activity(Order $order): Collection
     {
@@ -458,7 +458,7 @@ class CustomerOrderPresenter
     }
 
     /**
-     * @param array<int, mixed> $parts
+     * @param  array<int, mixed>  $parts
      * @return array<int, string>
      */
     private function addressLines(array $parts): array
@@ -471,7 +471,7 @@ class CustomerOrderPresenter
     }
 
     /**
-     * @param array<int, mixed> $parts
+     * @param  array<int, mixed>  $parts
      */
     private function compactLocation(array $parts): string
     {

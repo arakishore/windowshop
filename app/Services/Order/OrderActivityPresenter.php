@@ -6,12 +6,12 @@ use App\Models\Order;
 use App\Models\OrderExchange;
 use App\Models\OrderRefund;
 use App\Models\OrderStatusHistory;
-use App\Services\Admin\AdminSettingsService;
+use App\Services\System\SystemSettingService;
 
 class OrderActivityPresenter
 {
     public function __construct(
-        private readonly AdminSettingsService $settings,
+        private readonly SystemSettingService $settings,
     ) {}
 
     public function type(OrderStatusHistory $history): string

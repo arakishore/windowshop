@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminSetting;
 use App\Models\MerchantProfile;
 use App\Models\PostalCode;
 use App\Models\Product;
@@ -10,10 +9,13 @@ use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\ShopSetting;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\Storefront\CustomerLocationService;
+use App\Services\System\SystemSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -41,7 +43,7 @@ class StorefrontCustomerLocationTest extends TestCase
         parent::setUp();
 
         $this->currencySetting('symbol', 'INR ');
-        $this->currencySetting('decimal_places', '2', AdminSetting::TYPE_INTEGER);
+        $this->currencySetting('decimal_places', '2', SystemSetting::TYPE_INTEGER);
         $this->currencySetting('thousands_separator', ',');
         $this->currencySetting('decimal_separator', '.');
         $this->currencySetting('symbol_position', 'before');
@@ -304,7 +306,7 @@ class StorefrontCustomerLocationTest extends TestCase
     {
         $postalCode = $this->postalCode('422009', officeName: 'Cidco Colony S.O');
         $service = app(CustomerLocationService::class);
-        $request = \Illuminate\Http\Request::create('/');
+        $request = Request::create('/');
         $request->setLaravelSession($this->app['session.store']);
 
         $request->session()->put(CustomerLocationService::SESSION_KEY, '422009');
@@ -323,8 +325,7 @@ class StorefrontCustomerLocationTest extends TestCase
         bool $shippingEnabled = true,
         string $district = 'NASHIK',
         string $state = 'MAHARASHTRA',
-    ): PostalCode
-    {
+    ): PostalCode {
         return PostalCode::query()->create([
             'source_key' => sha1($postalCode.'|'.strtolower($officeName).'|ho|'.strtolower($district).'|'.strtolower($state)),
             'circle_name' => $state.' Circle',
@@ -398,7 +399,7 @@ class StorefrontCustomerLocationTest extends TestCase
     }
 
     /**
-     * @param array{merchant: MerchantProfile, shop: Shop, root: ProductCategory, category: ProductCategory} $fixture
+     * @param  array{merchant: MerchantProfile, shop: Shop, root: ProductCategory, category: ProductCategory}  $fixture
      */
     private function product(array $fixture, string $name): Product
     {
@@ -431,11 +432,12 @@ class StorefrontCustomerLocationTest extends TestCase
         ]);
     }
 
-    private function currencySetting(string $key, string $value, string $type = AdminSetting::TYPE_STRING): void
+    private function currencySetting(string $key, string $value, string $type = SystemSetting::TYPE_STRING): void
     {
-        AdminSetting::query()->updateOrCreate(
-            ['group' => 'currency', 'setting_key' => $key],
-            ['setting_value' => $value, 'setting_type' => $type],
+        app(SystemSettingService::class)->setRegionalCurrency(
+            'currency',
+            $key,
+            $type === SystemSetting::TYPE_INTEGER ? (int) $value : $value,
         );
     }
 

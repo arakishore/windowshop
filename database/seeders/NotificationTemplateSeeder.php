@@ -6,6 +6,7 @@ use App\Models\NotificationTemplate;
 use App\Services\Notification\NotificationEventCatalogue;
 use App\Services\Notification\NotificationTemplateDefaults;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class NotificationTemplateSeeder extends Seeder
 {
@@ -17,7 +18,10 @@ class NotificationTemplateSeeder extends Seeder
 
                 NotificationTemplate::query()->firstOrCreate(
                     ['event_key' => $event->templateKey, 'channel' => $channel],
-                    $attributes,
+                    [
+                        'uuid' => (string) Str::uuid(),
+                        ...$attributes,
+                    ],
                 );
             }
         }

@@ -9,7 +9,6 @@ use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductReview;
 use App\Models\ProductVariant;
 use App\Models\Shop;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
 use App\Services\System\SystemSettingService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -26,7 +25,6 @@ class ProductListingService
     private const FALLBACK_IMAGE = 'assets/storefront/images/no-image-icon.png';
 
     public function __construct(
-        private readonly AdminSettingsService $settings,
         private readonly SystemSettingService $systemSettings,
         private readonly CustomerLocationService $location,
         private readonly ProductLocationSorter $locationSorter,
@@ -355,7 +353,8 @@ class ProductListingService
                 'attributes.value:id,product_attribute_group_id,name,code,status',
                 'images' => fn ($query) => $query
                     ->where('status', 'active')
-                    ->select('id', 'product_id', 'image_path', 'thumbnail_path', 'alt_text', 'sort_order', 'status'),
+                    ->select('id', 'product_id', 'image_path', 'thumbnail_path', 'alt_text', 'sort_order', 'status')
+                    ->with('attributeValues:id'),
                 'storefrontCardVariant:id,product_id,shop_id,availability_status_id,sku,name,mrp,selling_price,stock_quantity,allow_backorder,is_default,status,is_sellable',
                 'storefrontCardVariant.availabilityStatus:id,name,code,customer_description,purchase_allowed,badge_type,status,deleted_at',
                 'variants' => fn ($query) => $query
@@ -624,7 +623,12 @@ class ProductListingService
         $mrp = (float) $variant->mrp;
         $hasDiscount = $mrp > $sellingPrice;
         $discountPercent = $hasDiscount ? (int) round((($mrp - $sellingPrice) / $mrp) * 100) : 0;
-        $images = $this->detailImages($product);
+        $selectedColorValueId = $this->variantAttributeValueId($variant, 'color');
+        $galleryImages = $this->galleryImages($product);
+        $images = $this->orderedGalleryImages($galleryImages, $selectedColorValueId)
+            ->pluck('url')
+            ->all();
+        $colors = $this->colorSwatches($product);
         $description = $product->description ?: ($product->short_description ?: 'A local shop product listing with clean catalogue-ready details.');
         $availability = $this->availabilityGuard->decision($variant, 1);
         $approvedReviews = ProductReview::query()
@@ -688,8 +692,12 @@ class ProductListingService
             'meta_title' => $product->meta_title ?: $product->product_name,
             'meta_description' => $product->meta_description ?: Str::limit(strip_tags($product->short_description ?: $description), 160, ''),
             'images' => $images,
-            'colors' => $this->colorSwatches($product),
+            'gallery_images' => $galleryImages->values()->all(),
+            'selected_color' => $this->variantAttributeName($variant, 'color') ?? ($colors[0]['name'] ?? ''),
+            'selected_size' => $this->variantAttributeName($variant, 'size') ?? ($this->sizeLabels($product)[0]['name'] ?? ''),
+            'colors' => $colors,
             'sizes' => $this->sizeLabels($product),
+            'variant_options' => $this->variantSelectionOptions($product),
             'size_guide' => $this->sizeGuide($product),
             'other_attributes' => $this->otherAttributes($product),
             'disclaimers' => $this->productDisclaimers($product),
@@ -713,19 +721,63 @@ class ProductListingService
     /**
      * @return array<int, string>
      */
-    private function detailImages(Product $product): array
+    private function galleryImages(Product $product): Collection
     {
         $images = $product->images
-            ->map(fn ($image): string => $this->productImageUrl($image->image_path, $image->thumbnail_path))
-            ->filter()
-            ->values()
-            ->all();
+            ->map(fn ($image): array => [
+                'id' => (int) $image->getKey(),
+                'url' => $this->productImageUrl($image->image_path, $image->thumbnail_path),
+                'attribute_value_ids' => $image->attributeValues->pluck('id')->map(fn ($id): int => (int) $id)->values()->all(),
+            ])
+            ->unique('id')
+            ->values();
 
-        return $images === [] ? [$this->imageUrl($product)] : $images;
+        return $images->isNotEmpty() ? $images : collect([[
+            'id' => 0,
+            'url' => $this->imageUrl($product),
+            'attribute_value_ids' => [],
+        ]]);
     }
 
     /**
-     * @return array<int, array{name: string, price: string, raw_price: float, variant_id: int, stock_quantity: float, availability_code: string|null, availability_label: string, stock_limit: int|null, availability_message: string|null}>
+     * @param  Collection<int, array{id: int, url: string, attribute_value_ids: array<int, int>}>  $allImages
+     * @return Collection<int, array{id: int, url: string, attribute_value_ids: array<int, int>}>
+     */
+    private function orderedGalleryImages(Collection $allImages, ?int $selectedColorValueId): Collection
+    {
+        $preferredImages = $selectedColorValueId === null
+            ? collect()
+            : $allImages->filter(fn (array $image): bool => in_array($selectedColorValueId, $image['attribute_value_ids'], true));
+
+        if ($preferredImages->isEmpty()) {
+            $preferredImages = $allImages->filter(fn (array $image): bool => $image['attribute_value_ids'] === []);
+        }
+
+        return $preferredImages
+            ->concat($allImages->reject(fn (array $image): bool => $preferredImages->contains('id', $image['id'])))
+            ->unique('id')
+            ->values();
+    }
+
+    private function variantAttributeName(?ProductVariant $variant, string $groupCode): ?string
+    {
+        return $variant?->attributes
+            ->first(fn ($attribute): bool => $attribute->group?->code === $groupCode && $attribute->value !== null)
+            ?->value
+            ?->name;
+    }
+
+    private function variantAttributeValueId(?ProductVariant $variant, string $groupCode): ?int
+    {
+        $valueId = $variant?->attributes
+            ->first(fn ($attribute): bool => $attribute->group?->code === $groupCode && $attribute->value !== null)
+            ?->product_attribute_group_value_id;
+
+        return $valueId === null ? null : (int) $valueId;
+    }
+
+    /**
+     * @return array<int, array{name: string, value_id: int, price: string, raw_price: float, variant_id: int, stock_quantity: float, availability_code: string|null, availability_label: string, stock_limit: int|null, availability_message: string|null, can_add_to_cart: bool}>
      */
     private function sizeLabels(Product $product): array
     {
@@ -738,16 +790,20 @@ class ProductListingService
                     return null;
                 }
 
+                $availability = $this->availabilityGuard->decision($variant, 1);
+
                 return [
                     'name' => $size->value->name,
+                    'value_id' => (int) $size->value->getKey(),
                     'price' => $this->money((float) $variant->selling_price),
                     'raw_price' => (float) $variant->selling_price,
                     'variant_id' => $variant->getKey(),
                     'stock_quantity' => (int) $variant->stock_quantity,
-                    'availability_code' => $this->availabilityGuard->decision($variant, 1)['status_code'],
+                    'availability_code' => $availability['status_code'],
                     'availability_label' => $this->customerAvailabilityLabel($variant, 1),
                     'stock_limit' => $this->stockLimit($variant),
-                    'availability_message' => $this->availabilityGuard->decision($variant, 1)['message'],
+                    'availability_message' => $availability['message'],
+                    'can_add_to_cart' => (bool) $availability['allowed'],
                 ];
             })
             ->filter()
@@ -771,16 +827,19 @@ class ProductListingService
                     return null;
                 }
 
+                $availability = $this->availabilityGuard->decision($variant, 1);
+
                 return [
                     'name' => $label,
                     'price' => $this->money((float) $variant->selling_price),
                     'raw_price' => (float) $variant->selling_price,
                     'variant_id' => $variant->getKey(),
                     'stock_quantity' => (int) $variant->stock_quantity,
-                    'availability_code' => $this->availabilityGuard->decision($variant, 1)['status_code'],
+                    'availability_code' => $availability['status_code'],
                     'availability_label' => $this->customerAvailabilityLabel($variant, 1),
                     'stock_limit' => $this->stockLimit($variant),
-                    'availability_message' => $this->availabilityGuard->decision($variant, 1)['message'],
+                    'availability_message' => $availability['message'],
+                    'can_add_to_cart' => (bool) $availability['allowed'],
                 ];
             })
             ->filter()
@@ -789,6 +848,44 @@ class ProductListingService
             ->all();
 
         return count($fallbackSizes) > 1 ? $fallbackSizes : [];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function variantSelectionOptions(Product $product): array
+    {
+        return $product->variants
+            ->map(function (ProductVariant $variant): ?array {
+                $size = $variant->attributes
+                    ->first(fn ($attribute): bool => $attribute->group?->code === 'size' && $attribute->value !== null);
+
+                if ($size === null) {
+                    return null;
+                }
+
+                $color = $variant->attributes
+                    ->first(fn ($attribute): bool => $attribute->group?->code === 'color' && $attribute->value !== null);
+                $availability = $this->availabilityGuard->decision($variant, 1);
+
+                return [
+                    'color_value_id' => $color === null ? null : (int) $color->value->getKey(),
+                    'size_value_id' => (int) $size->value->getKey(),
+                    'size_name' => $size->value->name,
+                    'price' => $this->money((float) $variant->selling_price),
+                    'raw_price' => (float) $variant->selling_price,
+                    'variant_id' => (int) $variant->getKey(),
+                    'stock_quantity' => (int) $variant->stock_quantity,
+                    'availability_code' => $availability['status_code'],
+                    'availability_label' => $this->customerAvailabilityLabel($variant, 1),
+                    'stock_limit' => $this->stockLimit($variant),
+                    'availability_message' => $availability['message'],
+                    'can_add_to_cart' => (bool) $availability['allowed'],
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private function fallbackVariantSizeLabel(ProductVariant $variant, Product $product): ?string
@@ -861,7 +958,7 @@ class ProductListingService
     }
 
     /**
-     * @return array<int, array{name: string, hex: string|null}>
+     * @return array<int, array{name: string, hex: string|null, value_id: int}>
      */
     private function colorSwatches(Product $product): array
     {
@@ -871,6 +968,7 @@ class ProductListingService
             ->map(fn ($attribute): array => [
                 'name' => $attribute->value->name,
                 'hex' => $attribute->value->swatch_hex,
+                'value_id' => (int) $attribute->value->getKey(),
             ])
             ->unique('name')
             ->values()
@@ -1106,7 +1204,7 @@ class ProductListingService
 
     private function money(float $value): string
     {
-        $currency = $this->settings->currencyConfig();
+        $currency = $this->systemSettings->currencyConfig();
         $amount = number_format(
             $value,
             (int) ($currency['decimal_places'] ?? 2),

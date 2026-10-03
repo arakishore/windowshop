@@ -5,9 +5,9 @@ namespace App\Services\Checkout;
 use App\Models\Cart;
 use App\Models\CustomerAddress;
 use App\Models\Shop;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Merchant\ShopSettingsInitializer;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -16,19 +16,20 @@ class StorefrontDeliveryService
     public const SELECTED_FULFILLMENT_SESSION_KEY = 'storefront.checkout.selected_fulfillment';
 
     public const FULFILLMENT_DELIVERY = 'delivery';
+
     public const FULFILLMENT_PICKUP = 'pickup';
+
     public const LEGACY_FULFILLMENT_STANDARD = 'standard';
 
     public function __construct(
         private readonly ShopDeliveryQuoteService $deliveryQuotes,
         private readonly ShopSettingsService $shopSettings,
         private readonly ShopSettingsInitializer $shopSettingsInitializer,
-        private readonly AdminSettingsService $adminSettings,
-    ) {
-    }
+        private readonly SystemSettingService $systemSettings,
+    ) {}
 
     /**
-     * @param array<string, mixed> $cartData
+     * @param  array<string, mixed>  $cartData
      * @return array{options: array<int, array<string, mixed>>, selected: ?string, shipping_cents: int, shipping: string, total_cents: int, total: string}
      */
     public function resolve(Request $request, ?Cart $cart, array $cartData, ?CustomerAddress $selectedAddress): array
@@ -103,8 +104,8 @@ class StorefrontDeliveryService
     }
 
     /**
-     * @param Collection<int, array<string, mixed>> $groups
-     * @param Collection<int, Shop> $shops
+     * @param  Collection<int, array<string, mixed>>  $groups
+     * @param  Collection<int, Shop>  $shops
      * @return array<string, mixed>|null
      */
     private function deliveryOption(Collection $groups, Collection $shops, ?CustomerAddress $selectedAddress, ?string $postalCode): ?array
@@ -167,8 +168,8 @@ class StorefrontDeliveryService
     }
 
     /**
-     * @param Collection<int, array<string, mixed>> $groups
-     * @param Collection<int, Shop> $shops
+     * @param  Collection<int, array<string, mixed>>  $groups
+     * @param  Collection<int, Shop>  $shops
      * @return array<string, mixed>|null
      */
     private function pickupOption(Collection $groups, Collection $shops): ?array
@@ -219,7 +220,7 @@ class StorefrontDeliveryService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $options
+     * @param  array<int, array<string, mixed>>  $options
      */
     private function selectedFulfillment(Request $request, array $options): ?string
     {
@@ -250,7 +251,7 @@ class StorefrontDeliveryService
     }
 
     /**
-     * @param array<string, mixed>|null $failed
+     * @param  array<string, mixed>|null  $failed
      */
     private function deliveryFailureReason(?array $failed): ?string
     {
@@ -270,7 +271,7 @@ class StorefrontDeliveryService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $quotes
+     * @param  array<int, array<string, mixed>>  $quotes
      */
     private function estimateText(array $quotes): ?string
     {
@@ -312,7 +313,7 @@ class StorefrontDeliveryService
 
     private function moneyFromCents(int $cents): string
     {
-        $currency = $this->adminSettings->currencyConfig();
+        $currency = $this->systemSettings->currencyConfig();
         $amount = number_format(
             $cents / 100,
             (int) ($currency['decimal_places'] ?? 2),

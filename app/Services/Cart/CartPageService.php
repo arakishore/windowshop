@@ -7,38 +7,40 @@ use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Shop;
-use App\Services\Admin\AdminSettingsService;
-use App\Services\Promotion\Engine\Data\GeneratedPromotionGift;
-use App\Services\Promotion\Engine\PromotionCalculator;
-use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
+use App\Services\Promotion\Coupons\CouponResolution;
 use App\Services\Promotion\Coupons\CouponResolver;
 use App\Services\Promotion\Coupons\CouponSessionStore;
-use App\Services\Promotion\Coupons\CouponResolution;
+use App\Services\Promotion\Engine\Data\GeneratedPromotionGift;
+use App\Services\Promotion\Engine\Data\PromotionCalculationResult;
+use App\Services\Promotion\Engine\PromotionCalculator;
 use App\Services\Storefront\StorefrontCustomerContext;
 use App\Services\Storefront\StorefrontProductPolicyPresenter;
 use App\Services\Storefront\StorefrontUrlService;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class CartPageService
 {
     private const FALLBACK_IMAGE = 'assets/storefront/images/no-image-icon.png';
+
     private const PAGE_DATA_ATTRIBUTE = 'storefront_cart_page_data';
+
     private const CURRENT_CART_ATTRIBUTE = 'storefront_current_cart';
 
     public function __construct(
         private readonly CartResolver $cartResolver,
         private readonly CartItemQuantityValidator $quantityValidator,
-        private readonly AdminSettingsService $settings,
+        private readonly SystemSettingService $settings,
         private readonly StorefrontUrlService $urls,
         private readonly StorefrontProductPolicyPresenter $policyPresenter,
         private readonly PromotionCalculator $promotions,
         private readonly CouponSessionStore $couponStore,
         private readonly CouponResolver $couponResolver,
         private readonly StorefrontCustomerContext $customerContext,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -136,7 +138,7 @@ class CartPageService
     }
 
     /**
-     * @param Collection<int, CartItem> $items
+     * @param  Collection<int, CartItem>  $items
      * @return array<string, mixed>
      */
     private function dataFromItems(Collection $items, Request $request): array
@@ -255,7 +257,7 @@ class CartPageService
                 $this->quantityValidator->validateStock($variant, (float) $item->quantity);
                 $decision = $this->quantityValidator->availabilityDecision($variant, (float) $item->quantity);
                 $message = (bool) ($decision['allowed'] ?? false) ? ($decision['message'] ?? null) : null;
-            } catch (\Illuminate\Validation\ValidationException $exception) {
+            } catch (ValidationException $exception) {
                 $isPurchasable = false;
                 $message = collect($exception->errors())->flatten()->first() ?: 'Currently unavailable.';
             }
