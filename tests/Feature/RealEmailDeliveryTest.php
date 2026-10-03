@@ -21,6 +21,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Mockery;
@@ -245,8 +246,10 @@ class RealEmailDeliveryTest extends TestCase
         ])->assertSessionHasErrors('admin_notification_email');
         $this->assertSame('notifications@example.test', app(EmailConfigurationService::class)->values()['admin_notification_email']);
         $this->actingAs($admin)->post(route('admin.email-settings.test'), ['test_recipient' => 'invalid'])->assertSessionHasErrors('test_recipient');
+        Queue::fake();
         $this->actingAs($admin)->post(route('admin.email-settings.test'), ['test_recipient' => 'test@example.test'])->assertSessionHas('success');
         Mail::assertSent(TransactionalNotificationMail::class, fn (TransactionalNotificationMail $mail): bool => $mail->hasTo('test@example.test'));
+        Queue::assertNothingPushed();
     }
 
     private function configure(): void

@@ -9,6 +9,7 @@ use App\Events\MerchantAccountCreated;
 use App\Events\MerchantLifecycleChanged;
 use App\Events\OrderStatusChanged;
 use App\Events\StorefrontOrderPlaced;
+use App\Jobs\DeliverNotificationEmail;
 use App\Listeners\DispatchBusinessNotifications;
 use App\Models\MerchantProfile;
 use App\Models\Order;
@@ -28,6 +29,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -38,6 +40,8 @@ class NotificationBusinessEventWiringTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Queue::fake();
 
         foreach (['notification_delivery_logs', 'order_status_histories', 'shop_settings', 'merchant_settings', 'system_settings', 'system_setting_groups', 'orders', 'shops', 'merchant_profiles', 'auth_user_roles', 'auth_roles', 'users'] as $table) {
             Schema::dropIfExists($table);
@@ -226,7 +230,7 @@ class NotificationBusinessEventWiringTest extends TestCase
             'notification_key' => 'customer.registered',
             'channel' => 'email',
             'destination' => 'customer@example.test',
-            'status' => 'skipped',
+            'status' => 'queued',
         ]);
         $this->assertSame(3, DB::table('notification_delivery_logs')->where('notification_key', 'customer.registered')->count());
     }
@@ -334,7 +338,7 @@ class NotificationBusinessEventWiringTest extends TestCase
         );
     }
 
-    public function test_storefront_merchant_notification_failure_is_logged_without_throwing(): void
+    public function test_storefront_merchant_notification_is_queued_without_calling_transport(): void
     {
         $merchant = $this->merchant();
         $adminId = $this->user('Admin', 'admin@example.test', '9000000002');
@@ -362,9 +366,9 @@ class NotificationBusinessEventWiringTest extends TestCase
         $this->assertDatabaseHas('notification_delivery_logs', [
             'notification_key' => 'merchant.registered.admin',
             'destination' => 'admin@example.test',
-            'status' => DeliveryResult::FAILED,
-            'error_summary' => 'Simulated transport failure',
+            'status' => 'queued',
         ]);
+        Queue::assertPushed(DeliverNotificationEmail::class, fn (DeliverNotificationEmail $job): bool => $job->message->key === 'merchant.registered.admin');
         $this->assertTrue($merchant->fresh()->exists);
     }
 
@@ -382,6 +386,7 @@ class NotificationBusinessEventWiringTest extends TestCase
         }
 
         $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'customer.registered']);
+        Queue::assertNothingPushed();
     }
 
     public function test_after_commit_domain_event_is_processed_after_successful_commit(): void
@@ -398,6 +403,7 @@ class NotificationBusinessEventWiringTest extends TestCase
             'channel' => 'email',
             'destination' => 'committed@example.test',
         ]);
+        Queue::assertPushed(DeliverNotificationEmail::class, 1);
     }
 
     public function test_lifecycle_uses_only_primary_contact_and_duplicate_occurrence_is_idempotent(): void
@@ -409,7 +415,7 @@ class NotificationBusinessEventWiringTest extends TestCase
         app(DispatchBusinessNotifications::class)->merchantLifecycleChanged($event);
         app(DispatchBusinessNotifications::class)->merchantLifecycleChanged($event);
 
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'merchant.approved', 'channel' => 'email', 'destination' => 'primary@example.test', 'status' => 'skipped']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'merchant.approved', 'channel' => 'email', 'destination' => 'primary@example.test', 'status' => 'queued']);
         $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'merchant.approved', 'destination' => 'operations@example.test']);
         $this->assertSame(3, DB::table('notification_delivery_logs')->where('notification_key', 'merchant.approved')->count());
     }
@@ -431,11 +437,14 @@ class NotificationBusinessEventWiringTest extends TestCase
         app(DispatchBusinessNotifications::class)->storefrontOrderPlaced($event);
         app(DispatchBusinessNotifications::class)->storefrontOrderPlaced($event);
 
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.placed.customer', 'channel' => 'email', 'destination' => 'snapshot@example.test', 'status' => 'skipped']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.placed.customer', 'channel' => 'email', 'destination' => 'snapshot@example.test', 'status' => 'queued']);
         $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'primary@example.test']);
         $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'operations@example.test']);
         $this->assertSame(1, DB::table('notification_delivery_logs')->where('notification_key', 'order.new.merchant')->where('channel', 'email')->where('destination', 'primary@example.test')->count());
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.admin', 'channel' => 'email', 'destination' => 'admin@example.test', 'status' => 'skipped']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.admin', 'channel' => 'email', 'destination' => 'admin@example.test', 'status' => 'queued']);
+        Queue::assertPushed(DeliverNotificationEmail::class, fn (DeliverNotificationEmail $job): bool => $job->message->key === 'order.placed.customer');
+        Queue::assertPushed(DeliverNotificationEmail::class, fn (DeliverNotificationEmail $job): bool => $job->message->key === 'order.new.merchant');
+        Queue::assertPushed(DeliverNotificationEmail::class, fn (DeliverNotificationEmail $job): bool => $job->message->key === 'order.new.admin');
     }
 
     public function test_storefront_order_event_is_not_wired_into_generic_pos_or_exchange_creation(): void
@@ -455,17 +464,17 @@ class NotificationBusinessEventWiringTest extends TestCase
     {
         $order = $this->notificationOrder();
         $cases = [
-            'confirmed' => ['order.confirmed.customer', 'skipped'],
-            'processing' => ['order.processing.customer', 'skipped'],
-            'ready_for_pickup' => ['order.ready_for_pickup.customer', 'skipped'],
-            'packed' => ['order.packed.customer', 'skipped'],
-            'ready_for_dispatch' => ['order.ready_for_dispatch.customer', 'skipped'],
-            'shipped' => ['order.shipped.customer', 'skipped'],
-            'in_transit' => ['order.in_transit.customer', 'skipped'],
-            'out_for_delivery' => ['order.out_for_delivery.customer', 'skipped'],
-            'delivered' => ['order.delivered.customer', 'skipped'],
-            'completed' => ['order.completed.customer', 'skipped'],
-            'cancelled' => ['order.cancelled.customer', 'skipped'],
+            'confirmed' => ['order.confirmed.customer', 'queued'],
+            'processing' => ['order.processing.customer', 'queued'],
+            'ready_for_pickup' => ['order.ready_for_pickup.customer', 'queued'],
+            'packed' => ['order.packed.customer', 'queued'],
+            'ready_for_dispatch' => ['order.ready_for_dispatch.customer', 'queued'],
+            'shipped' => ['order.shipped.customer', 'queued'],
+            'in_transit' => ['order.in_transit.customer', 'queued'],
+            'out_for_delivery' => ['order.out_for_delivery.customer', 'queued'],
+            'delivered' => ['order.delivered.customer', 'queued'],
+            'completed' => ['order.completed.customer', 'queued'],
+            'cancelled' => ['order.cancelled.customer', 'queued'],
         ];
 
         foreach ($cases as $status => [$key, $expected]) {
@@ -487,15 +496,15 @@ class NotificationBusinessEventWiringTest extends TestCase
         $listener->orderStatusChanged(new OrderStatusChanged($order, 'out_for_delivery', 'delivered', 'delivered-occurrence'));
         $listener->orderStatusChanged(new OrderStatusChanged($order, 'delivered', 'completed', 'automatic-completed-occurrence', ['automatic_after_delivered' => true]));
 
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.delivered.customer', 'channel' => 'email', 'status' => 'skipped']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.delivered.customer', 'channel' => 'email', 'status' => 'queued']);
         $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'order.completed.customer']);
 
         $listener->orderStatusChanged(new OrderStatusChanged($order, 'ready_for_pickup', 'completed', 'manual-completed-default'));
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.completed.customer', 'channel' => 'email', 'status' => 'skipped']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.completed.customer', 'channel' => 'email', 'status' => 'queued']);
 
         app(ShopSettingsService::class)->set($order->shop_id, 'notifications', 'events.order.completed.customer.email.enabled', true);
         $listener->orderStatusChanged(new OrderStatusChanged($order, 'ready_for_pickup', 'completed', 'manual-completed-enabled'));
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.completed.customer', 'channel' => 'email', 'status' => 'skipped']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.completed.customer', 'channel' => 'email', 'status' => 'queued']);
     }
 
     public function test_status_notification_keeps_order_snapshot_after_account_contact_changes(): void
@@ -558,7 +567,7 @@ class NotificationBusinessEventWiringTest extends TestCase
             'notification_key' => 'order.cancelled.customer',
             'channel' => 'email',
             'destination' => 'snapshot@example.test',
-            'status' => 'skipped',
+            'status' => 'queued',
         ]);
     }
 

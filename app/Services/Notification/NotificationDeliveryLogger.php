@@ -9,6 +9,48 @@ use Illuminate\Database\QueryException;
 
 class NotificationDeliveryLogger
 {
+    public function claimQueued(NotificationMessage $message): ?NotificationDeliveryLog
+    {
+        $key = $this->deliveryKey($message);
+
+        try {
+            return NotificationDeliveryLog::query()->create([
+                ...$this->attributes($message),
+                'delivery_key' => $key,
+                'status' => 'queued',
+            ]);
+        } catch (QueryException $exception) {
+            if ($key !== null && NotificationDeliveryLog::query()->where('delivery_key', $key)->exists()) {
+                return null;
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function beginQueuedAttempt(int $deliveryLogId, bool $retrying = false): ?NotificationDeliveryLog
+    {
+        $statuses = ['queued', DeliveryResult::FAILED];
+        if ($retrying) {
+            $statuses[] = 'processing';
+        }
+
+        $updated = NotificationDeliveryLog::query()
+            ->whereKey($deliveryLogId)
+            ->whereIn('status', $statuses)
+            ->update([
+                'status' => 'processing',
+                'provider_mode' => null,
+                'provider' => null,
+                'error_summary' => null,
+                'attempted_at' => now(),
+                'sent_at' => null,
+                'updated_at' => now(),
+            ]);
+
+        return $updated === 1 ? NotificationDeliveryLog::query()->find($deliveryLogId) : null;
+    }
+
     public function claim(NotificationMessage $message): ?NotificationDeliveryLog
     {
         $key = $this->deliveryKey($message);

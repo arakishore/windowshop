@@ -40,3 +40,7 @@ Schedule::command('orders:expire-unverified-upi')
 Schedule::command('orders:expire-uncollected-pickups')
     ->everyMinute()
     ->withoutOverlapping();
+
+Schedule::command('queue:work database --queue=emails --stop-when-empty --tries=3 --backoff=60 --timeout=60 --max-time=50 --max-jobs=100')
+    ->everyMinute()
+    ->withoutOverlapping(10);
