@@ -13,6 +13,60 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-03 17:55 IST - Storefront Color x Size variant synchronization
+
+### Goal
+Continue the storefront Color/gallery fix so Size choices and selected variant metadata follow the actual active, sellable Color x Size combinations.
+
+### Decision and Outcome
+- The product-detail presenter now exposes a selection matrix built only from the same active, sellable variants already loaded for the storefront. No variant status, stock, pricing, or cart business rule changed.
+- Selecting a Color disables Size values without a matching active variant, updates each available Size with that exact combination's variant/price/availability metadata, and preserves the selected Size when valid. If it is invalid, selection moves to the first valid Size.
+- The main Size picker and sticky Size selector are synchronized. Inactive combinations are not serialized into the storefront contract and cannot be selected.
+- Each serialized variant carries the canonical availability guard's `allowed` result as `can_add_to_cart`; the browser does not recalculate purchase eligibility.
+- Main and sticky Add-to-Cart CTAs consume that same selected-variant metadata. They switch immediately between enabled `Add To Cart` and disabled `Out of Stock`, preserve their price markup, and retain the canonical availability message. Loading state is now `loading OR not purchasable`, so ending a request cannot re-enable an unavailable variant.
+- Variant changes clear only the temporary cart-message lock before applying the newly selected variant's canonical message, preventing stale success/error availability text from surviving a selection change.
+
+### Verification
+- Product listing, Add-to-Cart, availability, quantity, and variant-generation suites passed: 95 tests, 649 assertions. Coverage includes inactive Red/L exclusion and active zero-stock Red/XL serialized with `can_add_to_cart=false`.
+- Pint, Blade compilation, inline/external JavaScript syntax checks, and `git diff --check` passed.
+- Browser verification was unavailable because this session exposed no browser surface; manual interaction testing remains required.
+
+## 2026-10-03 16:00 IST - Storefront gallery runtime contract hardening
+
+Supersedes: Storefront Color gallery prioritization on 2026-10-03 15:25 IST only as to the browser implementation mechanism; the complete-gallery prioritization rule remains authoritative.
+
+### Finding and Outcome
+- Live rendered HTML confirmed that the prior backend supplied all five active image URLs for every Color. The runtime risk was the per-Color array contract combined with removing and re-appending detached slide arrays through Swiper.
+- The page now serializes one complete structured active-image dataset containing stable image IDs, URLs, and assigned attribute-value IDs. A standalone client ordering function moves selected-Color images first, or Entire Product images first when no match exists, without removing any other image.
+- Main and thumbnail wrapper contents are replaced with the complete ordered slide sets, after which both Swipers explicitly recalculate and update. Drift and the sticky image are refreshed as before; PhotoSwipe continues to target the rebuilt main-gallery anchors.
+- `ProductImageService::galleryForVariant()` remains unchanged and strict for its existing callers.
+
+## 2026-10-03 15:25 IST - Storefront Color gallery prioritization
+
+Supersedes: Storefront color-assigned product galleries on 2026-10-03 15:10 IST.
+
+### Decision and Outcome
+- Selecting a Color controls gallery priority rather than filtering gallery membership. Selected-Color images appear first, followed by every other active product image in deterministic `sort_order`/ID order.
+- If a Color has no assigned image, active Entire Product images are preferred first; all other active images remain available afterward.
+- `ProductImageService::galleryForVariant()` retains its established strict/filtering semantics for admin and other callers. Complete-gallery composition is storefront-specific.
+- Initial/default variant selection still determines the first image. Inactive images and duplicate image rows remain excluded.
+
+## 2026-10-03 15:10 IST - Storefront color-assigned product galleries
+
+### Goal
+Make the storefront product-detail gallery follow the selected Color while preserving the existing Product → Attributes → Variants architecture and merchant image-management workflow.
+
+### Decision and Outcome
+- Reused `ProductImageService::galleryForVariant()` as the single image-selection rule: active images assigned to the variant's configured image attribute, then active Entire Product images, then an applicable unassigned/selected-value primary image.
+- The storefront detail presenter now supplies the default variant's gallery for initial render plus keyed galleries for each available Color. Selecting a Color replaces the main and thumbnail Swiper slides immediately without a page reload.
+- Images exclusive to another Color and inactive images are excluded; existing sort order, generated storage URLs, zoom, lightbox, thumbnail, and sticky-image behavior are retained.
+- Initial Color and Size labels now reflect the actual default storefront variant instead of assuming the first displayed option.
+- No schema, upload flow, Product Group, or variant pricing/stock/cart rules changed. Query-string Color selection (for example `?color=red`) remains a compatible future enhancement and was intentionally not implemented.
+
+### Verification
+- Focused storefront listing, product image, add-to-cart, and variant generation suites passed: 92 tests, 615 assertions.
+- Browser automation was attempted but no browser surface was available in the execution environment.
+
 ## 2026-10-03 IST - Fresh-install notification template UUID seeding fix
 
 ### Goal

@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Storefront\CustomerLocationService;
+use App\Services\Storefront\ProductListingService;
 use App\Services\Storefront\StorefrontUrlService;
 use App\Services\System\SystemSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -325,6 +326,206 @@ class StorefrontProductListingTest extends TestCase
         $this->assertStringNotContainsString('Sample review layout', $content);
         $this->assertStringNotContainsString('(0 reviews)', $content);
         $this->assertStringNotContainsString('Contact Store', $content);
+    }
+
+    public function test_product_detail_galleries_follow_color_assignments_and_fallback_rules(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Color Gallery Product');
+        $colors = $this->attributeGroup('Color', ['Black', 'White', 'Red', 'Blue']);
+        ProductCategoryAttributeGroup::query()->create([
+            'root_product_category_id' => $fixture['root']->getKey(),
+            'product_attribute_group_id' => $colors->getKey(),
+            'is_required' => true,
+            'is_variant' => true,
+            'is_image_attribute' => true,
+            'sort_order' => 1,
+        ]);
+
+        $variants = collect(['Black', 'White', 'Red', 'Blue'])->mapWithKeys(function (string $color, int $index) use ($product, $colors): array {
+            $variant = $this->variant($product, sellingPrice: (string) (90 + $index), overrides: [
+                'name' => $color,
+                'is_default' => $color === 'Red',
+                'sort_order' => $index,
+            ]);
+            $variant->attributes()->create([
+                'product_attribute_group_id' => $colors->getKey(),
+                'product_attribute_group_value_id' => $colors->values->firstWhere('name', $color)->getKey(),
+            ]);
+
+            return [$color => $variant];
+        });
+
+        $images = collect([
+            ['black-later.webp', 'Black', 'active', 20],
+            ['black-first.webp', 'Black', 'active', 10],
+            ['white.webp', 'White', 'active', 5],
+            ['red.webp', 'Red', 'active', 5],
+            ['red-inactive.webp', 'Red', 'inactive', 1],
+            ['common.webp', null, 'active', 30],
+        ])->map(function (array $definition) use ($product, $colors): ProductImage {
+            [$filename, $color, $status, $sortOrder] = $definition;
+            $path = 'products/color-gallery/'.$filename;
+            Storage::disk('public')->put($path, 'image');
+            $image = ProductImage::query()->create([
+                'product_id' => $product->getKey(),
+                'image_path' => $path,
+                'thumbnail_path' => $path,
+                'sort_order' => $sortOrder,
+                'status' => $status,
+            ]);
+
+            if ($color !== null) {
+                $image->attributeValues()->sync([$colors->values->firstWhere('name', $color)->getKey()]);
+            }
+
+            return $image;
+        });
+        $product->forceFill(['primary_image_id' => $images->last()->getKey()])->save();
+
+        request()->setLaravelSession(app('session.store'));
+        $detail = app(ProductListingService::class)->productDetail($product->slug)['product'];
+        $url = fn (string $filename): string => asset('storage/products/color-gallery/'.$filename);
+        $imageIds = $images->mapWithKeys(fn (ProductImage $image): array => [basename($image->image_path) => $image->getKey()]);
+        $allGalleryImages = collect($detail['gallery_images']);
+        $galleryIdsFor = function (string $color) use ($allGalleryImages, $colors): array {
+            $colorId = $colors->values->firstWhere('name', $color)->getKey();
+            $preferred = $allGalleryImages->filter(fn (array $image): bool => in_array($colorId, $image['attribute_value_ids'], true));
+
+            if ($preferred->isEmpty()) {
+                $preferred = $allGalleryImages->filter(fn (array $image): bool => $image['attribute_value_ids'] === []);
+            }
+
+            return $preferred
+                ->concat($allGalleryImages->reject(fn (array $image): bool => $preferred->contains('id', $image['id'])))
+                ->pluck('id')
+                ->all();
+        };
+
+        $this->assertSame('Red', $detail['selected_color']);
+        $this->assertSame([
+            $url('red.webp'),
+            $url('white.webp'),
+            $url('black-first.webp'),
+            $url('black-later.webp'),
+            $url('common.webp'),
+        ], $detail['images']);
+        $this->assertSame([
+            $imageIds['black-first.webp'],
+            $imageIds['black-later.webp'],
+            $imageIds['white.webp'],
+            $imageIds['red.webp'],
+            $imageIds['common.webp'],
+        ], $galleryIdsFor('Black'));
+        $this->assertSame([
+            $imageIds['white.webp'],
+            $imageIds['red.webp'],
+            $imageIds['black-first.webp'],
+            $imageIds['black-later.webp'],
+            $imageIds['common.webp'],
+        ], $galleryIdsFor('White'));
+        $this->assertSame([
+            $imageIds['red.webp'],
+            $imageIds['white.webp'],
+            $imageIds['black-first.webp'],
+            $imageIds['black-later.webp'],
+            $imageIds['common.webp'],
+        ], $galleryIdsFor('Red'));
+        $this->assertSame([
+            $imageIds['common.webp'],
+            $imageIds['white.webp'],
+            $imageIds['red.webp'],
+            $imageIds['black-first.webp'],
+            $imageIds['black-later.webp'],
+        ], $galleryIdsFor('Blue'));
+        $this->assertCount(5, $allGalleryImages);
+        $this->assertCount(5, $allGalleryImages->pluck('id')->unique());
+        $this->assertNotContains($images->firstWhere('image_path', 'products/color-gallery/red-inactive.webp')->getKey(), $allGalleryImages->pluck('id'));
+        $this->assertSame($variants['Red']->getKey(), $detail['selected_variant_id']);
+
+        $response = $this->get($this->productUrl($product))
+            ->assertOk()
+            ->assertSee('data-color-value-id="'.$colors->values->firstWhere('name', 'Red')->getKey().'"', false)
+            ->assertSee('window.updateProductGallery', false);
+        foreach ($allGalleryImages->pluck('id') as $imageId) {
+            $response->assertSee('"id":'.$imageId, false);
+        }
+    }
+
+    public function test_product_detail_exposes_only_active_color_size_variant_combinations(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Color Size Product');
+        $colors = $this->attributeGroup('Color', ['Red', 'Blue']);
+        $sizes = $this->attributeGroup('Size', ['M', 'L', 'XL']);
+        $variants = collect([
+            ['Red', 'M', 'active', true, 5],
+            ['Red', 'L', 'inactive', false, 5],
+            ['Blue', 'M', 'active', false, 5],
+            ['Blue', 'L', 'active', false, 5],
+            ['Red', 'XL', 'active', false, 0],
+        ])->map(function (array $definition, int $index) use ($product, $colors, $sizes): ProductVariant {
+            [$color, $size, $status, $isDefault, $stockQuantity] = $definition;
+            $variant = $this->variant($product, sellingPrice: (string) (90 + $index), overrides: [
+                'name' => $color.' / '.$size,
+                'status' => $status,
+                'is_default' => $isDefault,
+                'sort_order' => $index,
+                'stock_quantity' => $stockQuantity,
+            ]);
+            $variant->attributes()->createMany([
+                [
+                    'product_attribute_group_id' => $colors->getKey(),
+                    'product_attribute_group_value_id' => $colors->values->firstWhere('name', $color)->getKey(),
+                ],
+                [
+                    'product_attribute_group_id' => $sizes->getKey(),
+                    'product_attribute_group_value_id' => $sizes->values->firstWhere('name', $size)->getKey(),
+                ],
+            ]);
+
+            return $variant;
+        });
+
+        request()->setLaravelSession(app('session.store'));
+        $detail = app(ProductListingService::class)->productDetail($product->slug)['product'];
+        $combinations = collect($detail['variant_options'])->map(fn (array $variant): array => [
+            $variant['color_value_id'],
+            $variant['size_value_id'],
+            $variant['variant_id'],
+            $variant['can_add_to_cart'],
+        ])->all();
+
+        $redId = $colors->values->firstWhere('name', 'Red')->getKey();
+        $blueId = $colors->values->firstWhere('name', 'Blue')->getKey();
+        $mediumId = $sizes->values->firstWhere('name', 'M')->getKey();
+        $largeId = $sizes->values->firstWhere('name', 'L')->getKey();
+        $extraLargeId = $sizes->values->firstWhere('name', 'XL')->getKey();
+
+        $this->assertSame([
+            [$redId, $mediumId, $variants[0]->getKey(), true],
+            [$blueId, $mediumId, $variants[2]->getKey(), true],
+            [$blueId, $largeId, $variants[3]->getKey(), true],
+            [$redId, $extraLargeId, $variants[4]->getKey(), false],
+        ], $combinations);
+        $this->assertNotContains($variants[1]->getKey(), collect($detail['variant_options'])->pluck('variant_id'));
+
+        $content = $this->get($this->productUrl($product))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('data-size-value-id="'.$mediumId.'"', $content);
+        $this->assertStringContainsString('data-size-value-id="'.$largeId.'"', $content);
+        $this->assertStringContainsString('data-size-value-id="'.$extraLargeId.'"', $content);
+        $this->assertStringContainsString('syncSizesForColor', $content);
+        $this->assertStringNotContainsString('"variant_id":'.$variants[1]->getKey(), $content);
+        $this->assertStringContainsString('"variant_id":'.$variants[4]->getKey().',"stock_quantity":0', $content);
+        $this->assertStringContainsString('"can_add_to_cart":false', $content);
+        $this->assertSame(2, preg_match_all('/<span\b[^>]*\bdata-add-to-cart-label\b/', $content));
+        $this->assertSame(2, preg_match_all('/<form\b[^>]*\bdata-add-to-cart-form\b/s', $content));
+        $this->assertStringContainsString('button.disabled = isLoading || !canPurchase', $content);
+        $this->assertStringContainsString("canPurchase ? 'Add To Cart' : 'Out of Stock'", $content);
+        $this->assertStringContainsString("message.dataset.locked = 'false'", $content);
     }
 
     public function test_old_and_mismatched_product_urls_redirect_to_canonical_category_product_url(): void
