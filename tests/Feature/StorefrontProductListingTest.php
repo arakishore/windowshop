@@ -452,6 +452,82 @@ class StorefrontProductListingTest extends TestCase
         }
     }
 
+    public function test_product_detail_exposes_only_active_color_size_variant_combinations(): void
+    {
+        $fixture = $this->fixture();
+        $product = $this->product($fixture, 'Color Size Product');
+        $colors = $this->attributeGroup('Color', ['Red', 'Blue']);
+        $sizes = $this->attributeGroup('Size', ['M', 'L', 'XL']);
+        $variants = collect([
+            ['Red', 'M', 'active', true, 5],
+            ['Red', 'L', 'inactive', false, 5],
+            ['Blue', 'M', 'active', false, 5],
+            ['Blue', 'L', 'active', false, 5],
+            ['Red', 'XL', 'active', false, 0],
+        ])->map(function (array $definition, int $index) use ($product, $colors, $sizes): ProductVariant {
+            [$color, $size, $status, $isDefault, $stockQuantity] = $definition;
+            $variant = $this->variant($product, sellingPrice: (string) (90 + $index), overrides: [
+                'name' => $color.' / '.$size,
+                'status' => $status,
+                'is_default' => $isDefault,
+                'sort_order' => $index,
+                'stock_quantity' => $stockQuantity,
+            ]);
+            $variant->attributes()->createMany([
+                [
+                    'product_attribute_group_id' => $colors->getKey(),
+                    'product_attribute_group_value_id' => $colors->values->firstWhere('name', $color)->getKey(),
+                ],
+                [
+                    'product_attribute_group_id' => $sizes->getKey(),
+                    'product_attribute_group_value_id' => $sizes->values->firstWhere('name', $size)->getKey(),
+                ],
+            ]);
+
+            return $variant;
+        });
+
+        request()->setLaravelSession(app('session.store'));
+        $detail = app(ProductListingService::class)->productDetail($product->slug)['product'];
+        $combinations = collect($detail['variant_options'])->map(fn (array $variant): array => [
+            $variant['color_value_id'],
+            $variant['size_value_id'],
+            $variant['variant_id'],
+            $variant['can_add_to_cart'],
+        ])->all();
+
+        $redId = $colors->values->firstWhere('name', 'Red')->getKey();
+        $blueId = $colors->values->firstWhere('name', 'Blue')->getKey();
+        $mediumId = $sizes->values->firstWhere('name', 'M')->getKey();
+        $largeId = $sizes->values->firstWhere('name', 'L')->getKey();
+        $extraLargeId = $sizes->values->firstWhere('name', 'XL')->getKey();
+
+        $this->assertSame([
+            [$redId, $mediumId, $variants[0]->getKey(), true],
+            [$blueId, $mediumId, $variants[2]->getKey(), true],
+            [$blueId, $largeId, $variants[3]->getKey(), true],
+            [$redId, $extraLargeId, $variants[4]->getKey(), false],
+        ], $combinations);
+        $this->assertNotContains($variants[1]->getKey(), collect($detail['variant_options'])->pluck('variant_id'));
+
+        $content = $this->get($this->productUrl($product))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('data-size-value-id="'.$mediumId.'"', $content);
+        $this->assertStringContainsString('data-size-value-id="'.$largeId.'"', $content);
+        $this->assertStringContainsString('data-size-value-id="'.$extraLargeId.'"', $content);
+        $this->assertStringContainsString('syncSizesForColor', $content);
+        $this->assertStringNotContainsString('"variant_id":'.$variants[1]->getKey(), $content);
+        $this->assertStringContainsString('"variant_id":'.$variants[4]->getKey().',"stock_quantity":0', $content);
+        $this->assertStringContainsString('"can_add_to_cart":false', $content);
+        $this->assertSame(2, preg_match_all('/<span\b[^>]*\bdata-add-to-cart-label\b/', $content));
+        $this->assertSame(2, preg_match_all('/<form\b[^>]*\bdata-add-to-cart-form\b/s', $content));
+        $this->assertStringContainsString('button.disabled = isLoading || !canPurchase', $content);
+        $this->assertStringContainsString("canPurchase ? 'Add To Cart' : 'Out of Stock'", $content);
+        $this->assertStringContainsString("message.dataset.locked = 'false'", $content);
+    }
+
     public function test_old_and_mismatched_product_urls_redirect_to_canonical_category_product_url(): void
     {
         $fixture = $this->fixture();

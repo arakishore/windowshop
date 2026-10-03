@@ -697,6 +697,7 @@ class ProductListingService
             'selected_size' => $this->variantAttributeName($variant, 'size') ?? ($this->sizeLabels($product)[0]['name'] ?? ''),
             'colors' => $colors,
             'sizes' => $this->sizeLabels($product),
+            'variant_options' => $this->variantSelectionOptions($product),
             'size_guide' => $this->sizeGuide($product),
             'other_attributes' => $this->otherAttributes($product),
             'disclaimers' => $this->productDisclaimers($product),
@@ -776,7 +777,7 @@ class ProductListingService
     }
 
     /**
-     * @return array<int, array{name: string, price: string, raw_price: float, variant_id: int, stock_quantity: float, availability_code: string|null, availability_label: string, stock_limit: int|null, availability_message: string|null}>
+     * @return array<int, array{name: string, value_id: int, price: string, raw_price: float, variant_id: int, stock_quantity: float, availability_code: string|null, availability_label: string, stock_limit: int|null, availability_message: string|null, can_add_to_cart: bool}>
      */
     private function sizeLabels(Product $product): array
     {
@@ -789,16 +790,20 @@ class ProductListingService
                     return null;
                 }
 
+                $availability = $this->availabilityGuard->decision($variant, 1);
+
                 return [
                     'name' => $size->value->name,
+                    'value_id' => (int) $size->value->getKey(),
                     'price' => $this->money((float) $variant->selling_price),
                     'raw_price' => (float) $variant->selling_price,
                     'variant_id' => $variant->getKey(),
                     'stock_quantity' => (int) $variant->stock_quantity,
-                    'availability_code' => $this->availabilityGuard->decision($variant, 1)['status_code'],
+                    'availability_code' => $availability['status_code'],
                     'availability_label' => $this->customerAvailabilityLabel($variant, 1),
                     'stock_limit' => $this->stockLimit($variant),
-                    'availability_message' => $this->availabilityGuard->decision($variant, 1)['message'],
+                    'availability_message' => $availability['message'],
+                    'can_add_to_cart' => (bool) $availability['allowed'],
                 ];
             })
             ->filter()
@@ -822,16 +827,19 @@ class ProductListingService
                     return null;
                 }
 
+                $availability = $this->availabilityGuard->decision($variant, 1);
+
                 return [
                     'name' => $label,
                     'price' => $this->money((float) $variant->selling_price),
                     'raw_price' => (float) $variant->selling_price,
                     'variant_id' => $variant->getKey(),
                     'stock_quantity' => (int) $variant->stock_quantity,
-                    'availability_code' => $this->availabilityGuard->decision($variant, 1)['status_code'],
+                    'availability_code' => $availability['status_code'],
                     'availability_label' => $this->customerAvailabilityLabel($variant, 1),
                     'stock_limit' => $this->stockLimit($variant),
-                    'availability_message' => $this->availabilityGuard->decision($variant, 1)['message'],
+                    'availability_message' => $availability['message'],
+                    'can_add_to_cart' => (bool) $availability['allowed'],
                 ];
             })
             ->filter()
@@ -840,6 +848,44 @@ class ProductListingService
             ->all();
 
         return count($fallbackSizes) > 1 ? $fallbackSizes : [];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function variantSelectionOptions(Product $product): array
+    {
+        return $product->variants
+            ->map(function (ProductVariant $variant): ?array {
+                $size = $variant->attributes
+                    ->first(fn ($attribute): bool => $attribute->group?->code === 'size' && $attribute->value !== null);
+
+                if ($size === null) {
+                    return null;
+                }
+
+                $color = $variant->attributes
+                    ->first(fn ($attribute): bool => $attribute->group?->code === 'color' && $attribute->value !== null);
+                $availability = $this->availabilityGuard->decision($variant, 1);
+
+                return [
+                    'color_value_id' => $color === null ? null : (int) $color->value->getKey(),
+                    'size_value_id' => (int) $size->value->getKey(),
+                    'size_name' => $size->value->name,
+                    'price' => $this->money((float) $variant->selling_price),
+                    'raw_price' => (float) $variant->selling_price,
+                    'variant_id' => (int) $variant->getKey(),
+                    'stock_quantity' => (int) $variant->stock_quantity,
+                    'availability_code' => $availability['status_code'],
+                    'availability_label' => $this->customerAvailabilityLabel($variant, 1),
+                    'stock_limit' => $this->stockLimit($variant),
+                    'availability_message' => $availability['message'],
+                    'can_add_to_cart' => (bool) $availability['allowed'],
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private function fallbackVariantSizeLabel(ProductVariant $variant, Product $product): ?string

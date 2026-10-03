@@ -13,6 +13,24 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-03 17:55 IST - Storefront Color x Size variant synchronization
+
+### Goal
+Continue the storefront Color/gallery fix so Size choices and selected variant metadata follow the actual active, sellable Color x Size combinations.
+
+### Decision and Outcome
+- The product-detail presenter now exposes a selection matrix built only from the same active, sellable variants already loaded for the storefront. No variant status, stock, pricing, or cart business rule changed.
+- Selecting a Color disables Size values without a matching active variant, updates each available Size with that exact combination's variant/price/availability metadata, and preserves the selected Size when valid. If it is invalid, selection moves to the first valid Size.
+- The main Size picker and sticky Size selector are synchronized. Inactive combinations are not serialized into the storefront contract and cannot be selected.
+- Each serialized variant carries the canonical availability guard's `allowed` result as `can_add_to_cart`; the browser does not recalculate purchase eligibility.
+- Main and sticky Add-to-Cart CTAs consume that same selected-variant metadata. They switch immediately between enabled `Add To Cart` and disabled `Out of Stock`, preserve their price markup, and retain the canonical availability message. Loading state is now `loading OR not purchasable`, so ending a request cannot re-enable an unavailable variant.
+- Variant changes clear only the temporary cart-message lock before applying the newly selected variant's canonical message, preventing stale success/error availability text from surviving a selection change.
+
+### Verification
+- Product listing, Add-to-Cart, availability, quantity, and variant-generation suites passed: 95 tests, 649 assertions. Coverage includes inactive Red/L exclusion and active zero-stock Red/XL serialized with `can_add_to_cart=false`.
+- Pint, Blade compilation, inline/external JavaScript syntax checks, and `git diff --check` passed.
+- Browser verification was unavailable because this session exposed no browser surface; manual interaction testing remains required.
+
 ## 2026-10-03 16:00 IST - Storefront gallery runtime contract hardening
 
 Supersedes: Storefront Color gallery prioritization on 2026-10-03 15:25 IST only as to the browser implementation mechanism; the complete-gallery prioritization rule remains authoritative.

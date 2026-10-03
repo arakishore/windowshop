@@ -39,6 +39,12 @@
 @push('styles')
     <link rel="stylesheet" href="{{ asset('assets/storefront/css/drift-basic.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/storefront/css/photoswipe.css') }}">
+    <style>
+        [data-add-to-cart-button]:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+    </style>
 @endpush
 
 @section('content')
@@ -223,6 +229,7 @@
                                             @foreach ($product['sizes'] as $size)
                                                 <span class="size-btn {{ $size['name'] === $selectedSize ? 'active' : '' }}"
                                                     data-size="{{ $size['name'] }}"
+                                                    data-size-value-id="{{ $size['value_id'] ?? '' }}"
                                                     data-price="{{ $size['raw_price'] }}"
                                                     data-price-label="{{ $size['price'] }}"
                                                     data-variant-id="{{ $size['variant_id'] }}"
@@ -230,6 +237,7 @@
                                                     data-availability-code="{{ $size['availability_code'] }}"
                                                     data-availability-label="{{ $size['availability_label'] }}"
                                                     data-availability-message="{{ $size['availability_message'] }}"
+                                                    data-can-purchase="{{ $size['can_add_to_cart'] ? 'true' : 'false' }}"
                                                     @if ($size['stock_limit'] !== null) data-stock-limit="{{ $size['stock_limit'] }}" @endif>{{ $size['name'] }}</span>
                                             @endforeach
                                         </div>
@@ -245,6 +253,7 @@
                                         data-availability-code="{{ $product['selected_variant_availability_code'] }}"
                                         data-availability-label="{{ $product['selected_variant_availability_label'] }}"
                                         data-availability-message="{{ $product['availability_purchase_message'] }}"
+                                        data-can-purchase="{{ $product['can_add_to_cart'] ? 'true' : 'false' }}"
                                         @if ($product['selected_variant_stock_limit'] !== null) data-stock-limit="{{ $product['selected_variant_stock_limit'] }}" @endif>
                                         @csrf
                                         <input type="hidden" name="product_variant_id" value="{{ $product['selected_variant_id'] }}" data-cart-variant-input>
@@ -264,7 +273,7 @@
                                             class="btn-action-price tf-btn type-xl animate-btn w-100"
                                             data-add-to-cart-button
                                             {{ $product['can_add_to_cart'] ? '' : 'disabled' }}>
-                                            {{ $product['can_add_to_cart'] ? 'Add To Cart' : 'Out of Stock' }}
+                                            <span data-add-to-cart-label>{{ $product['can_add_to_cart'] ? 'Add To Cart' : 'Out of Stock' }}</span>
                                             <span class="d-none d-sm-block d-md-none d-lg-block">&nbsp;-&nbsp;</span>
                                             <span class="price-add d-none d-sm-block d-md-none d-lg-block">{{ $product['price'] }}</span>
                                         </button>
@@ -415,6 +424,7 @@
                         data-availability-code="{{ $product['selected_variant_availability_code'] }}"
                         data-availability-label="{{ $product['selected_variant_availability_label'] }}"
                         data-availability-message="{{ $product['availability_purchase_message'] }}"
+                        data-can-purchase="{{ $product['can_add_to_cart'] ? 'true' : 'false' }}"
                         @if ($product['selected_variant_stock_limit'] !== null) data-stock-limit="{{ $product['selected_variant_stock_limit'] }}" @endif>
                         @csrf
                         <input type="hidden" name="product_variant_id" value="{{ $product['selected_variant_id'] }}" data-cart-variant-input>
@@ -425,6 +435,7 @@
                                     <select data-sticky-variant-select>
                                         @foreach ($product['sizes'] as $size)
                                             <option value="{{ $size['name'] }}"
+                                                data-size-value-id="{{ $size['value_id'] ?? '' }}"
                                                 data-price="{{ $size['raw_price'] }}"
                                                 data-price-label="{{ $size['price'] }}"
                                                 data-variant-id="{{ $size['variant_id'] }}"
@@ -432,6 +443,7 @@
                                                 data-availability-code="{{ $size['availability_code'] }}"
                                                 data-availability-label="{{ $size['availability_label'] }}"
                                                 data-availability-message="{{ $size['availability_message'] }}"
+                                                data-can-purchase="{{ $size['can_add_to_cart'] ? 'true' : 'false' }}"
                                                 @if ($size['stock_limit'] !== null) data-stock-limit="{{ $size['stock_limit'] }}" @endif
                                                 {{ $size['name'] === $selectedSize ? 'selected' : '' }}>{{ $size['name'] }}</option>
                                         @endforeach
@@ -458,7 +470,7 @@
                             class="tf-btn animate-btn btn-add-to-cart"
                             data-add-to-cart-button
                             {{ $product['can_add_to_cart'] ? '' : 'disabled' }}>
-                            {{ $product['can_add_to_cart'] ? 'Add To Cart' : 'Out of Stock' }} - <span class="sticky-price-add">{{ $product['price'] }}</span>
+                            <span data-add-to-cart-label>{{ $product['can_add_to_cart'] ? 'Add To Cart' : 'Out of Stock' }}</span> - <span class="sticky-price-add">{{ $product['price'] }}</span>
                         </button>
                         <p class="text-caption-01 mt-2 mb-0" data-add-to-cart-message role="status" {{ $product['availability_purchase_message'] ? '' : 'hidden' }}>
                             {{ $product['availability_purchase_message'] }}
@@ -820,11 +832,88 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const productGalleryImages = @json($product['gallery_images']);
+            const productVariantOptions = @json($product['variant_options']);
+
+            const applyVariantData = (element, variant) => {
+                const fields = {
+                    price: variant.raw_price,
+                    priceLabel: variant.price,
+                    variantId: variant.variant_id,
+                    stockQuantity: variant.stock_quantity,
+                    availabilityCode: variant.availability_code,
+                    availabilityLabel: variant.availability_label,
+                    availabilityMessage: variant.availability_message,
+                    canPurchase: variant.can_add_to_cart ? 'true' : 'false',
+                    stockLimit: variant.stock_limit,
+                };
+
+                Object.entries(fields).forEach(([key, value]) => {
+                    if (value === null || value === '') {
+                        delete element.dataset[key];
+                    } else {
+                        element.dataset[key] = String(value);
+                    }
+                });
+            };
+
+            const variantsForColor = (colorValueId) => productVariantOptions.filter((variant) => (
+                variant.color_value_id === null || Number(variant.color_value_id) === colorValueId
+            ));
+
+            const syncSizesForColor = (colorValueId) => {
+                if (productVariantOptions.length === 0) {
+                    return;
+                }
+
+                const availableVariants = variantsForColor(colorValueId);
+                const variantsBySize = new Map(availableVariants.map((variant) => [Number(variant.size_value_id), variant]));
+                const sizeButtons = Array.from(document.querySelectorAll('.tf-product-info-list .size-btn[data-size-value-id]'));
+                let selectedButton = sizeButtons.find((button) => button.classList.contains('active') && variantsBySize.has(Number(button.dataset.sizeValueId)));
+
+                sizeButtons.forEach((button) => {
+                    const variant = variantsBySize.get(Number(button.dataset.sizeValueId));
+                    const disabled = !variant;
+                    button.classList.toggle('disabled', disabled);
+                    button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+                    button.tabIndex = disabled ? -1 : 0;
+
+                    if (variant) {
+                        applyVariantData(button, variant);
+                    } else {
+                        button.classList.remove('active');
+                    }
+                });
+
+                if (!selectedButton) {
+                    selectedButton = sizeButtons.find((button) => variantsBySize.has(Number(button.dataset.sizeValueId)));
+                }
+
+                document.querySelectorAll('[data-sticky-variant-select]').forEach((select) => {
+                    Array.from(select.options).forEach((option) => {
+                        const variant = variantsBySize.get(Number(option.dataset.sizeValueId));
+                        option.disabled = !variant;
+
+                        if (variant) {
+                            applyVariantData(option, variant);
+                        }
+                    });
+
+                    if (selectedButton) {
+                        select.value = selectedButton.dataset.size || '';
+                    }
+                });
+
+                if (selectedButton) {
+                    selectedButton.click();
+                }
+            };
 
             document.querySelectorAll('.tf-product-info-list .color-btn[data-color-value-id]').forEach((button) => {
                 button.addEventListener('click', () => {
                     const selectedValueId = Number.parseInt(button.dataset.colorValueId, 10);
                     const orderedImages = window.orderProductGalleryImages(productGalleryImages, selectedValueId);
+
+                    syncSizesForColor(selectedValueId);
 
                     if (orderedImages.length > 0 && typeof window.updateProductGallery === 'function') {
                         window.updateProductGallery(
@@ -834,6 +923,25 @@
                     }
                 });
             });
+
+            document.querySelectorAll('.tf-product-info-list .size-btn[data-size-value-id]').forEach((button) => {
+                button.addEventListener('click', (event) => {
+                    if (button.classList.contains('disabled')) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        return;
+                    }
+
+                    document.querySelectorAll('[data-sticky-variant-select]').forEach((select) => {
+                        select.value = button.dataset.size || '';
+                    });
+                });
+            });
+
+            const initialColor = document.querySelector('.tf-product-info-list .color-btn.active[data-color-value-id]');
+            if (initialColor) {
+                syncSizesForColor(Number.parseInt(initialColor.dataset.colorValueId, 10));
+            }
 
             const reviewLink = document.querySelector('[data-review-summary-link]');
             const reviewPanel = document.getElementById('customer-reviews');
@@ -881,8 +989,8 @@
                 const variantInput = form.querySelector('[data-cart-variant-input]');
                 const quantityInput = form.querySelector('[data-cart-quantity-input]');
                 const button = form.querySelector('[data-add-to-cart-button]');
+                const buttonLabel = button ? button.querySelector('[data-add-to-cart-label]') : null;
                 const message = form.parentElement ? form.parentElement.querySelector('[data-add-to-cart-message]') : null;
-                const defaultButtonText = button ? button.textContent.trim() : 'Add To Cart';
                 const decreaseButton = form.querySelector('.btn-decrease, .minus-btn');
                 const increaseButton = form.querySelector('.btn-increase, .plus-btn');
                 const priceTarget = form.querySelector('.price-add') || form.querySelector('.sticky-price-add');
@@ -911,9 +1019,13 @@
                         return;
                     }
 
-                    button.disabled = isLoading;
+                    const canPurchase = form.dataset.canPurchase === 'true';
+                    button.disabled = isLoading || !canPurchase;
                     button.dataset.loading = isLoading ? 'true' : 'false';
-                    button.childNodes[0].textContent = isLoading ? 'Adding...' : defaultButtonText.replace(/\s+-\s+.*$/, '');
+
+                    if (buttonLabel) {
+                        buttonLabel.textContent = isLoading ? 'Adding...' : (canPurchase ? 'Add To Cart' : 'Out of Stock');
+                    }
                 };
 
                 const stockLimit = () => {
@@ -1081,6 +1193,11 @@
                     form.dataset.availabilityCode = source.dataset.availabilityCode || '';
                     form.dataset.availabilityLabel = source.dataset.availabilityLabel || '';
                     form.dataset.availabilityMessage = source.dataset.availabilityMessage || '';
+                    form.dataset.canPurchase = source.dataset.canPurchase === 'true' ? 'true' : 'false';
+
+                    if (message) {
+                        message.dataset.locked = 'false';
+                    }
 
                     if (source.dataset.stockLimit) {
                         form.dataset.stockLimit = source.dataset.stockLimit;
@@ -1089,6 +1206,7 @@
                     }
 
                     syncQuantityControls();
+                    setLoading(button?.dataset.loading === 'true');
                 };
 
                 document.querySelectorAll('[data-size][data-variant-id]').forEach((sizeButton) => {
@@ -1104,6 +1222,14 @@
                         const option = stickySelect.selectedOptions[0];
 
                         if (!option) {
+                            return;
+                        }
+
+                        const matchingSizeButton = Array.from(document.querySelectorAll('.tf-product-info-list [data-size-value-id]'))
+                            .find((sizeButton) => sizeButton.dataset.sizeValueId === option.dataset.sizeValueId);
+
+                        if (matchingSizeButton && !matchingSizeButton.classList.contains('disabled')) {
+                            matchingSizeButton.click();
                             return;
                         }
 
