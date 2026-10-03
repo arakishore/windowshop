@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminSetting;
 use App\Models\SystemSetting;
 use App\Models\SystemSettingGroup;
 use App\Services\System\SystemSettingKeys;
 use App\Services\System\SystemSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PDO;
 use Tests\TestCase;
 
@@ -107,21 +107,8 @@ class SystemSettingServiceTest extends TestCase
         $this->assertNull(SystemSettingKeys::canonicalKeyForLegacy('merchant', 'shop_specific'));
     }
 
-    public function test_regional_and_currency_reads_prefer_canonical_values(): void
+    public function test_regional_and_currency_reads_use_canonical_values(): void
     {
-        AdminSetting::query()->create([
-            'group' => 'currency',
-            'setting_key' => 'base_currency',
-            'setting_value' => 'USD',
-            'setting_type' => AdminSetting::TYPE_STRING,
-        ]);
-        AdminSetting::query()->create([
-            'group' => 'regional',
-            'setting_key' => 'timezone',
-            'setting_value' => 'UTC',
-            'setting_type' => AdminSetting::TYPE_STRING,
-        ]);
-
         $settings = app(SystemSettingService::class);
         $settings->setRegionalCurrency('currency', 'base_currency', 'EUR');
         $settings->setRegionalCurrency('regional', 'timezone', 'Asia/Kolkata');
@@ -130,46 +117,22 @@ class SystemSettingServiceTest extends TestCase
         $this->assertSame('Asia/Kolkata', $settings->regionalConfig()['timezone']);
     }
 
-    public function test_regional_and_currency_reads_fall_back_only_when_canonical_rows_are_absent(): void
+    public function test_regional_and_currency_defaults_work_without_legacy_table(): void
     {
         SystemSetting::withTrashed()->whereIn('key', [
             SystemSettingKeys::DEFAULT_CURRENCY,
             SystemSettingKeys::DEFAULT_TIMEZONE,
         ])->forceDelete();
-        AdminSetting::query()->create([
-            'group' => 'currency',
-            'setting_key' => 'base_currency',
-            'setting_value' => 'USD',
-            'setting_type' => AdminSetting::TYPE_STRING,
-        ]);
-        AdminSetting::query()->create([
-            'group' => 'regional',
-            'setting_key' => 'timezone',
-            'setting_value' => 'UTC',
-            'setting_type' => AdminSetting::TYPE_STRING,
-        ]);
+        Schema::dropIfExists('admin_settings');
 
         $settings = app(SystemSettingService::class);
 
-        $this->assertSame('USD', $settings->currencyConfig()['currency']);
-        $this->assertSame('UTC', $settings->regionalConfig()['timezone']);
+        $this->assertSame('INR', $settings->currencyConfig()['currency']);
+        $this->assertSame('Asia/Kolkata', $settings->regionalConfig()['timezone']);
     }
 
-    public function test_blank_and_zero_canonical_values_do_not_fall_back_to_legacy(): void
+    public function test_blank_and_zero_canonical_values_remain_authoritative(): void
     {
-        AdminSetting::query()->create([
-            'group' => 'currency',
-            'setting_key' => 'symbol',
-            'setting_value' => '$',
-            'setting_type' => AdminSetting::TYPE_STRING,
-        ]);
-        AdminSetting::query()->create([
-            'group' => 'currency',
-            'setting_key' => 'decimal_places',
-            'setting_value' => '3',
-            'setting_type' => AdminSetting::TYPE_INTEGER,
-        ]);
-
         $settings = app(SystemSettingService::class);
         $settings->setRegionalCurrency('currency', 'symbol', '');
         $settings->setRegionalCurrency('currency', 'decimal_places', 0);
@@ -178,5 +141,15 @@ class SystemSettingServiceTest extends TestCase
 
         $this->assertSame('', $currency['symbol']);
         $this->assertSame(0, $currency['decimal_places']);
+    }
+
+    public function test_inactive_and_soft_deleted_canonical_values_use_application_defaults(): void
+    {
+        $settings = app(SystemSettingService::class);
+        $settings->setRegionalCurrency('currency', 'base_currency', 'EUR')->update(['status' => SystemSetting::STATUS_INACTIVE]);
+        $settings->setRegionalCurrency('regional', 'timezone', 'UTC')->delete();
+
+        $this->assertSame('INR', $settings->currencyConfig()['currency']);
+        $this->assertSame('Asia/Kolkata', $settings->regionalConfig()['timezone']);
     }
 }

@@ -9,6 +9,7 @@ use App\Support\CurrencyCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use PDO;
 use Tests\TestCase;
@@ -26,13 +27,12 @@ class AdminSettingsFoundationTest extends TestCase
         }
     }
 
-    public function test_visiting_admin_settings_does_not_initialize_legacy_defaults(): void
+    public function test_admin_settings_page_works_without_legacy_table(): void
     {
         $admin = $this->adminUser();
+        Schema::dropIfExists('admin_settings');
 
-        $this->assertDatabaseCount('admin_settings', 0);
         $this->actingAs($admin)->get(route('admin.settings.edit'))->assertOk();
-        $this->assertDatabaseCount('admin_settings', 0);
     }
 
     public function test_currency_catalog_loads_reference_currencies(): void
@@ -83,7 +83,6 @@ class AdminSettingsFoundationTest extends TestCase
         $this->assertSame('USD', SystemSetting::query()->where('key', 'default_currency')->value('value'));
         $this->assertSame('Asia/Kolkata', SystemSetting::query()->where('key', 'default_timezone')->value('value'));
         $this->assertSame('4', SystemSetting::query()->where('key', 'storefront_banner.max_per_shop')->value('value'));
-        $this->assertDatabaseCount('admin_settings', 0);
     }
 
     public function test_admin_settings_rejects_invalid_storefront_banner_limit(): void

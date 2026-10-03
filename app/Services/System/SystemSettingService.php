@@ -4,7 +4,6 @@ namespace App\Services\System;
 
 use App\Models\SystemSetting;
 use App\Models\SystemSettingGroup;
-use App\Services\Admin\AdminSettingsService;
 use App\Support\CurrencyCatalog;
 use App\Support\TimezoneCatalog;
 use DateTimeZone;
@@ -19,7 +18,6 @@ class SystemSettingService
     private const EMAIL_PASSWORD_PAYLOAD_PREFIX = 'canonical-smtp:v1:';
 
     public function __construct(
-        private readonly AdminSettingsService $legacySettings,
         private readonly TimezoneCatalog $timezones,
         private readonly CurrencyCatalog $currencies,
     ) {}
@@ -155,12 +153,12 @@ class SystemSettingService
     public function currencyConfig(): array
     {
         return [
-            'currency' => $this->canonicalOrLegacy(SystemSettingKeys::DEFAULT_CURRENCY, 'currency', 'base_currency', 'INR'),
-            'symbol' => $this->canonicalOrLegacy(SystemSettingKeys::CURRENCY_SYMBOL, 'currency', 'symbol', '₹'),
-            'decimal_places' => $this->canonicalOrLegacy(SystemSettingKeys::CURRENCY_DECIMAL_PLACES, 'currency', 'decimal_places', 2),
-            'thousands_separator' => $this->canonicalOrLegacy(SystemSettingKeys::CURRENCY_THOUSANDS_SEPARATOR, 'currency', 'thousands_separator', ','),
-            'decimal_separator' => $this->canonicalOrLegacy(SystemSettingKeys::CURRENCY_DECIMAL_SEPARATOR, 'currency', 'decimal_separator', '.'),
-            'symbol_position' => $this->canonicalOrLegacy(SystemSettingKeys::CURRENCY_SYMBOL_POSITION, 'currency', 'symbol_position', 'before'),
+            'currency' => $this->get(SystemSettingKeys::DEFAULT_CURRENCY, 'INR'),
+            'symbol' => $this->get(SystemSettingKeys::CURRENCY_SYMBOL, '₹'),
+            'decimal_places' => $this->get(SystemSettingKeys::CURRENCY_DECIMAL_PLACES, 2),
+            'thousands_separator' => $this->get(SystemSettingKeys::CURRENCY_THOUSANDS_SEPARATOR, ','),
+            'decimal_separator' => $this->get(SystemSettingKeys::CURRENCY_DECIMAL_SEPARATOR, '.'),
+            'symbol_position' => $this->get(SystemSettingKeys::CURRENCY_SYMBOL_POSITION, 'before'),
         ];
     }
 
@@ -168,10 +166,10 @@ class SystemSettingService
     public function regionalConfig(): array
     {
         return [
-            'timezone' => $this->canonicalOrLegacy(SystemSettingKeys::DEFAULT_TIMEZONE, 'regional', 'timezone', 'Asia/Kolkata'),
-            'date_format' => $this->canonicalOrLegacy(SystemSettingKeys::REGIONAL_DATE_FORMAT, 'regional', 'date_format', 'd-m-Y'),
-            'time_format' => $this->canonicalOrLegacy(SystemSettingKeys::REGIONAL_TIME_FORMAT, 'regional', 'time_format', 'h:i A'),
-            'financial_year_start_month' => $this->canonicalOrLegacy(SystemSettingKeys::REGIONAL_FINANCIAL_YEAR_START_MONTH, 'regional', 'financial_year_start_month', 4),
+            'timezone' => $this->get(SystemSettingKeys::DEFAULT_TIMEZONE, 'Asia/Kolkata'),
+            'date_format' => $this->get(SystemSettingKeys::REGIONAL_DATE_FORMAT, 'd-m-Y'),
+            'time_format' => $this->get(SystemSettingKeys::REGIONAL_TIME_FORMAT, 'h:i A'),
+            'financial_year_start_month' => $this->get(SystemSettingKeys::REGIONAL_FINANCIAL_YEAR_START_MONTH, 4),
         ];
     }
 
@@ -238,11 +236,8 @@ class SystemSettingService
 
     public function notificationPreference(string $eventKey, string $channel, bool $default): bool
     {
-        $legacyKey = "events.{$eventKey}.{$channel}.enabled";
-        $value = $this->canonicalOrLegacy(
+        $value = $this->get(
             SystemSettingKeys::notificationPreference($eventKey, $channel),
-            'notifications',
-            $legacyKey,
             $default,
         );
 
@@ -270,12 +265,7 @@ class SystemSettingService
             return $default;
         }
 
-        return $this->canonicalOrLegacy(
-            SystemSettingKeys::email($key),
-            'notifications.email',
-            $key,
-            $default,
-        );
+        return $this->get(SystemSettingKeys::email($key), $default);
     }
 
     public function setEmailSetting(string $key, mixed $value, string $type = SystemSetting::TYPE_STRING): SystemSetting
@@ -389,21 +379,6 @@ class SystemSettingService
         // Always read current canonical state. The former singleton-local cache
         // cached misses and stale models within the same request.
         return $this->query()->where('key', $key)->first();
-    }
-
-    private function canonicalOrLegacy(string $canonicalKey, string $legacyGroup, string $legacyKey, mixed $default): mixed
-    {
-        $setting = SystemSetting::withTrashed()->where('key', $canonicalKey)->first();
-
-        if ($setting !== null) {
-            if ($setting->trashed() || $setting->status !== SystemSetting::STATUS_ACTIVE || $this->encrypted($setting)) {
-                return $default;
-            }
-
-            return $this->cast($setting->value, (string) $setting->value_type, $default);
-        }
-
-        return $this->legacySettings->get($legacyGroup, $legacyKey, $default);
     }
 
     private function validateRegionalCurrency(string $group, string $key, mixed $value): void

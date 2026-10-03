@@ -21,6 +21,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Mockery;
 use PDO;
@@ -209,14 +210,13 @@ class RealEmailDeliveryTest extends TestCase
     {
         Mail::fake();
         $admin = $this->admin();
-        $legacyBefore = DB::table('admin_settings')->where('group', EmailConfigurationService::GROUP)->count();
+        Schema::dropIfExists('admin_settings');
 
         $this->actingAs($admin)->get(route('admin.email-settings.edit'))
             ->assertOk()
             ->assertDontSee('first-secret')
             ->assertSee('Admin Notification Email')
             ->assertSee('Primary email address for WindowShop administrative and operational notifications.');
-        $this->assertSame($legacyBefore, DB::table('admin_settings')->where('group', EmailConfigurationService::GROUP)->count());
         $this->actingAs($admin)->put(route('admin.email-settings.update'), ['enabled' => 1, 'smtp' => ['host' => '', 'port' => 70000, 'encryption' => 'bad']])->assertSessionHasErrors(['smtp.host', 'smtp.port', 'smtp.encryption']);
         $this->actingAs($admin)->put(route('admin.email-settings.update'), [
             'enabled' => 1,
@@ -224,7 +224,6 @@ class RealEmailDeliveryTest extends TestCase
             'from_name' => 'WindowShop Mail', 'from_email' => 'sender@example.test', 'reply_to' => 'reply@example.test',
             'admin_notification_email' => 'notifications@example.test',
         ])->assertSessionHas('success');
-        $this->assertDatabaseMissing('admin_settings', ['group' => EmailConfigurationService::GROUP]);
         $this->assertSame('smtp.example.test', app(EmailConfigurationService::class)->values()['host']);
         $this->assertSame('notifications@example.test', app(EmailConfigurationService::class)->values()['admin_notification_email']);
         $this->assertTrue(hash_equals('admin-secret', app(EmailConfigurationService::class)->decryptedPassword() ?? ''));

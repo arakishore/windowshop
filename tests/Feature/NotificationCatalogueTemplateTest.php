@@ -23,7 +23,7 @@ class NotificationCatalogueTemplateTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['notification_templates', 'shop_settings', 'merchant_settings', 'admin_settings', 'system_settings', 'system_setting_groups'] as $table) {
+        foreach (['notification_templates', 'shop_settings', 'merchant_settings', 'system_settings', 'system_setting_groups'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -46,15 +46,6 @@ class NotificationCatalogueTemplateTest extends TestCase
             $table->string('setting_type')->default('string');
             $table->timestamps();
             $table->unique(['shop_id', 'group', 'setting_key']);
-        });
-        Schema::create('admin_settings', function (Blueprint $table): void {
-            $table->id();
-            $table->string('group');
-            $table->string('setting_key');
-            $table->longText('setting_value')->nullable();
-            $table->string('setting_type')->default('string');
-            $table->timestamps();
-            $table->unique(['group', 'setting_key']);
         });
         Schema::create('system_setting_groups', function (Blueprint $table): void {
             $table->id();

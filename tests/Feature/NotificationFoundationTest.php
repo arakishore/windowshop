@@ -34,18 +34,8 @@ class NotificationFoundationTest extends TestCase
 
         Schema::dropIfExists('notification_delivery_logs');
         Schema::dropIfExists('merchant_settings');
-        Schema::dropIfExists('admin_settings');
         Schema::dropIfExists('system_settings');
         Schema::dropIfExists('system_setting_groups');
-        Schema::create('admin_settings', function (Blueprint $table): void {
-            $table->id();
-            $table->string('group', 50);
-            $table->string('setting_key');
-            $table->longText('setting_value')->nullable();
-            $table->string('setting_type', 30)->default('string');
-            $table->timestamps();
-            $table->unique(['group', 'setting_key']);
-        });
         $this->createSystemSettingsTables();
         Schema::create('merchant_settings', function (Blueprint $table): void {
             $table->id();

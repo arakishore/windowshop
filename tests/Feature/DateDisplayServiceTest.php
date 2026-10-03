@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\SystemSetting;
 use App\Services\DateTime\DateDisplayService;
 use App\Services\System\SystemSettingService;
 use Carbon\CarbonImmutable;
@@ -67,9 +66,7 @@ class DateDisplayServiceTest extends TestCase
 
     public function test_invalid_saved_timezone_falls_back_without_breaking_views(): void
     {
-        SystemSetting::query()
-            ->where('key', 'default_timezone')
-            ->update(['value' => 'Bad/Timezone']);
+        $this->settings()->set('default_timezone', 'Bad/Timezone');
         $this->app->forgetInstance(DateDisplayService::class);
 
         $timestamp = CarbonImmutable::parse('2026-08-01 13:05:00', 'UTC');

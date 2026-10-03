@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminSetting;
 use App\Models\SystemSetting;
 use App\Notifications\NotificationChannelName;
 use App\Services\Notification\AdminNotificationRecipientResolver;
@@ -11,6 +10,7 @@ use App\Services\System\SystemSettingKeys;
 use App\Services\System\SystemSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PDO;
 use Tests\TestCase;
 
@@ -27,10 +27,8 @@ class EmailConfigurationSystemSettingTest extends TestCase
         }
     }
 
-    public function test_canonical_non_secret_values_win_including_false_and_blank(): void
+    public function test_canonical_non_secret_values_preserve_false_and_blank(): void
     {
-        $this->legacy('enabled', '1', AdminSetting::TYPE_BOOLEAN);
-        $this->legacy('smtp.host', 'legacy.smtp.test');
         $settings = app(SystemSettingService::class);
         $settings->setEmailSetting('enabled', false, SystemSetting::TYPE_BOOLEAN);
         $settings->setEmailSetting('smtp.host', '');
@@ -41,26 +39,29 @@ class EmailConfigurationSystemSettingTest extends TestCase
         $this->assertSame('', $values['host']);
     }
 
-    public function test_non_secret_legacy_fallback_is_used_only_when_canonical_is_absent(): void
+    public function test_non_secret_application_defaults_work_without_legacy_table(): void
     {
         SystemSetting::withTrashed()->where('key', SystemSettingKeys::email('smtp.host'))->forceDelete();
-        $this->legacy('smtp.host', 'legacy.smtp.test');
+        Schema::dropIfExists('admin_settings');
 
-        $this->assertSame('legacy.smtp.test', app(EmailConfigurationService::class)->values()['host']);
+        $values = app(EmailConfigurationService::class)->values();
+
+        $this->assertSame('', $values['host']);
+        $this->assertSame(587, $values['port']);
+        $this->assertSame('tls', $values['encryption']);
+        $this->assertFalse($values['enabled']);
         $this->assertDatabaseMissing('system_settings', ['key' => SystemSettingKeys::email('smtp.host')]);
     }
 
     public function test_soft_deleted_canonical_email_setting_is_a_tombstone(): void
     {
         app(SystemSettingService::class)->setEmailSetting('smtp.host', 'canonical.smtp.test')->delete();
-        $this->legacy('smtp.host', 'legacy.smtp.test');
 
         $this->assertSame('', app(EmailConfigurationService::class)->values()['host']);
     }
 
-    public function test_admin_notification_recipient_prefers_canonical_and_can_fall_back_to_legacy(): void
+    public function test_admin_notification_recipient_uses_canonical_value_and_normal_empty_fallback(): void
     {
-        $this->legacy('admin_notification_email', 'legacy@example.test');
         app(SystemSettingService::class)->setEmailSetting('admin_notification_email', 'canonical@example.test');
 
         $this->assertSame(
@@ -72,10 +73,7 @@ class EmailConfigurationSystemSettingTest extends TestCase
             ->where('key', SystemSettingKeys::email('admin_notification_email'))
             ->forceDelete();
 
-        $this->assertSame(
-            [['id' => null, 'destination' => 'legacy@example.test']],
-            app(AdminNotificationRecipientResolver::class)->forChannel(NotificationChannelName::EMAIL),
-        );
+        $this->assertSame([], app(AdminNotificationRecipientResolver::class)->forChannel(NotificationChannelName::EMAIL));
     }
 
     public function test_email_social_links_remain_independent_from_storefront_social_links(): void
@@ -144,15 +142,5 @@ class EmailConfigurationSystemSettingTest extends TestCase
 
         $this->assertFalse($email->passwordConfigured());
         $this->assertNull($email->decryptedPassword());
-    }
-
-    private function legacy(string $key, string $value, string $type = AdminSetting::TYPE_STRING): void
-    {
-        AdminSetting::query()->create([
-            'group' => EmailConfigurationService::GROUP,
-            'setting_key' => $key,
-            'setting_value' => $value,
-            'setting_type' => $type,
-        ]);
     }
 }

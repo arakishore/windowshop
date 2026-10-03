@@ -13,6 +13,28 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-03 IST - Pre-production removal of legacy Admin Settings architecture
+
+Supersedes: the temporary legacy compatibility/fallback decisions recorded in Canonical System Settings Refactor Stages 2-5 on 2026-10-03.
+
+### Goal
+Make `system_settings` the sole global settings architecture before WindowShop's first production deployment.
+
+### Decisions
+- Removed the `admin_settings` runtime model, service, initializer, seeder, and `SystemSettingService` fallback. Missing canonical values now resolve directly to established application or notification-catalogue defaults.
+- Removed both the legacy table-creation migration and its canonical backfill migration together so a fresh installation never creates or depends on `admin_settings`.
+- Seed all ten foundational regional/currency settings as physical canonical rows. Runtime defaults remain a safety net, while the non-destructive seeder preserves every configured value on rerun.
+- Merchant and shop scoped settings remain separate and unchanged.
+
+### Implementation Outcome
+- Fresh isolated SQLite migrations create `system_settings` without creating `admin_settings`.
+- Canonical regional, currency, notification, email, and SMTP behavior no longer has an executable legacy dependency.
+- Historical entries below remain unchanged as an audit trail of the staged refactor.
+
+### Verification
+- Disposable in-memory migration/seeder verification and focused canonical settings tests passed.
+- Pint, PHP syntax checks, repository legacy-reference audit, and `git diff --check` were completed before handoff.
+
 ## 2026-10-03 IST - Canonical System Settings Refactor — Stage 6B SMTP Secret Payload Marker
 
 ### Goal

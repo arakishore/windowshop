@@ -39,7 +39,7 @@ class NotificationBusinessEventWiringTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['notification_delivery_logs', 'order_status_histories', 'shop_settings', 'merchant_settings', 'admin_settings', 'system_settings', 'system_setting_groups', 'orders', 'shops', 'merchant_profiles', 'auth_user_roles', 'auth_roles', 'users'] as $table) {
+        foreach (['notification_delivery_logs', 'order_status_histories', 'shop_settings', 'merchant_settings', 'system_settings', 'system_setting_groups', 'orders', 'shops', 'merchant_profiles', 'auth_user_roles', 'auth_roles', 'users'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -140,15 +140,6 @@ class NotificationBusinessEventWiringTest extends TestCase
                 $table->unique([$owner, 'group', 'setting_key']);
             });
         }
-        Schema::create('admin_settings', function (Blueprint $table): void {
-            $table->id();
-            $table->string('group');
-            $table->string('setting_key');
-            $table->longText('setting_value')->nullable();
-            $table->string('setting_type')->default('string');
-            $table->timestamps();
-            $table->unique(['group', 'setting_key']);
-        });
         $this->createSystemSettingsTables();
         Schema::create('notification_delivery_logs', function (Blueprint $table): void {
             $table->id();

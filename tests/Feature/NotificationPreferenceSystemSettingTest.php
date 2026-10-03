@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminSetting;
 use App\Models\SystemSetting;
 use App\Notifications\NotificationMessage;
 use App\Services\Notification\NotificationPreferenceResolver;
@@ -10,6 +9,7 @@ use App\Services\System\SystemSettingKeys;
 use App\Services\System\SystemSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PDO;
 use Tests\TestCase;
 
@@ -43,26 +43,23 @@ class NotificationPreferenceSystemSettingTest extends TestCase
         $this->assertFalse($resolver->enabled($this->globalMessage()));
     }
 
-    public function test_canonical_false_wins_over_legacy_true_and_canonical_true_wins_over_legacy_false(): void
+    public function test_canonical_false_and_true_remain_authoritative(): void
     {
         $settings = app(SystemSettingService::class);
         $resolver = app(NotificationPreferenceResolver::class);
 
-        $this->legacy('order.new.admin', true);
         $settings->setNotificationPreference('order.new.admin', 'email', false);
         $this->assertFalse($resolver->enabled($this->globalMessage()));
 
-        AdminSetting::query()->where('group', 'notifications')->delete();
-        $this->legacy('order.new.admin', false);
         $settings->setNotificationPreference('order.new.admin', 'email', true);
         $this->assertTrue($resolver->enabled($this->globalMessage()));
     }
 
-    public function test_legacy_is_used_only_when_canonical_key_is_absent(): void
+    public function test_catalogue_default_is_used_without_legacy_table(): void
     {
-        $this->legacy('order.new.admin', true);
+        Schema::dropIfExists('admin_settings');
 
-        $this->assertTrue(app(NotificationPreferenceResolver::class)->enabled($this->globalMessage()));
+        $this->assertFalse(app(NotificationPreferenceResolver::class)->enabled($this->globalMessage()));
         $this->assertDatabaseMissing('system_settings', [
             'key' => SystemSettingKeys::notificationPreference('order.new.admin', 'email'),
         ]);
@@ -76,11 +73,10 @@ class NotificationPreferenceSystemSettingTest extends TestCase
         $this->assertTrue($resolver->defaultEnabled('order.confirmed.customer', 'email'));
     }
 
-    public function test_soft_deleted_canonical_preference_is_a_tombstone_and_does_not_revive_legacy(): void
+    public function test_soft_deleted_canonical_preference_uses_catalogue_default(): void
     {
         $settings = app(SystemSettingService::class);
-        $settings->setNotificationPreference('order.new.admin', 'email', false)->delete();
-        $this->legacy('order.new.admin', true);
+        $settings->setNotificationPreference('order.new.admin', 'email', true)->delete();
 
         $this->assertFalse(app(NotificationPreferenceResolver::class)->enabled($this->globalMessage()));
         $this->assertNotNull(SystemSetting::withTrashed()
@@ -91,15 +87,5 @@ class NotificationPreferenceSystemSettingTest extends TestCase
     private function globalMessage(): NotificationMessage
     {
         return new NotificationMessage('order.new.admin', 'admin', 'email');
-    }
-
-    private function legacy(string $eventKey, bool $enabled): void
-    {
-        AdminSetting::query()->create([
-            'group' => 'notifications',
-            'setting_key' => "events.{$eventKey}.email.enabled",
-            'setting_value' => $enabled ? '1' : '0',
-            'setting_type' => AdminSetting::TYPE_BOOLEAN,
-        ]);
     }
 }

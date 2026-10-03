@@ -16,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use PDO;
 use Tests\TestCase;
@@ -213,11 +214,6 @@ class AdminNotificationManagementTest extends TestCase
             'value' => '1',
             'value_type' => SystemSetting::TYPE_BOOLEAN,
         ]);
-        $this->assertDatabaseMissing('admin_settings', [
-            'group' => 'notifications',
-            'setting_key' => 'events.order.new.admin.email.enabled',
-        ]);
-
         $resolver = app(NotificationPreferenceResolver::class);
         $this->assertFalse($resolver->defaultEnabled('order.processing.customer', 'email'));
         $this->actingAs($admin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'order.processing.customer', 'enabled' => 1])->assertSessionHas('success');
@@ -232,15 +228,13 @@ class AdminNotificationManagementTest extends TestCase
         $this->actingAs($nonAdmin)->put(route('admin.notification-rules.global.update'), ['event_key' => 'order.processing.customer', 'enabled' => 1])->assertForbidden();
     }
 
-    public function test_rules_page_read_does_not_initialize_legacy_notification_preferences(): void
+    public function test_rules_page_read_works_without_legacy_settings_table(): void
     {
-        $before = DB::table('admin_settings')->where('group', 'notifications')->count();
+        Schema::dropIfExists('admin_settings');
 
         $this->actingAs($this->admin())
             ->get(route('admin.notification-rules.index'))
             ->assertOk();
-
-        $this->assertSame($before, DB::table('admin_settings')->where('group', 'notifications')->count());
     }
 
     private function template(string $event, string $channel): NotificationTemplate
