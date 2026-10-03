@@ -2,17 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Models\Brand;
 use App\Models\MerchantProfile;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductAttributeGroup;
 use App\Models\ProductAttributeGroupValue;
 use App\Models\ProductCategory;
 use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductVariant;
-use App\Models\Brand;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\Product\ProductVariantGenerationService;
+use App\Services\Product\ProductVariantManagementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -569,7 +572,7 @@ class AdminProductVariantGenerationTest extends TestCase
         $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
 
         $blue = $product->variants()->where('name', 'Blue / M')->firstOrFail();
-        app(\App\Services\Product\ProductVariantManagementService::class)->setDefaultVariant($product, $blue->getKey(), $admin);
+        app(ProductVariantManagementService::class)->setDefaultVariant($product, $blue->getKey(), $admin);
         app(ProductVariantGenerationService::class)->generate($product->fresh(), $admin);
         $this->assertTrue($blue->fresh()->is_default);
 
@@ -589,7 +592,7 @@ class AdminProductVariantGenerationTest extends TestCase
         ]);
         $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
         $blue = $product->variants()->where('name', 'Blue / M')->firstOrFail();
-        app(\App\Services\Product\ProductVariantManagementService::class)->setDefaultVariant($product, $blue->getKey(), $admin);
+        app(ProductVariantManagementService::class)->setDefaultVariant($product, $blue->getKey(), $admin);
 
         $this->actingAs($admin)
             ->get(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
@@ -778,6 +781,130 @@ class AdminProductVariantGenerationTest extends TestCase
         $this->assertSame(2, $product->variants()->where('mrp', 1200)->where('selling_price', 999)->where('status', 'inactive')->count());
     }
 
+    public function test_variants_tab_has_one_checkbox_driven_bulk_delete_action(): void
+    {
+        [$admin, $product] = $this->productWithVariantSetup();
+
+        $content = $this->actingAs($admin)
+            ->get(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(1, preg_match_all('/<button\b[^>]*js-bulk-delete-variants[^>]*>.*?Delete Selected.*?<\/button>/s', $content));
+        $this->assertStringContainsString('class="btn btn-danger js-bulk-delete-variants" disabled', $content);
+        $this->assertStringContainsString('Delete selected variants?', $content);
+        $this->assertStringContainsString('Variants with existing transactional/history references cannot be permanently deleted and will be left unchanged.', $content);
+        $this->assertStringContainsString('Delete Variants', $content);
+        $this->assertStringNotContainsString('js-delete-variant', $content);
+    }
+
+    public function test_bulk_delete_permanently_deletes_safe_variants_and_preserves_history_then_allows_regeneration(): void
+    {
+        [$admin, $product, $color, $size] = $this->productWithVariantSetup();
+        $this->selectValues($product, [
+            [$color, ['Red', 'Blue']],
+            [$size, ['M']],
+        ]);
+        $this->actingAs($admin)->post(route('admin.products.variants.generate', $product));
+
+        $safeDefault = $product->variants()->where('name', 'Red / M')->firstOrFail();
+        $protected = $product->variants()->where('name', 'Blue / M')->firstOrFail();
+        $order = Order::query()->create([
+            'order_number' => 'VAR-DELETE-'.Str::random(8),
+            'merchant_id' => $product->merchant_id,
+            'shop_id' => $product->shop_id,
+            'created_source' => Order::SOURCE_POS,
+            'fulfilment_type' => Order::FULFILMENT_COUNTER,
+            'order_status' => Order::STATUS_COMPLETED,
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+            'payment_status' => Order::PAYMENT_PAID,
+            'currency_code' => 'INR',
+            'grand_total' => 1539,
+        ]);
+        $orderItem = OrderItem::query()->create([
+            'order_id' => $order->getKey(),
+            'product_id' => $product->getKey(),
+            'product_variant_id' => $protected->getKey(),
+            'product_name' => $product->product_name,
+            'variant_name' => $protected->name,
+            'quantity' => 1,
+            'unit_price' => 1539,
+            'line_total' => 1539,
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.products.variants.bulk-destroy', $product), [
+                'variant_ids' => [$safeDefault->getKey(), $protected->getKey()],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertSessionHas('success', '1 variant deleted. 1 variant could not be deleted because it has transaction history.');
+
+        $this->assertNull(ProductVariant::withTrashed()->find($safeDefault->getKey()));
+        $this->assertNotNull($protected->fresh());
+        $this->assertTrue((bool) $protected->fresh()->is_default);
+        $this->assertSame($protected->getKey(), $orderItem->fresh()->product_variant_id);
+        $this->assertDatabaseHas('order_items', ['id' => $orderItem->getKey()]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.products.variants.generate', $product))
+            ->assertSessionHas('success', '1 product variants generated successfully.');
+
+        $regenerated = $product->variants()->where('name', 'Red / M')->firstOrFail();
+        $this->assertNotSame($safeDefault->getKey(), $regenerated->getKey());
+        $this->assertSame(0, (int) $regenerated->stock_quantity);
+        $this->assertSame(2, $product->variants()->count());
+    }
+
+    public function test_bulk_delete_rejects_foreign_variant_ids_without_partial_deletion(): void
+    {
+        [$admin, $product] = $this->productWithVariantSetup();
+        [, $otherProduct] = $this->productWithVariantSetup();
+        $owned = $product->variants()->firstOrFail();
+        $foreign = $otherProduct->variants()->firstOrFail();
+
+        $this->actingAs($admin)
+            ->from(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->delete(route('admin.products.variants.bulk-destroy', $product), [
+                'variant_ids' => [$owned->getKey(), $foreign->getKey()],
+            ])
+            ->assertRedirect(route('admin.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertSessionHasErrors('variants');
+
+        $this->assertNotNull($owned->fresh());
+        $this->assertNotNull($foreign->fresh());
+    }
+
+    public function test_bulk_delete_preserves_variants_used_by_active_carts(): void
+    {
+        [$admin, $product] = $this->productWithVariantSetup();
+        $variant = $product->variants()->firstOrFail();
+        $cartId = DB::table('carts')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'session_token' => 'variant-delete-cart-'.Str::random(8),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $cartItemId = DB::table('cart_items')->insertGetId([
+            'cart_id' => $cartId,
+            'shop_id' => $product->shop_id,
+            'product_id' => $product->getKey(),
+            'product_variant_id' => $variant->getKey(),
+            'quantity' => 1,
+            'unit_price' => 1539,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.products.variants.bulk-destroy', $product), [
+                'variant_ids' => [$variant->getKey()],
+            ])
+            ->assertSessionHas('warning', '0 variants deleted. 1 variant could not be deleted because it is still used by a cart or promotion.');
+
+        $this->assertNotNull($variant->fresh());
+        $this->assertDatabaseHas('cart_items', ['id' => $cartItemId, 'product_variant_id' => $variant->getKey()]);
+    }
+
     public function test_variant_updates_reject_invalid_stock_and_foreign_variant_ids(): void
     {
         [$admin, $product] = $this->productWithVariantSetup();
@@ -954,7 +1081,7 @@ class AdminProductVariantGenerationTest extends TestCase
     }
 
     /**
-     * @param array<int, array{0: ProductAttributeGroup, 1: array<int, string>}> $selection
+     * @param  array<int, array{0: ProductAttributeGroup, 1: array<int, string>}>  $selection
      */
     private function selectValues(Product $product, array $selection): void
     {
@@ -1041,7 +1168,7 @@ class AdminProductVariantGenerationTest extends TestCase
     }
 
     /**
-     * @param array<int, string> $values
+     * @param  array<int, string>  $values
      */
     private function createGroup(string $name, string $selectionType, array $values): ProductAttributeGroup
     {

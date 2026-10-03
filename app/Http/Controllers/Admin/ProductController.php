@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\BulkDeleteProductImagesRequest;
+use App\Http\Requests\Admin\BulkDeleteProductVariantsRequest;
 use App\Http\Requests\Admin\BulkUpdateProductVariantsRequest;
 use App\Http\Requests\Admin\StoreProductImagesRequest;
 use App\Http\Requests\Admin\StoreProductQuickCreateRequest;
@@ -339,6 +340,15 @@ class ProductController extends Controller
             ->with('success', "{$updated} variant rows updated successfully.");
     }
 
+    public function bulkDestroyVariants(BulkDeleteProductVariantsRequest $request, Product $product): RedirectResponse
+    {
+        $result = $this->variantManagementService->bulkDelete($product, $request->variantIds(), Auth::user());
+
+        return redirect()
+            ->route('admin.products.edit', ['product' => $product, 'tab' => 'variants'])
+            ->with($result['deleted_count'] > 0 ? 'success' : 'warning', $this->variantDeletionMessage($result));
+    }
+
     /**
      * @param array{created_count: int, sku_updated_count?: int} $result
      * @return array{level: string, text: string}
@@ -373,6 +383,27 @@ class ProductController extends Controller
             'level' => 'info',
             'text' => 'All variant combinations already exist.',
         ];
+    }
+
+    /**
+     * @param  array{deleted_count: int, history_protected_count: int, other_protected_count: int}  $result
+     */
+    private function variantDeletionMessage(array $result): string
+    {
+        $deleted = $result['deleted_count'];
+        $historyProtected = $result['history_protected_count'];
+        $otherProtected = $result['other_protected_count'];
+        $message = $deleted.' '.Str::plural('variant', $deleted).' deleted.';
+
+        if ($historyProtected > 0) {
+            $message .= ' '.$historyProtected.' '.Str::plural('variant', $historyProtected).' could not be deleted because '.($historyProtected === 1 ? 'it has' : 'they have').' transaction history.';
+        }
+
+        if ($otherProtected > 0) {
+            $message .= ' '.$otherProtected.' '.Str::plural('variant', $otherProtected).' could not be deleted because '.($otherProtected === 1 ? 'it is' : 'they are').' still used by a cart or promotion.';
+        }
+
+        return $message;
     }
 
     public function updateDescriptionSeo(UpdateProductDescriptionSeoRequest $request, Product $product): RedirectResponse
