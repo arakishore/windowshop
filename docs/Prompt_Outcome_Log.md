@@ -13,6 +13,25 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-03 18:43 IST - Safe bulk permanent deletion of product variants
+
+### Goal
+Add one checkbox-driven `Delete Selected` action to the shared Admin/Merchant Variants & Inventory table without adding per-row delete actions or risking transaction/history data.
+
+### Decisions and Outcome
+- The existing row/select-all checkboxes drive one disabled-until-selected bulk action beside `Apply to Selected` and `Apply to All`. Bootbox confirmation includes the selected count, permanence warning, protected-history rule, and `Cancel` / `Delete Variants` actions.
+- Each selected ID is validated as belonging to the current product. Variants are processed independently inside a transaction and locked before reference checks, allowing safe rows to be deleted while protected rows remain unchanged.
+- Order items, refund items, exchange/return items, and product reviews are protected history. Active cart items and variant promotion targets are protected operational references. No referenced row is deleted or nulled by this workflow.
+- Only unused variants are force-deleted; their variant-owned attribute rows may cascade. If the default is deleted, the existing default-selection service promotes the next active variant.
+- Generation intentionally sees a hard-deleted combination as missing and can recreate it later with a new variant identity and the established zero-stock generation defaults.
+- Admin and Merchant use the same request, service logic, shared view, and result wording. Mixed results report deleted and protected counts; an all-protected result uses a warning flash.
+
+### Verification
+- Full `AdminProductVariantGenerationTest` and `MerchantProductManagementTest`: 53 tests, 299 assertions passed.
+- Regression coverage verifies the single bulk UI, disabled initial state, safe deletion, history preservation, partial results, default reassignment, regeneration, cart protection, foreign-ID rejection, and Merchant endpoint.
+- Pint, Blade compilation, inline JavaScript syntax, route registration, PHP syntax, and `git diff --check` passed.
+- Browser verification remained pending because no browser surface was available in the session.
+
 ## 2026-10-03 17:55 IST - Storefront Color x Size variant synchronization
 
 ### Goal

@@ -175,30 +175,30 @@
             @method('PUT')
 
             <div class="row g-2 align-items-end">
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-lg">
                     <label class="form-label" for="bulk_mrp">MRP</label>
                     <input id="bulk_mrp" name="changes[mrp]" type="number" min="0" step="0.01" class="form-control">
                 </div>
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-lg">
                     <label class="form-label" for="bulk_selling_price">Selling Price</label>
                     <input id="bulk_selling_price" name="changes[selling_price]" type="number" min="0" step="0.01" class="form-control">
                 </div>
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-lg">
                     <label class="form-label" for="bulk_cost_price">
                         Cost Price (Optional)
                         <i class="ph-info ms-1 text-muted" data-bs-popup="tooltip" title="Used for profit and margin reports. Leave blank if not required."></i>
                     </label>
                     <input id="bulk_cost_price" name="changes[cost_price]" type="number" min="0" step="0.01" class="form-control">
                 </div>
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-lg">
                     <label class="form-label" for="bulk_stock_quantity">Stock Quantity</label>
                     <input id="bulk_stock_quantity" name="changes[stock_quantity]" type="number" min="0" step="1" class="form-control">
                 </div>
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-lg">
                     <label class="form-label" for="bulk_low_stock_threshold">Low Stock</label>
                     <input id="bulk_low_stock_threshold" name="changes[low_stock_threshold]" type="number" min="0" step="1" class="form-control">
                 </div>
-                <div class="col-md-2">
+                <div class="col-12 col-sm-6 col-lg">
                     <label class="form-label" for="bulk_status">Status</label>
                     <select id="bulk_status" name="changes[status]" class="form-select">
                         <option value="">No change</option>
@@ -207,7 +207,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6 col-lg">
                     <label class="form-label" for="bulk_availability_status_id">Customer Availability</label>
                     <select id="bulk_availability_status_id" name="changes[availability_status_id]" class="form-select">
                         <option value="">No change</option>
@@ -220,6 +220,10 @@
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-3">
+                <button type="button" class="btn btn-danger js-bulk-delete-variants" disabled>
+                    <i class="ph-trash me-2"></i>
+                    Delete Selected
+                </button>
                 <button type="submit" name="scope" value="selected" class="btn btn-light border">
                     <i class="ph-check-square me-2"></i>
                     Apply to Selected
@@ -229,6 +233,11 @@
                     Apply to All
                 </button>
             </div>
+        </form>
+
+        <form id="bulk-delete-variants-form" method="POST" action="{{ route($productRoutePrefix.'.products.variants.bulk-destroy', $product) }}" class="d-none">
+            @csrf
+            @method('DELETE')
         </form>
     </div>
 
@@ -342,6 +351,27 @@
         document.addEventListener('DOMContentLoaded', function () {
             const selectAll = document.querySelector('.js-select-all-variants');
             const checkboxes = Array.from(document.querySelectorAll('.js-variant-checkbox'));
+            const deleteButton = document.querySelector('.js-bulk-delete-variants');
+            const deleteForm = document.getElementById('bulk-delete-variants-form');
+
+            const selectedCheckboxes = function () {
+                return checkboxes.filter(function (checkbox) {
+                    return checkbox.checked;
+                });
+            };
+
+            const syncSelectionState = function () {
+                const selectedCount = selectedCheckboxes().length;
+
+                if (deleteButton) {
+                    deleteButton.disabled = selectedCount === 0;
+                }
+
+                if (selectAll) {
+                    selectAll.checked = checkboxes.length > 0 && selectedCount === checkboxes.length;
+                    selectAll.indeterminate = selectedCount > 0 && selectedCount < checkboxes.length;
+                }
+            };
 
             if (!selectAll) {
                 return;
@@ -351,7 +381,60 @@
                 checkboxes.forEach(function (checkbox) {
                     checkbox.checked = selectAll.checked;
                 });
+                syncSelectionState();
             });
+
+            checkboxes.forEach(function (checkbox) {
+                checkbox.addEventListener('change', syncSelectionState);
+            });
+
+            if (deleteButton && deleteForm) {
+                deleteButton.addEventListener('click', function () {
+                    const selected = selectedCheckboxes();
+                    const count = selected.length;
+
+                    if (count === 0) {
+                        return;
+                    }
+
+                    bootbox.confirm({
+                        title: 'Delete selected variants?',
+                        message: 'You are about to permanently delete ' + count + ' selected variant' + (count === 1 ? '' : 's') + '.<br><br>Variants with existing transactional/history references cannot be permanently deleted and will be left unchanged.<br><br>This action cannot be undone.',
+                        buttons: {
+                            cancel: {
+                                label: 'Cancel',
+                                className: 'btn-link',
+                            },
+                            confirm: {
+                                label: 'Delete Variants',
+                                className: 'btn-danger',
+                            },
+                        },
+                        callback: function (confirmed) {
+                            if (!confirmed) {
+                                return;
+                            }
+
+                            deleteForm.querySelectorAll('[data-variant-id-field]').forEach(function (field) {
+                                field.remove();
+                            });
+
+                            selected.forEach(function (checkbox) {
+                                const field = document.createElement('input');
+                                field.type = 'hidden';
+                                field.name = 'variant_ids[]';
+                                field.value = checkbox.value;
+                                field.dataset.variantIdField = 'true';
+                                deleteForm.appendChild(field);
+                            });
+
+                            deleteForm.submit();
+                        },
+                    });
+                });
+            }
+
+            syncSelectionState();
         });
     </script>
 @endpush
