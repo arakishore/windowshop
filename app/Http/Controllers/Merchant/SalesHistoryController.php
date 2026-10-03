@@ -5,15 +5,16 @@ namespace App\Http\Controllers\Merchant;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderExchange;
+use App\Models\ProductVariant;
 use App\Models\ReturnReason;
 use App\Models\Shop;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\DateTime\BusinessTimeService;
 use App\Services\Merchant\MerchantSettingsService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Order\OrderExchangeService;
 use App\Services\Order\OrderRefundService;
 use App\Services\Order\OrderReturnExchangeEligibilityService;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -24,14 +25,13 @@ class SalesHistoryController extends Controller
 {
     public function __construct(
         private readonly MerchantShopContextService $shopContextService,
-        private readonly AdminSettingsService $adminSettings,
+        private readonly SystemSettingService $systemSettings,
         private readonly MerchantSettingsService $settings,
         private readonly OrderRefundService $refundService,
         private readonly OrderExchangeService $exchangeService,
         private readonly OrderReturnExchangeEligibilityService $returnExchangeEligibility,
         private readonly BusinessTimeService $businessTime,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -120,7 +120,7 @@ class SalesHistoryController extends Controller
                 ->orderBy('customer_name')
                 ->get(),
             'paymentMethods' => $this->paymentMethods(),
-            'posCurrency' => $this->adminSettings->currencyConfig(),
+            'posCurrency' => $this->systemSettings->currencyConfig(),
         ]);
     }
 
@@ -181,7 +181,7 @@ class SalesHistoryController extends Controller
             'refundableQuantities' => $this->refundService->refundableQuantities($order->loadMissing('items')),
             'exchangeableQuantities' => $this->exchangeService->exchangeableQuantities($order->loadMissing('items')),
             'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
-            'posCurrency' => $this->adminSettings->currencyConfig(),
+            'posCurrency' => $this->systemSettings->currencyConfig(),
         ]);
     }
 
@@ -200,7 +200,7 @@ class SalesHistoryController extends Controller
                 : collect(),
             'replacementSelector' => $this->replacementSelector((int) $shop->merchant_id),
             'paymentMethods' => $this->paymentMethods(),
-            'posCurrency' => $this->adminSettings->currencyConfig(),
+            'posCurrency' => $this->systemSettings->currencyConfig(),
             ...$this->navigationData($order),
         ]);
     }
@@ -242,7 +242,7 @@ class SalesHistoryController extends Controller
             'activeShop' => $shop,
             'exchange' => $exchange->load(['items.orderItem', 'replacementOrder.items', 'originalOrder', 'createdBy']),
             'autoPrint' => $request->boolean('print'),
-            'posCurrency' => $this->adminSettings->currencyConfig(),
+            'posCurrency' => $this->systemSettings->currencyConfig(),
             ...$this->navigationData($exchange->originalOrder),
         ]);
     }
@@ -265,7 +265,7 @@ class SalesHistoryController extends Controller
             'refundableQuantities' => $this->refundService->refundableQuantities($order),
             'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
             'paymentMethods' => ['original' => 'Use original method'] + $this->paymentMethods(),
-            'posCurrency' => $this->adminSettings->currencyConfig(),
+            'posCurrency' => $this->systemSettings->currencyConfig(),
             ...$this->navigationData($order),
         ]);
     }
@@ -325,7 +325,7 @@ class SalesHistoryController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function requirePolicyOverrideIfNeeded(Order $order, string $type, array $data, string $itemsKey): void
     {
@@ -354,7 +354,7 @@ class SalesHistoryController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function notesWithPolicyOverride(array $data): ?string
     {
@@ -396,7 +396,7 @@ class SalesHistoryController extends Controller
 
     private function replacementVariants(Shop $shop)
     {
-        return \App\Models\ProductVariant::query()
+        return ProductVariant::query()
             ->with('product')
             ->where('shop_id', $shop->getKey())
             ->where('status', 'active')
@@ -423,5 +423,4 @@ class SalesHistoryController extends Controller
             'cheque' => 'Cheque',
         ];
     }
-
 }

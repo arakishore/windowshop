@@ -6,7 +6,6 @@ use App\Models\Order;
 use App\Models\OrderStatus;
 use App\Models\OrderTotal;
 use App\Models\PaymentStatus;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\DateTime\DateDisplayService;
 use App\Services\System\SystemSettingService;
 use Illuminate\Support\Str;
@@ -14,7 +13,6 @@ use Illuminate\Support\Str;
 class OrderEmailPresenter
 {
     public function __construct(
-        private readonly AdminSettingsService $settings,
         private readonly DateDisplayService $dates,
         private readonly SystemSettingService $systemSettings,
     ) {}
@@ -112,13 +110,14 @@ class OrderEmailPresenter
 
     private function money(Order $order, mixed $amount): string
     {
-        $currency = $this->settings->currencyConfig();
+        $currency = $this->systemSettings->currencyConfig();
         $formatted = number_format((float) $amount, (int) $currency['decimal_places'], (string) $currency['decimal_separator'], (string) $currency['thousands_separator']);
         $configuredSymbol = (string) $currency['symbol'];
         if (($currency['currency'] ?? null) === 'INR' && str_contains($configuredSymbol, 'â')) {
             $configuredSymbol = "\u{20B9}";
         }
         $symbol = $order->currency_code === $currency['currency'] ? $configuredSymbol : (string) ($order->currency_code ?: $currency['currency']).' ';
+
         return $currency['symbol_position'] === 'after' && $order->currency_code === $currency['currency'] ? $formatted.$symbol : $symbol.$formatted;
     }
 
@@ -142,6 +141,7 @@ class OrderEmailPresenter
     {
         return $order->items->map(function ($item): ?array {
             $promotion = data_get($item->metadata, 'promotion');
+
             return is_array($promotion) && filled($promotion['name'] ?? null) ? ['name' => (string) $promotion['name'], 'coupon_code' => filled($promotion['coupon_code'] ?? null) ? (string) $promotion['coupon_code'] : null] : null;
         })->filter()->unique(fn (array $promotion): string => $promotion['name'].'|'.$promotion['coupon_code'])->values()->all();
     }

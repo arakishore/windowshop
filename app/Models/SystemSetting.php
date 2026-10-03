@@ -65,6 +65,17 @@ class SystemSetting extends Model
         return $this->belongsTo(SystemSettingGroup::class, 'group_id');
     }
 
+    public function toArray(): array
+    {
+        $values = parent::toArray();
+
+        if ($this->is_encrypted || $this->value_type === self::TYPE_ENCRYPTED) {
+            $values['value'] = filled($this->value) ? 'Configured' : null;
+        }
+
+        return $values;
+    }
+
     /**
      * @return array<int, string>
      */

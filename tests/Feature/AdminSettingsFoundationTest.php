@@ -2,13 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminSetting;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Services\Admin\AdminSettingsInitializer;
-use App\Services\Admin\AdminSettingsService;
+use App\Services\System\SystemSettingService;
 use App\Support\CurrencyCatalog;
-use Database\Seeders\AdminSettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -25,30 +22,17 @@ class AdminSettingsFoundationTest extends TestCase
         $pdo = DB::connection()->getPdo();
 
         if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
-            $pdo->sqliteCreateCollation(
-                'utf8mb4_unicode_ci',
-                fn (string $left, string $right): int => strcmp($left, $right),
-            );
+            $pdo->sqliteCreateCollation('utf8mb4_unicode_ci', fn (string $left, string $right): int => strcmp($left, $right));
         }
     }
 
-    public function test_admin_settings_seeder_creates_global_defaults(): void
+    public function test_visiting_admin_settings_does_not_initialize_legacy_defaults(): void
     {
-        $this->seed(AdminSettingsSeeder::class);
+        $admin = $this->adminUser();
 
-        $expectedCount = collect($this->initializer()->defaults())->sum(fn (array $settings): int => count($settings));
-
-        $this->assertSame($expectedCount, AdminSetting::query()->count());
-        $this->assertSame('Asia/Kolkata', $this->settings()->get('regional', 'timezone'));
-        $this->assertSame('d-m-Y', $this->settings()->get('regional', 'date_format'));
-        $this->assertSame('h:i A', $this->settings()->get('regional', 'time_format'));
-        $this->assertSame(4, $this->settings()->get('regional', 'financial_year_start_month'));
-        $this->assertSame('INR', $this->settings()->get('currency', 'base_currency'));
-        $this->assertSame('₹', $this->settings()->get('currency', 'symbol'));
-        $this->assertSame(2, $this->settings()->get('currency', 'decimal_places'));
-        $this->assertSame(',', $this->settings()->get('currency', 'thousands_separator'));
-        $this->assertSame('.', $this->settings()->get('currency', 'decimal_separator'));
-        $this->assertSame('before', $this->settings()->get('currency', 'symbol_position'));
+        $this->assertDatabaseCount('admin_settings', 0);
+        $this->actingAs($admin)->get(route('admin.settings.edit'))->assertOk();
+        $this->assertDatabaseCount('admin_settings', 0);
     }
 
     public function test_currency_catalog_loads_reference_currencies(): void
@@ -61,7 +45,7 @@ class AdminSettingsFoundationTest extends TestCase
         $this->assertSame(3, app(CurrencyCatalog::class)->find('KWD')['decimals']);
     }
 
-    public function test_admin_can_view_and_update_global_settings(): void
+    public function test_admin_can_view_and_update_canonical_global_settings_without_legacy_writes(): void
     {
         $admin = $this->adminUser();
 
@@ -83,67 +67,55 @@ class AdminSettingsFoundationTest extends TestCase
             ->assertDontSee('currency.base_currency');
 
         $this->actingAs($admin)
-            ->put(route('admin.settings.update'), [
-                'settings' => [
-                    'regional' => [
-                        'timezone' => 'Asia/Kolkata',
-                        'date_format' => 'd/m/Y',
-                        'time_format' => 'H:i',
-                        'financial_year_start_month' => '1',
-                    ],
-                    'currency' => [
-                        'base_currency' => 'USD',
-                        'symbol' => '$',
-                        'decimal_places' => '2',
-                        'thousands_separator' => ',',
-                        'decimal_separator' => '.',
-                        'symbol_position' => 'before',
-                    ],
-                    'storefront_banner' => [
-                        'max_per_shop' => '4',
-                    ],
-                ],
-            ])
+            ->put(route('admin.settings.update'), $this->payload())
             ->assertRedirect()
             ->assertSessionHas('success', 'Admin settings updated successfully.');
 
-        $this->assertSame('d/m/Y', $this->settings()->get('regional', 'date_format'));
-        $this->assertSame('H:i', $this->settings()->get('regional', 'time_format'));
-        $this->assertSame(1, $this->settings()->get('regional', 'financial_year_start_month'));
-        $this->assertSame('USD', $this->settings()->get('currency', 'base_currency'));
-        $this->assertSame('$', $this->settings()->get('currency', 'symbol'));
-        $this->assertSame(2, $this->settings()->get('currency', 'decimal_places'));
-        $this->assertSame('before', $this->settings()->get('currency', 'symbol_position'));
+        $regional = $this->settings()->regionalConfig();
+        $currency = $this->settings()->currencyConfig();
+        $this->assertSame('d/m/Y', $regional['date_format']);
+        $this->assertSame('H:i', $regional['time_format']);
+        $this->assertSame(1, $regional['financial_year_start_month']);
+        $this->assertSame('USD', $currency['currency']);
+        $this->assertSame('$', $currency['symbol']);
+        $this->assertSame(2, $currency['decimal_places']);
+        $this->assertSame('before', $currency['symbol_position']);
+        $this->assertSame('USD', SystemSetting::query()->where('key', 'default_currency')->value('value'));
+        $this->assertSame('Asia/Kolkata', SystemSetting::query()->where('key', 'default_timezone')->value('value'));
         $this->assertSame('4', SystemSetting::query()->where('key', 'storefront_banner.max_per_shop')->value('value'));
+        $this->assertDatabaseCount('admin_settings', 0);
     }
 
     public function test_admin_settings_rejects_invalid_storefront_banner_limit(): void
     {
-        $admin = $this->adminUser();
+        $payload = $this->payload();
+        $payload['settings']['storefront_banner']['max_per_shop'] = '0';
 
-        $this->actingAs($admin)
-            ->put(route('admin.settings.update'), [
-                'settings' => [
-                    'regional' => [
-                        'timezone' => 'Asia/Kolkata',
-                        'date_format' => 'd-m-Y',
-                        'time_format' => 'h:i A',
-                        'financial_year_start_month' => '4',
-                    ],
-                    'currency' => [
-                        'base_currency' => 'INR',
-                        'symbol' => '₹',
-                        'decimal_places' => '2',
-                        'thousands_separator' => ',',
-                        'decimal_separator' => '.',
-                        'symbol_position' => 'before',
-                    ],
-                    'storefront_banner' => [
-                        'max_per_shop' => '0',
-                    ],
-                ],
-            ])
+        $this->actingAs($this->adminUser())
+            ->put(route('admin.settings.update'), $payload)
             ->assertSessionHasErrors('settings.storefront_banner.max_per_shop');
+    }
+
+    /** @return array<string, mixed> */
+    private function payload(): array
+    {
+        return ['settings' => [
+            'regional' => [
+                'timezone' => 'Asia/Kolkata',
+                'date_format' => 'd/m/Y',
+                'time_format' => 'H:i',
+                'financial_year_start_month' => '1',
+            ],
+            'currency' => [
+                'base_currency' => 'USD',
+                'symbol' => '$',
+                'decimal_places' => '2',
+                'thousands_separator' => ',',
+                'decimal_separator' => '.',
+                'symbol_position' => 'before',
+            ],
+            'storefront_banner' => ['max_per_shop' => '4'],
+        ]];
     }
 
     private function adminUser(): User
@@ -172,13 +144,8 @@ class AdminSettingsFoundationTest extends TestCase
         return $user;
     }
 
-    private function settings(): AdminSettingsService
+    private function settings(): SystemSettingService
     {
-        return app(AdminSettingsService::class);
-    }
-
-    private function initializer(): AdminSettingsInitializer
-    {
-        return app(AdminSettingsInitializer::class);
+        return app(SystemSettingService::class);
     }
 }

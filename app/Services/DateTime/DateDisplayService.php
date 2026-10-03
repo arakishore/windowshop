@@ -2,7 +2,7 @@
 
 namespace App\Services\DateTime;
 
-use App\Services\Admin\AdminSettingsService;
+use App\Services\System\SystemSettingService;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use DateTimeZone;
@@ -15,9 +15,7 @@ class DateDisplayService
      */
     private ?array $regionalSettings = null;
 
-    public function __construct(private readonly AdminSettingsService $settings)
-    {
-    }
+    public function __construct(private readonly SystemSettingService $settings) {}
 
     public function date(mixed $value, string $fallback = '—'): string
     {
@@ -116,12 +114,12 @@ class DateDisplayService
             return $this->regionalSettings;
         }
 
-        $settings = $this->settings->all('regional');
+        $settings = $this->settings->regionalConfig();
 
         return $this->regionalSettings = [
-            'timezone' => (string) ($settings->get('timezone') ?: 'Asia/Kolkata'),
-            'date_format' => (string) ($settings->get('date_format') ?: 'd-m-Y'),
-            'time_format' => (string) ($settings->get('time_format') ?: 'h:i A'),
+            'timezone' => (string) ($settings['timezone'] ?: 'Asia/Kolkata'),
+            'date_format' => (string) ($settings['date_format'] ?: 'd-m-Y'),
+            'time_format' => (string) ($settings['time_format'] ?: 'h:i A'),
         ];
     }
 }

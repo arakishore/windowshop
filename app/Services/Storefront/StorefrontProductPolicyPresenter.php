@@ -4,20 +4,19 @@ namespace App\Services\Storefront;
 
 use App\Models\Product;
 use App\Models\Shop;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Merchant\ShopSettingsInitializer;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\Product\ProductReturnPolicyResolver;
+use App\Services\System\SystemSettingService;
 
 class StorefrontProductPolicyPresenter
 {
     public function __construct(
         private readonly ProductReturnPolicyResolver $returnPolicyResolver,
-        private readonly AdminSettingsService $adminSettings,
+        private readonly SystemSettingService $systemSettings,
         private readonly ShopSettingsService $shopSettings,
         private readonly ShopSettingsInitializer $shopSettingsInitializer,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{refund: string, exchange: string, lines: array<int, string>, inline: string}
@@ -113,7 +112,7 @@ class StorefrontProductPolicyPresenter
 
     private function money(float|int|string $amount): string
     {
-        $currency = $this->adminSettings->currencyConfig();
+        $currency = $this->systemSettings->currencyConfig();
         $formatted = number_format(
             (float) $amount,
             (int) ($currency['decimal_places'] ?? 2),

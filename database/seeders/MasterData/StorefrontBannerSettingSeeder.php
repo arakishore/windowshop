@@ -32,25 +32,29 @@ class StorefrontBannerSettingSeeder extends Seeder
             ->where('slug', 'storefront-banner')
             ->value('id');
 
-        DB::table('system_settings')->updateOrInsert(
-            ['key' => 'storefront_banner.max_per_shop'],
-            fn (bool $exists) => [
-                'group_id' => $groupId,
-                'label' => 'Maximum Banners Per Shop',
+        $existing = DB::table('system_settings')->where('key', 'storefront_banner.max_per_shop')->first();
+        $metadata = [
+            'group_id' => $groupId,
+            'label' => 'Maximum Banners Per Shop',
+            'value_type' => 'integer',
+            'is_public' => false,
+            'is_encrypted' => false,
+            'description' => 'Maximum number of banner slots allowed for each merchant shop.',
+            'sort_order' => 10,
+            'updated_at' => $now,
+        ];
+
+        if ($existing === null) {
+            DB::table('system_settings')->insert([
+                ...$metadata,
+                'uuid' => (string) Str::uuid(),
+                'key' => 'storefront_banner.max_per_shop',
                 'value' => '3',
-                'value_type' => 'integer',
-                'is_public' => false,
-                'is_encrypted' => false,
-                'description' => 'Maximum number of banner slots allowed for each merchant shop.',
-                'sort_order' => 10,
                 'status' => 'active',
-                'deleted_at' => null,
-                'updated_at' => $now,
-                ...($exists ? [] : [
-                    'uuid' => (string) Str::uuid(),
-                    'created_at' => $now,
-                ]),
-            ],
-        );
+                'created_at' => $now,
+            ]);
+        } else {
+            DB::table('system_settings')->where('id', $existing->id)->update($metadata);
+        }
     }
 }

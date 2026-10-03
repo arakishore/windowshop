@@ -22,7 +22,6 @@ class DatabaseSeeder extends Seeder
         $this->call(PaymentStatusSeeder::class);
         $this->call(TaxSeeder::class);
         $this->call(SuperAdminSeeder::class);
-        $this->call(AdminSettingsSeeder::class);
         $this->call(BannerTemplateSeeder::class);
         $this->call(NotificationTemplateSeeder::class);
 

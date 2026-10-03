@@ -118,7 +118,7 @@
                 'name' => "settings[{$group}][{$key}]",
                 'id' => 'setting_'.Str::slug($group.'_'.$key, '_'),
                 'value' => $oldSettings[$group][$key] ?? $settings["{$group}.{$key}"] ?? $defaults[$group][$key]['value'] ?? null,
-                'type' => $defaults[$group][$key]['type'] ?? \App\Models\AdminSetting::TYPE_STRING,
+                'type' => $defaults[$group][$key]['type'] ?? \App\Models\SystemSetting::TYPE_STRING,
                 'errorKey' => "settings.{$group}.{$key}",
             ];
         };

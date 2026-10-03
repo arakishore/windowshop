@@ -9,7 +9,6 @@ use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductReview;
 use App\Models\ProductVariant;
 use App\Models\Shop;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\ProductAvailability\CustomerPurchaseAvailabilityGuard;
 use App\Services\System\SystemSettingService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -26,7 +25,6 @@ class ProductListingService
     private const FALLBACK_IMAGE = 'assets/storefront/images/no-image-icon.png';
 
     public function __construct(
-        private readonly AdminSettingsService $settings,
         private readonly SystemSettingService $systemSettings,
         private readonly CustomerLocationService $location,
         private readonly ProductLocationSorter $locationSorter,
@@ -1106,7 +1104,7 @@ class ProductListingService
 
     private function money(float $value): string
     {
-        $currency = $this->settings->currencyConfig();
+        $currency = $this->systemSettings->currencyConfig();
         $amount = number_format(
             $value,
             (int) ($currency['decimal_places'] ?? 2),

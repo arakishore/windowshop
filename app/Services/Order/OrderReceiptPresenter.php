@@ -3,18 +3,18 @@
 namespace App\Services\Order;
 
 use App\Models\Order;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Checkout\StorefrontPaymentMethodService;
+use App\Services\System\SystemSettingService;
 
 class OrderReceiptPresenter
 {
-    public function __construct(private readonly AdminSettingsService $adminSettings) {}
+    public function __construct(private readonly SystemSettingService $systemSettings) {}
 
     /** @return array<string, mixed> */
     public function present(Order $order): array
     {
         $order->loadMissing(['shop.city', 'shop.state', 'shop.country', 'items.taxComponents', 'totals']);
-        $currency = $this->adminSettings->currencyConfig();
+        $currency = $this->systemSettings->currencyConfig();
         $itemDiscount = (float) $order->items->sum(fn ($item): float => (float) $item->line_discount);
 
         return [

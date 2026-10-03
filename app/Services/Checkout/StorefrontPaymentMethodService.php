@@ -4,9 +4,9 @@ namespace App\Services\Checkout;
 
 use App\Models\Cart;
 use App\Models\Shop;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Merchant\ShopSettingsInitializer;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -24,7 +24,7 @@ class StorefrontPaymentMethodService
     public function __construct(
         private readonly ShopSettingsService $shopSettings,
         private readonly ShopSettingsInitializer $shopSettingsInitializer,
-        private readonly AdminSettingsService $adminSettings,
+        private readonly SystemSettingService $systemSettings,
     ) {}
 
     /**
@@ -281,7 +281,7 @@ class StorefrontPaymentMethodService
 
     private function money(float|int|string $amount): string
     {
-        $currency = $this->adminSettings->currencyConfig();
+        $currency = $this->systemSettings->currencyConfig();
         $formatted = number_format(
             (float) $amount,
             (int) ($currency['decimal_places'] ?? 2),

@@ -11,22 +11,22 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Shop;
-use App\Services\Admin\AdminSettingsService;
 use App\Services\Customer\CustomerAddressService;
 use App\Services\Merchant\MerchantCustomerService;
-use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Merchant\MerchantSettingsService;
+use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Merchant\PosProductSearchService;
 use App\Services\Order\OrderCreationService;
 use App\Services\POS\PosPricingService;
 use App\Services\Product\ProductImageService;
 use App\Services\Shared\MobileNumberNormalizer;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class PosController extends Controller
@@ -41,10 +41,9 @@ class PosController extends Controller
         private readonly CustomerAddressService $customerAddressService,
         private readonly MerchantCustomerService $customerService,
         private readonly MerchantSettingsService $settings,
-        private readonly AdminSettingsService $adminSettings,
+        private readonly SystemSettingService $systemSettings,
         private readonly PosPricingService $posPricingService,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -81,7 +80,7 @@ class PosController extends Controller
             'categories' => $this->categoriesForShop($shop, $categoryIds),
             'filters' => $filters,
             'posItems' => $this->posItems($products, ''),
-            'posCurrency' => $this->adminSettings->currencyConfig(),
+            'posCurrency' => $this->systemSettings->currencyConfig(),
             'posSettings' => $posSettings,
             'posPreferences' => [
                 'tileSize' => in_array($tileSize, ['compact', 'comfortable', 'spacious'], true) ? $tileSize : 'spacious',
@@ -125,7 +124,7 @@ class PosController extends Controller
         $this->ensurePosDiscountsAllowed($data, $posSettings);
         $this->selectedCustomerForMerchant($shop, (int) ($data['customer_id'] ?? 0));
 
-        $currencyConfig = $this->adminSettings->currencyConfig();
+        $currencyConfig = $this->systemSettings->currencyConfig();
 
         $order = $this->orderCreationService->create([
             'shop_id' => $shop->getKey(),
@@ -262,8 +261,8 @@ class PosController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $data
-     * @param array{allowOrderDiscount: bool, allowItemDiscount: bool} $posSettings
+     * @param  array<string, mixed>  $data
+     * @param  array{allowOrderDiscount: bool, allowItemDiscount: bool}  $posSettings
      */
     private function ensurePosDiscountsAllowed(array $data, array $posSettings): void
     {
@@ -440,7 +439,7 @@ class PosController extends Controller
             'activeShop' => $shop,
             'autoPrint' => $request->boolean('print'),
             'order' => $orderModel,
-            'posCurrency' => $this->adminSettings->currencyConfig(),
+            'posCurrency' => $this->systemSettings->currencyConfig(),
             'receiptSettings' => [
                 'showShopName' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_shop_name', true),
                 'showAddress' => (bool) $this->settings->get((int) $shop->merchant_id, 'pos', 'receipt.show_address', true),

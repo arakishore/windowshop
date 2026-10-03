@@ -127,25 +127,29 @@ class SystemFoundationSeeder extends Seeder
         ];
 
         foreach ($settings as $setting) {
-            DB::table('system_settings')->updateOrInsert(
-                ['key' => $setting['key']],
-                fn (bool $exists) => [
-                    'group_id' => $setting['group_id'],
-                    'label' => $setting['label'],
+            $existing = DB::table('system_settings')->where('key', $setting['key'])->first();
+            $metadata = [
+                'group_id' => $setting['group_id'],
+                'label' => $setting['label'],
+                'value_type' => $setting['value_type'] ?? 'string',
+                'is_public' => false,
+                'is_encrypted' => false,
+                'sort_order' => $setting['sort_order'],
+                'updated_at' => $now,
+            ];
+
+            if ($existing === null) {
+                DB::table('system_settings')->insert([
+                    ...$metadata,
+                    'uuid' => (string) Str::uuid(),
+                    'key' => $setting['key'],
                     'value' => $setting['value'],
-                    'value_type' => $setting['value_type'] ?? 'string',
-                    'is_public' => false,
-                    'is_encrypted' => false,
-                    'sort_order' => $setting['sort_order'],
                     'status' => 'active',
-                    'deleted_at' => null,
-                    'updated_at' => $now,
-                    ...($exists ? [] : [
-                        'uuid' => (string) Str::uuid(),
-                        'created_at' => $now,
-                    ]),
-                ],
-            );
+                    'created_at' => $now,
+                ]);
+            } else {
+                DB::table('system_settings')->where('id', $existing->id)->update($metadata);
+            }
         }
 
         $this->call(StorefrontBannerSettingSeeder::class);

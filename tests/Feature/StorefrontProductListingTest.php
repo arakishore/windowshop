@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminSetting;
 use App\Models\MerchantProfile;
 use App\Models\PostalCode;
 use App\Models\Product;
@@ -17,11 +16,13 @@ use App\Models\ProductVariant;
 use App\Models\ProductVariantAttribute;
 use App\Models\Shop;
 use App\Models\ShopSetting;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\Storefront\StorefrontUrlService;
+use App\Services\System\SystemSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -52,7 +53,7 @@ class StorefrontProductListingTest extends TestCase
 
         Storage::fake('public');
         $this->currencySetting('symbol', 'INR ');
-        $this->currencySetting('decimal_places', '2', AdminSetting::TYPE_INTEGER);
+        $this->currencySetting('decimal_places', '2', SystemSetting::TYPE_INTEGER);
         $this->currencySetting('thousands_separator', ',');
         $this->currencySetting('decimal_separator', '.');
         $this->currencySetting('symbol_position', 'before');
@@ -1063,11 +1064,12 @@ class StorefrontProductListingTest extends TestCase
         return $group->load('values');
     }
 
-    private function currencySetting(string $key, string $value, string $type = AdminSetting::TYPE_STRING): void
+    private function currencySetting(string $key, string $value, string $type = SystemSetting::TYPE_STRING): void
     {
-        AdminSetting::query()->updateOrCreate(
-            ['group' => 'currency', 'setting_key' => $key],
-            ['setting_value' => $value, 'setting_type' => $type],
+        app(SystemSettingService::class)->setRegionalCurrency(
+            'currency',
+            $key,
+            $type === SystemSetting::TYPE_INTEGER ? (int) $value : $value,
         );
     }
 

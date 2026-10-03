@@ -23,7 +23,7 @@ class NotificationCatalogueTemplateTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['notification_templates', 'shop_settings', 'merchant_settings', 'admin_settings', 'system_settings'] as $table) {
+        foreach (['notification_templates', 'shop_settings', 'merchant_settings', 'admin_settings', 'system_settings', 'system_setting_groups'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -56,12 +56,27 @@ class NotificationCatalogueTemplateTest extends TestCase
             $table->timestamps();
             $table->unique(['group', 'setting_key']);
         });
+        Schema::create('system_setting_groups', function (Blueprint $table): void {
+            $table->id();
+            $table->uuid('uuid')->nullable()->unique();
+            $table->string('name');
+            $table->string('slug')->unique();
+            $table->unsignedInteger('sort_order')->default(0);
+            $table->string('status')->default('active');
+            $table->timestamps();
+            $table->softDeletes();
+        });
         Schema::create('system_settings', function (Blueprint $table): void {
             $table->id();
             $table->uuid('uuid')->nullable();
+            $table->unsignedBigInteger('group_id')->nullable();
             $table->string('key')->unique();
+            $table->string('label')->nullable();
             $table->longText('value')->nullable();
             $table->string('value_type')->default('string');
+            $table->boolean('is_public')->default(false);
+            $table->boolean('is_encrypted')->default(false);
+            $table->unsignedInteger('sort_order')->default(0);
             $table->string('status')->default('active');
             $table->timestamps();
             $table->softDeletes();

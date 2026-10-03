@@ -13,6 +13,7 @@ use App\Services\Checkout\StorefrontDeliveryService;
 use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\StorefrontCustomerContext;
+use App\Services\System\SystemSettingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +33,7 @@ class CheckoutController extends Controller
         private readonly StorefrontPaymentMethodService $payments,
         private readonly NavigationService $navigation,
         private readonly StorefrontCustomerContext $customerContext,
+        private readonly SystemSettingService $systemSettings,
     ) {}
 
     public function index(Request $request): RedirectResponse|View
@@ -244,6 +246,7 @@ class CheckoutController extends Controller
         return view('storefront.pages.checkout-success', [
             'order' => $order,
             'customer' => $customer,
+            'currency' => $this->systemSettings->currencyConfig(),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }

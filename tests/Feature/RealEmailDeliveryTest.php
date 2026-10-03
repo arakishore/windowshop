@@ -3,22 +3,21 @@
 namespace Tests\Feature;
 
 use App\Mail\TransactionalNotificationMail;
-use App\Models\AdminSetting;
 use App\Models\NotificationTemplate;
 use App\Models\Shop;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Notifications\Channels\EmailChannel;
 use App\Notifications\DeliveryResult;
 use App\Notifications\NotificationMessage;
 use App\Services\Notification\EmailConfigurationService;
 use App\Services\Notification\NotificationEventCatalogue;
-use App\Services\Notification\OrderEmailPresenter;
 use App\Services\Notification\NotificationTemplateRenderer;
 use App\Services\Notification\NotificationTemplateService;
+use App\Services\Notification\OrderEmailPresenter;
 use App\Services\System\SystemSettingService;
 use Database\Seeders\NotificationTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -69,6 +68,12 @@ class RealEmailDeliveryTest extends TestCase
         $result = app(EmailChannel::class)->send($message);
 
         $this->assertSame(DeliveryResult::SENT, $result->status);
+        $mailer = config('mail.mailers.'.EmailConfigurationService::MAILER);
+        $this->assertSame('smtp.example.test', $mailer['host']);
+        $this->assertSame(587, $mailer['port']);
+        $this->assertSame('mailer', $mailer['username']);
+        $this->assertSame('smtp', $mailer['scheme']);
+        $this->assertTrue(hash_equals('secret-value', $mailer['password'] ?? ''));
         Mail::assertSent(TransactionalNotificationMail::class, function (TransactionalNotificationMail $mail): bool {
             $html = $mail->render();
 
@@ -178,29 +183,40 @@ class RealEmailDeliveryTest extends TestCase
     {
         $service = app(EmailConfigurationService::class);
         $service->save(['enabled' => false, 'smtp.password' => 'first-secret']);
-        $setting = AdminSetting::query()->where('group', EmailConfigurationService::GROUP)->where('setting_key', 'smtp.password')->firstOrFail();
-        $first = $setting->setting_value;
+        $setting = SystemSetting::query()->where('key', 'notifications.email.smtp.password')->firstOrFail();
+        $first = $setting->getRawOriginal('value');
+        $payload = app(SystemSettingService::class)->secret('notifications.email.smtp.password');
 
-        $this->assertNotSame('first-secret', $first);
-        $this->assertSame('first-secret', Crypt::decryptString($first));
+        $this->assertFalse(hash_equals('first-secret', (string) $first));
+        $this->assertFalse(str_contains((string) $first, 'canonical-smtp:v1:'));
+        $this->assertTrue(str_starts_with((string) $payload, 'canonical-smtp:v1:'));
+        $this->assertTrue(hash_equals('first-secret', substr((string) $payload, strlen('canonical-smtp:v1:'))));
+        $this->assertTrue($setting->is_encrypted);
+        $this->assertFalse($setting->is_public);
+        $this->assertSame(SystemSetting::TYPE_ENCRYPTED, $setting->value_type);
+        $this->assertNull(app(SystemSettingService::class)->get('notifications.email.smtp.password'));
         $this->assertArrayNotHasKey('smtp.password', $service->values());
-        $this->assertSame('Configured', $setting->toArray()['setting_value']);
+        $this->assertSame('Configured', $setting->toArray()['value']);
         $service->save(['enabled' => false, 'smtp.password' => '']);
-        $this->assertSame($first, $setting->fresh()->setting_value);
+        $this->assertSame($first, $setting->fresh()->getRawOriginal('value'));
         $service->save(['enabled' => false, 'smtp.password' => 'second-secret']);
-        $this->assertSame('second-secret', Crypt::decryptString($setting->fresh()->setting_value));
+        $replacement = $setting->fresh()->getRawOriginal('value');
+        $this->assertNotSame($first, $replacement);
+        $this->assertTrue(hash_equals('second-secret', $service->decryptedPassword() ?? ''));
     }
 
     public function test_admin_page_validates_saves_and_sends_test_email(): void
     {
         Mail::fake();
         $admin = $this->admin();
+        $legacyBefore = DB::table('admin_settings')->where('group', EmailConfigurationService::GROUP)->count();
 
         $this->actingAs($admin)->get(route('admin.email-settings.edit'))
             ->assertOk()
             ->assertDontSee('first-secret')
             ->assertSee('Admin Notification Email')
             ->assertSee('Primary email address for WindowShop administrative and operational notifications.');
+        $this->assertSame($legacyBefore, DB::table('admin_settings')->where('group', EmailConfigurationService::GROUP)->count());
         $this->actingAs($admin)->put(route('admin.email-settings.update'), ['enabled' => 1, 'smtp' => ['host' => '', 'port' => 70000, 'encryption' => 'bad']])->assertSessionHasErrors(['smtp.host', 'smtp.port', 'smtp.encryption']);
         $this->actingAs($admin)->put(route('admin.email-settings.update'), [
             'enabled' => 1,
@@ -208,12 +224,21 @@ class RealEmailDeliveryTest extends TestCase
             'from_name' => 'WindowShop Mail', 'from_email' => 'sender@example.test', 'reply_to' => 'reply@example.test',
             'admin_notification_email' => 'notifications@example.test',
         ])->assertSessionHas('success');
+        $this->assertDatabaseMissing('admin_settings', ['group' => EmailConfigurationService::GROUP]);
         $this->assertSame('smtp.example.test', app(EmailConfigurationService::class)->values()['host']);
         $this->assertSame('notifications@example.test', app(EmailConfigurationService::class)->values()['admin_notification_email']);
-        $this->assertSame('admin-secret', app(EmailConfigurationService::class)->decryptedPassword());
-        $this->actingAs($admin)->get(route('admin.email-settings.edit'))
-            ->assertOk()
-            ->assertSee('value="notifications@example.test"', false);
+        $this->assertTrue(hash_equals('admin-secret', app(EmailConfigurationService::class)->decryptedPassword() ?? ''));
+        $ciphertext = SystemSetting::query()->where('key', 'notifications.email.smtp.password')->value('value');
+        $page = $this->actingAs($admin)->get(route('admin.email-settings.edit'));
+        $page->assertOk()->assertSee('value="notifications@example.test"', false);
+        $this->assertFalse(str_contains($page->getContent(), 'admin-secret'));
+        $this->actingAs($admin)->put(route('admin.email-settings.update'), [
+            'enabled' => 1,
+            'smtp' => ['host' => 'smtp.example.test', 'port' => 587, 'encryption' => 'tls', 'username' => 'mailer', 'password' => ''],
+            'from_name' => 'WindowShop Mail', 'from_email' => 'sender@example.test', 'reply_to' => 'reply@example.test',
+            'admin_notification_email' => 'notifications@example.test',
+        ])->assertSessionHas('success');
+        $this->assertSame($ciphertext, SystemSetting::query()->where('key', 'notifications.email.smtp.password')->value('value'));
         $this->actingAs($admin)->put(route('admin.email-settings.update'), [
             'enabled' => 0,
             'smtp' => ['encryption' => 'tls'],

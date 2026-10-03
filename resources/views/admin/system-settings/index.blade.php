@@ -26,7 +26,7 @@
                 <form method="GET" action="{{ route('admin.system-settings.index') }}" class="row g-3 align-items-end">
                     <div class="col-md-3">
                         <label for="search" class="form-label">Search</label>
-                        <input id="search" name="search" type="search" value="{{ $filters['search'] }}" class="form-control" placeholder="Key, label, value, description">
+                        <input id="search" name="search" type="search" value="{{ $filters['search'] }}" class="form-control" placeholder="Key, label, description">
                     </div>
                     <div class="col-md-3">
                         <label for="group_id" class="form-label">Group</label>
@@ -98,7 +98,13 @@
                                         <div class="text-muted fs-sm">{{ Str::limit($setting->description, 80) }}</div>
                                     @endif
                                 </td>
-                                <td class="text-break" style="max-width: 220px;">{{ Str::limit((string) $setting->value, 80) }}</td>
+                                <td class="text-break" style="max-width: 220px;">
+                                    @if($setting->is_encrypted || $setting->value_type === \App\Models\SystemSetting::TYPE_ENCRYPTED)
+                                        {{ filled($setting->value) ? 'Configured' : 'Not configured' }}
+                                    @else
+                                        {{ Str::limit((string) $setting->value, 80) }}
+                                    @endif
+                                </td>
                                 <td><span class="badge bg-light text-body border">{{ Str::headline($setting->value_type) }}</span></td>
                                 <td>{{ $setting->is_public ? 'Yes' : 'No' }}</td>
                                 <td>

@@ -13,6 +13,159 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-03 IST - Canonical System Settings Refactor — Stage 6B SMTP Secret Payload Marker
+
+### Goal
+Replace the temporary use of `SystemSetting.description` as SMTP credential state with the accepted versioned encrypted-payload format before persistent migration.
+
+### Decision and Outcome
+- New canonical SMTP passwords are wrapped internally as `canonical-smtp:v1:<password>` and the complete payload is encrypted exactly once through the existing protected secret API.
+- Runtime explicit secret access accepts only the recognized versioned payload, strips the prefix internally, and supplies only the actual password to the mail transport.
+- Unmarked Stage 2 ciphertext, an empty versioned payload, invalid ciphertext, missing/inactive/tombstoned rows, and failed decryption are all treated as not configured.
+- Blank submissions preserve existing ciphertext; replacements create a newly encrypted versioned payload.
+- `description` is documentation metadata only. Changing it has no effect on password validity.
+- No setting, column, or migration was added or changed.
+
+### Verification
+Focused EmailConfigurationSystemSetting, RealEmailDelivery, SystemSettingService, and Stage 2 backfill tests plus Pint, PHP syntax checks, and `git diff --check` passed during completion review.
+
+## 2026-10-03 IST - Canonical System Settings Refactor — Stage 5 Global Email Configuration
+
+### Goal
+Move global email delivery, SMTP, sender/reply-to, Admin operational recipient, and transactional email presentation ownership from `admin_settings` to canonical `system_settings` without changing merchant/shop provider settings.
+
+### Decisions
+- Non-secret email values resolve by canonical row existence, read-only legacy fallback, then the established application default. Blank, zero, and false canonical values remain authoritative; soft-deleted canonical rows remain tombstones.
+- `EmailConfigurationService` retains its public API but now reads and writes through email-specific `SystemSettingService` APIs using the approved `notifications.email.*` keys.
+- SMTP passwords never use legacy fallback. A newly entered password is encrypted exactly once through the canonical secret API, stored encrypted/non-public, and read only through explicit secret access.
+- Passwords copied by the Stage 2 migration are intentionally not considered runtime-configured until replaced through the protected email settings API. A safe setting-description marker distinguishes newly entered canonical credentials without changing the accepted migration or adding another key.
+- Blank password submissions preserve a valid canonical ciphertext. Invalid, unmarked, or undecryptable canonical ciphertext is treated as not configured.
+- Email footer social/app settings remain separate from public storefront `social.*` settings.
+
+### Implementation Outcome
+- Migrated transport, SMTP non-secret fields, sender/reply-to, `admin_notification_email`, branding, footer, social/app links, and dedicated email-logo persistence to canonical settings.
+- Admin Email Settings and Test Email now use canonical configuration and canonical secret access without writing legacy rows or rendering stored passwords.
+- `AdminNotificationRecipientResolver` continues to use `EmailConfigurationService`, so the central canonical Admin notification email remains primary with the existing account-recipient fallback when blank/invalid.
+- Runtime mailer configuration receives canonical host, port, encryption, username, sender/reply-to, and only a newly configured valid canonical password. Existing error sanitization remains unchanged.
+
+### Verification
+- Focused canonical/legacy/tombstone, secret lifecycle, Admin UI, recipient, branding/footer, runtime transport, Test Email, notification delivery, SystemSettingService, and Stage 2 migration tests passed.
+- PHP syntax checks, Pint on Stage 5 PHP/test files, and `git diff --check` passed during completion review.
+
+### Deferred
+Legacy infrastructure removal and final cleanup remain deferred. Merchant/shop settings, provider modes, provider credentials, additional recipients, and scoped notification overrides were intentionally unchanged.
+
+## 2026-10-03 IST - Canonical System Settings Refactor — Stage 4 Global Notification Preferences
+
+### Goal
+Move global/default notification event-channel enablement from `admin_settings` to canonical `system_settings` without changing merchant/shop overrides or migrating email configuration.
+
+### Decisions
+- Dynamic canonical keys are formed as `notifications.events.{event}.{channel}.enabled` through `SystemSettingKeys`.
+- Global/default resolution is canonical row existence, then read-only legacy `admin_settings` fallback, then the frozen catalogue default. Explicit canonical false values remain authoritative, and soft-deleted canonical rows remain tombstones.
+- `NotificationPreferenceResolver` retains the existing hierarchy: mandatory rules, then shop override, then merchant override, then the global/default resolver. Only the final global/default storage ownership changed.
+- Global Admin rule writes go only to canonical boolean `system_settings` rows. Reading the rules page creates no legacy preferences.
+- SMTP, sender/reply-to, Admin recipient, email branding/footer, and merchant/shop provider configuration remain legacy/scoped and deferred.
+
+### Implementation Outcome
+- Added canonical notification preference key generation plus typed read/write APIs to `SystemSettingService`.
+- Migrated `NotificationPreferenceResolver::defaultEnabled()`, `setGlobal()`, and `setDefault()` to those APIs.
+- Preserved merchant and shop setting services and their precedence unchanged.
+- Updated synthetic notification test schemas to provide the canonical tables now required by the resolver, without weakening their behavioral assertions.
+
+### Verification
+- Focused canonical preference, catalogue, Admin management, notification foundation, event wiring, merchant/shop override, SystemSettingService, and Stage 2 backfill tests passed.
+- PHP syntax checks, Pint on Stage 4 PHP/test files, and `git diff --check` passed during completion review.
+
+### Deferred
+`EmailConfigurationService`, SMTP credentials/transport, sender/reply-to, `admin_notification_email`, email branding/footer/social/app links, merchant provider credentials, and legacy-table retirement remain deferred to Stage 5 or later approval.
+
+## 2026-10-03 IST - Canonical System Settings Refactor — Stage 3 Regional and Currency Runtime Migration
+
+### Goal
+Move global regional/timezone and currency runtime ownership from `admin_settings` to canonical `system_settings`, while retaining an existence-based, read-only legacy fallback during the transition.
+
+### Decisions
+- `default_currency` and `default_timezone` remain the canonical primary keys; the remaining values use the approved `currency.*` and `regional.*` mappings in `SystemSettingKeys`.
+- Canonical row existence determines precedence. Active canonical blank and zero values remain authoritative, while a legacy value is read only when no canonical row (including no soft-deleted tombstone) exists.
+- The Admin Regional/Currency page reads and writes through `SystemSettingService` only. It no longer invokes `AdminSettingsInitializer`, and normal database seeding no longer calls `AdminSettingsSeeder`.
+- Legacy regional/currency infrastructure remains available solely for controlled compatibility fallback and explicit legacy operations. Notification and email consumers remain deferred.
+- Settings are resolved before rendering checkout success; Blade templates do not resolve settings services directly.
+
+### Implementation Outcome
+- Added canonical currency/regional aggregate reads, validation, updates, defaults, and read-only fallback to `SystemSettingService`.
+- Migrated global storefront, cart, checkout, delivery/payment, customer order, merchant POS/order/sales, receipt/activity, notification order presentation, date display, and business-time consumers to `SystemSettingService`.
+- Admin updates now write only canonical rows in `system_settings`; viewing or updating the page does not initialize or write regional/currency rows in `admin_settings`.
+- Removed `AdminSettingsSeeder` from the normal `DatabaseSeeder` path without removing the legacy table, model, service, initializer, or seeder.
+
+### Verification
+- Canonical precedence, absence-only fallback, blank/zero handling, Admin canonical-only writes, no page-triggered legacy initialization, regional formatting, and timezone/business-time behavior: 23 tests passed, 90 assertions.
+- Representative storefront currency consumers plus Stage 1/2 regressions: 87 tests passed, 1,031 assertions.
+- PHP syntax checks, Pint on changed PHP/test files, and `git diff --check` passed during completion review.
+- `BannerLimitServiceTest` remains passing without modification.
+
+### Deferred
+`NotificationPreferenceResolver`, `EmailConfigurationService`, SMTP runtime configuration, `admin_notification_email`, email branding/footer, merchant/shop notification settings, and legacy-table retirement remain deferred to later explicitly approved stages.
+
+## 2026-10-03 IST - Canonical System Settings Refactor — Stage 2 Legacy Data Backfill
+
+### Goal
+Backfill approved global legacy `admin_settings` values into canonical `system_settings` without migrating runtime consumers, modifying legacy source rows, or exposing secrets.
+
+### Decisions
+- Precedence is canonical row existence, then legacy value, then an approved canonical default. Empty strings and stored false/zero values are therefore preserved.
+- Static mappings come from `SystemSettingKeys`; dynamic global `notifications.events.*` preferences are migrated consistently. Merchant and shop settings remain untouched.
+- A soft-deleted canonical row reserves its globally unique key. The migration leaves that tombstone untouched rather than restoring it or attempting a conflicting duplicate insert.
+- Legacy SMTP password ciphertext is copied directly through the query builder, marked `encrypted` and non-public, and is never decrypted or re-encrypted by the migration.
+- Regional/currency settings that historically require seeded defaults receive defaults only when neither canonical nor legacy data exists. Optional email/presentation settings are created only from existing legacy values.
+- Rollback is intentionally non-destructive because migrated rows cannot be safely distinguished from canonical rows subsequently edited or adopted by runtime code. `down()` does not delete canonical or legacy data.
+
+### Implementation Outcome
+- Added `2026_10_03_000001_backfill_admin_settings_into_system_settings.php`.
+- The migration safely ensures Localization, Email, and Notifications groups without replacing existing identities or creating duplicates.
+- Existing canonical UUIDs, values, configured states, ciphertext, and tombstones survive repeated execution.
+- Legacy `admin_settings` and scoped `merchant_settings` / `shop_settings` rows remain unchanged.
+- No runtime consumer, fallback, initializer, or legacy model/service was changed in Stage 2.
+
+### Verification
+- New Stage 2 migration tests: 6 passed, 34 assertions.
+- Combined Stage 1/Stage 2 and directly relevant existing tests: 23 passed, 153 assertions.
+- PHP syntax checks, Pint, and `git diff --check` passed.
+- The already-classified `BannerLimitServiceTest` remains passing without modification.
+
+### Deferred
+All runtime consumer migration, legacy fallback behavior, SMTP/email service migration, and legacy-table retirement remain deferred to later explicitly approved stages.
+
+## 2026-10-03 IST - Canonical System Settings Refactor — Stage 1 Foundation
+
+### Goal
+Establish the canonical `system_settings` infrastructure, safe secret handling, non-destructive canonical seeders, and encrypted-value-safe generic Admin UI without yet migrating any legacy `admin_settings` data or consumers.
+
+### Decisions
+- The approved legacy-to-canonical key inventory is centralized in `SystemSettingKeys`; existing `default_currency` and `default_timezone` names remain canonical.
+- `SystemSettingService` is the single canonical service for typed reads, existence checks, group reads, writes/upserts, and explicit encrypted-secret access.
+- The unsafe singleton-local value cache was removed. Reads query current active canonical state so same-request writes, inserts, status changes, and direct existing write paths cannot leave stale values or cached misses.
+- Generic reads and group reads never decrypt secrets. Decryption requires the explicit `secret()` API; blank encrypted writes preserve configured ciphertext.
+- Canonical seeders may refresh descriptive metadata but must not overwrite existing values. This stage does not backfill, alter, or remove `admin_settings`.
+- Generic System Settings pages mask protected values, exclude stored values from search, never repopulate secret inputs, preserve secrets on blank submission, force encrypted rows non-public, and do not accept arbitrary encryption-state changes.
+
+### Implementation Outcome
+- Expanded `SystemSettingService` and added centralized `SystemSettingKeys`.
+- Hardened `SystemSetting` serialization and the generic Admin System Settings controller/views.
+- Made `SystemFoundationSeeder` and `StorefrontBannerSettingSeeder` preserve configured canonical values on rerun.
+- Added focused service, secret, UI, mapping, freshness, and seeder-preservation coverage.
+- The pre-existing `BannerLimitServiceTest` cache failure now passes without modifying that test or weakening its assertions.
+
+### Verification
+- PHP syntax checks passed for all changed PHP files.
+- Pint passed for the changed PHP files.
+- Focused Stage 1 and directly relevant existing tests: 17 passed, 119 assertions.
+- `git diff --check` passed before the final log update and is rerun during completion review.
+- Browser verification was attempted, but the computer-use environment exposed no browser and its in-app browser was unavailable.
+
+### Deferred
+Legacy backfill and all currency, timezone, notification, SMTP, `admin_notification_email`, and other runtime-consumer migrations remain deferred to later approved stages. The 2026-10-01 Admin Notification Email storage decision is therefore not superseded by Stage 1.
+
 ## 2026-10-01 - Central Admin Operational Notification Email
 
 Supersedes: the Admin recipient-resolution portion of `2026-10-01 - Admin Notification for Public Merchant Registration`.
