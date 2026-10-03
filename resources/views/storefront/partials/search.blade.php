@@ -336,6 +336,9 @@
                                         <a href="{{ $item['product_url'] }}" class="ws-mini-thumb"><img loading="lazy" src="{{ $item['image'] }}" alt="{{ $item['product_name'] }}" class="ws-item-img {{ empty($item['image']) ? 'ws-thumb-fallback' : '' }}"></a>
                                         <div class="flex-grow-1 ws-mini-info">
                                             <a href="{{ $item['product_url'] }}" class="fw-bold text-truncate d-block link" style="color:#111;font-size:13px;">{{ $item['product_name'] }}</a>
+                                            @if(!empty($item['attributes']))
+                                                <div class="text-secondary" style="font-size:11px;" data-mini-cart-item-attributes>{{ collect($item['attributes'])->map(fn($attribute) => ($attribute['label'] ?? '').': '.($attribute['value'] ?? ''))->implode(' · ') }}</div>
+                                            @endif
                                             <div class="text-secondary" style="font-size:11px;">Qty <span data-mini-cart-item-quantity>{{ $item['quantity'] }}</span> · <span data-mini-cart-item-price>{{ $item['line_subtotal'] }}</span>@if(!empty($item['base_line_subtotal']) && ($item['promotion_discount_cents'] ?? 0) > 0)<span class="text-decoration-line-through ms-1">{{ $item['base_line_subtotal'] }}</span>@endif @if(!empty($item['is_generated_gift']))· <span class="text-success fw-bold">FREE</span>@endif</div>
                                             @if(!empty($item['availability_message']) && !($item['is_available'] ?? true))<p class="text-xxs text-danger mb-0">{{ $item['availability_message'] }}</p>@endif
                                         </div>
@@ -444,6 +447,14 @@
                     const strike = (item.promotion_discount_cents > 0 && item.base_line_subtotal) ? `<span class="text-decoration-line-through ms-1">${esc(item.base_line_subtotal)}</span>` : '';
                     const itemSavings = esc(String(item.promotion_discount || '').replace(/^-/, ''));
                     row.innerHTML = `<a href="${esc(item.product_url || '#')}" class="ws-mini-thumb"><img loading="lazy" src="${esc(item.image || '')}" alt="${esc(item.product_name || 'Product')}" class="ws-item-img"></a><div class="flex-grow-1 ws-mini-info"><a href="${esc(item.product_url || '#')}" class="fw-bold text-truncate d-block link ws-mini-title">${esc(item.product_name || 'Product')}</a><div class="text-secondary ws-mini-meta">Qty ${esc(item.quantity || '0')} · ${esc(item.line_subtotal || '')} ${strike}${item.is_generated_gift ? ' · <span class="text-success fw-bold">FREE</span>' : ''}</div></div>${(item.promotion_discount_cents > 0) ? `<span class="flex-shrink-0 ws-mini-saving">${itemSavings}<span class="ws-mini-saving-label">saved</span></span>` : ''}`;
+                    const attributes = (item.attributes || []).map((attribute) => `${attribute.label}: ${attribute.value}`).join(' · ');
+                    if (attributes) {
+                        const attributesElement = document.createElement('div');
+                        attributesElement.className = 'text-secondary ws-mini-meta';
+                        attributesElement.dataset.miniCartItemAttributes = '';
+                        attributesElement.textContent = attributes;
+                        row.querySelector('.ws-mini-meta')?.before(attributesElement);
+                    }
                     list.append(row);
                 });
                 itemsWrap.append(shopWrap);

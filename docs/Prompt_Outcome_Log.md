@@ -4368,6 +4368,21 @@ Verification Results:
 - `php artisan test tests\Feature\StorefrontCartPageTest.php` passed: 18 tests, 103 assertions.
 - `php artisan test tests\Feature\StorefrontAddToCartTest.php` passed: 18 tests, 81 assertions.
 
+## 2026-10-03 - Variant-aware cart and checkout presentation
+
+Goal: Keep cart items for different variants of one product visually distinguishable by showing their selected attributes and the image assigned to the selected image attribute.
+
+Decisions and outcome:
+
+- `CartPageService` remains the shared item presenter for full cart, mini-cart, and checkout; no parallel cart or variant representation was added.
+- Cart image selection now delegates to the established `ProductImageService::galleryForVariant()` resolver. Its active-image precedence is selected image-attribute assignment, Entire Product/unassigned image, active product primary image, then the existing storefront placeholder.
+- Mini-cart now renders the existing generic item `attributes` collection in both its initial Blade markup and its JavaScript refresh path. Full-cart and checkout already rendered this collection and checkout already consumed the shared cart payload.
+- Pricing, quantities, promotions, availability, add-to-cart behavior, and product-detail gallery behavior were not changed.
+
+Key files: `CartPageService`, `ProductImageService` (reused unchanged), storefront mini-cart partial, full-cart/checkout views (consumers unchanged), and `StorefrontCartPageTest`.
+
+Verification: cart/image suites passed (48 tests, 329 assertions); focused checkout summary tests passed (2 tests, 20 assertions); Blade compilation, Pint, PHP lint, mini-cart JavaScript syntax, and `git diff --check` passed. The complete checkout suite had four unrelated existing failures involving country fixture setup, notification transaction timing, and an availability-message expectation. Browser verification was unavailable because this session exposed no browser surface.
+
 Deferred Items:
 - Full shipping engine and delivery pricing.
 - Payment gateway integrations beyond COD display.
