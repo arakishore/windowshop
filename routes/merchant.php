@@ -185,6 +185,8 @@ Route::prefix('merchant')->name('merchant.')->group(function (): void {
             ->name('products.variants.update');
         Route::put('products/{product}/variants/bulk', [ProductController::class, 'bulkUpdateVariants'])
             ->name('products.variants.bulk-update');
+        Route::delete('products/{product}/variants', [ProductController::class, 'bulkDestroyVariants'])
+            ->name('products.variants.bulk-destroy');
         Route::put('products/{product}/description-seo', [ProductController::class, 'updateDescriptionSeo'])
             ->name('products.description-seo.update');
         Route::post('products/{product}/description-seo/generate', [ProductController::class, 'generateDescriptionSeo'])

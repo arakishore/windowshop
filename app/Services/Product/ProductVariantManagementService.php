@@ -237,6 +237,69 @@ class ProductVariantManagementService
     }
 
     /**
+     * Permanently delete selected variants only when no historical or operational reference exists.
+     *
+     * @param  array<int, int>  $variantIds
+     * @return array{deleted_count: int, history_protected_count: int, other_protected_count: int}
+     */
+    public function bulkDelete(Product $product, array $variantIds, User $actor): array
+    {
+        return DB::transaction(function () use ($product, $variantIds, $actor): array {
+            $ids = collect($variantIds)
+                ->map(fn ($id): int => (int) $id)
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($ids->isEmpty()) {
+                throw ValidationException::withMessages(['variant_ids' => 'Select at least one variant.']);
+            }
+
+            /** @var EloquentCollection<int, ProductVariant> $variants */
+            $variants = $product->variants()
+                ->whereIn('id', $ids)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $this->ensureAllVariantsBelongToProduct($ids, $variants);
+
+            $deleted = 0;
+            $historyProtected = 0;
+            $otherProtected = 0;
+
+            foreach ($variants as $variant) {
+                if ($this->variantHasHistory($variant)) {
+                    $historyProtected++;
+
+                    continue;
+                }
+
+                if ($this->variantHasOperationalReferences($variant)) {
+                    $otherProtected++;
+
+                    continue;
+                }
+
+                $variant->forceFill([
+                    'deleted_by' => $actor->getKey(),
+                    'updated_by' => $actor->getKey(),
+                ])->save();
+                $variant->forceDelete();
+                $deleted++;
+            }
+
+            $this->ensureDefaultVariant($product, $actor);
+
+            return [
+                'deleted_count' => $deleted,
+                'history_protected_count' => $historyProtected,
+                'other_protected_count' => $otherProtected,
+            ];
+        });
+    }
+
+    /**
      * @param array<string, mixed> $filters
      * @return Collection<int, ProductVariant>
      */
@@ -360,6 +423,23 @@ class ProductVariantManagementService
         if ($ids->unique()->count() !== $variants->count()) {
             throw ValidationException::withMessages(['variants' => 'One or more selected variants do not belong to this product.']);
         }
+    }
+
+    private function variantHasHistory(ProductVariant $variant): bool
+    {
+        return DB::table('order_items')->where('product_variant_id', $variant->getKey())->exists()
+            || DB::table('order_refund_items')->where('product_variant_id', $variant->getKey())->exists()
+            || DB::table('order_exchange_return_items')->where('product_variant_id', $variant->getKey())->exists()
+            || DB::table('product_reviews')->where('product_variant_id', $variant->getKey())->exists();
+    }
+
+    private function variantHasOperationalReferences(ProductVariant $variant): bool
+    {
+        return DB::table('cart_items')->where('product_variant_id', $variant->getKey())->exists()
+            || DB::table('promotion_targets')
+                ->where('target_type', 'variant')
+                ->where('target_id', $variant->getKey())
+                ->exists();
     }
 
     /**

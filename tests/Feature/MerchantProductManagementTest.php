@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\CatalogueMasterRequest;
 use App\Models\MerchantProfile;
 use App\Models\Product;
 use App\Models\ProductAttributeGroup;
@@ -9,6 +10,7 @@ use App\Models\ProductAttributeGroupValue;
 use App\Models\ProductCategory;
 use App\Models\ProductCategoryAttributeGroup;
 use App\Models\ProductReturnPolicy;
+use App\Models\ProductVariant;
 use App\Models\Shop;
 use App\Models\TaxClass;
 use App\Models\TaxRateComponent;
@@ -64,6 +66,40 @@ class MerchantProductManagementTest extends TestCase
             ->assertOk()
             ->assertSee('View Storefront')
             ->assertSee(route('storefront.product.show', $product->slug), false);
+    }
+
+    public function test_merchant_variants_tab_exposes_and_processes_bulk_delete_for_selected_safe_variants(): void
+    {
+        [$user, $shop, $category] = $this->merchantFixture();
+        $product = $this->productFixture($shop, $category, 'Bulk Variant Product');
+        $variant = ProductVariant::query()->create([
+            'product_id' => $product->getKey(),
+            'shop_id' => $shop->getKey(),
+            'name' => 'Safe Variant',
+            'mrp' => 100,
+            'selling_price' => 90,
+            'stock_quantity' => 0,
+            'is_sellable' => true,
+            'is_default' => true,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->get(route('merchant.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertOk()
+            ->assertSee(route('merchant.products.variants.bulk-destroy', $product), false)
+            ->assertSee('Delete Selected');
+
+        $this->actingAs($user)
+            ->withSession(['active_shop_id' => $shop->getKey()])
+            ->delete(route('merchant.products.variants.bulk-destroy', $product), [
+                'variant_ids' => [$variant->getKey()],
+            ])
+            ->assertRedirect(route('merchant.products.edit', ['product' => $product, 'tab' => 'variants']))
+            ->assertSessionHas('success', '1 variant deleted.');
+
+        $this->assertNull(ProductVariant::withTrashed()->find($variant->getKey()));
     }
 
     public function test_merchant_create_product_shows_only_active_shop_categories(): void
@@ -287,7 +323,7 @@ class MerchantProductManagementTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $requestModel = \App\Models\CatalogueMasterRequest::query()
+        $requestModel = CatalogueMasterRequest::query()
             ->where('suggested_name', 'Formal Shirts')
             ->firstOrFail();
 
@@ -744,7 +780,7 @@ class MerchantProductManagementTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $returnPolicy
+     * @param  array<string, mixed>  $returnPolicy
      * @return array<string, mixed>
      */
     private function productUpdatePayload(Product $product, array $returnPolicy): array
