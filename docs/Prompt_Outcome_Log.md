@@ -4712,3 +4712,26 @@ Key files/services/tables: `DeliverNotificationEmail`, `NotificationManager`, `N
 Roadmap status: implementation is ready for Testing; WS-010 was not marked Completed automatically.
 
 Verification: focused notification queue, event wiring, and real email suites passed with 41 tests and 194 assertions; the broader notification-related run passed 86 of 87 tests with one pre-existing legacy-template mapping failure for `merchant.registered.admin:email`; focused storefront checkout/order placement passed with 3 tests and 71 assertions. Scheduler registration, Pint, PHP lint, and `git diff --check` passed. No UI changes were made.
+
+## 2026-10-03 - Shop-Specific Notification Email
+
+Supersedes: the shop-recipient fallback recommendation from the preceding Shop-Specific Primary Operational Email investigation.
+
+### Decision
+- Shop-level merchant email notifications use the optional shop-scoped `shop_settings` value `notifications / email.shop_notification_email`.
+- A blank, missing, or invalid Shop Notification Email disables shop-level merchant email delivery. There is no fallback to `merchant_profiles.contact_email`, the merchant owner's `users.email`, or the public `shops.email` field.
+- `shops.email` remains customer-facing Public Contact Email. Merchant lifecycle emails remain account-scoped and retain their existing MerchantProfile/User recipient rules.
+- Shop-scoped Additional To, CC, and BCC remain supplementary recipients. They cannot independently activate delivery without a valid Shop Notification Email, and their stored values are preserved while delivery is disabled.
+- V1 affects the currently wired `order.new.merchant` event only. Customer and Admin routing are unchanged. `payment.upi_submitted.merchant` remains a separate catalogued-but-unwired notification gap.
+- This task is email-only. SMS and WhatsApp recipient/provider work remains deferred to WS-012.
+- Recipient resolution still happens before WS-010 queueing, so the resolved destination remains fixed in the queued `NotificationMessage`; no queue architecture changes or database migrations are required.
+
+### Implementation Outcome
+- Added the Shop Notification Email field to the existing shop-scoped Merchant Notification Settings page, with blank-means-disabled guidance and supplementary fields that become read-only until the primary is valid.
+- Extended `MerchantOperationalEmailRecipientResolver` to store, validate defensively, and resolve the new setting while preserving existing supplementary-recipient normalization and deduplication.
+- Updated new-order merchant dispatch to omit the email message entirely when the shop has no valid Shop Notification Email, without changing SMS, WhatsApp, customer, Admin, or merchant-lifecycle delivery.
+
+### Verification
+- Merchant notification settings, business-event wiring, WS-010 foundation, and real email delivery suites passed: 52 tests, 357 assertions.
+- The broader checkout gate suite passed 85 of 89 tests; its four failures were unrelated existing fixture/transaction/copy failures, while the delivery and pickup order-placement cases passed.
+- Pint, PHP syntax checks, Blade compilation, inline JavaScript syntax, and `git diff --check` passed. Live browser verification was unavailable because no browser surface was exposed.
