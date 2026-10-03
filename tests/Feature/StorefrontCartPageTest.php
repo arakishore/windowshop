@@ -10,6 +10,8 @@ use App\Models\ProductAttributeGroup;
 use App\Models\ProductAttributeGroupValue;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\ProductCategory;
+use App\Models\ProductCategoryAttributeGroup;
+use App\Models\ProductImage;
 use App\Models\ProductReturnPolicy;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantAttribute;
@@ -24,12 +26,13 @@ use App\Models\User;
 use App\Services\Cart\CartResolver;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\Order\OrderCreationService;
-use App\Services\Promotion\Coupons\CouponSessionStore;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
+use App\Services\Promotion\Coupons\CouponSessionStore;
 use Database\Seeders\MasterData\PromotionTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PDO;
 use Tests\TestCase;
@@ -216,6 +219,126 @@ class StorefrontCartPageTest extends TestCase
             ->assertSee('Size')
             ->assertSee('M')
             ->assertDontSee('Default</span>', false);
+    }
+
+    public function test_cart_surfaces_distinguish_variants_with_canonical_color_images_and_attributes(): void
+    {
+        Storage::fake('public');
+        $fixture = $this->productFixture(name: 'Variant Image Product', price: 999);
+        $color = $this->attributeGroup('Color');
+        $size = $this->attributeGroup('Size');
+        $red = $this->attributeValue($color, 'Red');
+        $white = $this->attributeValue($color, 'White');
+        $large = $this->attributeValue($size, 'L');
+        $extraLarge = $this->attributeValue($size, 'XL');
+        ProductCategoryAttributeGroup::query()->create([
+            'root_product_category_id' => $fixture['product']->root_product_category_id,
+            'product_attribute_group_id' => $color->getKey(),
+            'is_required' => true,
+            'is_variant' => true,
+            'is_image_attribute' => true,
+        ]);
+        $this->attachVariantAttributeValue($fixture['variant'], $color, $red);
+        $this->attachVariantAttributeValue($fixture['variant'], $size, $large);
+        $whiteVariant = ProductVariant::query()->create([
+            'product_id' => $fixture['product']->getKey(),
+            'shop_id' => $fixture['shop']->getKey(),
+            'sku' => 'WHITE-XL-'.Str::random(5),
+            'name' => 'White / XL',
+            'mrp' => 1099,
+            'selling_price' => 999,
+            'stock_quantity' => 5,
+            'is_default' => false,
+            'is_sellable' => true,
+            'status' => 'active',
+        ]);
+        $this->attachVariantAttributeValue($whiteVariant, $color, $white);
+        $this->attachVariantAttributeValue($whiteVariant, $size, $extraLarge);
+        $redImage = $this->productImage($fixture['product'], 'cart/red.webp', 1, $red);
+        $whiteImage = $this->productImage($fixture['product'], 'cart/white.webp', 2, $white);
+        $inactiveImage = $this->productImage($fixture['product'], 'cart/inactive.webp', 0, $red, 'inactive');
+        $fixture['product']->forceFill(['primary_image_id' => $whiteImage->getKey()])->save();
+        $cart = $this->guestCart('variant-image-token');
+        $this->cartItem($cart, $fixture['variant']);
+        $this->cartItem($cart, $whiteVariant);
+
+        $response = $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'variant-image-token'])
+            ->get(route('storefront.cart'));
+
+        $response->assertOk()
+            ->assertSee(asset('storage/'.$redImage->image_path), false)
+            ->assertSee(asset('storage/'.$whiteImage->image_path), false)
+            ->assertDontSee(asset('storage/'.$inactiveImage->image_path), false)
+            ->assertSee('Color: Red · Size: L')
+            ->assertSee('Color: White · Size: XL')
+            ->assertSee('data-mini-cart-item-attributes', false);
+
+        $payload = $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'variant-image-token'])
+            ->patchJson(route('storefront.cart.items.update', $cart->items()->first()), ['quantity' => 1]);
+        $payload->assertOk()
+            ->assertJsonPath('subtotal_cents', 199800)
+            ->assertJsonPath('shop_groups.0.items.0.image', asset('storage/'.$redImage->image_path))
+            ->assertJsonPath('shop_groups.0.items.1.image', asset('storage/'.$whiteImage->image_path))
+            ->assertJsonPath('shop_groups.0.items.0.attributes.0.label', 'Color')
+            ->assertJsonPath('shop_groups.0.items.1.attributes.0.value', 'White');
+
+        DB::table('loc_countries')->insert([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'India',
+            'iso2' => 'IN',
+            'iso3' => 'IND',
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $customer = $this->userFixture('variant-checkout@example.test');
+        $customerCart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $this->cartItem($customerCart, $fixture['variant']);
+        $this->cartItem($customerCart, $whiteVariant);
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->assignRole($customer, 'customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee(asset('storage/'.$redImage->image_path), false)
+            ->assertSee(asset('storage/'.$whiteImage->image_path), false)
+            ->assertSee('Color: Red')
+            ->assertSee('Size: XL')
+            ->assertSee('1,998.00');
+    }
+
+    public function test_cart_variant_image_fallbacks_exclude_inactive_images(): void
+    {
+        Storage::fake('public');
+        $fixture = $this->productFixture(name: 'Fallback Image Product');
+        $color = $this->attributeGroup('Color');
+        $blue = $this->attributeValue($color, 'Blue');
+        ProductCategoryAttributeGroup::query()->create([
+            'root_product_category_id' => $fixture['product']->root_product_category_id,
+            'product_attribute_group_id' => $color->getKey(),
+            'is_variant' => true,
+            'is_image_attribute' => true,
+        ]);
+        $this->attachVariantAttributeValue($fixture['variant'], $color, $blue);
+        $inactive = $this->productImage($fixture['product'], 'cart/blue-inactive.webp', 1, $blue, 'inactive');
+        $entireProduct = $this->productImage($fixture['product'], 'cart/entire.webp', 2);
+        $primary = $this->productImage($fixture['product'], 'cart/primary.webp', 3, null, 'active', true);
+        $cart = $this->guestCart('fallback-image-token');
+        $this->cartItem($cart, $fixture['variant']);
+
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'fallback-image-token'])
+            ->get(route('storefront.cart'))
+            ->assertSee(asset('storage/'.$entireProduct->image_path), false)
+            ->assertDontSee(asset('storage/'.$inactive->image_path), false);
+
+        $entireProduct->forceFill(['status' => 'inactive'])->save();
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'fallback-image-token'])
+            ->get(route('storefront.cart'))
+            ->assertSee(asset('storage/'.$primary->image_path), false);
+
+        $primary->forceFill(['status' => 'inactive'])->save();
+        $this->withSession([CartResolver::SESSION_TOKEN_KEY => 'fallback-image-token'])
+            ->get(route('storefront.cart'))
+            ->assertSee(asset('assets/storefront/images/no-image-icon.png'), false);
     }
 
     public function test_cart_page_shows_effective_return_exchange_policy_for_each_item(): void
@@ -969,7 +1092,7 @@ class StorefrontCartPageTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $variantOverrides
+     * @param  array<string, mixed>  $variantOverrides
      * @return array{merchant: MerchantProfile, shop: Shop, product: Product, variant: ProductVariant}
      */
     private function productFixture(array $variantOverrides = [], string $name = 'Cart Page Product', int $price = 199, int $stock = 5): array
@@ -1105,6 +1228,68 @@ class StorefrontCartPageTest extends TestCase
             'product_attribute_group_id' => $group->getKey(),
             'product_attribute_group_value_id' => $value->getKey(),
         ]);
+    }
+
+    private function attributeGroup(string $name): ProductAttributeGroup
+    {
+        return ProductAttributeGroup::query()->create([
+            'name' => $name,
+            'code' => Str::slug($name).'-'.Str::random(5),
+            'selection_type' => 'single',
+            'status' => 'active',
+        ]);
+    }
+
+    private function attributeValue(ProductAttributeGroup $group, string $name): ProductAttributeGroupValue
+    {
+        return ProductAttributeGroupValue::query()->create([
+            'product_attribute_group_id' => $group->getKey(),
+            'name' => $name,
+            'code' => Str::slug($name).'-'.Str::random(5),
+            'status' => 'active',
+        ]);
+    }
+
+    private function attachVariantAttributeValue(
+        ProductVariant $variant,
+        ProductAttributeGroup $group,
+        ProductAttributeGroupValue $value,
+    ): void {
+        ProductVariantAttribute::query()->create([
+            'product_variant_id' => $variant->getKey(),
+            'product_attribute_group_id' => $group->getKey(),
+            'product_attribute_group_value_id' => $value->getKey(),
+        ]);
+    }
+
+    private function productImage(
+        Product $product,
+        string $path,
+        int $sortOrder,
+        ?ProductAttributeGroupValue $attributeValue = null,
+        string $status = 'active',
+        bool $primary = false,
+    ): ProductImage {
+        Storage::disk('public')->put($path, 'image');
+        $image = ProductImage::query()->create([
+            'uuid' => (string) Str::uuid(),
+            'product_id' => $product->getKey(),
+            'image_path' => $path,
+            'thumbnail_path' => null,
+            'is_primary' => $primary,
+            'sort_order' => $sortOrder,
+            'status' => $status,
+        ]);
+
+        if ($attributeValue instanceof ProductAttributeGroupValue) {
+            $image->attributeValues()->sync([$attributeValue->getKey()]);
+        }
+
+        if ($primary) {
+            $product->forceFill(['primary_image_id' => $image->getKey()])->save();
+        }
+
+        return $image;
     }
 
     private function availabilityStatus(MerchantProfile $merchant, string $code): ProductAvailabilityStatus

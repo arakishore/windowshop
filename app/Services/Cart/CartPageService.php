@@ -7,6 +7,7 @@ use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Shop;
+use App\Services\Product\ProductImageService;
 use App\Services\Promotion\Coupons\CouponResolution;
 use App\Services\Promotion\Coupons\CouponResolver;
 use App\Services\Promotion\Coupons\CouponSessionStore;
@@ -40,6 +41,7 @@ class CartPageService
         private readonly CouponSessionStore $couponStore,
         private readonly CouponResolver $couponResolver,
         private readonly StorefrontCustomerContext $customerContext,
+        private readonly ProductImageService $productImages,
     ) {}
 
     /**
@@ -370,7 +372,16 @@ class CartPageService
 
     private function imageUrl(CartItem $item): string
     {
-        $image = $item->product?->primaryImage;
+        $product = $item->product;
+        $variant = $item->productVariant;
+
+        if (! $product instanceof Product) {
+            return asset(self::FALLBACK_IMAGE);
+        }
+
+        $image = $this->productImages
+            ->galleryForVariant($product, $variant instanceof ProductVariant ? $variant : null)
+            ->first();
         $path = $image?->thumbnail_path ?: $image?->image_path;
 
         if ($path && Storage::disk('public')->exists($path)) {
