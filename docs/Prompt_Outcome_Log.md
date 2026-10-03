@@ -13,6 +13,17 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-03 IST - Fresh-install notification template UUID seeding fix
+
+### Goal
+Fix the pre-existing MySQL `migrate:fresh --seed` failure where `NotificationTemplateSeeder` attempted to insert a template without the required application-generated UUID.
+
+### Decision and Outcome
+- `DatabaseSeeder` intentionally disables model events, so UUID-backed seeders must supply UUIDs explicitly instead of relying on the shared `HasUuid` creating hook.
+- `NotificationTemplate` now permits UUID mass assignment and `NotificationTemplateSeeder` supplies a UUID only in `firstOrCreate` creation values, preserving existing template UUIDs and Admin customizations on rerun.
+- Added focused coverage that runs the seeder with model events disabled and verifies UUID presence, uniqueness, idempotency, and customization preservation.
+- No schema change was required. The real disposable-MySQL fresh-install rerun remains a separate verification step.
+
 ## 2026-10-03 IST - Pre-production removal of legacy Admin Settings architecture
 
 Supersedes: the temporary legacy compatibility/fallback decisions recorded in Canonical System Settings Refactor Stages 2-5 on 2026-10-03.

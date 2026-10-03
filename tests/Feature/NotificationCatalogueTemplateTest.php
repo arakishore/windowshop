@@ -12,6 +12,7 @@ use App\Services\Notification\NotificationPreferenceResolver;
 use App\Services\Notification\NotificationTemplateRenderer;
 use App\Services\Notification\NotificationTemplateService;
 use Database\Seeders\NotificationTemplateSeeder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
@@ -203,6 +204,35 @@ class NotificationCatalogueTemplateTest extends TestCase
         $this->assertSame(['copy@example.test'], data_get($template->fresh()->metadata, 'email.cc'));
         $this->assertSame(['hidden@example.test'], data_get($template->fresh()->metadata, 'email.bcc'));
         $this->assertFalse($template->fresh()->is_active);
+        $this->assertDatabaseCount('notification_templates', $expected);
+    }
+
+    public function test_seeder_generates_and_preserves_unique_uuids_when_model_events_are_disabled(): void
+    {
+        Model::withoutEvents(fn () => $this->seed(NotificationTemplateSeeder::class));
+
+        $expected = app(NotificationEventCatalogue::class)->all()->sum(fn ($event): int => count($event->channels));
+        $templates = NotificationTemplate::query()->get();
+
+        $this->assertCount($expected, $templates);
+        $this->assertTrue($templates->every(fn (NotificationTemplate $template): bool => filled($template->uuid)));
+        $this->assertCount($expected, $templates->pluck('uuid')->unique());
+
+        $template = $templates->firstWhere('channel', NotificationChannelName::EMAIL);
+        $uuid = $template->uuid;
+        $template->update([
+            'subject' => 'Admin-customized subject',
+            'body' => 'Admin-customized body',
+            'is_active' => false,
+        ]);
+
+        Model::withoutEvents(fn () => $this->seed(NotificationTemplateSeeder::class));
+
+        $template->refresh();
+        $this->assertSame($uuid, $template->uuid);
+        $this->assertSame('Admin-customized subject', $template->subject);
+        $this->assertSame('Admin-customized body', $template->body);
+        $this->assertFalse($template->is_active);
         $this->assertDatabaseCount('notification_templates', $expected);
     }
 
