@@ -72,7 +72,7 @@ class DispatchBusinessNotifications
 
         foreach (NotificationChannelName::all() as $channel) {
             foreach ($this->adminRecipients->forChannel($channel) as $recipient) {
-                $this->notifications->send(new NotificationMessage('order.new.admin', 'admin', $channel, $recipient['destination'], $recipient['id'], $order->shop_id, $order->merchant_id, 'order', $order->uuid, $event->occurrenceId, $context));
+                $this->dispatch(new NotificationMessage('order.new.admin', 'admin', $channel, $recipient['destination'], $recipient['id'], $order->shop_id, $order->merchant_id, 'order', $order->uuid, $event->occurrenceId, $context));
             }
         }
     }
@@ -130,7 +130,7 @@ class DispatchBusinessNotifications
         ];
 
         foreach ($this->adminRecipients->forChannel(NotificationChannelName::EMAIL) as $recipient) {
-            $this->notifications->send(new NotificationMessage(
+            $this->dispatch(new NotificationMessage(
                 'merchant.registered.admin',
                 'admin',
                 NotificationChannelName::EMAIL,
@@ -187,8 +187,19 @@ class DispatchBusinessNotifications
         foreach ($destinations as $channel => $values) {
             $normalized = collect($values)->filter()->map(fn ($value): string => trim((string) $value))->unique(fn (string $value): string => strtolower($value));
             foreach ($normalized as $destination) {
-                $this->notifications->send(new NotificationMessage($key, $recipientType, $channel, $destination, $recipientId, $shopId, $merchantId, $relatedType, $relatedId, $occurrenceId, $context, $metadata));
+                $this->dispatch(new NotificationMessage($key, $recipientType, $channel, $destination, $recipientId, $shopId, $merchantId, $relatedType, $relatedId, $occurrenceId, $context, $metadata));
             }
         }
+    }
+
+    private function dispatch(NotificationMessage $message): void
+    {
+        if ($message->channel === NotificationChannelName::EMAIL) {
+            $this->notifications->queueEmail($message);
+
+            return;
+        }
+
+        $this->notifications->send($message);
     }
 }

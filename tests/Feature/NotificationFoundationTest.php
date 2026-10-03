@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\DeliverNotificationEmail;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSetting;
 use App\Notifications\Channels\SmsChannel;
@@ -18,12 +19,15 @@ use App\Services\Notification\NotificationDeliveryLogger;
 use App\Services\Notification\NotificationManager;
 use App\Services\Notification\NotificationPreferenceResolver;
 use App\Services\Notification\NotificationProviderModeResolver;
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
+use RuntimeException;
 use Tests\TestCase;
 
 class NotificationFoundationTest extends TestCase
@@ -176,7 +180,7 @@ class NotificationFoundationTest extends TestCase
 
             public function send(NotificationMessage $message): DeliveryResult
             {
-                throw new \RuntimeException('Must not be called.');
+                throw new RuntimeException('Must not be called.');
             }
         };
         $manager = new NotificationManager(new NotificationChannelRegistry([$channel]), $preferences, app(NotificationDeliveryLogger::class));
@@ -198,7 +202,7 @@ class NotificationFoundationTest extends TestCase
 
             public function send(NotificationMessage $message): DeliveryResult
             {
-                throw new \RuntimeException('Test transport failure');
+                throw new RuntimeException('Test transport failure');
             }
         };
         $manager = new NotificationManager(new NotificationChannelRegistry([$channel]), app(NotificationPreferenceResolver::class), app(NotificationDeliveryLogger::class));
@@ -311,6 +315,163 @@ class NotificationFoundationTest extends TestCase
 
         $this->assertSame(2, $calls);
         $this->assertDatabaseCount('notification_delivery_logs', 2);
+    }
+
+    public function test_email_queue_claims_once_and_job_completes_the_same_log(): void
+    {
+        Queue::fake();
+        $statusSeenByChannel = null;
+        $channel = new class($statusSeenByChannel) implements NotificationChannel
+        {
+            public function __construct(private ?string &$statusSeenByChannel) {}
+
+            public function name(): string
+            {
+                return NotificationChannelName::EMAIL;
+            }
+
+            public function send(NotificationMessage $message): DeliveryResult
+            {
+                $this->statusSeenByChannel = DB::table('notification_delivery_logs')->value('status');
+
+                return DeliveryResult::sent(ProviderMode::WINDOWSHOP, 'test-provider');
+            }
+        };
+        $manager = new NotificationManager(new NotificationChannelRegistry([$channel]), app(NotificationPreferenceResolver::class), app(NotificationDeliveryLogger::class));
+        $message = $this->queuedMessage('queued-success');
+
+        $claim = $manager->queueEmail($message);
+        $duplicate = $manager->queueEmail($message);
+
+        $this->assertNotNull($claim);
+        $this->assertNull($duplicate);
+        $this->assertDatabaseHas('notification_delivery_logs', ['id' => $claim->getKey(), 'status' => 'queued']);
+        Queue::assertPushedOn('emails', DeliverNotificationEmail::class);
+        Queue::assertPushed(DeliverNotificationEmail::class, 1);
+
+        $job = Queue::pushed(DeliverNotificationEmail::class)->first();
+        $job->handle($manager);
+
+        $this->assertSame('processing', $statusSeenByChannel);
+        $this->assertDatabaseHas('notification_delivery_logs', ['id' => $claim->getKey(), 'status' => DeliveryResult::SENT, 'provider' => 'test-provider']);
+        $this->assertDatabaseCount('notification_delivery_logs', 1);
+    }
+
+    public function test_queued_email_failure_throws_and_retry_reuses_failed_log(): void
+    {
+        Queue::fake();
+        $calls = 0;
+        $channel = new class($calls) implements NotificationChannel
+        {
+            public function __construct(private int &$calls) {}
+
+            public function name(): string
+            {
+                return NotificationChannelName::EMAIL;
+            }
+
+            public function send(NotificationMessage $message): DeliveryResult
+            {
+                $this->calls++;
+
+                return $this->calls === 1
+                    ? DeliveryResult::failed('Temporary SMTP failure', ProviderMode::WINDOWSHOP, 'test-provider')
+                    : DeliveryResult::sent(ProviderMode::WINDOWSHOP, 'test-provider');
+            }
+        };
+        $manager = new NotificationManager(new NotificationChannelRegistry([$channel]), app(NotificationPreferenceResolver::class), app(NotificationDeliveryLogger::class));
+        $claim = $manager->queueEmail($this->queuedMessage('queued-retry'));
+        $job = Queue::pushed(DeliverNotificationEmail::class)->first();
+
+        try {
+            $job->handle($manager);
+            $this->fail('The failed delivery should fail the queue attempt.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Temporary SMTP failure', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('notification_delivery_logs', [
+            'id' => $claim->getKey(),
+            'status' => DeliveryResult::FAILED,
+            'error_summary' => 'Temporary SMTP failure',
+        ]);
+
+        $job->handle($manager);
+
+        $this->assertSame(2, $calls);
+        $this->assertDatabaseHas('notification_delivery_logs', ['id' => $claim->getKey(), 'status' => DeliveryResult::SENT]);
+        $this->assertDatabaseCount('notification_delivery_logs', 1);
+    }
+
+    public function test_queued_email_terminal_results_do_not_call_transport_unnecessarily(): void
+    {
+        Queue::fake();
+        $calls = 0;
+        $channel = new class($calls) implements NotificationChannel
+        {
+            public function __construct(private int &$calls) {}
+
+            public function name(): string
+            {
+                return NotificationChannelName::EMAIL;
+            }
+
+            public function send(NotificationMessage $message): DeliveryResult
+            {
+                $this->calls++;
+
+                return DeliveryResult::notConfigured(ProviderMode::WINDOWSHOP);
+            }
+        };
+        $preferences = app(NotificationPreferenceResolver::class);
+        $manager = new NotificationManager(new NotificationChannelRegistry([$channel]), $preferences, app(NotificationDeliveryLogger::class));
+        $preferences->setForMerchant(1, 'order.processing.customer', NotificationChannelName::EMAIL, false);
+        $disabled = new NotificationMessage('order.processing.customer', 'customer', 'email', 'customer@example.test', merchantId: 1, occurrenceId: 'queued-disabled');
+        $disabledClaim = $manager->queueEmail($disabled);
+        Queue::pushed(DeliverNotificationEmail::class)->last()->handle($manager);
+
+        $this->assertSame(0, $calls);
+        $this->assertDatabaseHas('notification_delivery_logs', ['id' => $disabledClaim->getKey(), 'status' => DeliveryResult::SKIPPED]);
+
+        $notConfiguredClaim = $manager->queueEmail($this->queuedMessage('queued-not-configured'));
+        Queue::pushed(DeliverNotificationEmail::class)->last()->handle($manager);
+
+        $this->assertSame(1, $calls);
+        $this->assertDatabaseHas('notification_delivery_logs', ['id' => $notConfiguredClaim->getKey(), 'status' => DeliveryResult::NOT_CONFIGURED]);
+    }
+
+    public function test_email_job_is_after_commit_safe_and_payload_has_no_smtp_credentials(): void
+    {
+        $message = $this->queuedMessage('queued-payload');
+        $job = new DeliverNotificationEmail($message, 123);
+
+        $this->assertInstanceOf(ShouldQueueAfterCommit::class, $job);
+        $this->assertSame('emails', $job->queue);
+        $this->assertSame(3, $job->tries);
+        $this->assertSame(60, $job->timeout);
+        $this->assertSame([60, 300, 900], $job->backoff());
+        $this->assertStringNotContainsString('smtp.password', serialize($job));
+        $this->assertStringNotContainsString('MAIL_PASSWORD', serialize($job));
+    }
+
+    public function test_scheduler_drains_only_email_queue_without_overlap(): void
+    {
+        $schedule = file_get_contents(base_path('routes/console.php'));
+
+        $this->assertStringContainsString('queue:work database --queue=emails --stop-when-empty', $schedule);
+        $this->assertStringContainsString('--tries=3 --backoff=60 --timeout=60 --max-time=50 --max-jobs=100', $schedule);
+        $this->assertMatchesRegularExpression('/queue:work database --queue=emails[\s\S]*?->everyMinute\(\)[\s\S]*?->withoutOverlapping\(10\)/', $schedule);
+    }
+
+    private function queuedMessage(string $occurrenceId): NotificationMessage
+    {
+        return new NotificationMessage(
+            'order.cancelled.customer',
+            'customer',
+            NotificationChannelName::EMAIL,
+            'customer@example.test',
+            occurrenceId: $occurrenceId,
+        );
     }
 
     private function message(string $channel, ?int $merchantId = null): NotificationMessage
