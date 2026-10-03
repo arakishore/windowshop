@@ -4693,3 +4693,22 @@ Decisions and outcome:
 Key files/services: `ShopDescriptionGuidanceService`, `MerchantShopService`, `Admin\MerchantShopController`, and the shared description-guidance Blade component.
 
 Verification: Admin rendered-DOM contract test passed with 6 assertions; `MerchantAuthTest` passed with 33 tests and 159 assertions; PHP lint, Blade compilation, and `git diff --check` passed. Live Admin interaction could not be exercised because the available browser session had Merchant access and correctly received HTTP 403 from Admin routes.
+
+## 2026-10-03 - WS-010 Email Queue / Cron Delivery
+
+Goal: Remove SMTP delivery from transactional business HTTP requests while preserving the existing notification catalogue, preferences, channels, delivery logs, and transaction boundaries.
+
+Decisions and outcome:
+
+- Business-event email messages are accepted through a dedicated `NotificationManager::queueEmail()` boundary. SMS and WhatsApp retain synchronous handling, and direct `NotificationManager::send()` remains available.
+- Each accepted email atomically claims its existing unique delivery identity as `queued` before one `DeliverNotificationEmail` job is dispatched to the database-backed `emails` queue. The job explicitly implements after-commit queue safety and carries only `NotificationMessage` data plus the delivery-log ID, never SMTP credentials.
+- The worker transitions the same delivery-log row through `queued -> processing -> sent|skipped|not_configured|failed`. A failed `DeliveryResult` is logged and then thrown so Laravel retries it; a retry atomically reacquires the same failed row instead of creating a duplicate.
+- The unique `delivery_key` remains the application-level duplicate business-event guard. SMTP acknowledgement ambiguity can still rarely cause a duplicate email after retry and is documented as an operational limitation.
+- Admin Test Email remains synchronous for immediate administrator feedback. No SMTP settings, channel registry, notification-message, SMS/WhatsApp, Redis, schema, or migration changes were introduced.
+- The existing once-per-minute Laravel scheduler now drains only the `emails` queue with a bounded, non-overlapping `queue:work --stop-when-empty` process, supporting shared hosting without requiring Supervisor.
+
+Key files/services/tables: `DeliverNotificationEmail`, `NotificationManager`, `NotificationDeliveryLogger`, `DispatchBusinessNotifications`, `routes/console.php`, existing `jobs`/`failed_jobs`/`notification_delivery_logs` tables, and the deployment guide.
+
+Roadmap status: implementation is ready for Testing; WS-010 was not marked Completed automatically.
+
+Verification: focused notification queue, event wiring, and real email suites passed with 41 tests and 194 assertions; the broader notification-related run passed 86 of 87 tests with one pre-existing legacy-template mapping failure for `merchant.registered.admin:email`; focused storefront checkout/order placement passed with 3 tests and 71 assertions. Scheduler registration, Pint, PHP lint, and `git diff --check` passed. No UI changes were made.
