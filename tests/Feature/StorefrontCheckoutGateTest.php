@@ -1338,12 +1338,10 @@ class StorefrontCheckoutGateTest extends TestCase
             ->withSession($session)
             ->get(route('storefront.checkout'))
             ->assertOk();
-        $pickupHtml = $pickupResponse->getContent();
-        $pos = strpos($pickupHtml, 'data-upi-amount');
-        fwrite(STDERR, "\nUPI-SLICE: ".substr((string) $pickupHtml, max(0, (int) $pos - 200), 600)."\n");
-        $this->assertStringContainsString('data-upi-amount">1649.00<', (string) $pickupHtml);
-            ->assertSee('&amp;am=1649.00&amp;cu=INR', false)
-            ->assertDontSee('&amp;am=0.00&amp;cu=INR', false);
+        $pickupHtml = (string) $pickupResponse->getContent();
+        $this->assertStringContainsString('data-upi-amount>1649.00<', $pickupHtml);
+        $this->assertStringContainsString('&amp;am=1649.00&amp;cu=INR', $pickupHtml);
+        $this->assertStringNotContainsString('&amp;am=0.00&amp;cu=INR', $pickupHtml);
 
         $ajaxHeaders = ['Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest'];
 
@@ -1369,7 +1367,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ])
             ->get(route('storefront.checkout'))
             ->assertOk()
-            ->assertSee('data-upi-amount">1699.00<', false)
+            ->assertSee('data-upi-amount>1699.00<', false)
             ->assertSee('&amp;am=1699.00&amp;cu=INR', false);
 
         // Free shipping threshold removes the charge from the QR amount.
