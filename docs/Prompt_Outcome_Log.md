@@ -4774,3 +4774,8 @@ Supersedes: the shop-recipient fallback recommendation from the preceding Shop-S
 - Merchant configuration now requires only enabled + UPI ID + payee name; historical QR settings/files are retained.
 - Fulfilment switching continues to obtain payment data from the server refresh endpoint, and unverified Direct Merchant UPI orders are blocked centrally from workflow advancement until payment is paid.
 - No database migration, gateway, settlement, or checkout redesign was introduced.
+## 2026-10-04 — WS-055 Cookie information notice
+
+- Added a storefront-wide, non-blocking cookie information notice with a versioned first-party dismissal cookie (`windowshop_cookie_notice_v1`, 12 months, `/`, SameSite=Lax).
+- Added footer Cookie Settings reopening and a static/CMS-compatible Cookie Policy route (`/cookie-policy`, CMS key `cookie`).
+- V1 remains informational only: no consent categories, tracker gating, database persistence, migrations, or map changes.

@@ -59,6 +59,7 @@
                                     <li><a href="{{ route('storefront.shipping') }}" class="cl-text-3 link">Shipping</a></li>
                                     <li><a href="{{ route('storefront.returns') }}" class="cl-text-3 link">Return &amp; Refund</a></li>
                                     <li><a href="{{ route('storefront.privacy') }}" class="cl-text-3 link">Privacy Policy</a></li>
+                                    <li><button type="button" class="cl-text-3 link btn btn-link p-0" data-cookie-settings>Cookie Settings</button></li>
                                     <li><a href="{{ route('storefront.terms') }}" class="cl-text-3 link">Terms &amp; Conditions</a></li>
                                     <li><a href="{{ route('storefront.faq') }}" class="cl-text-3 link">Orders FAQs</a></li>
                                 </ul>
