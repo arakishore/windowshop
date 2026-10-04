@@ -435,6 +435,11 @@ class StorefrontController extends Controller
         return $this->marketplaceCmsPage('privacy', 'storefront.pages.privacy');
     }
 
+    public function cookiePolicy(): View
+    {
+        return $this->marketplaceCmsPage('cookie', 'storefront.pages.cookie-policy');
+    }
+
     public function returns(): View
     {
         return $this->marketplaceCmsPage('return_refund', 'storefront.pages.returns');
