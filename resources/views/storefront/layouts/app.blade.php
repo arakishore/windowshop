@@ -96,6 +96,7 @@
     @include('storefront.partials.mobile-menu')
     @include('storefront.partials.search')
     @include('storefront.partials.customer-location-modal')
+    @include('storefront.partials.cookie-notice')
     @include('storefront.partials.scripts')
     @stack('scripts')
 </body>

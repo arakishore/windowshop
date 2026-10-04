@@ -61,6 +61,7 @@ Route::get('/testimonials', [StorefrontController::class, 'testimonials'])->name
 Route::get('/faq', [StorefrontController::class, 'faq'])->name('storefront.faq');
 Route::get('/terms-and-conditions', [StorefrontController::class, 'terms'])->name('storefront.terms');
 Route::get('/privacy-policy', [StorefrontController::class, 'privacy'])->name('storefront.privacy');
+Route::get('/cookie-policy', [StorefrontController::class, 'cookiePolicy'])->name('storefront.cookie-policy');
 Route::get('/return-and-refund', [StorefrontController::class, 'returns'])->name('storefront.returns');
 Route::get('/shipping', [StorefrontController::class, 'shipping'])->name('storefront.shipping');
 Route::get('/contact-us', [StorefrontController::class, 'contact'])->name('storefront.contact');
