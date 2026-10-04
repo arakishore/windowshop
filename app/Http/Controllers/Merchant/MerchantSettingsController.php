@@ -232,7 +232,6 @@ class MerchantSettingsController extends Controller
             return;
         }
 
-        $existingQrPath = $this->shopSettings->get((int) $shop->getKey(), 'payment', 'merchant_upi_qr_path');
         $messages = [];
 
         if (blank(data_get($validated, 'shop_settings.payment.merchant_upi_id'))) {
@@ -241,10 +240,6 @@ class MerchantSettingsController extends Controller
 
         if (blank(data_get($validated, 'shop_settings.payment.merchant_upi_payee_name'))) {
             $messages['shop_settings.payment.merchant_upi_payee_name'] = 'The payee name is required when Direct Merchant UPI is enabled.';
-        }
-
-        if (! $request->hasFile('merchant_upi_qr') && blank($existingQrPath)) {
-            $messages['merchant_upi_qr'] = 'The UPI QR code is required when Direct Merchant UPI is enabled.';
         }
 
         if ($messages !== []) {

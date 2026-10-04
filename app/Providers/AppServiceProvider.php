@@ -7,6 +7,7 @@ use App\Events\MerchantAccountCreated;
 use App\Events\MerchantLifecycleChanged;
 use App\Events\OrderStatusChanged;
 use App\Events\StorefrontOrderPlaced;
+use App\Events\DirectMerchantUpiLifecycle;
 use App\Listeners\DispatchBusinessNotifications;
 use App\Notifications\Channels\EmailChannel;
 use App\Notifications\Channels\SmsChannel;
@@ -50,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(MerchantLifecycleChanged::class, [DispatchBusinessNotifications::class, 'merchantLifecycleChanged']);
         Event::listen(OrderStatusChanged::class, [DispatchBusinessNotifications::class, 'orderStatusChanged']);
         Event::listen(StorefrontOrderPlaced::class, [DispatchBusinessNotifications::class, 'storefrontOrderPlaced']);
+        Event::listen(DirectMerchantUpiLifecycle::class, [DispatchBusinessNotifications::class, 'directMerchantUpiLifecycle']);
 
         Paginator::useBootstrapFive();
 

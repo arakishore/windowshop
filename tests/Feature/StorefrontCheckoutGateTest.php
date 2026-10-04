@@ -1295,7 +1295,10 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertOk()
             ->assertSee('Direct Merchant UPI')
             ->assertSee('Vana Women Studio')
-            ->assertSee('9422945125@ybl');
+            ->assertSee('9422945125@ybl')
+            ->assertSee('data-upi-uri="upi://pay?pa=9422945125%40ybl&amp;pn=Vana%20Women%20Studio&amp;tr=', false)
+            ->assertSee('&amp;am=1649.00&amp;cu=INR', false)
+            ->assertDontSee('&amp;am=0.00&amp;cu=INR', false);
 
         $this->actingAs($customer)
             ->withSession([
@@ -1305,6 +1308,98 @@ class StorefrontCheckoutGateTest extends TestCase
             ->get(route('storefront.checkout'))
             ->assertOk()
             ->assertSee('Direct Merchant UPI');
+    }
+
+    public function test_direct_merchant_upi_amount_matches_server_grand_total_across_fulfilment_modes(): void
+    {
+        Storage::fake('public');
+        $customer = $this->customerUser('payment-upi-amount@example.test');
+        $fixture = $this->productFixture(price: 1649);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->postalCode('422009');
+        $this->customerAddress($customer, $fixture['merchant'], [
+            'postal_code' => '422009',
+            'is_default_shipping' => true,
+            'is_default_billing' => true,
+        ]);
+        $this->configureDirectUpi($fixture['shop']);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_flat_charge', 50, ShopSetting::TYPE_DECIMAL);
+
+        $session = [
+            'active_role_id' => $this->roleId('customer'),
+            StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            // Pickup offers Cash at Shop alongside UPI, so nothing is
+            // auto-selected: mirror the browser selecting Direct Merchant UPI.
+            StorefrontPaymentMethodService::SELECTED_PAYMENT_SESSION_KEY => StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
+        ];
+
+        // Pickup initial render: no shipping, Grand Total 1649.00.
+        $pickupResponse = $this->actingAs($customer)
+            ->withSession($session)
+            ->get(route('storefront.checkout'))
+            ->assertOk();
+        $pickupHtml = $pickupResponse->getContent();
+        $pos = strpos($pickupHtml, 'data-upi-amount');
+        fwrite(STDERR, "\nUPI-SLICE: ".substr((string) $pickupHtml, max(0, (int) $pos - 200), 600)."\n");
+        $this->assertStringContainsString('data-upi-amount">1649.00<', (string) $pickupHtml);
+            ->assertSee('&amp;am=1649.00&amp;cu=INR', false)
+            ->assertDontSee('&amp;am=0.00&amp;cu=INR', false);
+
+        $ajaxHeaders = ['Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest'];
+
+        // Pickup -> Delivery switch: +50.00 shipping reflected in QR amount.
+        $deliveryResponse = $this->actingAs($customer)
+            ->withSession($session)
+            ->withHeaders($ajaxHeaders)
+            ->postJson(route('storefront.checkout.fulfillment'), [
+                'fulfillment' => StorefrontDeliveryService::FULFILLMENT_DELIVERY,
+            ])
+            ->assertOk();
+        $deliveryUpi = collect($deliveryResponse->json('payment_methods'))
+            ->firstWhere('id', StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI);
+        $this->assertNotNull($deliveryUpi);
+        $this->assertSame('1699.00', $deliveryUpi['details']['amount']);
+        $this->assertStringContainsString('am=1699.00', (string) $deliveryUpi['details']['upi_uri']);
+        $this->assertStringNotContainsString('am=0.00', (string) $deliveryUpi['details']['upi_uri']);
+
+        // Delivery initial render shows the same shipping-inclusive amount.
+        $this->actingAs($customer)
+            ->withSession($session + [
+                StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_DELIVERY,
+            ])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('data-upi-amount">1699.00<', false)
+            ->assertSee('&amp;am=1699.00&amp;cu=INR', false);
+
+        // Free shipping threshold removes the charge from the QR amount.
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'free_delivery_above', 1000, ShopSetting::TYPE_DECIMAL);
+        $freeResponse = $this->actingAs($customer)
+            ->withSession($session)
+            ->withHeaders($ajaxHeaders)
+            ->postJson(route('storefront.checkout.fulfillment'), [
+                'fulfillment' => StorefrontDeliveryService::FULFILLMENT_DELIVERY,
+            ])
+            ->assertOk();
+        $freeUpi = collect($freeResponse->json('payment_methods'))
+            ->firstWhere('id', StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI);
+        $this->assertNotNull($freeUpi);
+        $this->assertSame('1649.00', $freeUpi['details']['amount']);
+        $this->assertStringContainsString('am=1649.00', (string) $freeUpi['details']['upi_uri']);
+
+        // Delivery -> Pickup switch returns to the shipping-free amount.
+        $pickupResponse = $this->actingAs($customer)
+            ->withSession($session)
+            ->withHeaders($ajaxHeaders)
+            ->postJson(route('storefront.checkout.fulfillment'), [
+                'fulfillment' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            ])
+            ->assertOk();
+        $pickupUpi = collect($pickupResponse->json('payment_methods'))
+            ->firstWhere('id', StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI);
+        $this->assertNotNull($pickupUpi);
+        $this->assertSame('1649.00', $pickupUpi['details']['amount']);
+        $this->assertStringContainsString('am=1649.00', (string) $pickupUpi['details']['upi_uri']);
     }
 
     public function test_direct_merchant_upi_order_stores_customer_claim_pending_with_server_total(): void

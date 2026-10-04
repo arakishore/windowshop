@@ -9,7 +9,6 @@ use App\Services\Merchant\ShopSettingsService;
 use App\Services\System\SystemSettingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 
 class StorefrontPaymentMethodService
 {
@@ -25,6 +24,7 @@ class StorefrontPaymentMethodService
         private readonly ShopSettingsService $shopSettings,
         private readonly ShopSettingsInitializer $shopSettingsInitializer,
         private readonly SystemSettingService $systemSettings,
+        private readonly UpiPaymentDataService $upiPaymentData,
     ) {}
 
     /**
@@ -35,9 +35,12 @@ class StorefrontPaymentMethodService
     {
         $groups = collect($cartData['shop_groups'] ?? []);
         $shops = $this->shopsById($cart);
+        // `total` is display-formatted (e.g. ₹1,649.00); payment data must use
+        // the authoritative integer cents field to avoid locale/currency parsing.
+        $amount = number_format(((int) ($cartData['total_cents'] ?? 0)) / 100, 2, '.', '');
         $methods = match ($fulfillment) {
-            StorefrontDeliveryService::FULFILLMENT_DELIVERY => $this->deliveryMethods($groups, $shops, (string) ($cartData['total'] ?? '')),
-            StorefrontDeliveryService::FULFILLMENT_PICKUP => $this->pickupMethods($groups, $shops, (string) ($cartData['total'] ?? '')),
+            StorefrontDeliveryService::FULFILLMENT_DELIVERY => $this->deliveryMethods($groups, $shops, $amount),
+            StorefrontDeliveryService::FULFILLMENT_PICKUP => $this->pickupMethods($groups, $shops, $amount),
             default => [],
         };
 
@@ -131,7 +134,7 @@ class StorefrontPaymentMethodService
         }
 
         if ($groups->count() === 1) {
-            $upi = $this->merchantUpiMethod($groups->first(), $shops, $amount);
+        $upi = $this->merchantUpiMethod($groups->first(), $shops, $amount);
             if ($upi !== null) {
                 $methods[] = $upi;
             }
@@ -198,17 +201,14 @@ class StorefrontPaymentMethodService
 
         $upiId = trim((string) $this->shopSettings->get($shopId, 'payment', 'merchant_upi_id', ''));
         $payeeName = trim((string) $this->shopSettings->get($shopId, 'payment', 'merchant_upi_payee_name', ''));
-        $qrPath = trim((string) $this->shopSettings->get($shopId, 'payment', 'merchant_upi_qr_path', ''));
-
         if (! (bool) $this->shopSettings->get($shopId, 'payment', 'merchant_upi_enabled', false)
             || $upiId === ''
             || $payeeName === ''
-            || $qrPath === ''
-            || ! Storage::disk('public')->exists($qrPath)
         ) {
             return null;
         }
 
+        $payment = $this->upiPaymentData->build($upiId, $payeeName, $amount);
         return [
             'id' => self::PAYMENT_MERCHANT_UPI,
             'label' => 'Direct Merchant UPI',
@@ -219,8 +219,10 @@ class StorefrontPaymentMethodService
             'details' => [
                 'payee_name' => $payeeName,
                 'upi_id' => $upiId,
-                'qr_url' => Storage::disk('public')->url($qrPath),
-                'amount' => $amount,
+                'qr_url' => $payment['qr_url'],
+                'upi_uri' => $payment['uri'],
+                'amount' => $payment['amount'],
+                'reference' => $payment['reference'],
             ],
         ];
     }

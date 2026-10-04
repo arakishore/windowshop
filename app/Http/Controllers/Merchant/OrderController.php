@@ -121,6 +121,10 @@ class OrderController extends Controller
             'comments.createdBy',
         ]);
         $allowedNextStatuses = $this->orderStatusService->allowedNextStatuses($order);
+        if ($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
+            && $order->payment_status !== Order::PAYMENT_PAID) {
+            $allowedNextStatuses = array_values(array_filter($allowedNextStatuses, fn (string $status): bool => $status === Order::STATUS_CANCELLED));
+        }
         $stockShortage = $this->stockShortageService->forOrder($order);
 
         return view('merchant.orders.show', [

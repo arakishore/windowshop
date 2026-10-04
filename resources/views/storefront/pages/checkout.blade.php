@@ -780,7 +780,7 @@
                             <p class="mb-1">Pay <strong data-upi-amount>{{ $selectedUpiDetails['amount'] ?? '' }}</strong> directly to</p>
                             <h6 class="mb-0" data-upi-payee>{{ $selectedUpiDetails['payee_name'] ?? '' }}</h6>
                             <div class="checkout-upi-layout">
-                                <img src="{{ $selectedUpiDetails['qr_url'] ?? '' }}" alt="Merchant UPI QR code" class="checkout-upi-qr" data-upi-qr>
+                                <img src="{{ $selectedUpiDetails['qr_url'] ?? '' }}" alt="Merchant UPI QR code" class="checkout-upi-qr" data-upi-qr data-upi-uri="{{ $selectedUpiDetails['upi_uri'] ?? '' }}">
                                 <div>
                                     <div class="text-muted text-caption-01 mb-1">UPI ID</div>
                                     <div class="checkout-upi-id-row">
@@ -1172,7 +1172,9 @@
                 upiPanel.querySelector('[data-upi-amount]').textContent = details.amount || '';
                 upiPanel.querySelector('[data-upi-payee]').textContent = details.payee_name || '';
                 upiPanel.querySelector('[data-upi-id]').textContent = details.upi_id || '';
-                upiPanel.querySelector('[data-upi-qr]').src = details.qr_url || '';
+                const qr = upiPanel.querySelector('[data-upi-qr]');
+                qr.src = details.qr_url || '';
+                qr.dataset.upiUri = details.upi_uri || '';
             };
 
             const updatePlaceOrderState = (method) => {
