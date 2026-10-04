@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Notifications\Channels\EmailChannel;
 use App\Notifications\NotificationChannelName;
 use App\Notifications\NotificationMessage;
+use App\Services\Merchant\ShopSettingsService;
 use App\Services\Notification\EmailConfigurationService;
 use App\Services\Notification\MerchantOperationalEmailRecipientResolver;
 use App\Services\Notification\NotificationPreferenceResolver;
@@ -52,19 +53,28 @@ class MerchantNotificationSettingsTest extends TestCase
 
         $this->actingAs($merchant->user)->withSession(['active_shop_id' => $shopA->getKey()])
             ->get(route('merchant.notification-settings.edit'))
-            ->assertOk()->assertSee('owner@example.test')->assertSee('Shop Owner')->assertSee('Required')
+            ->assertOk()->assertSee('Owner Shop')->assertSee('Shop Notification Email')
+            ->assertSee('data-shop-notification-email', false)
+            ->assertSee('data-shop-notification-supplementary', false)
+            ->assertSee('readonly aria-disabled="true"', false)
             ->assertSee('SMS notifications are not currently available.')
             ->assertSee('WhatsApp notifications are not currently available.')
+            ->assertDontSee('Primary Recipient')->assertDontSee('Shop Owner')
             ->assertDontSee('Email subject')->assertDontSee('Email body');
+        $this->assertStringContainsString(
+            'Leave blank to disable shop email notifications.',
+            file_get_contents(resource_path('views/merchant/notification-settings/edit.blade.php')),
+        );
 
         $merchant->user->update(['email' => 'new-owner@example.test']);
         $this->actingAs($merchant->user->fresh())->withSession(['active_shop_id' => $shopA->getKey()])
-            ->get(route('merchant.notification-settings.edit'))->assertOk()->assertSee('new-owner@example.test');
+            ->get(route('merchant.notification-settings.edit'))->assertOk()->assertDontSee('new-owner@example.test');
 
         $this->actingAs($merchant->user)->withSession(['active_shop_id' => $shopA->getKey()])
             ->put(route('merchant.notification-settings.update'), [
                 'shop_id' => $shopB->getKey(),
                 'email' => [
+                    'shop_notification_email' => ' Orders@Example.TEST ',
                     'additional_to' => ' Manager@Example.test, sales@example.test, ',
                     'cc' => 'accounts@example.test',
                     'bcc' => 'backoffice@example.test',
@@ -72,17 +82,23 @@ class MerchantNotificationSettingsTest extends TestCase
             ])->assertSessionHas('success');
 
         $routingA = app(MerchantOperationalEmailRecipientResolver::class)->resolve($shopA);
-        $this->assertSame(['new-owner@example.test', 'manager@example.test', 'sales@example.test'], $routingA['to']);
+        $this->assertSame('orders@example.test', $routingA['primary']);
+        $this->assertSame(['orders@example.test', 'manager@example.test', 'sales@example.test'], $routingA['to']);
         $this->assertSame(['accounts@example.test'], $routingA['cc']);
         $this->assertSame(['backoffice@example.test'], $routingA['bcc']);
         $this->assertSame([], app(MerchantOperationalEmailRecipientResolver::class)->resolve($shopB)['additional_to']);
         $this->actingAs($merchant->user->fresh())->withSession(['active_shop_id' => $shopA->getKey()])
             ->get(route('merchant.notification-settings.edit'))
+            ->assertSee('value="orders@example.test"', false)
             ->assertSee('value="manager@example.test, sales@example.test"', false);
 
         $this->actingAs($merchant->user)->withSession(['active_shop_id' => $shopA->getKey()])
-            ->put(route('merchant.notification-settings.update'), ['email' => ['additional_to' => '', 'cc' => '', 'bcc' => '']])
+            ->put(route('merchant.notification-settings.update'), ['email' => ['shop_notification_email' => '', 'additional_to' => '', 'cc' => '', 'bcc' => '']])
             ->assertSessionHas('success');
+        $this->assertDatabaseMissing('shop_settings', [
+            'shop_id' => $shopA->getKey(), 'group' => 'notifications', 'setting_key' => 'email.shop_notification_email',
+        ]);
+        $this->assertSame('', app(MerchantOperationalEmailRecipientResolver::class)->resolve($shopA)['primary']);
         $this->assertSame([], app(MerchantOperationalEmailRecipientResolver::class)->resolve($shopA)['additional_to']);
     }
 
@@ -100,9 +116,13 @@ class MerchantNotificationSettingsTest extends TestCase
         foreach (['additional_to', 'cc', 'bcc'] as $group) {
             $payload = ['additional_to' => '', 'cc' => '', 'bcc' => ''];
             $payload[$group] = 'OWNER@example.test';
-            $this->actingAs($merchant->user)->withSession($session)->put(route('merchant.notification-settings.update'), ['email' => $payload])
+            $this->actingAs($merchant->user)->withSession($session)->put(route('merchant.notification-settings.update'), ['email' => ['shop_notification_email' => 'owner@example.test', ...$payload]])
                 ->assertSessionHasErrors("email.{$group}.0");
         }
+
+        $this->actingAs($merchant->user)->withSession($session)->put(route('merchant.notification-settings.update'), [
+            'email' => ['shop_notification_email' => 'invalid', 'additional_to' => '', 'cc' => '', 'bcc' => ''],
+        ])->assertSessionHasErrors('email.shop_notification_email');
 
         $this->actingAs($merchant->user)->withSession($session)->put(route('merchant.notification-settings.update'), [
             'email' => ['additional_to' => 'team@example.test', 'cc' => 'TEAM@example.test', 'bcc' => ''],
@@ -118,6 +138,63 @@ class MerchantNotificationSettingsTest extends TestCase
         ])->assertSessionHasErrors('email.additional_to');
     }
 
+    public function test_shop_notification_email_has_no_contact_owner_or_public_email_fallback(): void
+    {
+        [$merchant, $shop] = $this->merchantShop('Separate', 'login@example.test');
+        $merchant->update(['contact_email' => 'business@example.test']);
+        $shop->update(['email' => 'public@example.test']);
+        $settings = app(ShopSettingsService::class);
+        $resolver = app(MerchantOperationalEmailRecipientResolver::class);
+
+        $settings->set($shop->getKey(), 'notifications', 'email.additional_to', ['manager@example.test']);
+        $settings->set($shop->getKey(), 'notifications', 'email.cc', ['copy@example.test']);
+        $settings->set($shop->getKey(), 'notifications', 'email.bcc', ['hidden@example.test']);
+
+        $routing = $resolver->resolve($shop);
+        $this->assertSame('', $routing['primary']);
+        $this->assertSame([], $routing['to']);
+        $this->assertNotContains('business@example.test', $routing['to']);
+        $this->assertNotContains('login@example.test', $routing['to']);
+        $this->assertNotContains('public@example.test', $routing['to']);
+        $this->assertSame(['manager@example.test'], $routing['additional_to']);
+        $this->assertSame(['copy@example.test'], $routing['cc']);
+        $this->assertSame(['hidden@example.test'], $routing['bcc']);
+
+        $settings->set($shop->getKey(), 'notifications', 'email.shop_notification_email', 'not-an-email');
+        $this->assertSame('', $resolver->resolve($shop)['primary']);
+        $this->assertSame([], $resolver->resolve($shop)['to']);
+    }
+
+    public function test_two_shops_have_independent_notification_emails_and_cross_group_deduplication(): void
+    {
+        [$merchant, $shopA] = $this->merchantShop('Multi', 'login@example.test');
+        $shopB = $this->shop($merchant, 'Branch B');
+        $resolver = app(MerchantOperationalEmailRecipientResolver::class);
+
+        $routingA = $resolver->save($shopA, [
+            'shop_notification_email' => 'a@example.test',
+            'additional_to' => ['A@example.test', 'team@example.test'],
+            'cc' => ['team@example.test', 'copy@example.test'],
+            'bcc' => ['copy@example.test', 'hidden@example.test'],
+        ]);
+        $resolver->save($shopB, [
+            'shop_notification_email' => 'b@example.test',
+            'additional_to' => [], 'cc' => [], 'bcc' => [],
+        ]);
+
+        $this->assertSame(['a@example.test', 'team@example.test'], $routingA['to']);
+        $this->assertSame(['copy@example.test'], $routingA['cc']);
+        $this->assertSame(['hidden@example.test'], $routingA['bcc']);
+        $this->assertSame('b@example.test', $resolver->resolve($shopB)['primary']);
+
+        $resolver->save($shopB, [
+            'shop_notification_email' => 'new-b@example.test',
+            'additional_to' => [], 'cc' => [], 'bcc' => [],
+        ]);
+        $this->assertSame('a@example.test', $resolver->resolve($shopA)['primary']);
+        $this->assertSame('new-b@example.test', $resolver->resolve($shopB)['primary']);
+    }
+
     public function test_another_merchant_cannot_select_or_modify_the_first_merchants_shop(): void
     {
         [$merchantA, $shopA] = $this->merchantShop('A', 'a@example.test');
@@ -125,10 +202,12 @@ class MerchantNotificationSettingsTest extends TestCase
         $this->merchantRole($merchantB->user);
 
         $this->actingAs($merchantB->user)->withSession(['active_shop_id' => $shopA->getKey()])
-            ->put(route('merchant.notification-settings.update'), ['email' => ['additional_to' => 'b-team@example.test', 'cc' => '', 'bcc' => '']])
+            ->put(route('merchant.notification-settings.update'), ['email' => ['shop_notification_email' => 'b-notify@example.test', 'additional_to' => 'b-team@example.test', 'cc' => '', 'bcc' => '']])
             ->assertSessionHas('success');
 
         $this->assertSame([], app(MerchantOperationalEmailRecipientResolver::class)->resolve($shopA)['additional_to']);
+        $this->assertSame('', app(MerchantOperationalEmailRecipientResolver::class)->resolve($shopA)['primary']);
+        $this->assertSame('b-notify@example.test', app(MerchantOperationalEmailRecipientResolver::class)->resolve($shopB)['primary']);
         $this->assertSame(['b-team@example.test'], app(MerchantOperationalEmailRecipientResolver::class)->resolve($shopB)['additional_to']);
     }
 
@@ -254,6 +333,7 @@ class MerchantNotificationSettingsTest extends TestCase
         Mail::fake();
         [$merchant, $shop] = $this->merchantShop('Mail', 'owner@example.test');
         $routing = app(MerchantOperationalEmailRecipientResolver::class)->save($shop, [
+            'shop_notification_email' => 'owner@example.test',
             'additional_to' => ['manager@example.test'],
             'cc' => ['accounts@example.test'],
             'bcc' => ['hidden@example.test'],

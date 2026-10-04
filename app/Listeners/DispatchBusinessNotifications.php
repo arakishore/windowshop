@@ -62,9 +62,9 @@ class DispatchBusinessNotifications
         if ($merchant instanceof MerchantProfile) {
             $destinations = $this->merchantDestinations($merchant, true);
             $emailRouting = $order->shop ? $this->merchantEmailRecipients->resolve($order->shop) : null;
-            if ($emailRouting !== null) {
-                $destinations[NotificationChannelName::EMAIL] = [$emailRouting['primary']];
-            }
+            $destinations[NotificationChannelName::EMAIL] = $emailRouting !== null && $emailRouting['primary'] !== ''
+                ? [$emailRouting['primary']]
+                : [];
             $this->dispatchToDestinations('order.new.merchant', 'merchant', $event->occurrenceId, $destinations, $merchant->user_id, $order->shop_id, $merchant->getKey(), 'order', $order->uuid, [
                 ...$context, 'merchant_name' => $merchant->contact_person_name ?: $merchant->user?->name,
             ], $emailRouting ? ['email_routing' => $emailRouting] : []);

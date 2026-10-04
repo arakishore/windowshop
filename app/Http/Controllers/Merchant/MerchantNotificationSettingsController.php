@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
 use App\Models\Shop;
 use App\Notifications\NotificationChannelName;
+use App\Notifications\NotificationEventDefinition;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Notification\MerchantOperationalEmailRecipientResolver;
 use App\Services\Notification\NotificationEventCatalogue;
@@ -14,8 +15,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class MerchantNotificationSettingsController extends Controller
@@ -57,8 +58,12 @@ class MerchantNotificationSettingsController extends Controller
                 ->filter()
                 ->values()
                 ->all(),
-        ])->all();
+        ])->prepend(
+            mb_strtolower(trim((string) $request->input('email.shop_notification_email', ''))),
+            'shop_notification_email',
+        )->all();
         $data = Validator::make(['email' => $email], [
+            'email.shop_notification_email' => ['nullable', 'email:rfc', 'max:255'],
             'email.additional_to' => ['array', 'max:10'],
             'email.additional_to.*' => ['email:rfc', 'max:255'],
             'email.cc' => ['array', 'max:10'],
@@ -75,18 +80,20 @@ class MerchantNotificationSettingsController extends Controller
         ])->validate();
 
         $groups = [
+            'shop_notification_email' => data_get($data, 'email.shop_notification_email', ''),
             'additional_to' => data_get($data, 'email.additional_to', []),
             'cc' => data_get($data, 'email.cc', []),
             'bcc' => data_get($data, 'email.bcc', []),
         ];
-        $primary = $this->recipients->resolve($shop)['primary'];
+        $primary = $groups['shop_notification_email'];
         $seen = array_filter([$primary]);
-        foreach ($groups as $group => $addresses) {
+        foreach (['additional_to', 'cc', 'bcc'] as $group) {
+            $addresses = $groups[$group];
             foreach ($addresses as $index => $address) {
                 if (in_array($address, $seen, true)) {
                     throw ValidationException::withMessages([
                         "email.{$group}.{$index}" => $address === $primary
-                            ? 'The shop owner email is already the required primary recipient.'
+                            ? 'The Shop Notification Email is already the primary recipient.'
                             : 'This email address is already used in another recipient group.',
                     ]);
                 }
@@ -132,7 +139,7 @@ class MerchantNotificationSettingsController extends Controller
         return $shop;
     }
 
-    /** @return Collection<string, \App\Notifications\NotificationEventDefinition> */
+    /** @return Collection<string, NotificationEventDefinition> */
     private function customerOrderEvents(): Collection
     {
         return $this->catalogue->all()->filter(fn ($event): bool => $event->audience === 'customer'
