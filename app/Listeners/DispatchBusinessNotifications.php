@@ -7,6 +7,7 @@ use App\Events\MerchantAccountCreated;
 use App\Events\MerchantLifecycleChanged;
 use App\Events\OrderStatusChanged;
 use App\Events\StorefrontOrderPlaced;
+use App\Events\DirectMerchantUpiLifecycle;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderStatus;
@@ -74,6 +75,42 @@ class DispatchBusinessNotifications
             foreach ($this->adminRecipients->forChannel($channel) as $recipient) {
                 $this->dispatch(new NotificationMessage('order.new.admin', 'admin', $channel, $recipient['destination'], $recipient['id'], $order->shop_id, $order->merchant_id, 'order', $order->uuid, $event->occurrenceId, $context));
             }
+        }
+    }
+
+    public function directMerchantUpiLifecycle(DirectMerchantUpiLifecycle $event): void
+    {
+        $order = $event->order->loadMissing(['shop', 'merchant.user']);
+        $context = [
+            'customer_name' => $order->customer_name,
+            'merchant_name' => $order->merchant?->contact_person_name ?: $order->merchant?->user?->name,
+            'order_number' => $order->order_number,
+            'shop_name' => $order->shop?->name,
+        ];
+        $customerKey = match ($event->action) {
+            'submitted' => 'payment.upi_submitted.customer',
+            'verified' => 'payment.upi_verified.customer',
+            'rejected' => 'payment.upi_rejected.customer',
+            default => null,
+        };
+        if ($customerKey !== null) {
+            $this->dispatchToDestinations($customerKey, 'customer', $event->occurrenceId, [
+                NotificationChannelName::EMAIL => [$order->customer_email],
+            ], $order->customer_id, $order->shop_id, $order->merchant_id, 'order', $order->uuid, $context);
+        }
+        if ($event->action !== 'submitted' || ! $order->shop instanceof \App\Models\Shop) {
+            return;
+        }
+        $routing = $this->merchantEmailRecipients->resolve($order->shop);
+        if ($routing['primary'] === '') {
+            return;
+        }
+        foreach ($routing['to'] as $destination) {
+            $this->dispatch(new NotificationMessage(
+                'payment.upi_submitted.merchant', 'merchant', NotificationChannelName::EMAIL,
+                $destination, $order->merchant_id, $order->shop_id, $order->merchant_id, 'order', $order->uuid,
+                $event->occurrenceId, $context, ['email_routing' => $routing],
+            ));
         }
     }
 

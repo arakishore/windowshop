@@ -6,6 +6,7 @@ use App\Models\DirectMerchantUpiAttempt;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\User;
+use App\Events\DirectMerchantUpiLifecycle;
 use App\Services\Checkout\StorefrontPaymentMethodService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +19,7 @@ class DirectMerchantUpiPaymentService
     {
         $confirmedReference = $this->attempts->validatedReference($confirmedReference, 'upi_txn');
 
-        return DB::transaction(function () use ($order, $actor, $confirmedReference): Order {
+        $result = DB::transaction(function () use ($order, $actor, $confirmedReference): Order {
             $locked = Order::query()->lockForUpdate()->findOrFail($order->getKey());
             $this->assertDirectUpi($locked);
 
@@ -82,6 +83,8 @@ class DirectMerchantUpiPaymentService
 
             return $locked->refresh();
         });
+        DirectMerchantUpiLifecycle::dispatch($result, 'verified', "upi.verified:{$result->uuid}:".now()->timestamp);
+        return $result;
     }
 
     public function reject(Order $order, User $actor, string $reason): Order
@@ -93,7 +96,7 @@ class DirectMerchantUpiPaymentService
             ]);
         }
 
-        return DB::transaction(function () use ($order, $actor, $reason): Order {
+        $result = DB::transaction(function () use ($order, $actor, $reason): Order {
             $locked = Order::query()->lockForUpdate()->findOrFail($order->getKey());
             $this->assertDirectUpi($locked);
 
@@ -129,6 +132,8 @@ class DirectMerchantUpiPaymentService
 
             return $locked->refresh();
         });
+        DirectMerchantUpiLifecycle::dispatch($result, 'rejected', "upi.rejected:{$result->uuid}:".now()->timestamp);
+        return $result;
     }
 
     private function assertDirectUpi(Order $order): void

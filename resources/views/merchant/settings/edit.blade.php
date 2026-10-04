@@ -899,40 +899,7 @@
                                         </div>
                                     </div>
 
-                                    <div class="mt-3 js-storefront-upi-dependent">
-                                        <label class="form-label fw-semibold d-block">UPI QR Code</label>
-                                        <div class="card border-dashed p-3 mb-0">
-                                            <div class="d-flex flex-column flex-sm-row align-items-start gap-3">
-                                                <div class="rounded overflow-hidden bg-light border d-flex align-items-center justify-content-center" style="width: 180px; height: 120px;">
-                                                    <img
-                                                        id="merchant_upi_qr_preview"
-                                                        src="{{ $qrPath ? asset('storage/'.$qrPath) : '' }}"
-                                                        alt="UPI QR code"
-                                                        class="img-fluid {{ $qrPath ? '' : 'd-none' }}"
-                                                        style="width: 100%; height: 100%; object-fit: contain;"
-                                                    >
-                                                    <div id="merchant_upi_qr_placeholder" class="text-muted {{ $qrPath ? 'd-none' : '' }}">QR Code</div>
-                                                </div>
-                                                <div class="flex-fill">
-                                                    <label for="merchant_upi_qr" class="btn btn-outline-primary btn-sm">
-                                                        <i class="ph-upload me-1"></i>
-                                                        Choose image
-                                                    </label>
-                                                    <input
-                                                        id="merchant_upi_qr"
-                                                        type="file"
-                                                        name="merchant_upi_qr"
-                                                        class="d-none {{ $errors->has('merchant_upi_qr') ? 'is-invalid' : '' }}"
-                                                        accept=".jpg,.jpeg,.png,.webp"
-                                                    >
-                                                    <p class="text-muted mb-1 mt-2">{{ $qrPath ? 'Choose a new image to replace the current QR code.' : 'JPG, JPEG, PNG or WEBP. Max 2MB.' }}</p>
-                                                    @if ($errors->has('merchant_upi_qr'))
-                                                        <div class="text-danger small">{{ $errors->first('merchant_upi_qr') }}</div>
-                                                    @endif
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <div class="mt-3 alert alert-info mb-0">A payment QR is generated automatically at checkout with the exact payable amount. Existing uploaded QR data is retained for compatibility.</div>
                                 </div>
 
                                 <div class="storefront-settings-section">
