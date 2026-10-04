@@ -28,6 +28,8 @@
 
     $billingSameForView = (bool) old('billing_same_as_delivery', $billingSameAsDelivery ? 1 : 0);
     $selectedBillingAddressIdForView = (int) old('billing_address_id', $selectedBillingAddressId);
+    $deliveryOption = collect($shippingOptions)->firstWhere('id', 'delivery');
+    $pickupOption = collect($shippingOptions)->firstWhere('id', 'pickup');
 @endphp
 
 @push('styles')
@@ -42,7 +44,7 @@
         .checkout-section {
             padding: 24px;
             border: 1px solid #e5e7eb;
-            border-radius: 6px;
+            border-radius: 10px;
             background: #fff;
         }
 
@@ -56,6 +58,116 @@
             justify-content: space-between;
             gap: 16px;
             margin-bottom: 18px;
+        }
+
+        .checkout-section-heading {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkout-section-heading .icon {
+            color: var(--primary);
+            font-size: 21px;
+        }
+
+        .checkout-fulfillment-choices {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .checkout-fulfillment-card {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            gap: 14px;
+            align-items: center;
+            min-height: 92px;
+            padding: 18px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+            transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+        }
+
+        .checkout-fulfillment-card:hover {
+            border-color: #cbd5e1;
+        }
+
+        .checkout-fulfillment-card:focus-within {
+            outline: 2px solid color-mix(in srgb, var(--primary) 35%, transparent);
+            outline-offset: 2px;
+        }
+
+        .checkout-fulfillment-card.is-selected {
+            border-color: var(--primary);
+            background: color-mix(in srgb, var(--primary) 5%, #fff);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent);
+        }
+
+        .checkout-fulfillment-card__icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #f8fafc;
+            color: #111827;
+            font-size: 22px;
+        }
+
+        .checkout-fulfillment-card.is-selected .checkout-fulfillment-card__icon {
+            background: color-mix(in srgb, var(--primary) 12%, #fff);
+            color: var(--primary);
+        }
+
+        .checkout-fulfillment-card input {
+            width: 18px;
+            height: 18px;
+            margin: 0;
+            accent-color: var(--primary);
+        }
+
+        .checkout-fulfillment-card__description {
+            display: block;
+            margin-top: 4px;
+            color: #64748b;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        .checkout-pickup-card {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 16px;
+            padding: 18px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .checkout-pickup-card__icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 46px;
+            height: 46px;
+            border-radius: 8px;
+            background: #f8fafc;
+            color: var(--primary);
+            font-size: 24px;
+        }
+
+        .checkout-pickup-instructions {
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: 6px;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 14px;
+            line-height: 1.5;
         }
 
         .checkout-address-list,
@@ -296,6 +408,10 @@
                 grid-template-columns: 1fr;
             }
 
+            .checkout-fulfillment-choices {
+                grid-template-columns: 1fr;
+            }
+
             .checkout-upi-panel {
                 padding: 16px;
             }
@@ -347,21 +463,52 @@
 
             <div class="checkout-grid">
                 <div>
-                    @if ($selectedAddress && $canPlaceOrder)
+                    @if ($errors->any())
+                        <div class="alert alert-danger">
+                            Please check the highlighted checkout details.
+                        </div>
+                    @endif
+
+                    @if (! $orderingAvailable)
                         <div class="checkout-section">
-                            <div class="checkout-section-title mb-0">
-                                <div>
-                                    <p class="text-caption-01 cl-text-3 mb-4">Fast Checkout</p>
-                                    <h5 class="mb-4">Ready from your defaults</h5>
-                                    <p class="cl-text-2 mb-0">
-                                        Deliver to {{ $selectedAddress->label }}, PIN {{ $selectedPostalCode }} with Cash on Delivery.
-                                    </p>
-                                </div>
-                                <button type="button" class="tf-btn animate-btn small" disabled>Place Order Now</button>
+                            <div class="checkout-empty-panel">
+                                <strong class="d-block mb-2">Ordering is currently unavailable for this store.</strong>
+                                This store currently has no pickup or delivery option available.
                             </div>
                         </div>
                     @endif
 
+                    @if ($deliveryEnabled && $pickupEnabled)
+                        <div class="checkout-section" data-fulfillment-url="{{ route('storefront.checkout.fulfillment') }}" data-fulfillment-selector>
+                            <div class="checkout-section-title">
+                                <h5 class="checkout-section-heading mb-0">
+                                    <i class="icon icon-Truck" aria-hidden="true"></i>
+                                    <span>How would you like to receive your order?</span>
+                                </h5>
+                            </div>
+                            <div class="checkout-fulfillment-choices">
+                                <label class="checkout-fulfillment-card {{ $selectedFulfillment === 'delivery' ? 'is-selected' : '' }}" data-fulfillment-option="delivery">
+                                    <span class="checkout-fulfillment-card__icon"><i class="icon icon-Truck" aria-hidden="true"></i></span>
+                                    <span>
+                                        <strong class="d-block">Delivery</strong>
+                                        <span class="checkout-fulfillment-card__description">Get your order delivered to your address</span>
+                                    </span>
+                                    <input type="radio" name="shipping_method_visual" value="delivery" data-fulfillment-radio @checked($selectedFulfillment === 'delivery')>
+                                </label>
+                                <label class="checkout-fulfillment-card {{ $selectedFulfillment === 'pickup' ? 'is-selected' : '' }}" data-fulfillment-option="pickup">
+                                    <span class="checkout-fulfillment-card__icon"><i class="icon icon-storefront" aria-hidden="true"></i></span>
+                                    <span>
+                                        <strong class="d-block">Pick Up from Store</strong>
+                                        <span class="checkout-fulfillment-card__description">Collect your order from the shop</span>
+                                    </span>
+                                    <input type="radio" name="shipping_method_visual" value="pickup" data-fulfillment-radio @checked($selectedFulfillment === 'pickup')>
+                                </label>
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($deliveryEnabled)
+                    <div data-delivery-checkout-section {{ $selectedFulfillment === 'delivery' ? '' : 'hidden' }}>
                     <div class="checkout-section">
                         <div class="checkout-section-title">
                             <h5 class="mb-0">Delivery Address</h5>
@@ -369,12 +516,6 @@
                                 + Add New Address
                             </button>
                         </div>
-
-                        @if ($errors->any())
-                            <div class="alert alert-danger">
-                                Please check the highlighted checkout details.
-                            </div>
-                        @endif
 
                         @if ($addresses->isEmpty())
                             <div class="checkout-empty-panel">No saved delivery addresses yet.</div>
@@ -542,64 +683,59 @@
                             </div>
                         </div>
                     </div>
+                    </div>
+                    @endif
 
-                    <div class="checkout-section" data-fulfillment-url="{{ route('storefront.checkout.fulfillment') }}">
-                        <div class="checkout-section-title">
-                            <h5 class="mb-0">Delivery Options</h5>
-                            @if ($selectedPostalCode)
-                                <span class="text-caption-01 cl-text-3">PIN {{ $selectedPostalCode }}</span>
-                            @endif
-                        </div>
-
-                        @if ($shippingOptions === [])
-                            <div class="checkout-empty-panel">No delivery or pickup options are currently available for this cart.</div>
-                        @else
-                            <div class="checkout-options">
-                                @foreach ($shippingOptions as $option)
-                                    <label
-                                        class="checkout-option {{ $option['selected'] ? 'is-selected' : '' }} {{ $option['available'] ? '' : 'is-disabled' }}"
-                                        data-fulfillment-option="{{ $option['id'] }}"
-                                    >
-                                        <input
-                                            type="radio"
-                                            name="shipping_method_visual"
-                                            value="{{ $option['id'] }}"
-                                            data-fulfillment-radio
-                                            @checked($option['selected'])
-                                            @disabled(! $option['available'])
-                                        >
+                    @if ($deliveryEnabled)
+                        <div class="checkout-section" data-delivery-checkout-section {{ $selectedFulfillment === 'delivery' ? '' : 'hidden' }}>
+                            <div class="checkout-section-title">
+                                <h5 class="checkout-section-heading mb-0">
+                                    <i class="icon icon-Truck" aria-hidden="true"></i>
+                                    <span>Delivery Options</span>
+                                </h5>
+                                @if ($selectedPostalCode)
+                                    <span class="text-caption-01 cl-text-3">PIN {{ $selectedPostalCode }}</span>
+                                @endif
+                            </div>
+                            @if ($deliveryOption)
+                                <div class="checkout-options">
+                                    <div class="checkout-option {{ $deliveryOption['available'] ? 'is-selected' : 'is-disabled' }}" data-delivery-option>
+                                        <span aria-hidden="true"></span>
                                         <span>
                                             <span class="d-flex justify-content-between gap-3">
-                                                <strong>{{ $option['label'] }}</strong>
-                                                <strong data-fulfillment-amount>{{ $option['amount'] }}</strong>
+                                                <strong>{{ $deliveryOption['label'] }}</strong>
+                                                <strong data-fulfillment-amount>{{ $deliveryOption['amount'] }}</strong>
                                             </span>
-                                            <span class="checkout-fulfillment-description" data-fulfillment-description>
-                                                @foreach (($option['description_lines'] ?? [$option['description']]) as $line)
-                                                    @if (is_array($line))
-                                                        @continue(($line['text'] ?? '') === '')
-                                                        <span class="checkout-fulfillment-line checkout-fulfillment-line--{{ $line['type'] ?? 'summary' }}">{{ $line['text'] }}</span>
-                                                    @else
-                                                        @continue($line === '')
-                                                        <span class="checkout-fulfillment-line checkout-fulfillment-line--summary">{{ $line }}</span>
-                                                    @endif
-                                                @endforeach
-                                            </span>
-                                            @if ($option['estimate'])
-                                                <span class="d-block cl-text-2" data-fulfillment-estimate>{{ $option['estimate'] }}</span>
-                                            @else
-                                                <span class="d-none cl-text-2" data-fulfillment-estimate></span>
-                                            @endif
-                                            @if (! $option['available'] && $option['reason'])
-                                                <span class="d-block text-danger text-caption-01" data-fulfillment-reason>{{ $option['reason'] }}</span>
-                                            @else
-                                                <span class="d-none text-danger text-caption-01" data-fulfillment-reason></span>
-                                            @endif
+                                            <span class="d-block cl-text-2" data-fulfillment-estimate>{{ $deliveryOption['estimate'] }}</span>
+                                            <span class="{{ $deliveryOption['available'] || ! $deliveryOption['reason'] ? 'd-none' : 'd-block' }} text-danger text-caption-01" data-fulfillment-reason>{{ $deliveryOption['reason'] }}</span>
                                         </span>
-                                    </label>
-                                @endforeach
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+
+                    @if ($pickupEnabled && $pickupOption)
+                        <div class="checkout-section" data-pickup-information {{ $selectedFulfillment === 'pickup' ? '' : 'hidden' }}>
+                            <div class="checkout-section-title">
+                                <h5 class="checkout-section-heading mb-0">
+                                    <i class="icon icon-storefront" aria-hidden="true"></i>
+                                    <span>Pickup Information</span>
+                                </h5>
                             </div>
-                        @endif
-                    </div>
+                            <div class="checkout-pickup-card">
+                                <span class="checkout-pickup-card__icon"><i class="icon icon-storefront" aria-hidden="true"></i></span>
+                                <div>
+                                    <strong class="d-block mb-4" data-pickup-shop-name>{{ $pickupOption['shop_name'] }}</strong>
+                                    <p class="cl-text-2 mb-0" data-pickup-shop-address>{{ $pickupOption['shop_address'] }}</p>
+                                    <p class="text-caption-01 cl-text-3 mt-8 mb-0">This is where you will collect your order.</p>
+                                    @if ($pickupOption['instructions'])
+                                        <div class="checkout-pickup-instructions" data-pickup-instructions>{{ $pickupOption['instructions'] }}</div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    @endif
 
                     <div class="checkout-section">
                         <div class="checkout-section-title">
@@ -747,7 +883,7 @@
                         <input type="hidden" name="address_id" value="{{ $selectedAddressId }}">
                         <input type="hidden" name="billing_same_as_delivery" value="{{ $billingSameForView ? 1 : 0 }}" data-billing-same-order-field>
                         <input type="hidden" name="billing_address_id" value="{{ $selectedBillingAddressIdForView }}">
-                        <input type="hidden" name="shipping_method" value="{{ $selectedFulfillment ?: 'delivery' }}" data-selected-fulfillment-field>
+                        <input type="hidden" name="shipping_method" value="{{ $selectedFulfillment }}" data-selected-fulfillment-field>
                         <input type="hidden" name="payment_method" value="{{ $selectedPaymentMethod }}" data-selected-payment-field>
                         <p class="checkout-upi-order-hint {{ $selectedUpiDetails ? '' : 'd-none' }} mb-3" data-upi-order-hint>Pay by UPI and enter the transaction ID before placing your order.</p>
                         <div class="mb-3">
@@ -763,6 +899,7 @@
                             data-checkout-has-postal-code="{{ $selectedPostalCode !== null ? '1' : '0' }}"
                             data-checkout-has-billing-address="{{ $selectedBillingAddress ? '1' : '0' }}"
                             data-checkout-cart-has-items="{{ ! ($cartData['is_empty'] ?? true) ? '1' : '0' }}"
+                            data-checkout-ordering-available="{{ $orderingAvailable ? '1' : '0' }}"
                         >
                             <span class="spinner-border spinner-border-sm d-none" aria-hidden="true" data-place-order-spinner></span>
                             <span data-place-order-label>Place Order</span>
@@ -792,6 +929,9 @@
             const orderField = document.querySelector('[data-billing-same-order-field]');
             const billingAddressCollapse = document.getElementById('checkout-add-billing-address');
             const fulfillmentSection = document.querySelector('[data-fulfillment-url]');
+            const deliveryCheckoutSections = document.querySelectorAll('[data-delivery-checkout-section]');
+            const pickupInformation = document.querySelector('[data-pickup-information]');
+            const deliveryOptionNode = document.querySelector('[data-delivery-option]');
             const selectedFulfillmentField = document.querySelector('[data-selected-fulfillment-field]');
             const shippingTotal = document.querySelector('[data-checkout-shipping-total]');
             const grandTotal = document.querySelector('[data-checkout-grand-total]');
@@ -810,10 +950,6 @@
             let currentPaymentMethods = @json($paymentMethods);
             let orderSubmissionProcessing = false;
 
-            if (!form || !toggle || !panel || !orderField) {
-                return;
-            }
-
             const csrfToken = () => {
                 const metaToken = document.querySelector('meta[name="csrf-token"]');
 
@@ -821,6 +957,10 @@
             };
 
             const applyBillingSameState = () => {
+                if (!toggle || !panel || !orderField) {
+                    return true;
+                }
+
                 const sameAsDelivery = toggle.checked;
 
                 panel.hidden = sameAsDelivery;
@@ -834,7 +974,7 @@
             };
 
             const syncBillingSameState = async (sameAsDelivery) => {
-                if (!window.fetch) {
+                if (!form || !window.fetch) {
                     return;
                 }
 
@@ -862,12 +1002,12 @@
                 }
             };
 
-            form.addEventListener('submit', (event) => {
+            form?.addEventListener('submit', (event) => {
                 event.preventDefault();
                 syncBillingSameState(applyBillingSameState());
             });
 
-            toggle.addEventListener('change', () => {
+            toggle?.addEventListener('change', () => {
                 syncBillingSameState(applyBillingSameState());
             });
 
@@ -893,11 +1033,10 @@
                     const isAvailable = Boolean(option.available);
 
                     node.classList.toggle('is-selected', isSelected);
-                    node.classList.toggle('is-disabled', !isAvailable);
 
                     if (radio) {
                         radio.checked = isSelected;
-                        radio.disabled = !isAvailable;
+                        radio.disabled = false;
                     }
 
                     if (amount) {
@@ -931,6 +1070,36 @@
                         reason.classList.toggle('d-none', isAvailable || !option.reason);
                     }
                 });
+            };
+
+            const renderDeliveryOption = (options) => {
+                if (!deliveryOptionNode || !Array.isArray(options)) {
+                    return;
+                }
+
+                const option = options.find((item) => item.id === 'delivery');
+                if (!option) {
+                    return;
+                }
+
+                const amount = deliveryOptionNode.querySelector('[data-fulfillment-amount]');
+                const estimate = deliveryOptionNode.querySelector('[data-fulfillment-estimate]');
+                const reason = deliveryOptionNode.querySelector('[data-fulfillment-reason]');
+                deliveryOptionNode.classList.toggle('is-selected', Boolean(option.available));
+                deliveryOptionNode.classList.toggle('is-disabled', !option.available);
+
+                if (amount) {
+                    amount.textContent = option.amount || '';
+                }
+                if (estimate) {
+                    estimate.textContent = option.estimate || '';
+                    estimate.classList.toggle('d-none', !option.estimate);
+                }
+                if (reason) {
+                    reason.textContent = option.reason || '';
+                    reason.classList.toggle('d-none', Boolean(option.available) || !option.reason);
+                    reason.classList.toggle('d-block', !option.available && Boolean(option.reason));
+                }
             };
 
             const paymentOptionTemplate = (method) => {
@@ -1022,7 +1191,9 @@
                         || (placeOrderButton.dataset.checkoutHasAddress === '1'
                             && placeOrderButton.dataset.checkoutHasPostalCode === '1'));
                 const checkoutReady = fulfillmentReady
-                    && placeOrderButton.dataset.checkoutHasBillingAddress === '1'
+                    && (fulfillment !== 'delivery'
+                        || placeOrderButton.dataset.checkoutHasBillingAddress === '1')
+                    && placeOrderButton.dataset.checkoutOrderingAvailable === '1'
                     && placeOrderButton.dataset.checkoutCartHasItems === '1';
 
                 placeOrderButton.disabled = !checkoutReady || !method || !method.available;
@@ -1140,6 +1311,7 @@
                     const selected = payload.selected_fulfillment || fulfillment;
 
                     renderFulfillmentOptions(payload.shipping_options, selected);
+                    renderDeliveryOption(payload.shipping_options);
                     renderPaymentMethods(
                         payload.payment_methods || [],
                         payload.selected_payment_method || '',
@@ -1148,6 +1320,13 @@
 
                     if (selectedFulfillmentField) {
                         selectedFulfillmentField.value = selected;
+                    }
+
+                    deliveryCheckoutSections.forEach((section) => {
+                        section.hidden = selected !== 'delivery';
+                    });
+                    if (pickupInformation) {
+                        pickupInformation.hidden = selected !== 'pickup';
                     }
 
                     if (shippingTotal && payload.shipping) {
@@ -1168,7 +1347,7 @@
 
             document.querySelectorAll('[data-fulfillment-radio]').forEach((radio) => {
                 radio.addEventListener('change', () => {
-                    if (radio.checked && !radio.disabled) {
+                    if (radio.checked) {
                         syncFulfillment(radio.value);
                     }
                 });

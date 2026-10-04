@@ -42,7 +42,7 @@ class StorefrontCheckoutOrderService
         Customer $customer,
         string $fulfillment,
         string $paymentMethod,
-        CustomerAddress $billingAddress,
+        ?CustomerAddress $billingAddress,
         ?string $customerOrderNote = null,
         ?string $upiReference = null,
     ): Order {
@@ -90,6 +90,19 @@ class StorefrontCheckoutOrderService
                 ]);
             }
 
+            $selectedOption = collect($deliveryData['options'])->firstWhere('id', $fulfillment);
+            if (! (bool) ($selectedOption['available'] ?? false)) {
+                throw ValidationException::withMessages([
+                    'shipping_method' => (string) ($selectedOption['reason'] ?? 'The selected fulfilment option is unavailable.'),
+                ]);
+            }
+
+            if ($fulfillment === StorefrontDeliveryService::FULFILLMENT_DELIVERY && ! $billingAddress instanceof CustomerAddress) {
+                throw ValidationException::withMessages([
+                    'billing_address_id' => 'Please select a billing address.',
+                ]);
+            }
+
             $cartData['shipping_cents'] = $deliveryData['shipping_cents'];
             $cartData['shipping'] = $deliveryData['shipping'];
             $cartData['total_cents'] = $deliveryData['total_cents'];
@@ -125,7 +138,9 @@ class StorefrontCheckoutOrderService
                 'shipping_address_snapshot' => $fulfillment === StorefrontDeliveryService::FULFILLMENT_DELIVERY && $shippingAddress instanceof CustomerAddress
                     ? $this->addressSnapshot($shippingAddress)
                     : null,
-                'billing_address_snapshot' => $this->addressSnapshot($billingAddress),
+                'billing_address_snapshot' => $billingAddress instanceof CustomerAddress
+                    ? $this->addressSnapshot($billingAddress)
+                    : null,
                 'created_source' => Order::SOURCE_STOREFRONT,
                 'fulfilment_type' => $fulfillment,
                 'order_status' => Order::STATUS_PENDING,

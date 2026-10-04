@@ -15,7 +15,9 @@ use Illuminate\Validation\ValidationException;
 class CheckoutPageService
 {
     public const SELECTED_ADDRESS_SESSION_KEY = 'storefront.checkout.selected_address_id';
+
     public const BILLING_SAME_AS_DELIVERY_SESSION_KEY = 'storefront.checkout.billing_same_as_delivery';
+
     public const SELECTED_BILLING_ADDRESS_SESSION_KEY = 'storefront.checkout.selected_billing_address_id';
 
     public function __construct(
@@ -25,8 +27,7 @@ class CheckoutPageService
         private readonly StorefrontDeliveryService $delivery,
         private readonly StorefrontPaymentMethodService $payments,
         private readonly CheckoutFlowService $checkout,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -54,6 +55,9 @@ class CheckoutPageService
         $cartData['total_cents'] = $deliveryData['total_cents'];
         $cartData['total'] = $deliveryData['total'];
         $paymentData = $this->payments->resolve($request, $cart, $cartData, $deliveryData['selected']);
+        $selectedOption = collect($deliveryData['options'])->firstWhere('id', $deliveryData['selected']);
+        $deliveryEnabled = collect($deliveryData['options'])->contains('id', StorefrontDeliveryService::FULFILLMENT_DELIVERY);
+        $pickupEnabled = collect($deliveryData['options'])->contains('id', StorefrontDeliveryService::FULFILLMENT_PICKUP);
         $hasFulfillmentAddress = $deliveryData['selected'] !== StorefrontDeliveryService::FULFILLMENT_DELIVERY
             || $selectedAddress instanceof CustomerAddress;
         $hasFulfillmentPostalCode = $deliveryData['selected'] !== StorefrontDeliveryService::FULFILLMENT_DELIVERY
@@ -74,14 +78,19 @@ class CheckoutPageService
             'defaultCountry' => $this->postalLookup->defaultCountry(),
             'shippingOptions' => $deliveryData['options'],
             'selectedFulfillment' => $deliveryData['selected'],
+            'deliveryEnabled' => $deliveryEnabled,
+            'pickupEnabled' => $pickupEnabled,
+            'orderingAvailable' => $deliveryEnabled || $pickupEnabled,
             'shippingTotal' => $deliveryData['shipping'],
             'paymentMethods' => $paymentData['methods'],
             'selectedPaymentMethod' => $paymentData['selected'],
             'paymentUnavailableMessage' => $paymentData['message'],
             'canPlaceOrder' => $hasFulfillmentAddress
-                && $selectedBillingAddress instanceof CustomerAddress
+                && ($deliveryData['selected'] !== StorefrontDeliveryService::FULFILLMENT_DELIVERY
+                    || $selectedBillingAddress instanceof CustomerAddress)
                 && $hasFulfillmentPostalCode
                 && $deliveryData['selected'] !== null
+                && (bool) ($selectedOption['available'] ?? false)
                 && $paymentData['selected'] !== null
                 && ! (bool) $cartData['is_empty'],
         ];
@@ -190,5 +199,4 @@ class CheckoutPageService
 
         return $item?->shop?->merchant_id !== null ? (int) $item->shop->merchant_id : null;
     }
-
 }

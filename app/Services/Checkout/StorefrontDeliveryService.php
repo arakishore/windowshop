@@ -10,6 +10,7 @@ use App\Services\Merchant\ShopSettingsService;
 use App\Services\System\SystemSettingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 class StorefrontDeliveryService
 {
@@ -83,7 +84,9 @@ class StorefrontDeliveryService
         }
 
         if (! in_array($fulfillment, [self::FULFILLMENT_DELIVERY, self::FULFILLMENT_PICKUP], true)) {
-            $fulfillment = self::FULFILLMENT_DELIVERY;
+            throw ValidationException::withMessages([
+                'fulfillment' => 'Please select a valid delivery or pickup option.',
+            ]);
         }
 
         $request->session()->put(self::SELECTED_FULFILLMENT_SESSION_KEY, $fulfillment);
@@ -208,6 +211,9 @@ class StorefrontDeliveryService
         return [
             'id' => self::FULFILLMENT_PICKUP,
             'label' => 'Pickup from Shop',
+            'shop_name' => $shop->name,
+            'shop_address' => $address,
+            'instructions' => $instructions ?: null,
             'description' => collect($descriptionLines)->pluck('text')->implode(' '),
             'description_lines' => $descriptionLines,
             'amount' => 'FREE',
@@ -224,21 +230,19 @@ class StorefrontDeliveryService
      */
     private function selectedFulfillment(Request $request, array $options): ?string
     {
-        $available = collect($options)
-            ->filter(fn (array $option): bool => (bool) ($option['available'] ?? false))
-            ->values();
+        $configured = collect($options)->values();
 
-        if ($available->isEmpty()) {
+        if ($configured->isEmpty()) {
             return null;
         }
 
         $current = $request->session()->get(self::SELECTED_FULFILLMENT_SESSION_KEY);
-        if ($current && $available->contains(fn (array $option): bool => $option['id'] === $current)) {
+        if ($current && $configured->contains(fn (array $option): bool => $option['id'] === $current)) {
             return (string) $current;
         }
 
-        return $available->firstWhere('id', self::FULFILLMENT_DELIVERY)['id']
-            ?? $available->first()['id'];
+        return $configured->firstWhere('id', self::FULFILLMENT_DELIVERY)['id']
+            ?? $configured->first()['id'];
     }
 
     private function deliveryAddressText(CustomerAddress $address): string

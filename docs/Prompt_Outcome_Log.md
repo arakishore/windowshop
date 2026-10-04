@@ -4713,6 +4713,38 @@ Roadmap status: implementation is ready for Testing; WS-010 was not marked Compl
 
 Verification: focused notification queue, event wiring, and real email suites passed with 41 tests and 194 assertions; the broader notification-related run passed 86 of 87 tests with one pre-existing legacy-template mapping failure for `merchant.registered.admin:email`; focused storefront checkout/order placement passed with 3 tests and 71 assertions. Scheduler registration, Pint, PHP lint, and `git diff --check` passed. No UI changes were made.
 
+## 2026-10-04 - Fulfilment-Driven Checkout Simplification
+
+Goal: Make the single-shop storefront checkout derive its flow entirely from each selected shop's existing pickup/delivery settings, including addressless pickup and a safe unavailable state, without adding settings, schema, payment rules, or notification changes.
+
+Decisions and outcome:
+
+- `fulfillment.pickup_enabled` and `fulfillment.delivery_enabled` are the sole checkout-mode controls. There is one checkout engine and no Local/Normal Checkout setting.
+- Pickup-only checkout omits delivery/billing address and delivery-option sections, shows shop pickup details, and creates orders with null shipping and billing snapshots and zero shipping.
+- Delivery-only retains the existing address, billing, quote, serviceability, charge, and payment behavior. When both modes are enabled, the customer chooses between them and the existing AJAX refresh updates payment methods and totals.
+- Neither-enabled checkout shows an unavailable message and cannot place an order. Server validation rejects disabled or unknown fulfilment values independently of the UI; invalid values are no longer coerced to delivery.
+- Payment rules, delivery quote/serviceability rules, V1 selected-shop cart scoping, order workflow, notification architecture, and existing pickup presentation fallbacks were unchanged.
+
+Key files/services: `StorefrontDeliveryService`, `CheckoutPageService`, `StorefrontCheckoutOrderService`, `CheckoutController`, the storefront checkout Blade view, and focused `StorefrontCheckoutGateTest` coverage. Existing nullable order snapshot columns are reused; no migration was required.
+
+Verification: focused fulfilment/delivery regression run passed 9 tests with 116 assertions. The full checkout gate suite passed 88 of 92 tests with the same four unrelated fixture/transaction/copy failures previously recorded in this log. Pint, PHP syntax checks, Blade compilation, and `git diff --check` passed. Live browser verification was unavailable because no browser surface was exposed.
+
+## 2026-10-04 - Fulfilment Checkout UI/UX Refinement
+
+Goal: Apply the approved checkout hierarchy and fulfilment-card visual direction while preserving the completed fulfilment-driven business logic and WindowShop branding.
+
+Decisions and outcome:
+
+- When both modes are enabled, the fulfilment decision is now the first checkout section and uses two responsive, full-label radio cards with the existing WindowShop accent and icon system.
+- Delivery context remains Delivery Address, Billing Address, Delivery Options, then Payment Method. Pickup context now uses a dedicated non-interactive Pickup Information panel containing the actual shop name, address, and configured instructions, followed by Payment Method.
+- Pickup-only and delivery-only shops omit the unnecessary selector. The neither-enabled state and the desktop Order Summary sidebar remain unchanged.
+- The visually competing Fast Checkout banner was removed; the existing Order Summary Place Order button remains the sole final action with its established disabled/spinner/double-submit behavior.
+- AJAX switching continues to use the existing endpoint and now also toggles the contextual panels and refreshes the dedicated delivery-option presentation. Backend fulfilment, address, payment, delivery calculation, order workflow, and notification rules were not changed.
+
+Key files/services: storefront checkout Blade view, `StorefrontDeliveryService` pickup presentation data, and `StorefrontCheckoutGateTest` presentation coverage. No schema, migration, setting, or new image dependency was introduced.
+
+Verification: focused UI/placement runs passed (10 tests, 143 assertions; final local-only/pickup/delivery regression run 5 tests, 102 assertions). The full checkout suite initially passed 87 of 92 tests; its one UI-copy failure was corrected and rerun successfully, leaving only the same four unrelated registration fixture, notification transaction, and stale unavailable-copy failures already recorded for this suite. Pint, PHP syntax checks, Blade compilation, inline checkout JavaScript syntax, and `git diff --check` passed. Live browser verification was unavailable because no browser surface was exposed.
+
 ## 2026-10-03 - Shop-Specific Notification Email
 
 Supersedes: the shop-recipient fallback recommendation from the preceding Shop-Specific Primary Operational Email investigation.
