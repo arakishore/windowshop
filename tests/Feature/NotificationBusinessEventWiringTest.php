@@ -429,6 +429,7 @@ class NotificationBusinessEventWiringTest extends TestCase
             'customer_id' => 77, 'customer_name' => 'Snapshot Customer', 'customer_email' => 'snapshot@example.test', 'customer_mobile' => '9876543210',
         ]);
         app(AdditionalMerchantRecipientService::class)->set($merchant->getKey(), 'email', ['primary@example.test', 'operations@example.test']);
+        app(ShopSettingsService::class)->set($shopId, 'notifications', 'email.shop_notification_email', 'shop-orders@example.test');
         $adminId = $this->user('Admin', 'admin@example.test', '9000000002');
         $roleId = DB::table('auth_roles')->insertGetId(['slug' => 'admin', 'status' => 'active']);
         DB::table('auth_user_roles')->insert(['user_id' => $adminId, 'role_id' => $roleId]);
@@ -438,13 +439,47 @@ class NotificationBusinessEventWiringTest extends TestCase
         app(DispatchBusinessNotifications::class)->storefrontOrderPlaced($event);
 
         $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.placed.customer', 'channel' => 'email', 'destination' => 'snapshot@example.test', 'status' => 'queued']);
-        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'primary@example.test']);
+        $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'shop-orders@example.test']);
         $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'operations@example.test']);
-        $this->assertSame(1, DB::table('notification_delivery_logs')->where('notification_key', 'order.new.merchant')->where('channel', 'email')->where('destination', 'primary@example.test')->count());
+        $this->assertDatabaseMissing('notification_delivery_logs', ['notification_key' => 'order.new.merchant', 'channel' => 'email', 'destination' => 'primary@example.test']);
+        $this->assertSame(1, DB::table('notification_delivery_logs')->where('notification_key', 'order.new.merchant')->where('channel', 'email')->where('destination', 'shop-orders@example.test')->count());
         $this->assertDatabaseHas('notification_delivery_logs', ['notification_key' => 'order.new.admin', 'channel' => 'email', 'destination' => 'admin@example.test', 'status' => 'queued']);
         Queue::assertPushed(DeliverNotificationEmail::class, fn (DeliverNotificationEmail $job): bool => $job->message->key === 'order.placed.customer');
         Queue::assertPushed(DeliverNotificationEmail::class, fn (DeliverNotificationEmail $job): bool => $job->message->key === 'order.new.merchant');
         Queue::assertPushed(DeliverNotificationEmail::class, fn (DeliverNotificationEmail $job): bool => $job->message->key === 'order.new.admin');
+    }
+
+    public function test_storefront_order_does_not_queue_merchant_email_without_valid_shop_notification_email(): void
+    {
+        $merchant = $this->merchant();
+        $shopId = DB::table('shops')->insertGetId([
+            'uuid' => (string) Str::uuid(), 'merchant_id' => $merchant->getKey(), 'name' => 'No Email Shop',
+            'status' => 'active',
+        ]);
+        $order = Order::query()->create([
+            'uuid' => (string) Str::uuid(), 'order_number' => 'ORD-NO-MERCHANT-EMAIL', 'merchant_id' => $merchant->getKey(), 'shop_id' => $shopId,
+            'customer_id' => 77, 'customer_name' => 'Snapshot Customer', 'customer_email' => 'snapshot@example.test', 'customer_mobile' => '9876543210',
+        ]);
+        app(AdditionalMerchantRecipientService::class)->set($merchant->getKey(), 'email', ['legacy@example.test']);
+        app(ShopSettingsService::class)->set($shopId, 'notifications', 'email.additional_to', ['manager@example.test']);
+        app(ShopSettingsService::class)->set($shopId, 'notifications', 'email.cc', ['copy@example.test']);
+        app(ShopSettingsService::class)->set($shopId, 'notifications', 'email.bcc', ['hidden@example.test']);
+
+        app(DispatchBusinessNotifications::class)->storefrontOrderPlaced(new StorefrontOrderPlaced($order, 'no-shop-email'));
+
+        $this->assertDatabaseMissing('notification_delivery_logs', [
+            'notification_key' => 'order.new.merchant', 'channel' => 'email',
+        ]);
+        $this->assertDatabaseHas('notification_delivery_logs', [
+            'notification_key' => 'order.placed.customer', 'channel' => 'email', 'destination' => 'snapshot@example.test',
+        ]);
+        Queue::assertNotPushed(DeliverNotificationEmail::class, fn (DeliverNotificationEmail $job): bool => $job->message->key === 'order.new.merchant');
+
+        app(ShopSettingsService::class)->set($shopId, 'notifications', 'email.shop_notification_email', 'invalid');
+        app(DispatchBusinessNotifications::class)->storefrontOrderPlaced(new StorefrontOrderPlaced($order, 'invalid-shop-email'));
+        $this->assertDatabaseMissing('notification_delivery_logs', [
+            'notification_key' => 'order.new.merchant', 'channel' => 'email',
+        ]);
     }
 
     public function test_storefront_order_event_is_not_wired_into_generic_pos_or_exchange_creation(): void

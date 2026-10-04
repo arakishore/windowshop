@@ -10,6 +10,7 @@ class MerchantOperationalEmailRecipientResolver
     private const GROUP = 'notifications';
 
     private const KEYS = [
+        'shop_notification_email' => 'email.shop_notification_email',
         'additional_to' => 'email.additional_to',
         'cc' => 'email.cc',
         'bcc' => 'email.bcc',
@@ -20,11 +21,16 @@ class MerchantOperationalEmailRecipientResolver
         private readonly AdditionalMerchantRecipientService $legacyRecipients,
     ) {}
 
-    /** @return array{primary: string, additional_to: array<int, string>, to: array<int, string>, cc: array<int, string>, bcc: array<int, string>} */
+    /** @return array{shop_notification_email: string, primary: string, additional_to: array<int, string>, to: array<int, string>, cc: array<int, string>, bcc: array<int, string>} */
     public function resolve(Shop $shop): array
     {
-        $shop->loadMissing('merchant.user');
-        $primary = $this->normalize($shop->merchant?->contact_email ?: $shop->merchant?->user?->email);
+        $configuredPrimary = $this->normalize($this->settings->get(
+            (int) $shop->getKey(),
+            self::GROUP,
+            self::KEYS['shop_notification_email'],
+            '',
+        ));
+        $primary = filter_var($configuredPrimary, FILTER_VALIDATE_EMAIL) !== false ? $configuredPrimary : '';
         $additional = $this->configured($shop, 'additional_to');
 
         if (! $this->settings->has((int) $shop->getKey(), self::GROUP, self::KEYS['additional_to'])) {
@@ -39,18 +45,27 @@ class MerchantOperationalEmailRecipientResolver
         $bcc = $this->without($this->configured($shop, 'bcc'), $used);
 
         return [
+            'shop_notification_email' => $configuredPrimary,
             'primary' => $primary,
             'additional_to' => $additional,
-            'to' => array_values(array_filter([$primary, ...$additional])),
+            'to' => $primary === '' ? [] : [$primary, ...$additional],
             'cc' => $cc,
             'bcc' => $bcc,
         ];
     }
 
-    /** @param array<string, array<int, string>> $groups */
+    /** @param array{shop_notification_email?: mixed, additional_to?: array<int, string>, cc?: array<int, string>, bcc?: array<int, string>} $groups */
     public function save(Shop $shop, array $groups): array
     {
-        foreach (self::KEYS as $group => $key) {
+        $shopNotificationEmail = $this->normalize($groups['shop_notification_email'] ?? '');
+        if ($shopNotificationEmail === '') {
+            $this->settings->delete((int) $shop->getKey(), self::GROUP, self::KEYS['shop_notification_email']);
+        } else {
+            $this->settings->set((int) $shop->getKey(), self::GROUP, self::KEYS['shop_notification_email'], $shopNotificationEmail);
+        }
+
+        foreach (['additional_to', 'cc', 'bcc'] as $group) {
+            $key = self::KEYS[$group];
             $this->settings->set((int) $shop->getKey(), self::GROUP, $key, $this->normalizeMany($groups[$group] ?? []));
         }
 
