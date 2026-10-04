@@ -347,6 +347,41 @@ class MerchantOrderActionsTest extends TestCase
         $this->assertSame(1, DB::table('order_status_histories')->where('order_id', $order->getKey())->count());
     }
 
+    public function test_unpaid_online_payment_order_cannot_be_accepted(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId, [
+            'payment_method' => 'online_payment',
+            'payment_status' => Order::PAYMENT_PENDING,
+        ]);
+        $this->statusHistory($order, null, Order::STATUS_PENDING, 'Order placed');
+
+        $this->actingAs($user)->withSession(['active_shop_id' => $shopId])
+            ->from(route('merchant.orders.show', $order))
+            ->post(route('merchant.orders.accept', $order))
+            ->assertRedirect(route('merchant.orders.show', $order))
+            ->assertSessionHasErrors('payment');
+
+        $this->assertSame(Order::STATUS_PENDING, $order->fresh()->order_status);
+    }
+
+    public function test_paid_online_payment_order_can_be_accepted(): void
+    {
+        [$user, , $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId, [
+            'payment_method' => 'online_payment',
+            'payment_status' => Order::PAYMENT_PAID,
+        ]);
+        $this->statusHistory($order, null, Order::STATUS_PENDING, 'Order placed');
+
+        $this->actingAs($user)->withSession(['active_shop_id' => $shopId])
+            ->post(route('merchant.orders.accept', $order))
+            ->assertRedirect(route('merchant.orders.show', $order))
+            ->assertSessionHas('success');
+
+        $this->assertSame(Order::STATUS_CONFIRMED, $order->fresh()->order_status);
+    }
+
     public function test_confirmed_storefront_pickup_order_can_start_processing_without_stock_or_payment_changes(): void
     {
         [$user, , $shopId] = $this->merchantShopFixture();

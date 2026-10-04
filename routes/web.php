@@ -128,6 +128,9 @@ Route::post('/checkout/billing-address/select', [CheckoutAddressController::clas
 Route::post('/checkout/billing-addresses', [CheckoutAddressController::class, 'storeBilling'])->name('storefront.checkout.billing-addresses.store');
 Route::post('/checkout/fulfillment', [CheckoutController::class, 'fulfillment'])->name('storefront.checkout.fulfillment');
 Route::post('/checkout/place-order', [CheckoutController::class, 'placeOrder'])->name('storefront.checkout.place-order');
+Route::post('/checkout/order/{order}/razorpay/retry', [CheckoutController::class, 'retryRazorpay'])->name('storefront.checkout.razorpay.retry');
+Route::post('/checkout/razorpay/{paymentAttempt}/verify', [CheckoutController::class, 'verifyRazorpay'])->name('storefront.checkout.razorpay.verify');
+Route::post('/checkout/razorpay/{paymentAttempt}/outcome', [CheckoutController::class, 'razorpayOutcome'])->name('storefront.checkout.razorpay.outcome');
 Route::get('/checkout/order/{order}', [CheckoutController::class, 'success'])->name('storefront.checkout.success');
 Route::get('/category/{parentSlug}/{slug}', [StorefrontController::class, 'categoryWithParent'])->name('storefront.category.child.show');
 Route::get('/category/{slug}', [StorefrontController::class, 'category'])->name('storefront.category.show');

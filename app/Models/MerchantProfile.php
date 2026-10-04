@@ -89,6 +89,8 @@ class MerchantProfile extends Model
         return $this->hasMany(Shop::class, 'merchant_id');
     }
 
+    public function paymentAccounts(): HasMany { return $this->hasMany(PaymentAccount::class, 'merchant_id'); }
+
     public function banners(): HasMany
     {
         return $this->hasMany(Banner::class, 'merchant_id');

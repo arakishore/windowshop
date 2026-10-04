@@ -9,6 +9,7 @@ use App\Models\OrderComment;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\Shop;
+use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Order\DeliveryCompletionService;
 use App\Services\Order\DirectMerchantUpiPaymentService;
@@ -121,7 +122,10 @@ class OrderController extends Controller
             'comments.createdBy',
         ]);
         $allowedNextStatuses = $this->orderStatusService->allowedNextStatuses($order);
-        if ($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
+        if (in_array($order->payment_method, [
+            StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
+            StorefrontPaymentMethodService::PAYMENT_ONLINE,
+        ], true)
             && $order->payment_status !== Order::PAYMENT_PAID) {
             $allowedNextStatuses = array_values(array_filter($allowedNextStatuses, fn (string $status): bool => $status === Order::STATUS_CANCELLED));
         }
@@ -150,6 +154,12 @@ class OrderController extends Controller
     public function accept(Request $request, Order $order): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
+        if (in_array($order->payment_method, [
+            StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
+            StorefrontPaymentMethodService::PAYMENT_ONLINE,
+        ], true) && $order->payment_status !== Order::PAYMENT_PAID) {
+            return back()->withErrors(['payment' => 'Payment must be verified before this order can be accepted.']);
+        }
         $stockShortage = $this->stockShortageService->forOrder($order);
 
         if ($stockShortage['has_shortage'] && ! $request->boolean('confirm_stock_shortage')) {

@@ -3,11 +3,11 @@
 namespace App\Providers;
 
 use App\Events\CustomerRegistered;
+use App\Events\DirectMerchantUpiLifecycle;
 use App\Events\MerchantAccountCreated;
 use App\Events\MerchantLifecycleChanged;
 use App\Events\OrderStatusChanged;
 use App\Events\StorefrontOrderPlaced;
-use App\Events\DirectMerchantUpiLifecycle;
 use App\Listeners\DispatchBusinessNotifications;
 use App\Notifications\Channels\EmailChannel;
 use App\Notifications\Channels\SmsChannel;
@@ -17,6 +17,8 @@ use App\Services\Cart\CartPageService;
 use App\Services\Cart\CartResolver;
 use App\Services\DateTime\DateDisplayService;
 use App\Services\Marketplace\MarketplaceLogoService;
+use App\Services\Payment\RazorpayGateway;
+use App\Services\Payment\SdkRazorpayGateway;
 use App\Services\Storefront\CustomerLocationService;
 use App\Services\System\SystemSettingService;
 use Illuminate\Pagination\Paginator;
@@ -34,6 +36,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(DateDisplayService::class);
         $this->app->singleton(CustomerLocationService::class);
         $this->app->singleton(SystemSettingService::class);
+        $this->app->bind(RazorpayGateway::class, SdkRazorpayGateway::class);
         $this->app->singleton(NotificationChannelRegistry::class, fn ($app) => new NotificationChannelRegistry([
             $app->make(EmailChannel::class),
             $app->make(SmsChannel::class),

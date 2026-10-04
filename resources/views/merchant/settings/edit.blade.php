@@ -902,16 +902,31 @@
                                     <div class="mt-3 alert alert-info mb-0">A payment QR is generated automatically at checkout with the exact payable amount. Existing uploaded QR data is retained for compatibility.</div>
                                 </div>
 
+                                @php
+                                    $razorpayByMode = collect($paymentAccounts ?? [])->keyBy('mode');
+                                    $razorpayEnvironment = old('razorpay_environment', $razorpayByMode->firstWhere('enabled', true)?->mode ?? 'test');
+                                    $razorpayAccount = $razorpayByMode->get($razorpayEnvironment);
+                                    $razorpayUiAccounts = $razorpayByMode->map(fn ($account) => ['name' => $account->name, 'key_id' => $account->public_key, 'configured' => filled($account->secret)]);
+                                @endphp
                                 <div class="storefront-settings-section">
-                                    <input type="hidden" name="{{ $onlinePaymentEnabled['name'] }}" value="0">
-                                    <div class="d-flex align-items-center justify-content-between gap-3">
-                                        <div>
-                                            <div class="fw-semibold">Online Payment</div>
-                                            <div class="text-muted fs-sm">Payment gateway setup will be added later.</div>
-                                        </div>
-                                        <span class="badge bg-light text-muted border">Coming Soon</span>
+                                    <div class="form-check form-switch mb-1">
+                                        <input type="checkbox" class="form-check-input" id="razorpay_enabled" name="razorpay_enabled" value="1" data-razorpay-enabled @checked($razorpayAccount?->enabled)>
+                                        <label class="form-check-label fw-semibold" for="razorpay_enabled">Online Payment — Razorpay</label>
+                                    </div>
+                                    <div class="text-muted fs-sm mb-2">Allow customers to pay online through your Razorpay account.</div>
+                                    <div data-razorpay-details @if (!$razorpayAccount?->enabled) hidden @endif>
+                                    <div class="row g-3">
+                                        <div class="col-md-4"><label class="form-label">Environment</label><select class="form-select" name="razorpay_environment" data-razorpay-environment><option value="test" @selected($razorpayEnvironment === 'test')>Test</option><option value="live" @selected($razorpayEnvironment === 'live')>Live</option></select></div>
+                                        <div class="col-md-8"><label class="form-label">Account Name</label><input class="form-control" name="razorpay_name" data-razorpay-name value="{{ $razorpayAccount?->name }}"></div>
+                                        <div class="col-md-6"><label class="form-label">Key ID</label><input class="form-control" name="razorpay_key_id" data-razorpay-key-id value="{{ $razorpayAccount?->public_key }}"></div>
+                                        <div class="col-md-6"><label class="form-label">Key Secret</label><input type="password" class="form-control" name="razorpay_key_secret" value="" autocomplete="new-password" data-razorpay-secret placeholder="{{ $razorpayAccount && $razorpayAccount->secret ? 'Configured — leave blank to keep it' : 'Required for a new account' }}"></div>
+                                    </div>
+                                    <div class="form-text mt-2">Online Payment remains unavailable to customers until Razorpay checkout integration is enabled.</div>
                                     </div>
                                 </div>
+                                <script>
+                                (()=>{const accounts=@json($razorpayUiAccounts);const toggle=document.querySelector('[data-razorpay-enabled]'),details=document.querySelector('[data-razorpay-details]'),environment=document.querySelector('[data-razorpay-environment]'),name=document.querySelector('[data-razorpay-name]'),key=document.querySelector('[data-razorpay-key-id]'),secret=document.querySelector('[data-razorpay-secret]');const render=()=>{const a=accounts[environment?.value]||{};if(name)name.value=a.name||'';if(key)key.value=a.key_id||'';if(secret){secret.value='';secret.placeholder=a.configured?'Configured — leave blank to keep it':'Required for a new account';}};toggle?.addEventListener('change',()=>{if(details)details.hidden=!toggle.checked});environment?.addEventListener('change',render);})();
+                                </script>
                             @else
                                 <div class="text-muted">No active shop is available for storefront payment settings.</div>
                             @endif
