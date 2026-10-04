@@ -122,6 +122,12 @@ class CheckoutController extends Controller
         $this->delivery->select($request, $data['fulfillment']);
         $pageData = $this->checkoutPage->pageData($request, $customer);
 
+        if ($pageData['selectedFulfillment'] !== $data['fulfillment']) {
+            throw ValidationException::withMessages([
+                'fulfillment' => 'That fulfilment option is not available for this shop.',
+            ]);
+        }
+
         if ($request->expectsJson()) {
             return response()->json([
                 'ok' => true,
@@ -185,26 +191,36 @@ class CheckoutController extends Controller
         }
 
         $selectedFulfillment = $this->delivery->select($request, $data['shipping_method'])['selected'];
+        $pageData = $this->checkoutPage->pageData($request, $customer);
 
-        $billingSameAsDelivery = (bool) ($data['billing_same_as_delivery'] ?? $this->checkoutPage->billingSameAsDelivery($request));
+        if ($pageData['selectedFulfillment'] !== $selectedFulfillment) {
+            throw ValidationException::withMessages([
+                'shipping_method' => 'That fulfilment option is not available for this shop.',
+            ]);
+        }
 
-        if ($billingSameAsDelivery && $address instanceof CustomerAddress) {
-            $billingAddress = $address;
-            $request->session()->put(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, true);
-            $request->session()->forget(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY);
-        } else {
-            $billingAddressId = (int) ($data['billing_address_id'] ?? 0);
+        $billingAddress = null;
+        if ($selectedFulfillment === StorefrontDeliveryService::FULFILLMENT_DELIVERY) {
+            $billingSameAsDelivery = (bool) ($data['billing_same_as_delivery'] ?? $this->checkoutPage->billingSameAsDelivery($request));
 
-            if ($billingAddressId <= 0) {
-                throw ValidationException::withMessages([
-                    'billing_address_id' => 'Please select a billing address.',
-                ]);
+            if ($billingSameAsDelivery && $address instanceof CustomerAddress) {
+                $billingAddress = $address;
+                $request->session()->put(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, true);
+                $request->session()->forget(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY);
+            } else {
+                $billingAddressId = (int) ($data['billing_address_id'] ?? 0);
+
+                if ($billingAddressId <= 0) {
+                    throw ValidationException::withMessages([
+                        'billing_address_id' => 'Please select a billing address.',
+                    ]);
+                }
+
+                $billingAddress = CustomerAddress::query()->findOrFail($billingAddressId);
+                abort_unless($this->checkoutPage->addressBelongsToCustomer($billingAddress, $globalCustomer), 404);
+                $request->session()->put(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, false);
+                $request->session()->put(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY, $billingAddress->getKey());
             }
-
-            $billingAddress = CustomerAddress::query()->findOrFail($billingAddressId);
-            abort_unless($this->checkoutPage->addressBelongsToCustomer($billingAddress, $globalCustomer), 404);
-            $request->session()->put(CheckoutPageService::BILLING_SAME_AS_DELIVERY_SESSION_KEY, false);
-            $request->session()->put(CheckoutPageService::SELECTED_BILLING_ADDRESS_SESSION_KEY, $billingAddress->getKey());
         }
 
         try {

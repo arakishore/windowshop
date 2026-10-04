@@ -110,7 +110,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Delivery Address')
             ->assertSee('Billing Address')
             ->assertSee('Same as delivery address')
-            ->assertSee('Delivery Options')
+            ->assertSee('How would you like to receive your order?')
             ->assertSee('Payment Method')
             ->assertSee('Order Summary')
             ->assertSee('Place Order')
@@ -373,7 +373,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Kishore Home')
             ->assertSee('Home Road')
             ->assertSee('PIN 422009')
-            ->assertSee('Fast Checkout')
+            ->assertDontSee('Fast Checkout')
             ->assertSee('name="address_id" value="'.$home->getKey().'"', false);
     }
 
@@ -970,12 +970,139 @@ class StorefrontCheckoutGateTest extends TestCase
             ->withSession(['active_role_id' => $this->roleId('customer')])
             ->get(route('storefront.checkout'))
             ->assertOk()
-            ->assertSee('Collect from '.$fixture['shop']->name)
+            ->assertSee('Pickup Information')
+            ->assertSee($fixture['shop']->name)
             ->assertSee('Fixture Street')
             ->assertSee('Bring your order number.')
-            ->assertSee('checkout-fulfillment-line--shop', false)
-            ->assertSee('checkout-fulfillment-line--address', false)
-            ->assertSee('checkout-fulfillment-line--instructions', false);
+            ->assertSee('checkout-pickup-card', false)
+            ->assertSee('checkout-pickup-instructions', false);
+    }
+
+    public function test_pickup_only_checkout_hides_delivery_sections_and_places_addressless_order(): void
+    {
+        $customer = $this->customerUser('pickup-only@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $cart = Cart::query()->create(['user_id' => $customer->getKey()]);
+        $this->cartItem($cart, $fixture['variant']);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'pickup_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_enabled', false, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'pickup_instructions', 'Bring your confirmation.', ShopSetting::TYPE_STRING);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Pickup Information')
+            ->assertSee($fixture['shop']->name)
+            ->assertSee('Fixture Street')
+            ->assertSee('Bring your confirmation.')
+            ->assertSee('This is where you will collect your order.')
+            ->assertDontSee('data-fulfillment-selector', false)
+            ->assertDontSee('Delivery Address')
+            ->assertDontSee('Billing Address')
+            ->assertDontSee('Delivery Options')
+            ->assertSee('Payment Method');
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->postJson(route('storefront.checkout.fulfillment'), [
+                'fulfillment' => StorefrontDeliveryService::FULFILLMENT_DELIVERY,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('fulfillment');
+
+        $response = $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ]);
+
+        $order = Order::query()->firstOrFail();
+        $response->assertRedirect(route('storefront.checkout.success', $order));
+        $this->assertSame('0.00', $order->shipping_total);
+        $this->assertNull($order->shipping_address_line_1);
+        $this->assertNull($order->shipping_postal_code);
+        $this->assertNull($order->billing_address_line_1);
+        $this->assertNull($order->billing_postal_code);
+    }
+
+    public function test_fulfillment_configuration_controls_checkout_and_rejects_tampering(): void
+    {
+        $customer = $this->customerUser('fulfillment-matrix@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'pickup_enabled', false, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_enabled', true, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Delivery Address')
+            ->assertSee('Billing Address')
+            ->assertSee('Delivery Options')
+            ->assertDontSee('Pickup Information')
+            ->assertDontSee('data-fulfillment-selector', false);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.place-order'), [
+                'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+                'payment_method' => StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP,
+            ])
+            ->assertSessionHasErrors('shipping_method');
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->postJson(route('storefront.checkout.fulfillment'), ['fulfillment' => 'garbage'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('fulfillment');
+    }
+
+    public function test_both_fulfillment_choices_render_and_neither_enabled_blocks_ordering(): void
+    {
+        $customer = $this->customerUser('fulfillment-both-neither@example.test');
+        $fixture = $this->productFixture(price: 700);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'pickup_enabled', true, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_enabled', true, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('How would you like to receive your order?')
+            ->assertSee('Get your order delivered to your address')
+            ->assertSee('Pick Up from Store')
+            ->assertSee('Collect your order from the shop')
+            ->assertSee('data-fulfillment-selector', false)
+            ->assertSee('data-fulfillment-option="delivery"', false)
+            ->assertSee('data-fulfillment-option="pickup"', false)
+            ->assertSee('data-pickup-information hidden', false);
+
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'pickup_enabled', false, ShopSetting::TYPE_BOOLEAN);
+        $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_enabled', false, ShopSetting::TYPE_BOOLEAN);
+
+        $this->actingAs($customer)
+            ->withSession(['active_role_id' => $this->roleId('customer')])
+            ->get(route('storefront.checkout'))
+            ->assertOk()
+            ->assertSee('Ordering is currently unavailable for this store.')
+            ->assertSee('This store currently has no pickup or delivery option available.')
+            ->assertSee('data-place-order-button disabled', false);
+
+        foreach ([StorefrontDeliveryService::FULFILLMENT_PICKUP, StorefrontDeliveryService::FULFILLMENT_DELIVERY] as $fulfillment) {
+            $this->actingAs($customer)
+                ->withSession(['active_role_id' => $this->roleId('customer')])
+                ->post(route('storefront.checkout.place-order'), [
+                    'shipping_method' => $fulfillment,
+                    'payment_method' => $fulfillment === StorefrontDeliveryService::FULFILLMENT_PICKUP
+                        ? StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP
+                        : StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY,
+                ])
+                ->assertSessionHasErrors('shipping_method');
+        }
     }
 
     public function test_checkout_delivery_minimum_order_can_make_delivery_unavailable(): void
@@ -1017,8 +1144,8 @@ class StorefrontCheckoutGateTest extends TestCase
             ->get(route('storefront.checkout'))
             ->assertOk()
             ->assertSee('Delivery temporarily unavailable')
-            ->assertSee('Pickup from Shop')
-            ->assertSee('FREE');
+            ->assertSee('Pick Up from Store')
+            ->assertSee('Collect your order from the shop');
     }
 
     public function test_checkout_fulfillment_ajax_can_select_pickup_without_reload(): void
@@ -1077,7 +1204,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Selected Shop Product')
             ->assertSee('₹50.00')
             ->assertSee('₹650.00')
-            ->assertSee('Pickup from Shop')
+            ->assertSee('Pick Up from Store')
             ->assertSee('Cash on Delivery')
             ->assertSessionHas(CheckoutFlowService::SELECTED_SHOP_SESSION_KEY, $first['shop']->getKey());
 
@@ -1350,6 +1477,11 @@ class StorefrontCheckoutGateTest extends TestCase
             ])
             ->get(route('storefront.checkout'))
             ->assertOk()
+            ->assertSee('class="checkout-fulfillment-card is-selected" data-fulfillment-option="pickup"', false)
+            ->assertSee('data-delivery-checkout-section hidden', false)
+            ->assertSee('data-pickup-information', false)
+            ->assertSee('Pickup Information')
+            ->assertSee($fixture['shop']->name)
             ->assertSee('Cash at Shop')
             ->assertSee('Pay when you collect your order.')
             ->assertSee('value="'.StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP.'"', false);
@@ -1577,7 +1709,7 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertSame(StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP, $order->payment_method);
         $this->assertSame(Order::PAYMENT_PENDING, $order->payment_status);
         $this->assertSame('0.00', $order->shipping_total);
-        $this->assertSame('Main Road', $order->billing_address_line_1);
+        $this->assertNull($order->billing_address_line_1);
         $this->assertSame($fixture['shop']->getKey(), $order->shop_id);
         $this->assertDatabaseMissing('cart_items', ['id' => $item->getKey()]);
         $this->assertDatabaseCount('direct_merchant_upi_attempts', 0);
@@ -2189,7 +2321,7 @@ class StorefrontCheckoutGateTest extends TestCase
             'id' => $globalAddress->getKey(),
             'address_line_1' => 'Global Saved Address',
         ]);
-        $this->assertSame('Global Saved Address', $order->billing_address_line_1);
+        $this->assertNull($order->billing_address_line_1);
 
         $this->cartItem($cart, $otherFixture['variant']);
 
@@ -2206,7 +2338,7 @@ class StorefrontCheckoutGateTest extends TestCase
         $secondResponse->assertRedirect(route('storefront.checkout.success', $secondOrder));
 
         $this->assertSame($otherFixture['shop']->getKey(), $secondOrder->shop_id);
-        $this->assertSame('Global Saved Address', $secondOrder->billing_address_line_1);
+        $this->assertNull($secondOrder->billing_address_line_1);
         $this->assertDatabaseCount('customer_addresses', 1);
     }
 
@@ -2312,7 +2444,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Standard Delivery')
             ->assertSee('Unavailable')
             ->assertSee('Delivery is not available to this PIN code.')
-            ->assertSee('Pickup from Shop');
+            ->assertSee('Pick Up from Store');
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
