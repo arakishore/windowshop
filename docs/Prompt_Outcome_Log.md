@@ -13,6 +13,52 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-04 — WS-018 Razorpay Webhook V1
+
+- Added PaymentAccount-specific public webhook URLs using stable random 64-character tokens. Tokens locate an account only; the exact raw request body must pass Razorpay HMAC verification with that account's separately encrypted webhook secret before payload parsing or state changes.
+- Added allowlisted `payment_webhook_events` receipts for event-level deduplication and audit without retaining raw payloads or customer/payment-instrument PII. Only `payment.captured` and `payment.failed` are processed.
+- Captured notifications are scoped through the routed account and existing attempt, then the payment is fetched using that attempt's account credentials. Callback and webhook now share one locked, idempotent provider-field verification and paid transition. Payment success never confirms an order or moves inventory.
+- Disabled accounts may reconcile existing attempts while remaining unavailable to new checkout. Captured payments for cancelled orders are recorded as `requires_review` without reviving the order or changing financial state; refund automation remains deferred.
+- `payment.failed` records only a matching eligible attempt and cannot downgrade Paid or cancel an order. Test/Live and merchant isolation follow the attempt's bound PaymentAccount.
+- Merchant Razorpay Test/Live settings now expose the mode-specific webhook URL and accept a write-only webhook secret; blank edits preserve existing ciphertext.
+- Supersedes: **WS-018 Phase 3 storefront Razorpay test-mode checkout / 2026-10-04**, only for merchant acceptance gating. Pending/unpaid Online Payment orders may be accepted while payment reconciliation continues independently; Direct Merchant UPI verification gating remains unchanged.
+- Key areas: PaymentAccount token/schema, PaymentWebhookEvent receipts, public CSRF-exempt webhook route, Razorpay provider/service boundary, shared payment transition, merchant settings, merchant order acceptance, and focused tests.
+
+## 2026-10-04 — WS-018 historical gateway payment display
+
+- Merchant and customer order details derive gateway provider identity from the deterministic latest paid PaymentAttempt, never from the generic `online_payment` method. Failed/abandoned attempts are excluded.
+- Merchant order details show the presentation-mapped provider, trusted provider payment ID, Gateway Order ID, and an optional persisted Bank RRN with copy actions. Customer details show only the provider.
+- Only allowlisted historical fields are exposed; raw metadata and PaymentAccount credentials are never rendered. Display remains available after an account is disabled or credentials are cleared.
+- Razorpay's already-verified fetched payment response now persists the documented `acquirer_data.rrn` as `metadata.bank_rrn` for future payments when present. Old attempts without it remain valid and omit the row; order pages never call Razorpay.
+- No checkout, payment state, order workflow, refund, or notification behavior changed.
+
+## 2026-10-04 — WS-018 disabled Razorpay credential clearing
+
+- Enabled Razorpay configurations continue to require Account Name, Key ID, and either an existing decryptable Key Secret or a newly submitted secret. Blank secret on an enabled existing account preserves its ciphertext.
+- Disabled configurations may be partial. OFF with both Account Name and Key ID cleared and a blank Secret is the explicit clear operation: the retained PaymentAccount is disabled, its name becomes blank, public key and encrypted Key Secret become null, and its shop mapping remains.
+- PaymentAttempts and paid orders remain unchanged and traceable because the PaymentAccount row is retained. Test and Live rows are selected and updated independently; changing environments in the UI now loads that row's own enabled state.
+- PaymentAccount resolution now fails closed for disabled accounts, missing public keys, missing secrets, and undecryptable secrets.
+- No schema change or storefront payment-flow redesign was required.
+
+## 2026-10-04 — WS-018 Phase 3 storefront Razorpay test-mode checkout
+
+### Goal and frozen rules
+- Enable merchant-direct Razorpay for the existing single-shop storefront checkout using only a valid shop-mapped Test PaymentAccount.
+- Keep payment success separate from merchant acceptance: verified gateway payment sets Payment=Paid while Order remains Pending.
+
+### Decision and outcome
+- Installed the official `razorpay/razorpay` SDK and isolated it behind a provider boundary so initiation and verification can be tested without network calls and reused by a future webhook.
+- Online Payment availability fails closed unless the selected shop has an enabled, mapped `razorpay/test` account with a public key and decryptable encrypted secret. Live accounts never fall back into the Test flow.
+- The existing authoritative order grand total is converted to integer paise server-side. Every launch/retry creates a distinct PaymentAttempt, then creates and records a Razorpay Order using the merchant's own credentials.
+- Browser success is not authoritative. The server loads the customer-owned attempt, uses its attached account/secret, verifies the signature, fetches the payment, and requires matching provider order, amount, currency, and `captured` status.
+- Verification locks the attempt and order and is idempotent. It records the provider payment, marks the attempt/order payment paid, preserves Order=Pending, and never repeats stock deduction or order placement.
+- Unpaid Online Payment orders cannot be accepted; paid ones continue through the existing merchant workflow. Direct Merchant UPI gating remains intact.
+- Dismissal/failure records only attempt state; retry reuses the same WindowShop order and creates a new attempt. Webhooks, refunds, Live payment execution, and settlement handling remain deferred.
+
+### Key areas and verification
+- Payment provider/services, storefront checkout controller/routes/views, payment-method resolver, merchant acceptance gating, Composer manifests, and focused checkout/order tests.
+- Focused coverage verifies fail-closed availability, Test-only resolution, authoritative amount/minor units, multiple attempts, signature/provider-field rejection, captured success, idempotency, Pending order state, and merchant acceptance gating.
+
 ## 2026-10-03 18:43 IST - Safe bulk permanent deletion of product variants
 
 ### Goal
@@ -4779,3 +4825,19 @@ Supersedes: the shop-recipient fallback recommendation from the preceding Shop-S
 - Added a storefront-wide, non-blocking cookie information notice with a versioned first-party dismissal cookie (`windowshop_cookie_notice_v1`, 12 months, `/`, SameSite=Lax).
 - Added footer Cookie Settings reopening and a static/CMS-compatible Cookie Policy route (`/cookie-policy`, CMS key `cookie`).
 - V1 remains informational only: no consent categories, tracker gating, database persistence, migrations, or map changes.
+## 2026-10-04 — WS-018 gateway-neutral payment foundation
+
+- Added merchant-owned `PaymentAccount` records, shop mappings, and generic `PaymentAttempt` records.
+- Gateway secrets are encrypted with Laravel `Crypt`, excluded from serialization, and decryption fails closed.
+- Resolver enforces shop mapping, merchant ownership, provider, mode, enabled state, and public-key presence.
+- Payment attempts use integer minor units and domain validation; no gateway SDK/API, checkout enablement, callbacks, webhooks, refunds, settlement, or migrations outside the three foundation tables were added.
+## 2026-10-04 — WS-018 Phase 1 foundation test coverage
+
+- Added focused unit coverage for encrypted PaymentAccount serialization/accessors, corrupted-secret fail-closed behavior, mass-assignment protection, mode separation, integer minor-unit amounts, and attempt status vocabulary.
+- Corrected PaymentAttemptService to reject an explicitly supplied provider that differs from the mapped PaymentAccount provider.
+## 2026-10-04 — WS-018 Phase 2 merchant Razorpay account settings
+
+- Added merchant-scoped Razorpay PaymentAccount configuration to existing Merchant Settings.
+- Credentials remain in encrypted PaymentAccount fields, never shop settings; blank secret preserves the existing value.
+- Account mode, enabled state, public key, account name, and same-merchant shop assignments are managed server-side.
+- Customer Online Payment remains disabled until the future Razorpay checkout phase; no SDK/API/callback/webhook/refund work was added.

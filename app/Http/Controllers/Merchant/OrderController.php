@@ -9,6 +9,7 @@ use App\Models\OrderComment;
 use App\Models\OrderStatus;
 use App\Models\PaymentStatus;
 use App\Models\Shop;
+use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Order\DeliveryCompletionService;
 use App\Services\Order\DirectMerchantUpiPaymentService;
@@ -20,6 +21,7 @@ use App\Services\Order\OrderRefundService;
 use App\Services\Order\OrderReturnExchangeEligibilityService;
 use App\Services\Order\OrderStatusService;
 use App\Services\Order\PickupCompletionService;
+use App\Services\Payment\PaymentDisplayService;
 use App\Services\System\SystemSettingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,6 +47,7 @@ class OrderController extends Controller
         private readonly OrderExchangeService $exchangeService,
         private readonly OrderActivityPresenter $orderActivityPresenter,
         private readonly DirectMerchantUpiPaymentService $directUpiPayments,
+        private readonly PaymentDisplayService $paymentDisplay,
     ) {}
 
     public function index(Request $request): View
@@ -115,13 +118,14 @@ class OrderController extends Controller
             'customer',
             'statusHistories.changedBy',
             'directMerchantUpiAttempts',
+            'paymentAttempts',
             'refunds.items.orderItem',
             'exchanges.items.orderItem',
             'exchanges.replacementOrder.items',
             'comments.createdBy',
         ]);
         $allowedNextStatuses = $this->orderStatusService->allowedNextStatuses($order);
-        if ($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
+        if ($order->payment_method === StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
             && $order->payment_status !== Order::PAYMENT_PAID) {
             $allowedNextStatuses = array_values(array_filter($allowedNextStatuses, fn (string $status): bool => $status === Order::STATUS_CANCELLED));
         }
@@ -144,12 +148,17 @@ class OrderController extends Controller
             'refundableQuantities' => $this->refundService->refundableQuantities($order),
             'exchangeableQuantities' => $this->exchangeService->exchangeableQuantities($order),
             'orderActivityPresenter' => $this->orderActivityPresenter,
+            'gatewayPayment' => $this->paymentDisplay->paidGatewayDetails($order),
         ]);
     }
 
     public function accept(Request $request, Order $order): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
+        if ($order->payment_method === StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
+            && $order->payment_status !== Order::PAYMENT_PAID) {
+            return back()->withErrors(['payment' => 'Payment must be verified before this order can be accepted.']);
+        }
         $stockShortage = $this->stockShortageService->forOrder($order);
 
         if ($stockShortage['has_shortage'] && ! $request->boolean('confirm_stock_shortage')) {

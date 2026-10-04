@@ -16,6 +16,8 @@ use App\Models\OrderRefund;
 use App\Models\OrderStatus;
 use App\Models\OrderStatusHistory;
 use App\Models\OrderTotal;
+use App\Models\PaymentAccount;
+use App\Models\PaymentAttempt;
 use App\Models\PaymentStatus;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -271,6 +273,38 @@ class StorefrontCustomerOrdersTest extends TestCase
         $this->assertLessThan(strpos($content, 'Order Processing'), strpos($content, 'Order Confirmed'));
         $this->assertLessThan(strpos($content, 'Customer visible update'), strpos($content, 'Order Processing'));
         $this->assertLessThan(strpos($content, 'Packed'), strpos($content, 'Customer visible update'));
+    }
+
+    public function test_customer_online_order_shows_provider_without_gateway_internals(): void
+    {
+        $customer = $this->customerUser('gateway-customer@example.test', 'Gateway Customer', '9422945199');
+        $roleId = $this->assignRole($customer, 'customer');
+        $globalCustomer = $this->globalCustomer($customer);
+        $fixture = $this->fixture('Gateway Shop');
+        $order = $this->order($globalCustomer, $fixture, [
+            'order_number' => 'ORD-GATEWAY-CUSTOMER', 'payment_method' => 'online_payment',
+            'payment_status' => Order::PAYMENT_PAID, 'grand_total' => 2198.20, 'amount_paid' => 2198.20,
+        ]);
+        $account = PaymentAccount::query()->create([
+            'merchant_id' => $fixture['merchant']->getKey(), 'provider' => 'razorpay',
+            'name' => '', 'mode' => 'test', 'enabled' => false,
+        ]);
+        PaymentAttempt::query()->create([
+            'order_id' => $order->getKey(), 'shop_id' => $fixture['shop']->getKey(), 'payment_account_id' => $account->getKey(),
+            'provider' => 'razorpay', 'provider_order_id' => 'order_customer_hidden', 'provider_payment_id' => 'pay_customer_hidden',
+            'amount_minor' => 219820, 'currency' => 'INR', 'status' => PaymentAttempt::PAID,
+            'paid_at' => now(), 'metadata' => ['bank_rrn' => 'customer-rrn-hidden', 'secret' => 'never-render'],
+        ]);
+
+        $this->actingAs($customer)->withSession(['active_role_id' => $roleId])
+            ->get(route('storefront.account.orders.show', $order))
+            ->assertOk()
+            ->assertSeeText('Provider')
+            ->assertSeeText('Razorpay')
+            ->assertDontSee('pay_customer_hidden')
+            ->assertDontSee('order_customer_hidden')
+            ->assertDontSee('customer-rrn-hidden')
+            ->assertDontSee('never-render');
     }
 
     public function test_pickup_progress_and_cancelled_order_are_customer_friendly(): void
