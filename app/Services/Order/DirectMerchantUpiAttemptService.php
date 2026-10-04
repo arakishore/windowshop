@@ -7,6 +7,7 @@ use App\Models\DirectMerchantUpiAttempt;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\User;
+use App\Events\DirectMerchantUpiLifecycle;
 use App\Services\Checkout\StorefrontPaymentMethodService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,9 @@ class DirectMerchantUpiAttemptService
         $reference = $this->validatedReference($reference);
         $this->assertDirectUpi($order);
 
-        return $this->createSubmitted($order, $actor, $reference, 1);
+        $attempt = $this->createSubmitted($order, $actor, $reference, 1);
+        DirectMerchantUpiLifecycle::dispatch($order, 'submitted', "upi.submitted:{$attempt->uuid}");
+        return $attempt;
     }
 
     public function submitCorrection(Order $order, Customer $customer, User $actor, string $reference): DirectMerchantUpiAttempt
@@ -57,6 +60,7 @@ class DirectMerchantUpiAttemptService
                 'upi_txn' => null,
                 'updated_by' => $actor->getKey(),
             ])->save();
+            DirectMerchantUpiLifecycle::dispatch($locked, 'submitted', "upi.submitted:{$attempt->uuid}");
 
             return $attempt;
         });

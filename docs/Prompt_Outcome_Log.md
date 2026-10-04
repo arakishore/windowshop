@@ -4767,3 +4767,10 @@ Supersedes: the shop-recipient fallback recommendation from the preceding Shop-S
 - Merchant notification settings, business-event wiring, WS-010 foundation, and real email delivery suites passed: 52 tests, 357 assertions.
 - The broader checkout gate suite passed 85 of 89 tests; its four failures were unrelated existing fixture/transaction/copy failures, while the delivery and pickup order-placement cases passed.
 - Pint, PHP syntax checks, Blade compilation, inline JavaScript syntax, and `git diff --check` passed. Live browser verification was unavailable because no browser surface was exposed.
+## 2026-10-04 — Direct Merchant UPI dynamic QR V1
+
+- Replaced checkout's static merchant QR availability dependency with server-generated UPI QR data using `endroid/qr-code`.
+- UPI URI uses RFC3986 `pa`, `pn`, `tr`, `am` (authoritative checkout total, two decimals), and `cu=INR`; the customer-entered bank reference remains separate.
+- Merchant configuration now requires only enabled + UPI ID + payee name; historical QR settings/files are retained.
+- Fulfilment switching continues to obtain payment data from the server refresh endpoint, and unverified Direct Merchant UPI orders are blocked centrally from workflow advancement until payment is paid.
+- No database migration, gateway, settlement, or checkout redesign was introduced.

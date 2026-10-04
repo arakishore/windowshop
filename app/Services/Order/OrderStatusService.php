@@ -31,6 +31,13 @@ class OrderStatusService
     public function transition(Order $order, string $toStatus, ?User $actor = null, ?string $notes = null, ?array $metadata = null): Order
     {
         return $this->transitionUsing($order, $toStatus, $actor, $notes, $metadata, function () use ($order, $toStatus): void {
+            if ($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
+                && $order->payment_status !== Order::PAYMENT_PAID
+                && $toStatus !== Order::STATUS_CANCELLED) {
+                throw ValidationException::withMessages([
+                    'payment_status' => 'Waiting for UPI payment verification.',
+                ]);
+            }
             $this->assertCanTransition($order, $toStatus);
         });
     }
