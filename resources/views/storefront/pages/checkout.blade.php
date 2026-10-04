@@ -347,14 +347,25 @@
 
             <div class="checkout-grid">
                 <div>
-                    @if ($selectedAddress && $canPlaceOrder)
+                    @if ($errors->any())
+                        <div class="alert alert-danger">
+                            Please check the highlighted checkout details.
+                        </div>
+                    @endif
+
+                    @if ($canPlaceOrder)
+                        @php($selectedPaymentLabel = collect($paymentMethods)->firstWhere('id', $selectedPaymentMethod)['label'] ?? null)
                         <div class="checkout-section">
                             <div class="checkout-section-title mb-0">
                                 <div>
                                     <p class="text-caption-01 cl-text-3 mb-4">Fast Checkout</p>
-                                    <h5 class="mb-4">Ready from your defaults</h5>
+                                    <h5 class="mb-4">Ready from your saved choices</h5>
                                     <p class="cl-text-2 mb-0">
-                                        Deliver to {{ $selectedAddress->label }}, PIN {{ $selectedPostalCode }} with Cash on Delivery.
+                                        @if ($selectedFulfillment === 'pickup')
+                                            Pick up from the store{{ $selectedPaymentLabel ? ' with '.$selectedPaymentLabel : '' }}.
+                                        @else
+                                            Deliver to {{ $selectedAddress?->label }}, PIN {{ $selectedPostalCode }}{{ $selectedPaymentLabel ? ' with '.$selectedPaymentLabel : '' }}.
+                                        @endif
                                     </p>
                                 </div>
                                 <button type="button" class="tf-btn animate-btn small" disabled>Place Order Now</button>
@@ -362,6 +373,17 @@
                         </div>
                     @endif
 
+                    @if (! $orderingAvailable)
+                        <div class="checkout-section">
+                            <div class="checkout-empty-panel">
+                                <strong class="d-block mb-2">Ordering is currently unavailable for this store.</strong>
+                                This store currently has no pickup or delivery option available.
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($deliveryEnabled)
+                    <div data-delivery-checkout-section {{ $selectedFulfillment === 'delivery' ? '' : 'hidden' }}>
                     <div class="checkout-section">
                         <div class="checkout-section-title">
                             <h5 class="mb-0">Delivery Address</h5>
@@ -369,12 +391,6 @@
                                 + Add New Address
                             </button>
                         </div>
-
-                        @if ($errors->any())
-                            <div class="alert alert-danger">
-                                Please check the highlighted checkout details.
-                            </div>
-                        @endif
 
                         @if ($addresses->isEmpty())
                             <div class="checkout-empty-panel">No saved delivery addresses yet.</div>
@@ -542,11 +558,22 @@
                             </div>
                         </div>
                     </div>
+                    </div>
+                    @endif
 
+                    @if ($orderingAvailable)
                     <div class="checkout-section" data-fulfillment-url="{{ route('storefront.checkout.fulfillment') }}">
                         <div class="checkout-section-title">
-                            <h5 class="mb-0">Delivery Options</h5>
-                            @if ($selectedPostalCode)
+                            <h5 class="mb-0">
+                                @if ($deliveryEnabled && $pickupEnabled)
+                                    How would you like to receive your order?
+                                @elseif ($pickupEnabled)
+                                    Pick Up from Store
+                                @else
+                                    Delivery Options
+                                @endif
+                            </h5>
+                            @if ($selectedFulfillment === 'delivery' && $selectedPostalCode)
                                 <span class="text-caption-01 cl-text-3">PIN {{ $selectedPostalCode }}</span>
                             @endif
                         </div>
@@ -557,7 +584,7 @@
                             <div class="checkout-options">
                                 @foreach ($shippingOptions as $option)
                                     <label
-                                        class="checkout-option {{ $option['selected'] ? 'is-selected' : '' }} {{ $option['available'] ? '' : 'is-disabled' }}"
+                                        class="checkout-option {{ $option['selected'] ? 'is-selected' : '' }}"
                                         data-fulfillment-option="{{ $option['id'] }}"
                                     >
                                         <input
@@ -566,7 +593,6 @@
                                             value="{{ $option['id'] }}"
                                             data-fulfillment-radio
                                             @checked($option['selected'])
-                                            @disabled(! $option['available'])
                                         >
                                         <span>
                                             <span class="d-flex justify-content-between gap-3">
@@ -600,6 +626,7 @@
                             </div>
                         @endif
                     </div>
+                    @endif
 
                     <div class="checkout-section">
                         <div class="checkout-section-title">
@@ -747,7 +774,7 @@
                         <input type="hidden" name="address_id" value="{{ $selectedAddressId }}">
                         <input type="hidden" name="billing_same_as_delivery" value="{{ $billingSameForView ? 1 : 0 }}" data-billing-same-order-field>
                         <input type="hidden" name="billing_address_id" value="{{ $selectedBillingAddressIdForView }}">
-                        <input type="hidden" name="shipping_method" value="{{ $selectedFulfillment ?: 'delivery' }}" data-selected-fulfillment-field>
+                        <input type="hidden" name="shipping_method" value="{{ $selectedFulfillment }}" data-selected-fulfillment-field>
                         <input type="hidden" name="payment_method" value="{{ $selectedPaymentMethod }}" data-selected-payment-field>
                         <p class="checkout-upi-order-hint {{ $selectedUpiDetails ? '' : 'd-none' }} mb-3" data-upi-order-hint>Pay by UPI and enter the transaction ID before placing your order.</p>
                         <div class="mb-3">
@@ -763,6 +790,7 @@
                             data-checkout-has-postal-code="{{ $selectedPostalCode !== null ? '1' : '0' }}"
                             data-checkout-has-billing-address="{{ $selectedBillingAddress ? '1' : '0' }}"
                             data-checkout-cart-has-items="{{ ! ($cartData['is_empty'] ?? true) ? '1' : '0' }}"
+                            data-checkout-ordering-available="{{ $orderingAvailable ? '1' : '0' }}"
                         >
                             <span class="spinner-border spinner-border-sm d-none" aria-hidden="true" data-place-order-spinner></span>
                             <span data-place-order-label>Place Order</span>
@@ -792,6 +820,7 @@
             const orderField = document.querySelector('[data-billing-same-order-field]');
             const billingAddressCollapse = document.getElementById('checkout-add-billing-address');
             const fulfillmentSection = document.querySelector('[data-fulfillment-url]');
+            const deliveryCheckoutSection = document.querySelector('[data-delivery-checkout-section]');
             const selectedFulfillmentField = document.querySelector('[data-selected-fulfillment-field]');
             const shippingTotal = document.querySelector('[data-checkout-shipping-total]');
             const grandTotal = document.querySelector('[data-checkout-grand-total]');
@@ -810,10 +839,6 @@
             let currentPaymentMethods = @json($paymentMethods);
             let orderSubmissionProcessing = false;
 
-            if (!form || !toggle || !panel || !orderField) {
-                return;
-            }
-
             const csrfToken = () => {
                 const metaToken = document.querySelector('meta[name="csrf-token"]');
 
@@ -821,6 +846,10 @@
             };
 
             const applyBillingSameState = () => {
+                if (!toggle || !panel || !orderField) {
+                    return true;
+                }
+
                 const sameAsDelivery = toggle.checked;
 
                 panel.hidden = sameAsDelivery;
@@ -834,7 +863,7 @@
             };
 
             const syncBillingSameState = async (sameAsDelivery) => {
-                if (!window.fetch) {
+                if (!form || !window.fetch) {
                     return;
                 }
 
@@ -862,12 +891,12 @@
                 }
             };
 
-            form.addEventListener('submit', (event) => {
+            form?.addEventListener('submit', (event) => {
                 event.preventDefault();
                 syncBillingSameState(applyBillingSameState());
             });
 
-            toggle.addEventListener('change', () => {
+            toggle?.addEventListener('change', () => {
                 syncBillingSameState(applyBillingSameState());
             });
 
@@ -893,11 +922,10 @@
                     const isAvailable = Boolean(option.available);
 
                     node.classList.toggle('is-selected', isSelected);
-                    node.classList.toggle('is-disabled', !isAvailable);
 
                     if (radio) {
                         radio.checked = isSelected;
-                        radio.disabled = !isAvailable;
+                        radio.disabled = false;
                     }
 
                     if (amount) {
@@ -1022,7 +1050,9 @@
                         || (placeOrderButton.dataset.checkoutHasAddress === '1'
                             && placeOrderButton.dataset.checkoutHasPostalCode === '1'));
                 const checkoutReady = fulfillmentReady
-                    && placeOrderButton.dataset.checkoutHasBillingAddress === '1'
+                    && (fulfillment !== 'delivery'
+                        || placeOrderButton.dataset.checkoutHasBillingAddress === '1')
+                    && placeOrderButton.dataset.checkoutOrderingAvailable === '1'
                     && placeOrderButton.dataset.checkoutCartHasItems === '1';
 
                 placeOrderButton.disabled = !checkoutReady || !method || !method.available;
@@ -1150,6 +1180,10 @@
                         selectedFulfillmentField.value = selected;
                     }
 
+                    if (deliveryCheckoutSection) {
+                        deliveryCheckoutSection.hidden = selected !== 'delivery';
+                    }
+
                     if (shippingTotal && payload.shipping) {
                         shippingTotal.textContent = payload.shipping;
                     }
@@ -1168,7 +1202,7 @@
 
             document.querySelectorAll('[data-fulfillment-radio]').forEach((radio) => {
                 radio.addEventListener('change', () => {
-                    if (radio.checked && !radio.disabled) {
+                    if (radio.checked) {
                         syncFulfillment(radio.value);
                     }
                 });
