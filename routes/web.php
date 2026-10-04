@@ -42,6 +42,7 @@ use App\Http\Controllers\Storefront\MerchantRegistrationController;
 use App\Http\Controllers\Storefront\ProductReviewController;
 use App\Http\Controllers\Storefront\StorefrontController;
 use App\Http\Controllers\Storefront\WishlistController;
+use App\Http\Controllers\Payment\RazorpayWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -131,6 +132,7 @@ Route::post('/checkout/place-order', [CheckoutController::class, 'placeOrder'])-
 Route::post('/checkout/order/{order}/razorpay/retry', [CheckoutController::class, 'retryRazorpay'])->name('storefront.checkout.razorpay.retry');
 Route::post('/checkout/razorpay/{paymentAttempt}/verify', [CheckoutController::class, 'verifyRazorpay'])->name('storefront.checkout.razorpay.verify');
 Route::post('/checkout/razorpay/{paymentAttempt}/outcome', [CheckoutController::class, 'razorpayOutcome'])->name('storefront.checkout.razorpay.outcome');
+Route::post('/payments/razorpay/webhook/{token}', RazorpayWebhookController::class)->name('payments.razorpay.webhook');
 Route::get('/checkout/order/{order}', [CheckoutController::class, 'success'])->name('storefront.checkout.success');
 Route::get('/category/{parentSlug}/{slug}', [StorefrontController::class, 'categoryWithParent'])->name('storefront.category.child.show');
 Route::get('/category/{slug}', [StorefrontController::class, 'category'])->name('storefront.category.show');

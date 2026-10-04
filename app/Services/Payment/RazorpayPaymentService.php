@@ -94,7 +94,39 @@ class RazorpayPaymentService
         } catch (Throwable) {
             throw ValidationException::withMessages(['payment' => 'Razorpay payment verification failed.']);
         }
-        if ((string) ($payment['id'] ?? '') !== $paymentId
+        $result = $this->reconcileFetchedPayment($attempt, $paymentId, $payment);
+        if ($result['disposition'] === 'requires_review') {
+            throw ValidationException::withMessages(['payment' => 'This captured payment requires merchant review.']);
+        }
+
+        return $result['order'];
+    }
+
+    /** @return array{order: Order, transitioned: bool, disposition: string} */
+    public function reconcileCaptured(PaymentAttempt $attempt, string $paymentId): array
+    {
+        $attempt->loadMissing('paymentAccount');
+        if ($attempt->provider !== self::PROVIDER || ! $attempt->paymentAccount) {
+            throw ValidationException::withMessages(['payment' => 'The payment does not match this attempt.']);
+        }
+        $secret = $this->accountSecrets->secret($attempt->paymentAccount);
+        if (blank($secret) || blank($attempt->paymentAccount->public_key)) {
+            throw ValidationException::withMessages(['payment' => 'Payment verification is unavailable.']);
+        }
+        try {
+            $payment = $this->gateway->fetchPayment((string) $attempt->paymentAccount->public_key, $secret, $paymentId);
+        } catch (Throwable) {
+            throw ValidationException::withMessages(['payment' => 'Razorpay payment verification failed.']);
+        }
+
+        return $this->reconcileFetchedPayment($attempt, $paymentId, $payment);
+    }
+
+    /** @return array{order: Order, transitioned: bool, disposition: string} */
+    private function reconcileFetchedPayment(PaymentAttempt $attempt, string $paymentId, array $payment): array
+    {
+        if ((filled($attempt->provider_payment_id) && ! hash_equals((string) $attempt->provider_payment_id, $paymentId))
+            || (string) ($payment['id'] ?? '') !== $paymentId
             || (string) ($payment['order_id'] ?? '') !== (string) $attempt->provider_order_id
             || (int) ($payment['amount'] ?? -1) !== (int) $attempt->amount_minor
             || strtoupper((string) ($payment['currency'] ?? '')) !== strtoupper($attempt->currency)
@@ -105,20 +137,23 @@ class RazorpayPaymentService
         $bankRrn = is_scalar($bankRrn) ? trim((string) $bankRrn) : '';
         $bankRrn = $bankRrn !== '' ? mb_substr($bankRrn, 0, 100) : null;
 
-        return DB::transaction(function () use ($attempt, $paymentId, $bankRrn): Order {
+        return DB::transaction(function () use ($attempt, $paymentId, $bankRrn): array {
             $lockedAttempt = PaymentAttempt::query()->whereKey($attempt)->lockForUpdate()->firstOrFail();
             $order = Order::query()->whereKey($lockedAttempt->order_id)->lockForUpdate()->firstOrFail();
+            if ($order->order_status === Order::STATUS_CANCELLED) {
+                return ['order' => $order, 'transitioned' => false, 'disposition' => 'requires_review'];
+            }
             if ($bankRrn !== null && blank(data_get($lockedAttempt->metadata, 'bank_rrn'))) {
                 $lockedAttempt->metadata = [...($lockedAttempt->metadata ?? []), 'bank_rrn' => $bankRrn];
                 $lockedAttempt->save();
             }
             if ($lockedAttempt->status === PaymentAttempt::PAID || $order->payment_status === Order::PAYMENT_PAID) {
-                return $order;
+                return ['order' => $order, 'transitioned' => false, 'disposition' => 'already_paid'];
             }
             $lockedAttempt->forceFill(['status' => PaymentAttempt::PAID, 'provider_payment_id' => $paymentId, 'paid_at' => now(), 'failure_code' => null, 'failure_message' => null])->save();
             $order->forceFill(['payment_status' => Order::PAYMENT_PAID, 'amount_paid' => number_format($lockedAttempt->amount_minor / 100, 2, '.', ''), 'payment_reference' => $paymentId])->save();
 
-            return $order;
+            return ['order' => $order, 'transitioned' => true, 'disposition' => 'processed'];
         });
     }
 

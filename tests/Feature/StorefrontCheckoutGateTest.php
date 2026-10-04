@@ -3225,6 +3225,13 @@ class StorefrontCheckoutGateTest extends TestCase
                 }
             }
 
+            public function verifyWebhookSignature(string $payload, string $signature, string $secret): void
+            {
+                if (! hash_equals(hash_hmac('sha256', $payload, $secret), $signature)) {
+                    throw new \RuntimeException('Invalid webhook signature.');
+                }
+            }
+
             public function fetchPayment(string $keyId, string $secret, string $paymentId): array
             {
                 return ['id' => $paymentId, 'order_id' => $this->paymentOrder, 'amount' => $this->paymentAmount, 'currency' => $this->paymentCurrency, 'status' => $this->paymentStatus, 'acquirer_data' => ['rrn' => '123456789012']];

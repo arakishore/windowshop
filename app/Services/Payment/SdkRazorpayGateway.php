@@ -16,6 +16,11 @@ class SdkRazorpayGateway implements RazorpayGateway
         (new Api($keyId, $secret))->utility->verifyPaymentSignature($attributes);
     }
 
+    public function verifyWebhookSignature(string $payload, string $signature, string $secret): void
+    {
+        (new Api('', ''))->utility->verifyWebhookSignature($payload, $signature, $secret);
+    }
+
     public function fetchPayment(string $keyId, string $secret, string $paymentId): array
     {
         return (new Api($keyId, $secret))->payment->fetch($paymentId)->toArray();

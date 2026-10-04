@@ -112,6 +112,7 @@ class MerchantSettingsController extends Controller
             'razorpay_name' => ['nullable', 'string', 'max:191'],
             'razorpay_key_id' => ['nullable', 'string', 'max:191'],
             'razorpay_key_secret' => ['nullable', 'string', 'max:1000'],
+            'razorpay_webhook_secret' => ['nullable', 'string', 'max:1000'],
             'razorpay_enabled' => ['nullable', 'boolean'],
         ]);
         $mode = $data['razorpay_environment'];
@@ -120,8 +121,9 @@ class MerchantSettingsController extends Controller
         $name = trim((string) ($data['razorpay_name'] ?? ''));
         $keyId = trim((string) ($data['razorpay_key_id'] ?? ''));
         $newSecret = $data['razorpay_key_secret'] ?? null;
+        $newWebhookSecret = $data['razorpay_webhook_secret'] ?? null;
 
-        if (! $account && ! $enabled && $name === '' && $keyId === '' && blank($newSecret)) {
+        if (! $account && ! $enabled && $name === '' && $keyId === '' && blank($newSecret) && blank($newWebhookSecret)) {
             return;
         }
 
@@ -153,14 +155,15 @@ class MerchantSettingsController extends Controller
             $account->update($attributes);
             if (! $enabled && $name === '' && $keyId === '' && blank($newSecret)) {
                 $this->paymentAccounts->clearSecret($account);
+                $this->paymentAccounts->updateSecrets($account, null, $newWebhookSecret);
             } else {
-                $this->paymentAccounts->updateSecrets($account, $newSecret);
+                $this->paymentAccounts->updateSecrets($account, $newSecret, $newWebhookSecret);
             }
 
             return;
         }
 
-        $account = $this->paymentAccounts->create($merchant, [...$attributes, 'secret' => $newSecret]);
+        $account = $this->paymentAccounts->create($merchant, [...$attributes, 'secret' => $newSecret, 'webhook_secret' => $newWebhookSecret]);
         $this->paymentAccounts->map($account, $activeShop);
     }
 

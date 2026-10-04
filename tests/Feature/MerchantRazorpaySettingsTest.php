@@ -64,6 +64,28 @@ class MerchantRazorpaySettingsTest extends TestCase
         $this->assertSame('original-secret', app(PaymentAccountService::class)->secret($account));
     }
 
+    public function test_webhook_secret_is_encrypted_hidden_and_blank_edit_preserves_it(): void
+    {
+        [$merchant, $shop] = $this->merchantShop();
+        $account = $this->account($merchant, $shop, 'test', true, 'api-secret');
+        app(PaymentAccountService::class)->updateSecrets($account, null, 'super-private-hook-value');
+        $ciphertext = $account->fresh()->getRawOriginal('webhook_secret');
+
+        $this->save($merchant, $shop, [
+            'razorpay_enabled' => '1', 'razorpay_name' => 'Test Account',
+            'razorpay_key_id' => 'rzp_test_key', 'razorpay_key_secret' => '', 'razorpay_webhook_secret' => '',
+        ])->assertSessionHasNoErrors();
+
+        $account->refresh();
+        $this->assertSame($ciphertext, $account->getRawOriginal('webhook_secret'));
+        $this->assertNotSame('super-private-hook-value', $ciphertext);
+        $this->assertSame('super-private-hook-value', app(PaymentAccountService::class)->webhookSecret($account));
+        $this->assertArrayNotHasKey('webhook_secret', $account->toArray());
+        $this->actingAs($merchant->user)->withSession(['merchant_id' => $merchant->getKey(), 'active_shop_id' => $shop->getKey()])
+            ->get(route('merchant.settings.edit'))
+            ->assertOk()->assertSee(route('payments.razorpay.webhook', $account->webhook_token))->assertDontSee('super-private-hook-value');
+    }
+
     public function test_disabled_blank_configuration_clears_credentials_without_deleting_history_or_live_account(): void
     {
         [$merchant, $shop] = $this->merchantShop();

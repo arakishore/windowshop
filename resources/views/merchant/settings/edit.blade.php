@@ -906,7 +906,7 @@
                                     $razorpayByMode = collect($paymentAccounts ?? [])->keyBy('mode');
                                     $razorpayEnvironment = old('razorpay_environment', $razorpayByMode->firstWhere('enabled', true)?->mode ?? 'test');
                                     $razorpayAccount = $razorpayByMode->get($razorpayEnvironment);
-                                    $razorpayUiAccounts = $razorpayByMode->map(fn ($account) => ['name' => $account->name, 'key_id' => $account->public_key, 'configured' => filled($account->secret), 'enabled' => (bool) $account->enabled]);
+                                    $razorpayUiAccounts = $razorpayByMode->map(fn ($account) => ['name' => $account->name, 'key_id' => $account->public_key, 'configured' => filled($account->secret), 'enabled' => (bool) $account->enabled, 'webhook_configured' => filled($account->webhook_secret), 'webhook_url' => route('payments.razorpay.webhook', $account->webhook_token)]);
                                 @endphp
                                 <div class="storefront-settings-section">
                                     <div class="form-check form-switch mb-1">
@@ -923,10 +923,18 @@
                                     </div>
                                     <div class="form-text mt-2">Enabled accounts are available to the matching storefront payment environment.</div>
                                     <div class="form-text">When Razorpay is off, clear both Account Name and Key ID and leave Key Secret blank to clear the saved credentials.</div>
+                                    <div class="border-top mt-3 pt-3">
+                                        <div class="fw-semibold mb-2">Webhook</div>
+                                        <label class="form-label">Webhook URL</label>
+                                        <div class="input-group mb-2"><input class="form-control" type="text" readonly data-razorpay-webhook-url value="{{ $razorpayAccount ? route('payments.razorpay.webhook', $razorpayAccount->webhook_token) : '' }}"><button class="btn btn-outline-secondary" type="button" data-copy-webhook>Copy</button></div>
+                                        <label class="form-label">Webhook Secret</label>
+                                        <input class="form-control" type="password" name="razorpay_webhook_secret" value="" autocomplete="new-password" data-razorpay-webhook-secret placeholder="{{ $razorpayAccount?->webhook_secret ? 'Configured — leave blank to keep it' : 'Enter the secret configured in Razorpay' }}">
+                                        <div class="form-text">Razorpay Dashboard → Webhooks → Add Webhook. Use the URL above, enter the same secret, and enable only <code>payment.captured</code> and <code>payment.failed</code>.</div>
+                                    </div>
                                     </div>
                                 </div>
                                 <script>
-                                (()=>{const accounts=@json($razorpayUiAccounts);const toggle=document.querySelector('[data-razorpay-enabled]'),environment=document.querySelector('[data-razorpay-environment]'),name=document.querySelector('[data-razorpay-name]'),key=document.querySelector('[data-razorpay-key-id]'),secret=document.querySelector('[data-razorpay-secret]');const render=()=>{const a=accounts[environment?.value]||{};if(toggle)toggle.checked=Boolean(a.enabled);if(name)name.value=a.name||'';if(key)key.value=a.key_id||'';if(secret){secret.value='';secret.placeholder=a.configured?'Configured — leave blank to keep it':'Required when enabling Razorpay';}};environment?.addEventListener('change',render);})();
+                                (()=>{const accounts=@json($razorpayUiAccounts);const toggle=document.querySelector('[data-razorpay-enabled]'),environment=document.querySelector('[data-razorpay-environment]'),name=document.querySelector('[data-razorpay-name]'),key=document.querySelector('[data-razorpay-key-id]'),secret=document.querySelector('[data-razorpay-secret]'),webhookSecret=document.querySelector('[data-razorpay-webhook-secret]'),webhookUrl=document.querySelector('[data-razorpay-webhook-url]');const render=()=>{const a=accounts[environment?.value]||{};if(toggle)toggle.checked=Boolean(a.enabled);if(name)name.value=a.name||'';if(key)key.value=a.key_id||'';if(secret){secret.value='';secret.placeholder=a.configured?'Configured — leave blank to keep it':'Required when enabling Razorpay';}if(webhookSecret){webhookSecret.value='';webhookSecret.placeholder=a.webhook_configured?'Configured — leave blank to keep it':'Enter the secret configured in Razorpay';}if(webhookUrl)webhookUrl.value=a.webhook_url||'';};environment?.addEventListener('change',render);document.querySelector('[data-copy-webhook]')?.addEventListener('click',()=>{if(webhookUrl?.value)navigator.clipboard?.writeText(webhookUrl.value);});})();
                                 </script>
                             @else
                                 <div class="text-muted">No active shop is available for storefront payment settings.</div>

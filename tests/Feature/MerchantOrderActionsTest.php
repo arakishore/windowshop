@@ -349,7 +349,7 @@ class MerchantOrderActionsTest extends TestCase
         $this->assertSame(1, DB::table('order_status_histories')->where('order_id', $order->getKey())->count());
     }
 
-    public function test_unpaid_online_payment_order_cannot_be_accepted(): void
+    public function test_unpaid_online_payment_order_can_be_accepted_without_changing_payment_state(): void
     {
         [$user, , $shopId] = $this->merchantShopFixture();
         $order = $this->operationalOrder($shopId, [
@@ -362,9 +362,10 @@ class MerchantOrderActionsTest extends TestCase
             ->from(route('merchant.orders.show', $order))
             ->post(route('merchant.orders.accept', $order))
             ->assertRedirect(route('merchant.orders.show', $order))
-            ->assertSessionHasErrors('payment');
+            ->assertSessionHas('success');
 
-        $this->assertSame(Order::STATUS_PENDING, $order->fresh()->order_status);
+        $this->assertSame(Order::STATUS_CONFIRMED, $order->fresh()->order_status);
+        $this->assertSame(Order::PAYMENT_PENDING, $order->fresh()->payment_status);
     }
 
     public function test_paid_online_payment_order_can_be_accepted(): void

@@ -23,6 +23,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ])
     ->withMiddleware(function (Middleware $middleware): void {
 
+        $middleware->validateCsrfTokens(except: ['payments/razorpay/webhook/*']);
+
         // Redirect unauthenticated users to the correct login page
         $middleware->redirectGuestsTo(function (Request $request): string {
             if ($request->is('merchant') || $request->is('merchant/*')) {

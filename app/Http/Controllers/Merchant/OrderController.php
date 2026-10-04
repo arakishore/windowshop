@@ -125,10 +125,7 @@ class OrderController extends Controller
             'comments.createdBy',
         ]);
         $allowedNextStatuses = $this->orderStatusService->allowedNextStatuses($order);
-        if (in_array($order->payment_method, [
-            StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
-            StorefrontPaymentMethodService::PAYMENT_ONLINE,
-        ], true)
+        if ($order->payment_method === StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
             && $order->payment_status !== Order::PAYMENT_PAID) {
             $allowedNextStatuses = array_values(array_filter($allowedNextStatuses, fn (string $status): bool => $status === Order::STATUS_CANCELLED));
         }
@@ -158,10 +155,8 @@ class OrderController extends Controller
     public function accept(Request $request, Order $order): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
-        if (in_array($order->payment_method, [
-            StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI,
-            StorefrontPaymentMethodService::PAYMENT_ONLINE,
-        ], true) && $order->payment_status !== Order::PAYMENT_PAID) {
+        if ($order->payment_method === StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
+            && $order->payment_status !== Order::PAYMENT_PAID) {
             return back()->withErrors(['payment' => 'Payment must be verified before this order can be accepted.']);
         }
         $stockShortage = $this->stockShortageService->forOrder($order);

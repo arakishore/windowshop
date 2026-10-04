@@ -13,6 +13,17 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-04 — WS-018 Razorpay Webhook V1
+
+- Added PaymentAccount-specific public webhook URLs using stable random 64-character tokens. Tokens locate an account only; the exact raw request body must pass Razorpay HMAC verification with that account's separately encrypted webhook secret before payload parsing or state changes.
+- Added allowlisted `payment_webhook_events` receipts for event-level deduplication and audit without retaining raw payloads or customer/payment-instrument PII. Only `payment.captured` and `payment.failed` are processed.
+- Captured notifications are scoped through the routed account and existing attempt, then the payment is fetched using that attempt's account credentials. Callback and webhook now share one locked, idempotent provider-field verification and paid transition. Payment success never confirms an order or moves inventory.
+- Disabled accounts may reconcile existing attempts while remaining unavailable to new checkout. Captured payments for cancelled orders are recorded as `requires_review` without reviving the order or changing financial state; refund automation remains deferred.
+- `payment.failed` records only a matching eligible attempt and cannot downgrade Paid or cancel an order. Test/Live and merchant isolation follow the attempt's bound PaymentAccount.
+- Merchant Razorpay Test/Live settings now expose the mode-specific webhook URL and accept a write-only webhook secret; blank edits preserve existing ciphertext.
+- Supersedes: **WS-018 Phase 3 storefront Razorpay test-mode checkout / 2026-10-04**, only for merchant acceptance gating. Pending/unpaid Online Payment orders may be accepted while payment reconciliation continues independently; Direct Merchant UPI verification gating remains unchanged.
+- Key areas: PaymentAccount token/schema, PaymentWebhookEvent receipts, public CSRF-exempt webhook route, Razorpay provider/service boundary, shared payment transition, merchant settings, merchant order acceptance, and focused tests.
+
 ## 2026-10-04 — WS-018 historical gateway payment display
 
 - Merchant and customer order details derive gateway provider identity from the deterministic latest paid PaymentAttempt, never from the generic `online_payment` method. Failed/abandoned attempts are excluded.
