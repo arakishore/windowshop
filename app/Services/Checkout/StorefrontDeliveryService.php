@@ -211,6 +211,9 @@ class StorefrontDeliveryService
         return [
             'id' => self::FULFILLMENT_PICKUP,
             'label' => 'Pickup from Shop',
+            'shop_name' => $shop->name,
+            'shop_address' => $address,
+            'instructions' => $instructions ?: null,
             'description' => collect($descriptionLines)->pluck('text')->implode(' '),
             'description_lines' => $descriptionLines,
             'amount' => 'FREE',

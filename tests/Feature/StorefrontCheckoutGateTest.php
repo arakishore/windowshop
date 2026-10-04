@@ -373,7 +373,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Kishore Home')
             ->assertSee('Home Road')
             ->assertSee('PIN 422009')
-            ->assertSee('Fast Checkout')
+            ->assertDontSee('Fast Checkout')
             ->assertSee('name="address_id" value="'.$home->getKey().'"', false);
     }
 
@@ -970,12 +970,12 @@ class StorefrontCheckoutGateTest extends TestCase
             ->withSession(['active_role_id' => $this->roleId('customer')])
             ->get(route('storefront.checkout'))
             ->assertOk()
-            ->assertSee('Collect from '.$fixture['shop']->name)
+            ->assertSee('Pickup Information')
+            ->assertSee($fixture['shop']->name)
             ->assertSee('Fixture Street')
             ->assertSee('Bring your order number.')
-            ->assertSee('checkout-fulfillment-line--shop', false)
-            ->assertSee('checkout-fulfillment-line--address', false)
-            ->assertSee('checkout-fulfillment-line--instructions', false);
+            ->assertSee('checkout-pickup-card', false)
+            ->assertSee('checkout-pickup-instructions', false);
     }
 
     public function test_pickup_only_checkout_hides_delivery_sections_and_places_addressless_order(): void
@@ -992,10 +992,12 @@ class StorefrontCheckoutGateTest extends TestCase
             ->withSession(['active_role_id' => $this->roleId('customer')])
             ->get(route('storefront.checkout'))
             ->assertOk()
-            ->assertSee('Pick Up from Store')
+            ->assertSee('Pickup Information')
             ->assertSee($fixture['shop']->name)
             ->assertSee('Fixture Street')
             ->assertSee('Bring your confirmation.')
+            ->assertSee('This is where you will collect your order.')
+            ->assertDontSee('data-fulfillment-selector', false)
             ->assertDontSee('Delivery Address')
             ->assertDontSee('Billing Address')
             ->assertDontSee('Delivery Options')
@@ -1040,7 +1042,8 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Delivery Address')
             ->assertSee('Billing Address')
             ->assertSee('Delivery Options')
-            ->assertDontSee('Pickup from Shop');
+            ->assertDontSee('Pickup Information')
+            ->assertDontSee('data-fulfillment-selector', false);
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
@@ -1070,8 +1073,13 @@ class StorefrontCheckoutGateTest extends TestCase
             ->get(route('storefront.checkout'))
             ->assertOk()
             ->assertSee('How would you like to receive your order?')
-            ->assertSee('Pickup from Shop')
-            ->assertSee('Standard Delivery');
+            ->assertSee('Get your order delivered to your address')
+            ->assertSee('Pick Up from Store')
+            ->assertSee('Collect your order from the shop')
+            ->assertSee('data-fulfillment-selector', false)
+            ->assertSee('data-fulfillment-option="delivery"', false)
+            ->assertSee('data-fulfillment-option="pickup"', false)
+            ->assertSee('data-pickup-information hidden', false);
 
         $this->shopSetting($fixture['shop'], 'fulfillment', 'pickup_enabled', false, ShopSetting::TYPE_BOOLEAN);
         $this->shopSetting($fixture['shop'], 'fulfillment', 'delivery_enabled', false, ShopSetting::TYPE_BOOLEAN);
@@ -1136,8 +1144,8 @@ class StorefrontCheckoutGateTest extends TestCase
             ->get(route('storefront.checkout'))
             ->assertOk()
             ->assertSee('Delivery temporarily unavailable')
-            ->assertSee('Pickup from Shop')
-            ->assertSee('FREE');
+            ->assertSee('Pick Up from Store')
+            ->assertSee('Collect your order from the shop');
     }
 
     public function test_checkout_fulfillment_ajax_can_select_pickup_without_reload(): void
@@ -1196,7 +1204,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Selected Shop Product')
             ->assertSee('₹50.00')
             ->assertSee('₹650.00')
-            ->assertSee('Pickup from Shop')
+            ->assertSee('Pick Up from Store')
             ->assertSee('Cash on Delivery')
             ->assertSessionHas(CheckoutFlowService::SELECTED_SHOP_SESSION_KEY, $first['shop']->getKey());
 
@@ -1469,6 +1477,11 @@ class StorefrontCheckoutGateTest extends TestCase
             ])
             ->get(route('storefront.checkout'))
             ->assertOk()
+            ->assertSee('class="checkout-fulfillment-card is-selected" data-fulfillment-option="pickup"', false)
+            ->assertSee('data-delivery-checkout-section hidden', false)
+            ->assertSee('data-pickup-information', false)
+            ->assertSee('Pickup Information')
+            ->assertSee($fixture['shop']->name)
             ->assertSee('Cash at Shop')
             ->assertSee('Pay when you collect your order.')
             ->assertSee('value="'.StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP.'"', false);
@@ -2431,7 +2444,7 @@ class StorefrontCheckoutGateTest extends TestCase
             ->assertSee('Standard Delivery')
             ->assertSee('Unavailable')
             ->assertSee('Delivery is not available to this PIN code.')
-            ->assertSee('Pickup from Shop');
+            ->assertSee('Pick Up from Store');
 
         $this->actingAs($customer)
             ->withSession(['active_role_id' => $this->roleId('customer')])
