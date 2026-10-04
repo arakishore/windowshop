@@ -5,15 +5,15 @@ namespace App\Http\Controllers\Merchant;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSetting;
+use App\Models\PaymentAccount;
 use App\Models\Shop;
 use App\Models\ShopSetting;
-use App\Models\PaymentAccount;
-use App\Services\Payment\PaymentAccountService;
 use App\Services\Merchant\MerchantSettingsInitializer;
 use App\Services\Merchant\MerchantSettingsService;
 use App\Services\Merchant\MerchantShopContextService;
 use App\Services\Merchant\ShopSettingsInitializer;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\Payment\PaymentAccountService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -30,8 +30,7 @@ class MerchantSettingsController extends Controller
         private readonly ShopSettingsInitializer $shopSettingsInitializer,
         private readonly ShopSettingsService $shopSettings,
         private readonly PaymentAccountService $paymentAccounts,
-    ) {
-    }
+    ) {}
 
     public function edit(Request $request): View
     {
@@ -104,21 +103,65 @@ class MerchantSettingsController extends Controller
 
     private function saveRazorpayAccount(Request $request, MerchantProfile $merchant, ?Shop $activeShop): void
     {
-        if (! $activeShop instanceof Shop || ! $request->has('razorpay_environment')) return;
+        if (! $activeShop instanceof Shop || ! $request->has('razorpay_environment')) {
+            return;
+        }
+
         $data = $request->validate([
             'razorpay_environment' => ['required', Rule::in(['test', 'live'])],
-            'razorpay_name' => ['nullable', 'string', 'max:191'], 'razorpay_key_id' => ['nullable', 'string', 'max:191'],
-            'razorpay_key_secret' => ['nullable', 'string', 'max:1000'], 'razorpay_enabled' => ['nullable', 'boolean'],
+            'razorpay_name' => ['nullable', 'string', 'max:191'],
+            'razorpay_key_id' => ['nullable', 'string', 'max:191'],
+            'razorpay_key_secret' => ['nullable', 'string', 'max:1000'],
+            'razorpay_enabled' => ['nullable', 'boolean'],
         ]);
         $mode = $data['razorpay_environment'];
         $account = $activeShop->paymentAccounts()->where('provider', 'razorpay')->where('mode', $mode)->first();
         $enabled = (bool) ($data['razorpay_enabled'] ?? false);
-        if (! $account && ! $enabled && blank($data['razorpay_name']) && blank($data['razorpay_key_id']) && blank($data['razorpay_key_secret'])) return;
-        if (blank($data['razorpay_name'])) throw ValidationException::withMessages(['razorpay_name' => 'The account name is required.']);
-        if (blank($data['razorpay_key_id'])) throw ValidationException::withMessages(['razorpay_key_id' => 'The Key ID is required.']);
-        $attributes = ['name'=>$data['razorpay_name'],'provider'=>'razorpay','mode'=>$mode,'public_key'=>$data['razorpay_key_id'],'enabled'=>$enabled];
-        if ($account instanceof PaymentAccount) { $account->update($attributes); $this->paymentAccounts->updateSecrets($account, $data['razorpay_key_secret'] ?? null); }
-        else { if (blank($data['razorpay_key_secret'])) throw ValidationException::withMessages(['razorpay_key_secret'=>'A Key Secret is required for a new Razorpay account.']); $account=$this->paymentAccounts->create($merchant, [...$attributes,'secret'=>$data['razorpay_key_secret']]); $this->paymentAccounts->map($account, $activeShop); }
+        $name = trim((string) ($data['razorpay_name'] ?? ''));
+        $keyId = trim((string) ($data['razorpay_key_id'] ?? ''));
+        $newSecret = $data['razorpay_key_secret'] ?? null;
+
+        if (! $account && ! $enabled && $name === '' && $keyId === '' && blank($newSecret)) {
+            return;
+        }
+
+        if ($enabled) {
+            $messages = [];
+            if ($name === '') {
+                $messages['razorpay_name'] = 'The account name is required when Razorpay is enabled.';
+            }
+            if ($keyId === '') {
+                $messages['razorpay_key_id'] = 'The Key ID is required when Razorpay is enabled.';
+            }
+            if (blank($newSecret) && (! $account || blank($this->paymentAccounts->secret($account)))) {
+                $messages['razorpay_key_secret'] = 'A Key Secret is required when Razorpay is enabled.';
+            }
+            if ($messages !== []) {
+                throw ValidationException::withMessages($messages);
+            }
+        }
+
+        $attributes = [
+            'name' => $name,
+            'provider' => 'razorpay',
+            'mode' => $mode,
+            'public_key' => $keyId === '' ? null : $keyId,
+            'enabled' => $enabled,
+        ];
+
+        if ($account instanceof PaymentAccount) {
+            $account->update($attributes);
+            if (! $enabled && $name === '' && $keyId === '' && blank($newSecret)) {
+                $this->paymentAccounts->clearSecret($account);
+            } else {
+                $this->paymentAccounts->updateSecrets($account, $newSecret);
+            }
+
+            return;
+        }
+
+        $account = $this->paymentAccounts->create($merchant, [...$attributes, 'secret' => $newSecret]);
+        $this->paymentAccounts->map($account, $activeShop);
     }
 
     private function activeMerchant(Request $request): MerchantProfile
@@ -155,7 +198,7 @@ class MerchantSettingsController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $shopPayload
+     * @param  array<string, mixed>  $shopPayload
      */
     private function saveShopSettings(Request $request, Shop $shop, array $shopPayload): void
     {
@@ -276,7 +319,7 @@ class MerchantSettingsController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $shopPayload
+     * @param  array<string, mixed>  $shopPayload
      */
     private function normalizeShopSettingValue(string $group, string $key, mixed $value, array $shopPayload): mixed
     {

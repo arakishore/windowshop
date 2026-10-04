@@ -14,6 +14,7 @@ use App\Services\Order\CustomerOrderCancellationService;
 use App\Services\Order\DirectMerchantUpiAttemptService;
 use App\Services\Order\OrderReceiptPresenter;
 use App\Services\Order\OrderReturnExchangeEligibilityService;
+use App\Services\Payment\PaymentDisplayService;
 use App\Services\Storefront\CustomerOrderPresenter;
 use App\Services\Storefront\NavigationService;
 use App\Services\Storefront\ProductListingService;
@@ -38,6 +39,7 @@ class CustomerAccountController extends Controller
         private readonly DirectMerchantUpiAttemptService $directUpiAttempts,
         private readonly OrderReturnExchangeEligibilityService $returnExchangeEligibility,
         private readonly OrderReceiptPresenter $receiptPresenter,
+        private readonly PaymentDisplayService $paymentDisplay,
     ) {}
 
     public function dashboard(Request $request): View|RedirectResponse
@@ -169,6 +171,7 @@ class CustomerAccountController extends Controller
             'totals',
             'statusHistories',
             'directMerchantUpiAttempts',
+            'paymentAttempts',
             'refunds.items.orderItem',
             'exchanges.items.orderItem',
             'exchanges.replacementOrder.items',
@@ -182,6 +185,7 @@ class CustomerAccountController extends Controller
             'cancellationReasons' => $this->customerCancellation->reasonOptions(),
             'returnExchangeEligibility' => $this->returnExchangeEligibility->forOrder($order),
             'canResubmitUpi' => $this->directUpiAttempts->canSubmitCorrection($order),
+            'gatewayPayment' => $this->paymentDisplay->paidGatewayDetails($order),
         ]));
     }
 

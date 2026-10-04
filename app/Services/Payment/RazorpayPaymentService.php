@@ -101,10 +101,17 @@ class RazorpayPaymentService
             || (string) ($payment['status'] ?? '') !== 'captured') {
             throw ValidationException::withMessages(['payment' => 'Razorpay payment details did not match the order.']);
         }
+        $bankRrn = data_get($payment, 'acquirer_data.rrn');
+        $bankRrn = is_scalar($bankRrn) ? trim((string) $bankRrn) : '';
+        $bankRrn = $bankRrn !== '' ? mb_substr($bankRrn, 0, 100) : null;
 
-        return DB::transaction(function () use ($attempt, $paymentId): Order {
+        return DB::transaction(function () use ($attempt, $paymentId, $bankRrn): Order {
             $lockedAttempt = PaymentAttempt::query()->whereKey($attempt)->lockForUpdate()->firstOrFail();
             $order = Order::query()->whereKey($lockedAttempt->order_id)->lockForUpdate()->firstOrFail();
+            if ($bankRrn !== null && blank(data_get($lockedAttempt->metadata, 'bank_rrn'))) {
+                $lockedAttempt->metadata = [...($lockedAttempt->metadata ?? []), 'bank_rrn' => $bankRrn];
+                $lockedAttempt->save();
+            }
             if ($lockedAttempt->status === PaymentAttempt::PAID || $order->payment_status === Order::PAYMENT_PAID) {
                 return $order;
             }

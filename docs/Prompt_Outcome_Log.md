@@ -13,6 +13,22 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-04 — WS-018 historical gateway payment display
+
+- Merchant and customer order details derive gateway provider identity from the deterministic latest paid PaymentAttempt, never from the generic `online_payment` method. Failed/abandoned attempts are excluded.
+- Merchant order details show the presentation-mapped provider, trusted provider payment ID, Gateway Order ID, and an optional persisted Bank RRN with copy actions. Customer details show only the provider.
+- Only allowlisted historical fields are exposed; raw metadata and PaymentAccount credentials are never rendered. Display remains available after an account is disabled or credentials are cleared.
+- Razorpay's already-verified fetched payment response now persists the documented `acquirer_data.rrn` as `metadata.bank_rrn` for future payments when present. Old attempts without it remain valid and omit the row; order pages never call Razorpay.
+- No checkout, payment state, order workflow, refund, or notification behavior changed.
+
+## 2026-10-04 — WS-018 disabled Razorpay credential clearing
+
+- Enabled Razorpay configurations continue to require Account Name, Key ID, and either an existing decryptable Key Secret or a newly submitted secret. Blank secret on an enabled existing account preserves its ciphertext.
+- Disabled configurations may be partial. OFF with both Account Name and Key ID cleared and a blank Secret is the explicit clear operation: the retained PaymentAccount is disabled, its name becomes blank, public key and encrypted Key Secret become null, and its shop mapping remains.
+- PaymentAttempts and paid orders remain unchanged and traceable because the PaymentAccount row is retained. Test and Live rows are selected and updated independently; changing environments in the UI now loads that row's own enabled state.
+- PaymentAccount resolution now fails closed for disabled accounts, missing public keys, missing secrets, and undecryptable secrets.
+- No schema change or storefront payment-flow redesign was required.
+
 ## 2026-10-04 — WS-018 Phase 3 storefront Razorpay test-mode checkout
 
 ### Goal and frozen rules

@@ -9,6 +9,8 @@ use App\Models\Order;
 use App\Models\OrderComment;
 use App\Models\OrderItem;
 use App\Models\OrderStatus;
+use App\Models\PaymentAccount;
+use App\Models\PaymentAttempt;
 use App\Models\PaymentStatus;
 use App\Models\ProductAvailabilityStatus;
 use App\Models\User;
@@ -380,6 +382,62 @@ class MerchantOrderActionsTest extends TestCase
             ->assertSessionHas('success');
 
         $this->assertSame(Order::STATUS_CONFIRMED, $order->fresh()->order_status);
+    }
+
+    public function test_merchant_order_detail_uses_the_paid_gateway_attempt_and_safe_identifiers(): void
+    {
+        [$user, $merchantId, $shopId] = $this->merchantShopFixture();
+        $order = $this->operationalOrder($shopId, [
+            'payment_method' => 'online_payment', 'payment_status' => Order::PAYMENT_PAID,
+            'grand_total' => 2198.20, 'amount_paid' => 2198.20,
+        ]);
+        $account = PaymentAccount::query()->create([
+            'merchant_id' => $merchantId, 'provider' => 'razorpay', 'name' => '',
+            'mode' => 'test', 'enabled' => false, 'public_key' => null,
+        ]);
+        PaymentAttempt::query()->create([
+            'order_id' => $order->getKey(), 'shop_id' => $shopId, 'payment_account_id' => $account->getKey(),
+            'provider' => 'razorpay', 'provider_order_id' => 'order_failed_old', 'provider_payment_id' => 'pay_failed_old',
+            'amount_minor' => 219820, 'currency' => 'INR', 'status' => PaymentAttempt::FAILED,
+        ]);
+        PaymentAttempt::query()->create([
+            'order_id' => $order->getKey(), 'shop_id' => $shopId, 'payment_account_id' => $account->getKey(),
+            'provider' => 'razorpay', 'provider_order_id' => 'order_paid_current', 'provider_payment_id' => 'pay_paid_current',
+            'amount_minor' => 219820, 'currency' => 'INR', 'status' => PaymentAttempt::PAID,
+            'paid_at' => now(), 'metadata' => ['bank_rrn' => '123456789012', 'unsafe' => 'must-not-render'],
+        ]);
+
+        $this->actingAs($user)->withSession(['active_shop_id' => $shopId])
+            ->get(route('merchant.orders.show', $order))
+            ->assertOk()
+            ->assertSeeText('Provider')
+            ->assertSeeText('Razorpay')
+            ->assertSee('pay_paid_current')
+            ->assertSee('order_paid_current')
+            ->assertSee('123456789012')
+            ->assertSee('Copy Payment ID')
+            ->assertSee('Copy Gateway Order ID')
+            ->assertDontSee('pay_failed_old')
+            ->assertDontSee('order_failed_old')
+            ->assertDontSee('must-not-render');
+    }
+
+    public function test_merchant_gateway_details_hide_missing_rrn_and_non_gateway_provider_row(): void
+    {
+        [$user, $merchantId, $shopId] = $this->merchantShopFixture();
+        $online = $this->operationalOrder($shopId, ['payment_method' => 'online_payment', 'payment_status' => Order::PAYMENT_PAID]);
+        $account = PaymentAccount::query()->create(['merchant_id' => $merchantId, 'provider' => 'razorpay', 'name' => 'Historical', 'mode' => 'test', 'enabled' => false]);
+        PaymentAttempt::query()->create([
+            'order_id' => $online->getKey(), 'shop_id' => $shopId, 'payment_account_id' => $account->getKey(),
+            'provider' => 'razorpay', 'provider_order_id' => 'order_without_rrn', 'provider_payment_id' => 'pay_without_rrn',
+            'amount_minor' => 199800, 'currency' => 'INR', 'status' => PaymentAttempt::PAID, 'paid_at' => now(),
+        ]);
+        $this->actingAs($user)->withSession(['active_shop_id' => $shopId])->get(route('merchant.orders.show', $online))
+            ->assertOk()->assertDontSeeText('Bank RRN');
+
+        $cash = $this->operationalOrder($shopId);
+        $this->actingAs($user)->withSession(['active_shop_id' => $shopId])->get(route('merchant.orders.show', $cash))
+            ->assertOk()->assertDontSee('<span>Provider</span>', false);
     }
 
     public function test_confirmed_storefront_pickup_order_can_start_processing_without_stock_or_payment_changes(): void

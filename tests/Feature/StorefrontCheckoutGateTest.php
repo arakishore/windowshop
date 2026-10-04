@@ -3227,7 +3227,7 @@ class StorefrontCheckoutGateTest extends TestCase
 
             public function fetchPayment(string $keyId, string $secret, string $paymentId): array
             {
-                return ['id' => $paymentId, 'order_id' => $this->paymentOrder, 'amount' => $this->paymentAmount, 'currency' => $this->paymentCurrency, 'status' => $this->paymentStatus];
+                return ['id' => $paymentId, 'order_id' => $this->paymentOrder, 'amount' => $this->paymentAmount, 'currency' => $this->paymentCurrency, 'status' => $this->paymentStatus, 'acquirer_data' => ['rrn' => '123456789012']];
             }
         };
         $this->app->instance(RazorpayGateway::class, $gateway);
@@ -3274,6 +3274,7 @@ class StorefrontCheckoutGateTest extends TestCase
         $this->assertSame(Order::PAYMENT_PAID, $order->payment_status);
         $this->assertSame(Order::STATUS_PENDING, $order->order_status);
         $this->assertSame('999.00', $order->amount_paid);
+        $this->assertSame('123456789012', $attempt->fresh()->metadata['bank_rrn']);
         $this->assertDatabaseCount('payment_attempts', 2);
     }
 
