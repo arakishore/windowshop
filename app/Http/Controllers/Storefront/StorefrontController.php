@@ -12,6 +12,7 @@ use App\Models\Promotion;
 use App\Models\Shop;
 use App\Models\ShopAudience;
 use App\Models\ShopPage;
+use App\Models\Testimonial;
 use App\Models\WishlistItem;
 use App\Services\Banner\BannerService;
 use App\Services\Cart\CartPageService;
@@ -85,6 +86,12 @@ class StorefrontController extends Controller
             'nearbyOfferArtwork' => $nearbyOfferArtwork,
             'newArrivalProducts' => $newArrivalProducts,
             'newArrivalWishlistedProductIds' => $this->wishlistedProductIds($request, $newArrivalProducts),
+            'customerTestimonials' => Testimonial::query()
+                ->ofType(Testimonial::TYPE_CUSTOMER)
+                ->active()
+                ->ordered()
+                ->limit(6)
+                ->get(),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
         ]);
     }

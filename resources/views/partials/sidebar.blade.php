@@ -1,7 +1,7 @@
 {{-- Purpose: Provides the shared Limitless sidebar navigation for admin pages. --}}
 @php
 	$isMasterDataActive = request()->routeIs('admin.master.*') || request()->routeIs('admin.system-settings.*');
-	$isMarketingActive = request()->routeIs('admin.banners.*') || request()->routeIs('admin.banner-templates.*') || request()->routeIs('admin.banner-library.*');
+	$isMarketingActive = request()->routeIs('admin.banners.*') || request()->routeIs('admin.banner-templates.*') || request()->routeIs('admin.banner-library.*') || request()->routeIs('admin.testimonials.*');
 @endphp
 <!-- Main sidebar -->
 		<div class="sidebar sidebar-dark sidebar-main sidebar-expand-lg">
@@ -112,6 +112,11 @@
 								<li class="nav-item">
 									<a href="{{ route('admin.banners.index') }}" class="nav-link {{ request()->routeIs('admin.banners.*') ? 'active' : '' }}">
 										Banners
+									</a>
+								</li>
+								<li class="nav-item">
+									<a href="{{ route('admin.testimonials.index') }}" class="nav-link {{ request()->routeIs('admin.testimonials.*') ? 'active' : '' }}">
+										Testimonials
 									</a>
 								</li>
 							</ul>
