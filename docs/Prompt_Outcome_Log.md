@@ -13,6 +13,17 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-06 — WS-057 FAQ Management
+
+- Converted the static /faq page into an Admin-managed dynamic FAQ system with four fixed categories (general/customer/order/merchant, field `category`, no category table/CRUD).
+- New `faqs` table/model (uuid, question 255, answer text, sort_order, active/inactive status, audit actors, soft deletes). Plain-textarea answers rendered escaped with line breaks; no rich text, no FAQPage schema.
+- Admin → Marketing → FAQs CRUD follows Testimonials/Brands conventions (resource routes minus show, uuid binding, FormRequests, search/category/status filters, shared datatable pagination, soft-delete with deleted_by). No FAQ seeder; DB is the single source of truth.
+- Public /faq keeps route, title, meta, breadcrumb, sidebar and visual design; renders one active-FAQ query grouped by fixed category order (General, Customer, Order, Merchant), sort_order/id within; empty categories hidden; all-empty shows a neutral message with Contact CTA. Accordion IDs are deterministic `faq-{category}-{id}`; triggers changed from div to real buttons with preserved styling plus minimal reset CSS.
+- Existing four static Q&As were removed from Blade (not seeded); to be re-entered manually via Admin.
+- Tests: new `AdminFaqManagementTest` (12 tests) covering auth, CRUD, validation, filters, ordering, visibility, IDs, escaping, empty states. CMS/contact/merchant-registration/testimonial suites still pass.
+- Key files: Faq model/migration, Admin FaqController + FormRequests + views, sidebar Marketing item, faq.blade.php, StorefrontController@faq.
+- Follow-up: default FAQ catalogue added as `docs/data/faq.json` (existing file adopted as canonical source; `docs/data/` already hosts importer data such as india-pincodes.csv) plus `FaqSeeder` (insert-missing-only on category + question identity, per-entry validation with skip-and-warn, UUID via HasUuid, never updates existing rows so Admin edits survive reruns), registered in `DatabaseSeeder` alongside other production-safe foundation seeders. `FaqSeederTest` (5 tests) proves first-run creation, rerun idempotency, Admin-edit preservation, catalogue validity (categories/statuses/lengths/unique identity) and public-page visibility. Migration stays schema-only.
+
 ## 2026-10-05 — WS-056 Customer Say & Merchant Say Testimonials
 
 - Added a separate Admin-managed marketing Testimonials module with `customer` (Customer Say) and `merchant` (Merchant Say) types. ProductReview and the verified-purchase review workflow were not touched.

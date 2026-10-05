@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Storefront;
 use App\Enums\BannerPosition;
 use App\Http\Controllers\Controller;
 use App\Models\CmsPage;
+use App\Models\Faq;
 use App\Models\PostalCode;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -427,8 +428,20 @@ class StorefrontController extends Controller
 
     public function faq(): View
     {
+        $faqs = Faq::query()->active()->ordered()->get();
+
+        $faqGroups = collect(Faq::orderedCategoryKeys())
+            ->map(fn (string $key): array => [
+                'key' => $key,
+                'label' => Faq::categories()[$key],
+                'faqs' => $faqs->where('category', $key)->values(),
+            ])
+            ->filter(fn (array $group): bool => $group['faqs']->isNotEmpty())
+            ->values();
+
         return view('storefront.pages.faq', [
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
+            'faqGroups' => $faqGroups,
         ]);
     }
 

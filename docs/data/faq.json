@@ -1,0 +1,404 @@
+[
+  {
+    "category": "general",
+    "question": "What is WindowShop?",
+    "answer": "WindowShop is a local shopping platform that helps customers discover nearby shops, browse their products and offers, and place orders with participating merchants.",
+    "sort_order": 10,
+    "status": "active"
+  },
+  {
+    "category": "general",
+    "question": "Are the shops on WindowShop local?",
+    "answer": "Yes. WindowShop is designed around local merchants and store discovery, helping customers find and shop from businesses in their area.",
+    "sort_order": 20,
+    "status": "active"
+  },
+  {
+    "category": "general",
+    "question": "Does WindowShop sell the products directly?",
+    "answer": "Products are offered by individual merchants on WindowShop. The merchant is responsible for its products, availability, fulfilment and applicable store policies.",
+    "sort_order": 30,
+    "status": "active"
+  },
+  {
+    "category": "general",
+    "question": "How do I find shops near me?",
+    "answer": "WindowShop can use the location or area you select to help you discover participating shops and products relevant to your area.",
+    "sort_order": 40,
+    "status": "active"
+  },
+  {
+    "category": "general",
+    "question": "Are all products available in every location?",
+    "answer": "No. Product availability depends on the individual shop, its inventory and the area it serves.",
+    "sort_order": 50,
+    "status": "active"
+  },
+  {
+    "category": "general",
+    "question": "How can I contact WindowShop for help?",
+    "answer": "You can use the Contact Us page for general platform questions. For questions about a specific product or order, you may also need to contact the relevant shop.",
+    "sort_order": 60,
+    "status": "active"
+  },
+
+  {
+    "category": "customer",
+    "question": "Do I need an account to shop on WindowShop?",
+    "answer": "You can browse shops and products without an account where permitted, but an account may be required to place and manage orders and access customer features.",
+    "sort_order": 10,
+    "status": "active"
+  },
+  {
+    "category": "customer",
+    "question": "How do I create a customer account?",
+    "answer": "Use the customer registration option and provide the required details. After registration, you can sign in to access your account and available shopping features.",
+    "sort_order": 20,
+    "status": "active"
+  },
+  {
+    "category": "customer",
+    "question": "How do I find a product?",
+    "answer": "Browse products and shops available on WindowShop and use the available discovery or search options to find products offered by participating merchants.",
+    "sort_order": 30,
+    "status": "active"
+  },
+  {
+    "category": "customer",
+    "question": "Can the same product have different prices at different shops?",
+    "answer": "Yes. Each merchant manages its own products, pricing, offers and availability, so prices and promotions can vary between shops.",
+    "sort_order": 40,
+    "status": "active"
+  },
+  {
+    "category": "customer",
+    "question": "Can I see offers from local shops?",
+    "answer": "Yes. Participating merchants may publish promotions and offers that customers can discover through WindowShop.",
+    "sort_order": 50,
+    "status": "active"
+  },
+  {
+    "category": "customer",
+    "question": "Can I add products from different shops to my cart?",
+    "answer": "Products from different shops may be added while browsing where supported, but checkout is processed for one selected shop at a time.",
+    "sort_order": 60,
+    "status": "active"
+  },
+  {
+    "category": "customer",
+    "question": "Can I choose between delivery and store pickup?",
+    "answer": "It depends on the fulfilment options enabled by the shop. A shop may offer delivery, store pickup, or both.",
+    "sort_order": 70,
+    "status": "active"
+  },
+  {
+    "category": "customer",
+    "question": "Why is delivery not available for a shop?",
+    "answer": "The shop may offer pickup only, may not serve your location, or may have delivery temporarily unavailable. Available fulfilment options are shown during checkout.",
+    "sort_order": 80,
+    "status": "active"
+  },
+  {
+    "category": "customer",
+    "question": "Why is store pickup not available?",
+    "answer": "Store pickup is available only when the merchant has enabled it for that shop.",
+    "sort_order": 90,
+    "status": "active"
+  },
+  {
+    "category": "customer",
+    "question": "How do I contact a shop?",
+    "answer": "Use the contact information and options shown on the shop's WindowShop page where available.",
+    "sort_order": 100,
+    "status": "active"
+  },
+  {
+    "category": "customer",
+    "question": "Can I visit a shop after finding it on WindowShop?",
+    "answer": "Yes. WindowShop is designed to connect online product discovery with local merchants. Check the shop information for its location and other available details before visiting.",
+    "sort_order": 110,
+    "status": "active"
+  },
+
+  {
+    "category": "order",
+    "question": "How do I place an order?",
+    "answer": "Select products from a shop, proceed to checkout, choose an available fulfilment and payment option, review your order and submit it.",
+    "sort_order": 10,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "Can I order from multiple shops in one checkout?",
+    "answer": "No. WindowShop processes checkout for one selected shop at a time. Orders from another shop require a separate checkout.",
+    "sort_order": 20,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "What happens after I place an order?",
+    "answer": "Your order is created and sent to the relevant merchant. You can follow its available order and payment statuses as the merchant processes it.",
+    "sort_order": 30,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "Who handles questions about my order?",
+    "answer": "For store-specific stock, product, fulfilment or order questions, contact the relevant shop. WindowShop can help with general platform-related questions.",
+    "sort_order": 40,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "What payment methods are available?",
+    "answer": "Available payment methods depend on the shop's configuration and may include options such as online payment, direct UPI, Cash on Delivery or Cash at Shop where enabled.",
+    "sort_order": 50,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "How does online payment work?",
+    "answer": "When a shop offers an online payment gateway, payment is processed using the merchant's configured payment account. A successful payment does not by itself mean that the merchant has accepted the order.",
+    "sort_order": 60,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "What happens after an online payment is successful?",
+    "answer": "The payment can be marked as paid after successful verification. The order remains subject to the merchant's order-processing and acceptance workflow.",
+    "sort_order": 70,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "What is Direct UPI payment?",
+    "answer": "Direct UPI allows you to pay the merchant using the payment details presented during checkout. The payment is made directly to the merchant rather than being held by WindowShop.",
+    "sort_order": 80,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "Why do I need to enter my UPI transaction or reference number?",
+    "answer": "The reference helps the merchant identify and verify a Direct UPI payment submitted for your order.",
+    "sort_order": 90,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "What happens if my Direct UPI payment is rejected?",
+    "answer": "If the merchant cannot verify the submitted payment information, the payment may be rejected and you may be asked to correct or resubmit the payment details where available.",
+    "sort_order": 100,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "Can I pay Cash on Delivery?",
+    "answer": "Cash on Delivery is available only when the shop has enabled it and the order qualifies for that payment option.",
+    "sort_order": 110,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "What is Cash at Shop?",
+    "answer": "Cash at Shop allows you to place an eligible pickup order and pay according to the shop's available pay-at-shop process.",
+    "sort_order": 120,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "How does store pickup work?",
+    "answer": "If pickup is offered, select it during checkout. Follow the shop's pickup instructions and order status before visiting the store to collect your order.",
+    "sort_order": 130,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "How does delivery work?",
+    "answer": "Delivery availability and instructions depend on the shop. During checkout, WindowShop shows the delivery options available for that order where applicable.",
+    "sort_order": 140,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "How do shipping and returns work?",
+    "answer": "Shipping, delivery, return and refund terms can depend on the merchant. Review the applicable policy pages and any shop-specific instructions before ordering.",
+    "sort_order": 150,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "Can I cancel an order?",
+    "answer": "Cancellation availability depends on the current order and payment state and the applicable merchant or platform workflow. Check your order options or contact the shop for assistance.",
+    "sort_order": 160,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "How are refunds handled?",
+    "answer": "Refund eligibility depends on the order, payment method and applicable return or cancellation policy. The available refund process may differ depending on how the original payment was made.",
+    "sort_order": 170,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "Can I exchange a product?",
+    "answer": "Exchange availability depends on the applicable policy and merchant. Check the relevant order and store information or contact the merchant for assistance.",
+    "sort_order": 180,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "Where can I check my order status?",
+    "answer": "Sign in to your customer account and open your orders to view the latest status information available for your order.",
+    "sort_order": 190,
+    "status": "active"
+  },
+  {
+    "category": "order",
+    "question": "Why can payment status and order status be different?",
+    "answer": "Payment and order processing are separate. For example, a payment may be successfully completed while the order is still waiting for the merchant to process or accept it.",
+    "sort_order": 200,
+    "status": "active"
+  },
+
+  {
+    "category": "merchant",
+    "question": "How can I join WindowShop as a merchant?",
+    "answer": "Use the merchant registration page to submit the required business and account information. Your registration will follow WindowShop's merchant onboarding process.",
+    "sort_order": 10,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can a local shop sell on WindowShop?",
+    "answer": "WindowShop is designed for participating local merchants. Eligibility and onboarding requirements apply according to the platform's merchant registration process.",
+    "sort_order": 20,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "How do I create and manage my shop?",
+    "answer": "After your merchant account is approved and the appropriate access is available, you can manage your shop information through the merchant area.",
+    "sort_order": 30,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "How do I add products?",
+    "answer": "Use the merchant product-management area to create products and maintain their available information, pricing, images, variants and other supported details.",
+    "sort_order": 40,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can I manage product variants such as size and colour?",
+    "answer": "Yes. Where applicable, WindowShop supports product variants so merchants can manage combinations such as colour and size.",
+    "sort_order": 50,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can I create offers and promotions?",
+    "answer": "Yes. WindowShop includes merchant promotion features that can be used to present eligible offers to customers.",
+    "sort_order": 60,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "How will I know when I receive an order?",
+    "answer": "Orders appear in the merchant order-management area, and configured merchant notifications may also be sent through supported notification channels.",
+    "sort_order": 70,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can I choose whether my shop offers delivery or pickup?",
+    "answer": "Yes. Shop fulfilment settings determine whether customers can use delivery, store pickup, or both where supported.",
+    "sort_order": 80,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can I choose which payment methods my shop accepts?",
+    "answer": "Yes. Available payment methods depend on the payment features and settings configured for your shop.",
+    "sort_order": 90,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can I receive online payments through my own Razorpay account?",
+    "answer": "Where Razorpay is enabled, a merchant can configure its own supported Razorpay account for the shop. Customer payments are processed through the configured merchant payment account.",
+    "sort_order": 100,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Does WindowShop hold my Razorpay sales money?",
+    "answer": "Under the merchant-direct payment model, WindowShop does not hold or settle the merchant's Razorpay sale proceeds. Payment is processed through the merchant's configured gateway account.",
+    "sort_order": 110,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can I use my existing Razorpay account?",
+    "answer": "A merchant may configure an existing eligible Razorpay account, subject to Razorpay's own account, approval and usage requirements.",
+    "sort_order": 120,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can I accept Direct UPI payments?",
+    "answer": "Yes, if Direct UPI is enabled and correctly configured for the shop. Customers can then pay directly using the merchant's configured UPI details.",
+    "sort_order": 130,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "How do I verify a Direct UPI payment?",
+    "answer": "Use the merchant order/payment workflow to review the payment information submitted by the customer and verify or reject it as appropriate.",
+    "sort_order": 140,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can I accept an order while an online payment is still pending?",
+    "answer": "Order acceptance and online payment status are separate states in WindowShop. The merchant should review the payment status and order details before deciding how to proceed.",
+    "sort_order": 150,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can I configure an email address for shop notifications?",
+    "answer": "Yes. A shop can configure its operational notification email in the available shop notification settings.",
+    "sort_order": 160,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can customers contact my shop directly?",
+    "answer": "Customers can use the public contact information and options that your shop makes available through its WindowShop presence.",
+    "sort_order": 170,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Can I deactivate products that are temporarily unavailable?",
+    "answer": "Use the available product-management controls to manage whether products are available or visible according to the supported merchant workflow.",
+    "sort_order": 180,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Who is responsible for product and shop information?",
+    "answer": "Merchants are responsible for maintaining accurate information for their shop, products, prices, availability and applicable customer-facing details.",
+    "sort_order": 190,
+    "status": "active"
+  },
+  {
+    "category": "merchant",
+    "question": "Who should I contact if I need help using WindowShop?",
+    "answer": "Use WindowShop's available support or Contact Us options for platform-related assistance.",
+    "sort_order": 200,
+    "status": "active"
+  }
+]
