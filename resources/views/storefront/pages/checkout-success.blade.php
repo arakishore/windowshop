@@ -63,12 +63,14 @@
             \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP => 'Cash at Shop',
             \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY => 'Cash on Delivery',
             \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI => 'Direct Merchant UPI',
+            \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_ONLINE => 'Online Payment',
             default => \Illuminate\Support\Str::headline($order->payment_method),
         };
         $paymentText = match ($order->payment_method) {
             \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_CASH_AT_SHOP => 'Pay at the shop when you collect your order.',
             \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_CASH_ON_DELIVERY => 'Pay when your order is delivered.',
             \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI => 'Your payment reference was submitted and is awaiting merchant verification.',
+            \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_ONLINE => $order->payment_status === \App\Models\Order::PAYMENT_PAID ? 'Payment successful.' : 'Payment is pending.',
             default => 'Payment is pending.',
         };
         $isUpiVerificationPending = $order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI
@@ -110,10 +112,47 @@
             <div class="order-success-address"><i class="icon-storefront"></i><div><h5>Pickup from Shop</h5><p><strong>{{ $order->shop?->name }}</strong><br>{{ $shopAddress ?: '-' }}</p></div></div>
         @endif
         <div class="order-success-footer">
+            @if ($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_ONLINE && $order->payment_status !== \App\Models\Order::PAYMENT_PAID)
+                <form method="POST" action="{{ route('storefront.checkout.razorpay.retry', $order) }}">@csrf<button type="submit" class="tf-btn animate-btn">Pay Online</button></form>
+            @endif
             <a href="{{ route('storefront.account.orders.show', $order) }}" class="tf-btn animate-btn">View Order</a>
             <a href="{{ route('storefront.account.orders.receipt', ['order' => $order, 'print' => 1]) }}" target="_blank" rel="noopener" class="tf-btn btn-stroke">Print Receipt</a>
             <a href="{{ route('storefront.home') }}" class="tf-btn btn-stroke">Continue Shopping</a>
             <div class="order-success-reassurance"><span><i class="icon-CheckCircle"></i> Order updates available</span><span><i class="icon-Truck2"></i> Status notifications</span><span><i class="icon-ShieldCheck"></i> Safe &amp; Secure Shopping</span></div>
         </div>
     </div></div></div></div></div></section>
+    @if (! empty($razorpayError))
+        <div class="container"><div class="alert alert-danger">{{ $razorpayError }}</div></div>
+    @endif
 @endsection
+
+@if (! empty($razorpayCheckout))
+    @push('scripts')
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const checkout = @json($razorpayCheckout);
+                const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const outcomeUrl = @json(route('storefront.checkout.razorpay.outcome', $razorpayCheckout['attempt_id']));
+                const sendOutcome = (status) => fetch(outcomeUrl, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'}, body: JSON.stringify({status})});
+                const options = {
+                    key: checkout.key, order_id: checkout.order_id, amount: checkout.amount,
+                    currency: checkout.currency, name: checkout.name, description: checkout.description,
+                    prefill: checkout.prefill,
+                    handler: async (response) => {
+                        const result = await fetch(@json(route('storefront.checkout.razorpay.verify', $razorpayCheckout['attempt_id'])), {
+                            method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'}, body: JSON.stringify(response)
+                        });
+                        const payload = await result.json();
+                        if (result.ok && payload.redirect) window.location.assign(payload.redirect);
+                        else window.alert(payload.message || payload.errors?.payment?.[0] || 'Payment verification failed.');
+                    },
+                    modal: {ondismiss: () => sendOutcome('abandoned')}
+                };
+                const instance = new Razorpay(options);
+                instance.on('payment.failed', () => sendOutcome('failed'));
+                instance.open();
+            });
+        </script>
+    @endpush
+@endif

@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\BannerTemplateController;
 use App\Http\Controllers\Admin\CmsPageController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EmailSettingsController;
+use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
 use App\Http\Controllers\Admin\MasterData\CustomerCancellationReasonController;
@@ -30,6 +31,7 @@ use App\Http\Controllers\Admin\NotificationTemplateController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductReviewController as AdminProductReviewController;
 use App\Http\Controllers\Admin\SystemSettingController;
+use App\Http\Controllers\Admin\TestimonialController;
 use App\Http\Controllers\Customer\Auth\CustomerAuthController;
 use App\Http\Controllers\Storefront\AccountAddressController;
 use App\Http\Controllers\Storefront\CartItemController;
@@ -42,6 +44,7 @@ use App\Http\Controllers\Storefront\MerchantRegistrationController;
 use App\Http\Controllers\Storefront\ProductReviewController;
 use App\Http\Controllers\Storefront\StorefrontController;
 use App\Http\Controllers\Storefront\WishlistController;
+use App\Http\Controllers\Payment\RazorpayWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -128,6 +131,10 @@ Route::post('/checkout/billing-address/select', [CheckoutAddressController::clas
 Route::post('/checkout/billing-addresses', [CheckoutAddressController::class, 'storeBilling'])->name('storefront.checkout.billing-addresses.store');
 Route::post('/checkout/fulfillment', [CheckoutController::class, 'fulfillment'])->name('storefront.checkout.fulfillment');
 Route::post('/checkout/place-order', [CheckoutController::class, 'placeOrder'])->name('storefront.checkout.place-order');
+Route::post('/checkout/order/{order}/razorpay/retry', [CheckoutController::class, 'retryRazorpay'])->name('storefront.checkout.razorpay.retry');
+Route::post('/checkout/razorpay/{paymentAttempt}/verify', [CheckoutController::class, 'verifyRazorpay'])->name('storefront.checkout.razorpay.verify');
+Route::post('/checkout/razorpay/{paymentAttempt}/outcome', [CheckoutController::class, 'razorpayOutcome'])->name('storefront.checkout.razorpay.outcome');
+Route::post('/payments/razorpay/webhook/{token}', RazorpayWebhookController::class)->name('payments.razorpay.webhook');
 Route::get('/checkout/order/{order}', [CheckoutController::class, 'success'])->name('storefront.checkout.success');
 Route::get('/category/{parentSlug}/{slug}', [StorefrontController::class, 'categoryWithParent'])->name('storefront.category.child.show');
 Route::get('/category/{slug}', [StorefrontController::class, 'category'])->name('storefront.category.show');
@@ -266,6 +273,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('banner-templates', BannerTemplateController::class)
             ->except(['show', 'destroy']);
         Route::resource('banners', BannerController::class);
+        Route::resource('testimonials', TestimonialController::class)
+            ->except(['show']);
+        Route::resource('faqs', FaqController::class)
+            ->except(['show']);
         Route::get('system-settings', [SystemSettingController::class, 'index'])
             ->name('system-settings.index');
         Route::get('system-settings/{systemSetting}/edit', [SystemSettingController::class, 'edit'])

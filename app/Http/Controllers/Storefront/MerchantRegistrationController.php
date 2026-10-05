@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Storefront;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Storefront\RegisterMerchantRequest;
 use App\Models\MerchantProfile;
+use App\Models\Testimonial;
 use App\Models\User;
 use App\Services\Merchant\MerchantService;
 use App\Services\Storefront\NavigationService;
@@ -33,6 +34,12 @@ class MerchantRegistrationController extends Controller
             'businessTypes' => $this->merchants->businessTypes(),
             'storefrontNavigationCategories' => $this->navigation->getMarketplaceCategories(),
             'existingUser' => $user instanceof User ? $user : null,
+            'merchantTestimonials' => Testimonial::query()
+                ->ofType(Testimonial::TYPE_MERCHANT)
+                ->active()
+                ->ordered()
+                ->limit(4)
+                ->get(),
         ]);
     }
 

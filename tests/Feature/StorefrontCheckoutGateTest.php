@@ -11,6 +11,8 @@ use App\Models\DirectMerchantUpiAttempt;
 use App\Models\MerchantProfile;
 use App\Models\Order;
 use App\Models\OrderTotal;
+use App\Models\PaymentAccount;
+use App\Models\PaymentAttempt;
 use App\Models\PostalCode;
 use App\Models\PostalCodeRestriction;
 use App\Models\Product;
@@ -33,6 +35,8 @@ use App\Services\Checkout\StorefrontDeliveryService;
 use App\Services\Checkout\StorefrontPaymentMethodService;
 use App\Services\Merchant\ShopSettingsService;
 use App\Services\Order\OrderStatusService;
+use App\Services\Payment\PaymentAccountService;
+use App\Services\Payment\RazorpayGateway;
 use App\Services\ProductAvailability\MerchantAvailabilityStatusSeeder;
 use App\Services\Promotion\Coupons\CouponSessionStore;
 use App\Services\Promotion\Engine\Data\AppliedPromotion;
@@ -3151,6 +3155,143 @@ class StorefrontCheckoutGateTest extends TestCase
     private function shopSetting(Shop $shop, string $group, string $key, mixed $value, string $type): void
     {
         app(ShopSettingsService::class)->setTyped((int) $shop->getKey(), $group, $key, $value, $type);
+    }
+
+    public function test_online_payment_requires_a_valid_enabled_test_account(): void
+    {
+        $customer = $this->customerUser('razorpay-availability@example.test');
+        $fixture = $this->productFixture(price: 999);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+
+        $this->actingAs($customer)->withSession([
+            'active_role_id' => $this->roleId('customer'),
+            StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+        ])->get(route('storefront.checkout', ['shop' => $fixture['shop']->getKey()]))->assertOk()->assertDontSee('Pay securely online');
+
+        $this->configureRazorpay($fixture['shop'], 'live');
+        $this->actingAs($customer)->withSession([
+            'active_role_id' => $this->roleId('customer'),
+            StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+        ])->get(route('storefront.checkout', ['shop' => $fixture['shop']->getKey()]))->assertOk()->assertDontSee('Pay securely online');
+
+        $testAccount = $this->configureRazorpay($fixture['shop'], 'test', false);
+        $this->actingAs($customer)->withSession([
+            'active_role_id' => $this->roleId('customer'),
+            StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+        ])->get(route('storefront.checkout', ['shop' => $fixture['shop']->getKey()]))->assertOk()->assertDontSee('Pay securely online');
+        $testAccount->forceFill(['enabled' => true, 'secret' => 'corrupt'])->save();
+        $this->actingAs($customer)->withSession([
+            'active_role_id' => $this->roleId('customer'),
+            StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+        ])->get(route('storefront.checkout', ['shop' => $fixture['shop']->getKey()]))->assertOk()->assertDontSee('Pay securely online');
+        app(PaymentAccountService::class)->updateSecrets($testAccount, 'test-secret');
+        $this->actingAs($customer)->withSession([
+            'active_role_id' => $this->roleId('customer'),
+            StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+        ])->get(route('storefront.checkout', ['shop' => $fixture['shop']->getKey()]))->assertOk()->assertSee('Pay securely online');
+    }
+
+    public function test_online_payment_uses_server_total_and_verified_payment_leaves_order_pending(): void
+    {
+        $customer = $this->customerUser('razorpay-payment@example.test');
+        $fixture = $this->productFixture(price: 999);
+        $this->cartItem(Cart::query()->create(['user_id' => $customer->getKey()]), $fixture['variant']);
+        $this->configureRazorpay($fixture['shop']);
+        $gateway = new class implements RazorpayGateway
+        {
+            public array $created = [];
+
+            public bool $rejectSignature = false;
+
+            public string $paymentOrder = 'order_test_1';
+
+            public int $paymentAmount = 99900;
+
+            public string $paymentCurrency = 'INR';
+
+            public string $paymentStatus = 'captured';
+
+            public function createOrder(string $keyId, string $secret, array $attributes): array
+            {
+                $this->created[] = $attributes;
+
+                return ['id' => 'order_test_'.count($this->created), 'amount' => $attributes['amount'], 'currency' => $attributes['currency'], 'status' => 'created'];
+            }
+
+            public function verifyPaymentSignature(string $keyId, string $secret, array $attributes): void
+            {
+                if ($this->rejectSignature) {
+                    throw new \RuntimeException('invalid signature');
+                }
+            }
+
+            public function verifyWebhookSignature(string $payload, string $signature, string $secret): void
+            {
+                if (! hash_equals(hash_hmac('sha256', $payload, $secret), $signature)) {
+                    throw new \RuntimeException('Invalid webhook signature.');
+                }
+            }
+
+            public function fetchPayment(string $keyId, string $secret, string $paymentId): array
+            {
+                return ['id' => $paymentId, 'order_id' => $this->paymentOrder, 'amount' => $this->paymentAmount, 'currency' => $this->paymentCurrency, 'status' => $this->paymentStatus, 'acquirer_data' => ['rrn' => '123456789012']];
+            }
+        };
+        $this->app->instance(RazorpayGateway::class, $gateway);
+
+        $response = $this->actingAs($customer)->withSession([
+            'active_role_id' => $this->roleId('customer'),
+            CheckoutFlowService::SELECTED_SHOP_SESSION_KEY => $fixture['shop']->getKey(),
+            StorefrontDeliveryService::SELECTED_FULFILLMENT_SESSION_KEY => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            StorefrontPaymentMethodService::SELECTED_PAYMENT_SESSION_KEY => StorefrontPaymentMethodService::PAYMENT_ONLINE,
+        ])->post(route('storefront.checkout.place-order'), [
+            'shipping_method' => StorefrontDeliveryService::FULFILLMENT_PICKUP,
+            'payment_method' => StorefrontPaymentMethodService::PAYMENT_ONLINE,
+        ]);
+        $order = Order::query()->firstOrFail();
+        $response->assertRedirect(route('storefront.checkout.success', $order));
+        $this->actingAs($customer)->withSession(['active_role_id' => $this->roleId('customer'), 'storefront.razorpay.start_order' => $order->getKey()])
+            ->get(route('storefront.checkout.success', $order))->assertOk()->assertSee('order_test_1');
+        $firstAttempt = PaymentAttempt::query()->firstOrFail();
+        $this->assertSame(99900, $firstAttempt->amount_minor);
+        $this->assertSame(99900, $gateway->created[0]['amount']);
+        $this->actingAs($customer)->withSession(['active_role_id' => $this->roleId('customer')])
+            ->post(route('storefront.checkout.razorpay.retry', $order))->assertOk()->assertSee('order_test_2');
+        $attempt = PaymentAttempt::query()->latest('id')->firstOrFail();
+        $gateway->paymentOrder = 'order_test_2';
+        $this->assertDatabaseCount('payment_attempts', 2);
+
+        $payload = ['razorpay_payment_id' => 'pay_test_1', 'razorpay_order_id' => 'order_test_2', 'razorpay_signature' => 'valid-signature'];
+        $this->actingAs($customer)->withSession(['active_role_id' => $this->roleId('customer')])->postJson(route('storefront.checkout.razorpay.verify', $attempt), [...$payload, 'razorpay_order_id' => 'order_wrong'])->assertUnprocessable();
+        $gateway->rejectSignature = true;
+        $this->actingAs($customer)->withSession(['active_role_id' => $this->roleId('customer')])->postJson(route('storefront.checkout.razorpay.verify', $attempt), $payload)->assertUnprocessable();
+        $gateway->rejectSignature = false;
+        $gateway->paymentAmount = 100;
+        $this->actingAs($customer)->withSession(['active_role_id' => $this->roleId('customer')])->postJson(route('storefront.checkout.razorpay.verify', $attempt), $payload)->assertUnprocessable();
+        $gateway->paymentAmount = 99900;
+        $gateway->paymentCurrency = 'USD';
+        $this->actingAs($customer)->withSession(['active_role_id' => $this->roleId('customer')])->postJson(route('storefront.checkout.razorpay.verify', $attempt), $payload)->assertUnprocessable();
+        $gateway->paymentCurrency = 'INR';
+        $gateway->paymentStatus = 'authorized';
+        $this->actingAs($customer)->withSession(['active_role_id' => $this->roleId('customer')])->postJson(route('storefront.checkout.razorpay.verify', $attempt), $payload)->assertUnprocessable();
+        $gateway->paymentStatus = 'captured';
+        $this->actingAs($customer)->withSession(['active_role_id' => $this->roleId('customer')])->postJson(route('storefront.checkout.razorpay.verify', $attempt), $payload)->assertOk();
+        $this->actingAs($customer)->withSession(['active_role_id' => $this->roleId('customer')])->postJson(route('storefront.checkout.razorpay.verify', $attempt), $payload)->assertOk();
+        $order->refresh();
+        $this->assertSame(Order::PAYMENT_PAID, $order->payment_status);
+        $this->assertSame(Order::STATUS_PENDING, $order->order_status);
+        $this->assertSame('999.00', $order->amount_paid);
+        $this->assertSame('123456789012', $attempt->fresh()->metadata['bank_rrn']);
+        $this->assertDatabaseCount('payment_attempts', 2);
+    }
+
+    private function configureRazorpay(Shop $shop, string $mode = 'test', bool $enabled = true): PaymentAccount
+    {
+        $service = app(PaymentAccountService::class);
+        $account = $service->create($shop->merchant, ['provider' => 'razorpay', 'name' => 'Test Merchant', 'mode' => $mode, 'enabled' => $enabled, 'public_key' => 'rzp_'.$mode.'_key', 'secret' => 'test-secret']);
+        $service->map($account, $shop);
+
+        return $account;
     }
 
     private function configureDirectUpi(Shop $shop): void

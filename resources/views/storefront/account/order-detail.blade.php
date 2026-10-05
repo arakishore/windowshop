@@ -233,6 +233,9 @@
                     <h6 class="mb-16">Payment</h6>
                     <div class="account-info-list">
                         <div><span>Method</span><strong>{{ $paymentMethodLabel }}</strong></div>
+                        @if($gatewayPayment)
+                            <div><span>Provider</span><strong>{{ $gatewayPayment['provider_label'] }}</strong></div>
+                        @endif
                         <div><span>Status</span><strong>{{ $presenter->paymentStatusLabel($order->payment_status) }}</strong></div>
                         @if ($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI)
                             <div><span>Verification</span><strong>{{ $order->payment_status === \App\Models\Order::PAYMENT_PAID ? 'Payment Confirmed' : ($latestUpiAttempt?->status === \App\Models\DirectMerchantUpiAttempt::STATUS_REJECTED ? 'Payment Verification Rejected' : 'Payment Verification Pending') }}</strong></div>

@@ -69,6 +69,8 @@ class Order extends Model
 
     public const PAYMENT_REFUNDED = 'refunded';
 
+    public function paymentAttempts(): HasMany { return $this->hasMany(PaymentAttempt::class); }
+
     public const PAYMENT_PARTIALLY_REFUNDED = 'partially_refunded';
 
     public const DISCOUNT_TYPE_PERCENT = 'percent';

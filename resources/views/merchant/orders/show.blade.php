@@ -1065,13 +1065,34 @@
                     <h5 class="mb-0">Payment</h5>
                 </div>
                 <div class="card-body">
-                    <div class="fw-semibold mb-2">{{ $label($paymentMethods, $order->payment_method) }}</div>
-                    <div class="mb-3">
-                        <span class="badge {{ $paymentStatusClass($order->payment_status) }} bg-opacity-10 text-body">{{ $paymentStatusLabel($order->payment_status) }}</span>
-                    </div>
+                    <div class="order-money-row"><span>Method</span><span class="fw-semibold">{{ $label($paymentMethods, $order->payment_method) }}</span></div>
+                    @if($gatewayPayment)
+                        <div class="order-money-row"><span>Provider</span><span class="fw-semibold">{{ $gatewayPayment['provider_label'] }}</span></div>
+                    @endif
+                    <div class="order-money-row"><span>Status</span><span class="badge {{ $paymentStatusClass($order->payment_status) }} bg-opacity-10 text-body">{{ $paymentStatusLabel($order->payment_status) }}</span></div>
                     <div class="order-money-row"><span>Order Total</span><span class="fw-semibold">{{ $money($order->grand_total) }}</span></div>
                     <div class="order-money-row"><span>Amount Paid</span><span>{{ $money($order->amount_paid) }}</span></div>
                     <div class="order-money-row mb-0"><span>Balance</span><span class="fw-semibold">{{ $money($balance) }}</span></div>
+                    @if($gatewayPayment)
+                        <hr>
+                        <h6 class="mb-2">Gateway Details</h6>
+                        <div class="order-money-row">
+                            <span>Payment ID</span>
+                            <span class="d-inline-flex align-items-center gap-1"><span class="fw-semibold text-break">{{ $gatewayPayment['payment_id'] }}</span><button type="button" class="btn btn-link btn-sm p-0" data-copy-payment="{{ $gatewayPayment['payment_id'] }}" title="Copy Payment ID" aria-label="Copy Payment ID"><i class="ph-copy"></i></button></span>
+                        </div>
+                        @if($gatewayPayment['gateway_order_id'])
+                            <div class="order-money-row">
+                                <span>Gateway Order ID</span>
+                                <span class="d-inline-flex align-items-center gap-1"><span class="fw-semibold text-break">{{ $gatewayPayment['gateway_order_id'] }}</span><button type="button" class="btn btn-link btn-sm p-0" data-copy-payment="{{ $gatewayPayment['gateway_order_id'] }}" title="Copy Gateway Order ID" aria-label="Copy Gateway Order ID"><i class="ph-copy"></i></button></span>
+                            </div>
+                        @endif
+                        @if($gatewayPayment['bank_rrn'])
+                            <div class="order-money-row mb-0">
+                                <span>Bank RRN</span>
+                                <span class="d-inline-flex align-items-center gap-1"><span class="fw-semibold text-break">{{ $gatewayPayment['bank_rrn'] }}</span><button type="button" class="btn btn-link btn-sm p-0" data-copy-payment="{{ $gatewayPayment['bank_rrn'] }}" title="Copy Bank RRN" aria-label="Copy Bank RRN"><i class="ph-copy"></i></button></span>
+                            </div>
+                        @endif
+                    @endif
                     @if($order->payment_method === \App\Services\Checkout\StorefrontPaymentMethodService::PAYMENT_MERCHANT_UPI)
                         <hr>
                         <h6>UPI Payment Verification</h6>
@@ -1236,6 +1257,27 @@
             notifyToggle?.addEventListener('change', applyCommentControls);
             applyCommentControls();
         }
+
+        document.querySelectorAll('[data-copy-payment]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const value = button.dataset.copyPayment || '';
+                try {
+                    await navigator.clipboard.writeText(value);
+                } catch (error) {
+                    const input = document.createElement('textarea');
+                    input.value = value;
+                    input.style.position = 'fixed';
+                    input.style.opacity = '0';
+                    document.body.appendChild(input);
+                    input.select();
+                    document.execCommand('copy');
+                    input.remove();
+                }
+                const icon = button.querySelector('i');
+                icon?.classList.replace('ph-copy', 'ph-check');
+                window.setTimeout(() => icon?.classList.replace('ph-check', 'ph-copy'), 1200);
+            });
+        });
 
         @if($errors->has('cancellation_reason_id') || $errors->has('cancellation_note'))
             const cancelOrderModal = document.getElementById('cancelOrderModal');

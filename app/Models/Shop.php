@@ -78,6 +78,8 @@ class Shop extends Model
         return $this->belongsTo(MerchantProfile::class, 'merchant_id');
     }
 
+    public function paymentAccounts(): BelongsToMany { return $this->belongsToMany(PaymentAccount::class, 'payment_account_shop')->withTimestamps(); }
+
     public function rootProductCategory(): BelongsTo
     {
         return $this->belongsTo(ProductCategory::class, 'root_product_category_id');

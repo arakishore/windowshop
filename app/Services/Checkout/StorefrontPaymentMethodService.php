@@ -6,6 +6,7 @@ use App\Models\Cart;
 use App\Models\Shop;
 use App\Services\Merchant\ShopSettingsInitializer;
 use App\Services\Merchant\ShopSettingsService;
+use App\Services\Payment\RazorpayPaymentService;
 use App\Services\System\SystemSettingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -20,11 +21,14 @@ class StorefrontPaymentMethodService
 
     public const PAYMENT_MERCHANT_UPI = 'merchant_upi';
 
+    public const PAYMENT_ONLINE = 'online_payment';
+
     public function __construct(
         private readonly ShopSettingsService $shopSettings,
         private readonly ShopSettingsInitializer $shopSettingsInitializer,
         private readonly SystemSettingService $systemSettings,
         private readonly UpiPaymentDataService $upiPaymentData,
+        private readonly RazorpayPaymentService $razorpay,
     ) {}
 
     /**
@@ -43,6 +47,19 @@ class StorefrontPaymentMethodService
             StorefrontDeliveryService::FULFILLMENT_PICKUP => $this->pickupMethods($groups, $shops, $amount),
             default => [],
         };
+        if ($groups->count() === 1) {
+            $shop = $shops->get((int) ($groups->first()['shop_id'] ?? 0));
+            if ($shop instanceof Shop && $this->razorpay->availableForShop($shop)) {
+                $methods[] = [
+                    'id' => self::PAYMENT_ONLINE,
+                    'label' => 'Online Payment',
+                    'description' => 'Pay securely online.',
+                    'available' => true,
+                    'selected' => false,
+                    'reason' => null,
+                ];
+            }
+        }
 
         $selected = $this->selectedPayment($request, $methods);
         foreach ($methods as &$method) {
@@ -134,7 +151,7 @@ class StorefrontPaymentMethodService
         }
 
         if ($groups->count() === 1) {
-        $upi = $this->merchantUpiMethod($groups->first(), $shops, $amount);
+            $upi = $this->merchantUpiMethod($groups->first(), $shops, $amount);
             if ($upi !== null) {
                 $methods[] = $upi;
             }
@@ -209,6 +226,7 @@ class StorefrontPaymentMethodService
         }
 
         $payment = $this->upiPaymentData->build($upiId, $payeeName, $amount);
+
         return [
             'id' => self::PAYMENT_MERCHANT_UPI,
             'label' => 'Direct Merchant UPI',

@@ -176,4 +176,80 @@
             </div>
         </div>
     </section>
+    @if(($merchantTestimonials ?? collect())->isNotEmpty())
+        <section class="flat-spacing">
+            <div class="container">
+                <div class="sect-heading type-2 text-center wow fadeInUp">
+                    <h3 class="s-title">
+                        Merchant Say!
+                    </h3>
+                    <p class="s-desc text-body-1 cl-text-2">
+                        Hear from shop owners growing their business with {{ $marketplaceName }}.
+                    </p>
+                </div>
+                <div dir="ltr" class="swiper tf-swiper" data-preview="2" data-tablet="2" data-mobile-sm="1"
+                    data-mobile="1" data-space-lg="30" data-space-md="15" data-space="10" data-pagination="1"
+                    data-pagination-sm="2" data-pagination-md="2" data-pagination-lg="2">
+                    <div class="swiper-wrapper">
+                        @foreach ($merchantTestimonials as $testimonial)
+                            <div class="swiper-slide">
+                                <div class="testimonial-v01 style-2 wow fadeInUp">
+                                    <div class="tes-content">
+                                        <div class="tes_author">
+                                            <h5 class="author-name">{{ $testimonial->name }}</h5>
+                                        </div>
+                                        <p class="tes_text h6 fw-medium">
+                                            &ldquo;{{ $testimonial->body }}&rdquo;
+                                        </p>
+                                        <div class="tes_product">
+                                            <div class="product-image">
+                                                @if($testimonial->photo_path)
+                                                    <img loading="lazy" width="60" height="60"
+                                                        src="{{ asset('storage/'.$testimonial->photo_path) }}"
+                                                        alt="{{ $testimonial->name }}">
+                                                @else
+                                                    <span class="testimonial-avatar-fallback" aria-hidden="true">{{ mb_strtoupper(mb_substr(trim($testimonial->name), 0, 1)) }}</span>
+                                                @endif
+                                            </div>
+                                            <div class="product-infor">
+                                                <span class="link fw-medium lh-24">{{ $testimonial->name }}</span>
+                                                @if($testimonial->business_name)
+                                                    <div class="fw-medium">{{ $testimonial->business_name }}</div>
+                                                @endif
+                                                @if($testimonial->designation || $testimonial->location)
+                                                    <div class="text-caption-01 cl-text-3">{{ trim($testimonial->designation.($testimonial->designation && $testimonial->location ? ', ' : '').$testimonial->location) }}</div>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="sw-line-default style-2 tf-sw-pagination"></div>
+                </div>
+            </div>
+        </section>
+    @endif
 @endsection
+
+@push('styles')
+    <style>
+        .testimonial-avatar-fallback {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: #eef1f5;
+            color: #5b6b82;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .tes_product .product-image {
+            border-radius: 50%;
+            overflow: hidden;
+        }
+    </style>
+@endpush

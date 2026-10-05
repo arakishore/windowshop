@@ -660,6 +660,7 @@
     <!-- /Gallery -->
     --}}
     <!-- Testimonial -->
+    @if(($customerTestimonials ?? collect())->isNotEmpty())
     <section class="flat-spacing">
         <div class="container">
             <div class="sect-heading type-2 text-center wow fadeInUp">
@@ -674,144 +675,70 @@
                 data-mobile="1" data-space-lg="30" data-space-md="15" data-space="10" data-pagination="1"
                 data-pagination-sm="2" data-pagination-md="2" data-pagination-lg="2">
                 <div class="swiper-wrapper">
-                    <!-- slide 1 -->
-                    <div class="swiper-slide">
-                        <div class="testimonial-v01 style-2 wow fadeInUp">
-                            <div class="tes-content">
-                                <div class="star-wrap d-flex align-items-center">
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                </div>
-                                <div class="tes_author">
-                                    <h5 class="author-name">Emma Collins</h5>
-                                    <div class="br-line"></div>
-                                    <div class="author-verified">
-                                        <i class="icon icon-CheckCircle1"></i>
-                                        <span class="cl-text-2">
-                                            Verified Buyer
-                                        </span>
+                    @foreach ($customerTestimonials as $testimonial)
+                        <div class="swiper-slide">
+                            <div class="testimonial-v01 style-2 wow fadeInUp">
+                                <div class="tes-content">
+                                    @if($testimonial->rating)
+                                        <div class="star-wrap d-flex align-items-center" role="img" aria-label="Rated {{ $testimonial->rating }} out of 5">
+                                            @for ($star = 0; $star < 5; $star++)
+                                                <i class="icon icon-Star fs-24 {{ $star < $testimonial->rating ? '' : 'cl-text-3' }}" aria-hidden="true"></i>
+                                            @endfor
+                                        </div>
+                                    @endif
+                                    <div class="tes_author">
+                                        <h5 class="author-name">{{ $testimonial->name }}</h5>
                                     </div>
-                                </div>
-                                <p class="tes_text h6 fw-medium text-capitalize">
-                                    “I love how calm and balanced I feel after using these products. Everything
-                                    feels more natural, lighter, and easy again <br class="d-none d-xxl-block">
-                                    every day.”
-                                </p>
-                                <div class="tes_product">
-                                    <div class="product-image">
-                                        <img loading="lazy" width="60" height="60"
-                                            src="{{ asset('assets/storefront/images/product/mental/product-1.jpg') }}"
-                                            alt="Image">
-                                    </div>
-                                    <div class="product-infor">
-                                        <a href="{{ route('storefront.product.detail') }}" class="link fw-medium lh-24">
-                                            Gaia Herbs Relax Gummies
-                                        </a>
-                                        <div class="price-wrap prd_price">
-                                            <span class="price-new text-primary fw-semibold">$74.99</span>
-                                            <span class="price-old text-caption-01 cl-text-3">$89,99</span>
+                                    <p class="tes_text h6 fw-medium">
+                                        &ldquo;{{ $testimonial->body }}&rdquo;
+                                    </p>
+                                    <div class="tes_product">
+                                        <div class="product-image">
+                                            @if($testimonial->photo_path)
+                                                <img loading="lazy" width="60" height="60"
+                                                    src="{{ asset('storage/'.$testimonial->photo_path) }}"
+                                                    alt="{{ $testimonial->name }}">
+                                            @else
+                                                <span class="testimonial-avatar-fallback" aria-hidden="true">{{ mb_strtoupper(mb_substr(trim($testimonial->name), 0, 1)) }}</span>
+                                            @endif
+                                        </div>
+                                        <div class="product-infor">
+                                            <span class="link fw-medium lh-24">{{ $testimonial->name }}</span>
+                                            @if($testimonial->location)
+                                                <div class="text-caption-01 cl-text-3">{{ $testimonial->location }}</div>
+                                            @endif
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <!-- slide 2 -->
-                    <div class="swiper-slide">
-                        <div class="testimonial-v01 style-2 wow fadeInUp">
-                            <div class="tes-content">
-                                <div class="star-wrap d-flex align-items-center">
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                </div>
-                                <div class="tes_author">
-                                    <h5 class="author-name">Sophia Ramirez</h5>
-                                    <div class="br-line"></div>
-                                    <div class="author-verified">
-                                        <i class="icon icon-CheckCircle1"></i>
-                                        <span class="cl-text-2">
-                                            Verified Buyer
-                                        </span>
-                                    </div>
-                                </div>
-                                <p class="tes_text h6 fw-medium text-capitalize">
-                                    “These supplements have become part of my nightly routine. I sleep deeper, rest
-                                    longer, wake up feeling genuinely refreshed every morning.”
-                                </p>
-                                <div class="tes_product">
-                                    <div class="product-image">
-                                        <img loading="lazy" width="60" height="60"
-                                            src="{{ asset('assets/storefront/images/product/mental/product-3.jpg') }}"
-                                            alt="Image">
-                                    </div>
-                                    <div class="product-infor">
-                                        <a href="{{ route('storefront.product.detail') }}" class="link fw-medium lh-24">
-                                            Blooming Blends Sleep Drops
-                                        </a>
-                                        <div class="price-wrap prd_price">
-                                            <span class="price-new text-primary fw-semibold">$74.99</span>
-                                            <span class="price-old text-caption-01 cl-text-3">$89,99</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- slide 1 -->
-                    <div class="swiper-slide">
-                        <div class="testimonial-v01 style-2 wow fadeInUp">
-                            <div class="tes-content">
-                                <div class="star-wrap d-flex align-items-center">
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                    <i class="icon icon-Star fs-24"></i>
-                                </div>
-                                <div class="tes_author">
-                                    <h5 class="author-name">Emma Collins</h5>
-                                    <div class="br-line"></div>
-                                    <div class="author-verified">
-                                        <i class="icon icon-CheckCircle1"></i>
-                                        <span class="cl-text-2">
-                                            Verified Buyer
-                                        </span>
-                                    </div>
-                                </div>
-                                <p class="tes_text h6 fw-medium text-capitalize">
-                                    “I love how calm and balanced I feel after using these products. Everything
-                                    feels more natural, lighter, and easy again <br class="d-none d-xxl-block">
-                                    every day.”
-                                </p>
-                                <div class="tes_product">
-                                    <div class="product-image">
-                                        <img loading="lazy" width="60" height="60"
-                                            src="{{ asset('assets/storefront/images/product/mental/product-1.jpg') }}"
-                                            alt="Image">
-                                    </div>
-                                    <div class="product-infor">
-                                        <a href="{{ route('storefront.product.detail') }}" class="link fw-medium lh-24">
-                                            Gaia Herbs Relax Gummies
-                                        </a>
-                                        <div class="price-wrap prd_price">
-                                            <span class="price-new text-primary fw-semibold">$74.99</span>
-                                            <span class="price-old text-caption-01 cl-text-3">$89,99</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    @endforeach
                 </div>
                 <div class="sw-line-default style-2 tf-sw-pagination"></div>
             </div>
         </div>
     </section>
+    @endif
     <!-- /Testimonial -->
 @endsection
+
+@push('styles')
+    <style>
+        .testimonial-avatar-fallback {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: #eef1f5;
+            color: #5b6b82;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .tes_product .product-image {
+            border-radius: 50%;
+            overflow: hidden;
+        }
+    </style>
+@endpush
