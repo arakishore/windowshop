@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\BannerTemplateController;
 use App\Http\Controllers\Admin\CmsPageController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EmailSettingsController;
+use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\MasterData\BrandController;
 use App\Http\Controllers\Admin\MasterData\CatalogueMasterRequestController;
 use App\Http\Controllers\Admin\MasterData\CustomerCancellationReasonController;
@@ -273,6 +274,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->except(['show', 'destroy']);
         Route::resource('banners', BannerController::class);
         Route::resource('testimonials', TestimonialController::class)
+            ->except(['show']);
+        Route::resource('faqs', FaqController::class)
             ->except(['show']);
         Route::get('system-settings', [SystemSettingController::class, 'index'])
             ->name('system-settings.index');

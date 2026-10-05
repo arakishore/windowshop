@@ -24,66 +24,37 @@
         <div class="container">
             <div class="row">
                 <div class="col-lg-9">
-                    <ul class="faq-list">
-                        <li class="faq-item" id="general">
-                            <h4 class="faq_title">General</h4>
-                            <div class="faq_wrap" id="general-faq">
-                                <div class="accordion-faq">
-                                    <div class="accordion-title" data-bs-target="#faq-windowshop" role="button"
-                                        data-bs-toggle="collapse" aria-expanded="true" aria-controls="faq-windowshop">
-                                        <span class="text h6">1. What is {{ $marketplaceName }}?</span>
-                                        <span class="icon"><span class="ic-accordion-custom"></span></span>
+                    @if(($faqGroups ?? collect())->isNotEmpty())
+                        <ul class="faq-list">
+                            @foreach($faqGroups as $group)
+                                <li class="faq-item" id="{{ $group['key'] }}">
+                                    <h4 class="faq_title">{{ $group['label'] }}</h4>
+                                    <div class="faq_wrap" id="{{ $group['key'] }}-faq">
+                                        @foreach($group['faqs'] as $faqIndex => $faq)
+                                            @php
+                                                $panelId = 'faq-'.$group['key'].'-'.$faq->getKey();
+                                                $isOpen = $loop->parent->first && $faqIndex === 0;
+                                            @endphp
+                                            <div class="accordion-faq">
+                                                <button type="button" class="accordion-title{{ $isOpen ? '' : ' collapsed' }}" data-bs-target="#{{ $panelId }}"
+                                                    data-bs-toggle="collapse" aria-expanded="{{ $isOpen ? 'true' : 'false' }}" aria-controls="{{ $panelId }}">
+                                                    <span class="text h6">{{ $faq->question }}</span>
+                                                    <span class="icon" aria-hidden="true"><span class="ic-accordion-custom"></span></span>
+                                                </button>
+                                                <div id="{{ $panelId }}" class="collapse{{ $isOpen ? ' show' : '' }}" data-bs-parent="#{{ $group['key'] }}-faq">
+                                                    <div class="accordion-body">
+                                                        <p class="cl-text-2">{!! nl2br(e($faq->answer)) !!}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endforeach
                                     </div>
-                                    <div id="faq-windowshop" class="collapse show" data-bs-parent="#general-faq">
-                                        <div class="accordion-body">
-                                            <p class="cl-text-2">{{ $marketplaceName }} helps customers discover nearby shops, browse products, check offers, and visit merchant store pages.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="accordion-faq">
-                                    <div class="accordion-title collapsed" data-bs-target="#faq-local-shops" role="button"
-                                        data-bs-toggle="collapse" aria-expanded="false" aria-controls="faq-local-shops">
-                                        <span class="text h6">2. Are the shops local?</span>
-                                        <span class="icon"><span class="ic-accordion-custom"></span></span>
-                                    </div>
-                                    <div id="faq-local-shops" class="collapse" data-bs-parent="#general-faq">
-                                        <div class="accordion-body">
-                                            <p class="cl-text-2">Yes. The platform is designed around local merchants and store discovery, so customers can find sellers they can trust and visit.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </li>
-                        <li class="faq-item" id="orders">
-                            <h4 class="faq_title">Orders & Support</h4>
-                            <div class="faq_wrap" id="orders-faq">
-                                <div class="accordion-faq">
-                                    <div class="accordion-title collapsed" data-bs-target="#faq-order-help" role="button"
-                                        data-bs-toggle="collapse" aria-expanded="false" aria-controls="faq-order-help">
-                                        <span class="text h6">1. Who handles order questions?</span>
-                                        <span class="icon"><span class="ic-accordion-custom"></span></span>
-                                    </div>
-                                    <div id="faq-order-help" class="collapse" data-bs-parent="#orders-faq">
-                                        <div class="accordion-body">
-                                            <p class="cl-text-2">For store-specific stock, order, or product questions, customers should contact the listed shop. {{ $marketplaceName }} can help route general platform questions.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="accordion-faq">
-                                    <div class="accordion-title collapsed" data-bs-target="#faq-shipping" role="button"
-                                        data-bs-toggle="collapse" aria-expanded="false" aria-controls="faq-shipping">
-                                        <span class="text h6">2. How do shipping and returns work?</span>
-                                        <span class="icon"><span class="ic-accordion-custom"></span></span>
-                                    </div>
-                                    <div id="faq-shipping" class="collapse" data-bs-parent="#orders-faq">
-                                        <div class="accordion-body">
-                                            <p class="cl-text-2">Shipping, delivery, return, and refund terms can depend on the merchant. Please review the policy pages and any store-specific instructions before ordering.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </li>
-                    </ul>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <p class="cl-text-2">No FAQs are available at the moment. Please contact us if you need help.</p>
+                    @endif
                 </div>
                 <div class="col-lg-3">
                     <div class="faq-sidebar">
@@ -96,3 +67,19 @@
         </div>
     </section>
 @endsection
+
+@push('styles')
+    <style>
+        .accordion-faq .accordion-title {
+            background: none;
+            border: 0;
+            padding: 0;
+            width: 100%;
+            font-family: inherit;
+            font-size: inherit;
+            color: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+    </style>
+@endpush
