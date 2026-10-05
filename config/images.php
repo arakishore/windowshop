@@ -74,6 +74,16 @@ return [
         ],
     ],
 
+    'testimonial' => [
+        'max_upload_kb' => 5120,
+        'quality' => 82,
+        'fit' => 'cover',
+        'variants' => [
+            'thumb' => [160, 160],
+            'web' => [640, 640],
+        ],
+    ],
+
     'offer_banner_app' => [
         'max_upload_kb' => 6144,
         'quality' => 80,

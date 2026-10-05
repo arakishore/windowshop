@@ -13,6 +13,17 @@ Use it as a running project memory so we can quickly see:
 
 Add new entries at the top, newest first, with local time.
 
+## 2026-10-05 — WS-056 Customer Say & Merchant Say Testimonials
+
+- Added a separate Admin-managed marketing Testimonials module with `customer` (Customer Say) and `merchant` (Merchant Say) types. ProductReview and the verified-purchase review workflow were not touched.
+- New `testimonials` table/model (uuid, type, name, nullable photo_path, body max 2000, nullable location/rating/business_name/designation, sort_order, active/inactive status, audit actors, soft deletes). No FK to products/orders/shops/merchants; rating is customer-only display, optional 1–5.
+- Admin → Marketing → Testimonials CRUD follows Brands conventions (resource routes minus show, uuid binding, FormRequests, GET filters for search/type/status, shared admin-datatable pagination, soft-delete with deleted_by, ImageVariantService `testimonial` profile with webp variants, blank-safe photo replace/remove). No testimonials seeded.
+- Storefront homepage Customer Say block is now DB-driven (active customer, sort_order/id, limit 6, hidden when empty) reusing `.testimonial-v01` swiper (2 desktop / 1 mobile), avatar-or-initial fallback, accessible star labels, no review structured data.
+- Merchant registration page gained a Merchant Say section after the form shell (active merchant, limit 4, hidden when empty, no stars).
+- Existing static `/testimonials` page left unchanged. No caching added. All output escaped.
+- Tests: new `AdminTestimonialManagementTest` (12 tests, 95 assertions) covering auth, CRUD, validation, photo replace/remove, filters, ordering, limits, empty-hide and type isolation on both pages. StorefrontCustomerOrdersTest (reviews, 20 tests) and merchant-registration/homepage suites still pass.
+- Key files: Testimonial model/migration, Admin TestimonialController + FormRequests + views, sidebar Marketing item, home + merchant-register views/controllers, `testimonial` image profile.
+
 ## 2026-10-04 — WS-018 Razorpay Webhook V1
 
 - Added PaymentAccount-specific public webhook URLs using stable random 64-character tokens. Tokens locate an account only; the exact raw request body must pass Razorpay HMAC verification with that account's separately encrypted webhook secret before payload parsing or state changes.

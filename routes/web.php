@@ -30,6 +30,7 @@ use App\Http\Controllers\Admin\NotificationTemplateController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductReviewController as AdminProductReviewController;
 use App\Http\Controllers\Admin\SystemSettingController;
+use App\Http\Controllers\Admin\TestimonialController;
 use App\Http\Controllers\Customer\Auth\CustomerAuthController;
 use App\Http\Controllers\Storefront\AccountAddressController;
 use App\Http\Controllers\Storefront\CartItemController;
@@ -271,6 +272,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('banner-templates', BannerTemplateController::class)
             ->except(['show', 'destroy']);
         Route::resource('banners', BannerController::class);
+        Route::resource('testimonials', TestimonialController::class)
+            ->except(['show']);
         Route::get('system-settings', [SystemSettingController::class, 'index'])
             ->name('system-settings.index');
         Route::get('system-settings/{systemSetting}/edit', [SystemSettingController::class, 'edit'])
